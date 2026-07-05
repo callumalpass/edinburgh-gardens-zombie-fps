@@ -83,6 +83,9 @@ Purpose: track the building-by-building realism pass for every structure current
 - `osm-building-1475006769` / Bowling club outbuilding:
   - Added front/rear guttering, roller-door slat, low roof vent and timber equipment box scaled to the angled footprint.
   - Source basis: OSM way `1475006769` for the skewed rectangular footprint; Fitzroy Bowls official site for active greens/BBQ operation; bowling-club precinct context from CMP.
+- `osm-building-1475006770` / Bowling green shed:
+  - Added a long front gutter, hose reel, small tool crate and rear timber storage bench to make the timber shed read as rink maintenance storage.
+  - Source basis: OSM way `1475006770` for footprint and timber shed scale; Fitzroy Bowls official site for active greens/BBQ operation; bowling-club precinct context from CMP.
 
 ## Implementation Notes
 
