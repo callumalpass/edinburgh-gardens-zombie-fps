@@ -132,6 +132,7 @@ These notes record the real-world sources and implementation decisions used to s
 - The 2026-07-06 public-use/weather pass adds source-backed non-colliding rule signs for dog-leash edges, picnic alcohol hours, Emely Baker access-friendly status and the rotunda stair/no-power constraint, plus a modest rain/wind/wetness firearm-spread modifier shared by local and LAN players.
 - The 2026-07-06 structure-depth pass adds source-backed grandstand umpire-room, Emely Baker kitchenette, bowling shed service-locker, north toilet service-room and rotunda memorial-plaque interactions, plus richer building details for tennis social-space, Emely Baker venue use, grandstand secure gates, toilet service hardware and rotunda memorial setting.
 - The 2026-07-06 structure-utility pass adds source-backed grandstand kiosk/public-toilet interactions and powered-building switchboards that activate exterior floodlights with a visibility tradeoff, while preserving the rotunda source's no-current-power constraint.
+- The 2026-07-06 structure-shelter pass adds source-backed roof, verandah, grandstand-cover and shade-sail shelter zones for major buildings. These zones render as dry patches/drip edges and reduce weather handling/search exposure without inventing interiors.
 - The 2026-07-06 heritage-furniture/weather pass adds non-colliding CMP-backed Chandler Fountain, cast-iron gas-lamp, cast-iron bollard, reproduction-seat and interpretive-sign artifacts, and retunes weather phases against BOM Melbourne July climate normals while preserving the existing 420 second gameplay loop.
 - The 2026-07-06 oval sports-marking pass replaces the old generic circular oval cue with an OSM-footprint-aware W. T. Peterson Oval overlay: mapped-polygon boundary markers, AFL 50 m arcs, centre square/circles, goal squares, a scaled MCC cricket pitch/crease/stump set, wet run-up sheen and spectator-side benches/scoreboard.
 - Tree placement refresh research is stored in `docs/research/tree-placement-refresh-2026-07-05.md`.
@@ -161,6 +162,7 @@ These notes record the real-world sources and implementation decisions used to s
 - Public-use and weather realism research is stored in `docs/research/public-use-weather-realism-2026-07-06.md`.
 - Structure depth research is stored in `docs/research/structure-depth-pass-2026-07-06.md`.
 - Structure utility interaction research is stored in `docs/research/structure-utility-interactions-2026-07-06.md`.
+- Structure shelter interaction research is stored in `docs/research/structure-shelter-interactions-2026-07-06.md`.
 - Heritage furniture and winter-weather research is stored in `docs/research/heritage-furniture-winter-weather-2026-07-06.md`.
 - Oval sports-marking research is stored in `docs/research/oval-sports-markings-2026-07-06.md`.
 - Local raw research asset guidance is stored in `docs/research/raw-assets.md`.

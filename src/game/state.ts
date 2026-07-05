@@ -95,6 +95,8 @@ export interface Snapshot {
   weatherCloudCover: number;
   weatherFog: number;
   weatherWind: number;
+  sheltered: boolean;
+  shelterProtection: number;
   lastHitZone: HitZone | null;
   meleeSwing: number;
   shotBloom: number;

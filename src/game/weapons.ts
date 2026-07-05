@@ -11,6 +11,7 @@ export interface FirearmSpreadContext {
   aimHeld: boolean;
   stamina: number;
   weather?: Pick<WeatherState, "precipitation" | "wind" | "wetness">;
+  weatherProtection?: number;
 }
 
 export interface WeaponStats {
@@ -336,9 +337,15 @@ export function damageAtDistance(stats: WeaponStats, distance: number, zone: "he
   return Math.max(1, Math.round(stats.damage * falloff * zoneMultiplier));
 }
 
-export function weatherWeaponInstability(weather?: Pick<WeatherState, "precipitation" | "wind" | "wetness">): number {
+export function weatherWeaponInstability(weather?: Pick<WeatherState, "precipitation" | "wind" | "wetness">, weatherProtection = 0): number {
   if (!weather) return 0;
-  return Math.min(0.18, weather.precipitation * 0.06 + weather.wind * 0.07 + weather.wetness * 0.05);
+  const protection = Math.max(0, Math.min(1, weatherProtection));
+  return Math.min(
+    0.18,
+    weather.precipitation * (1 - protection * 0.78) * 0.06 +
+      weather.wind * (1 - protection * 0.42) * 0.07 +
+      weather.wetness * (1 - protection * 0.62) * 0.05
+  );
 }
 
 export function effectiveFirearmSpread(stats: WeaponStats, context: FirearmSpreadContext): number {
@@ -347,7 +354,7 @@ export function effectiveFirearmSpread(stats: WeaponStats, context: FirearmSprea
   const crouchSpread = context.crouching ? 0.64 : 1;
   const breathControl = context.aimAmount > 0.55 && context.aimHeld ? (context.stamina > 12 ? 0.86 : 1.18) : 1;
   const aimSpread = 1 + (stats.aimSpreadMultiplier - 1) * Math.max(0, Math.min(1, context.aimAmount));
-  const weatherJitter = (stats.spread * 0.22 + stats.movingSpread * 0.08) * weatherWeaponInstability(context.weather);
+  const weatherJitter = (stats.spread * 0.22 + stats.movingSpread * 0.08) * weatherWeaponInstability(context.weather, context.weatherProtection);
   return (stats.spread + movementSpread + context.shotBloom + weatherJitter) * aimSpread * crouchSpread * breathControl;
 }
 

@@ -603,6 +603,19 @@
       ]
     },
     {
+      "id": "structure-shelter-interactions",
+      "path": "docs/research/structure-shelter-interactions-2026-07-06.md",
+      "requiredHeadings": ["## Sources", "## Findings", "## Implementation Translation", "## Uncertainty", "## Validation"],
+      "sourceIds": [
+        "yarra-edinburgh-gardens",
+        "yarra-brunswick-street-oval",
+        "yarra-emely-baker-centre",
+        "yarra-edinburgh-gardens-rotunda",
+        "edinburgh-gardens-cmp",
+        "osm-way-api"
+      ]
+    },
+    {
       "id": "heritage-furniture-winter-weather",
       "path": "docs/research/heritage-furniture-winter-weather-2026-07-06.md",
       "requiredHeadings": ["## Sources", "## Findings", "## Implementation Translation", "## Uncertainty", "## Validation"],

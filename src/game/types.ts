@@ -225,6 +225,16 @@ export interface MappedFence {
   }>;
 }
 
+export interface StructureShelter {
+  id: string;
+  label: string;
+  kind: "roof" | "verandah" | "shade-sail" | "grandstand-cover";
+  footprint: InteractableRaisedFootprint;
+  weatherProtection: number;
+  linkedStructureId: string;
+  source?: string;
+}
+
 export interface HardscapeLine {
   id: string;
   label: string;
@@ -398,6 +408,7 @@ export interface LevelData {
   terrainModifiers: TerrainModifier[];
   skateBowls: SkateBowlFeature[];
   mappedBuildings: MappedBuilding[];
+  structureShelters: StructureShelter[];
   mappedFences: MappedFence[];
   hardscapeLines: HardscapeLine[];
   pathSurfacePatches: PathSurfacePatch[];

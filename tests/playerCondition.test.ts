@@ -102,4 +102,45 @@ describe("player condition", () => {
     expect(bleedingRested).toBeLessThan(rested);
     expect(bleedDamagePerSecond(5)).toBeLessThan(0.8);
   });
+
+  it("uses structure shelter as a modest stamina advantage", () => {
+    const exposedSprint = nextStamina(70, 1, {
+      sprinting: true,
+      scoped: false,
+      resting: false,
+      searching: false,
+      crouching: false,
+      bleeding: false
+    });
+    const shelteredSprint = nextStamina(70, 1, {
+      sprinting: true,
+      scoped: false,
+      resting: false,
+      searching: false,
+      crouching: false,
+      bleeding: false,
+      sheltered: true
+    });
+    const exposedRecovery = nextStamina(40, 1, {
+      sprinting: false,
+      scoped: false,
+      resting: false,
+      searching: false,
+      crouching: false,
+      bleeding: false
+    });
+    const shelteredRecovery = nextStamina(40, 1, {
+      sprinting: false,
+      scoped: false,
+      resting: false,
+      searching: false,
+      crouching: false,
+      bleeding: false,
+      sheltered: true
+    });
+
+    expect(shelteredSprint).toBeGreaterThan(exposedSprint);
+    expect(shelteredRecovery).toBeGreaterThan(exposedRecovery);
+    expect(shelteredRecovery - exposedRecovery).toBeLessThan(3);
+  });
 });

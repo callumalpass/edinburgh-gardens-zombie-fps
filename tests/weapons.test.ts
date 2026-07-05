@@ -164,9 +164,21 @@ describe("weapon upgrades", () => {
       stamina: 100,
       weather: storm
     });
+    const shelteredStorm = effectiveFirearmSpread(stats, {
+      movementSpeed: 0,
+      shotBloom: 0,
+      crouching: false,
+      aimAmount: 0,
+      aimHeld: false,
+      stamina: 100,
+      weather: storm,
+      weatherProtection: 0.82
+    });
 
     expect(weatherWeaponInstability(storm)).toBeGreaterThan(weatherWeaponInstability(clear));
+    expect(weatherWeaponInstability(storm, 0.82)).toBeLessThan(weatherWeaponInstability(storm));
     expect(standingStorm).toBeGreaterThan(standingClear);
+    expect(shelteredStorm).toBeLessThan(standingStorm);
     expect(standingStorm / standingClear).toBeLessThan(1.12);
     expect(crouchedAimedStorm).toBeLessThan(standingClear);
   });

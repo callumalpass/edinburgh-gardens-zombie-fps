@@ -39,6 +39,7 @@ import type {
   SkateBowlFeature,
   SignificantTreePoint,
   SportsFixture,
+  StructureShelter,
   StreetEdge,
   TerrainModifier,
   TreeCollider,
@@ -174,6 +175,7 @@ export const RESEARCH_NOTES = [
   "A 2026-07-06 public-use pass added source-backed rule signs for dog-leash edges, alcohol hours, access-friendly venue cues and the rotunda stair/no-power constraint so the park reads like the current public Edinburgh Gardens rather than a generic arena.",
   "A 2026-07-06 structure-depth pass added additional source-backed building affordances: grandstand umpire access, Emely Baker kitchenette/service cues, bowling-green shed supplies, north toilet service access and an interactable rotunda memorial plaque.",
   "A 2026-07-06 structure utility pass adds source-backed grandstand kiosk/public-toilet access plus powered-building switchboards that can activate exterior floodlights; the rotunda remains explicitly unpowered.",
+  "A 2026-07-06 structure shelter pass adds source-backed roof, verandah, shade-sail and grandstand-cover shelter zones that reduce weather handling/search exposure while staying tied to visible building footprints.",
   "A 2026-07-06 heritage-furniture and winter-weather pass adds CMP-backed Chandler Fountain, cast-iron gas-lamp, bollard, reproduction-seat and interpretive-sign cues, and retunes weather toward Bureau of Meteorology Melbourne July cloud/rain/wind normals.",
   "See docs/edinburgh-gardens-research.md for source URLs, query notes, data licensing notes and implementation decisions."
 ];
@@ -465,6 +467,8 @@ const STRUCTURE_ACCESS_SOURCE =
   "Yarra Edinburgh Gardens facility listing; OSM building footprints; Edinburgh Gardens CMP 2004 built-feature inventory; Yarra Brunswick Street Oval redevelopment scope for changerooms, accessible public toilets, tennis social/community space, external stairs and secure access gates";
 const STRUCTURE_UTILITY_SOURCE =
   "Yarra Brunswick Street Oval redevelopment kiosk terrace, externally accessible public toilets, tennis social space and upgraded amenities; Yarra Emely Baker Centre kitchenette/refrigerator/microwave; Yarra Edinburgh Gardens Rotunda no-current-power constraint; switchboard cabinet locations are exterior gameplay approximations because public service drawings were unavailable";
+const STRUCTURE_SHELTER_SOURCE =
+  "Yarra Edinburgh Gardens facility listing confirms pavilion, public toilets and access-friendly park facilities; Yarra Brunswick Street Oval redevelopment confirms kiosk terrace, grandstand external stairs/gates and tennis social-space/amenity works; Yarra Emely Baker Centre confirms gated outdoor area and shade sail; Yarra Rotunda page confirms bookable shelter use but no current power";
 const HERITAGE_FURNITURE_SOURCE =
   "Edinburgh Gardens CMP 2004 sections 3.4.17-3.4.25 and 6.5.25: Chandler Drinking Fountain, gas lamp standards around the Rotunda/remnant cast-iron lanterns, reproduction seats, interpretive signs and Fitzroy cast-iron bollards";
 
@@ -3935,6 +3939,88 @@ export function createLevelData(): LevelData {
     source: building.source,
     collision: building.collision
   })).filter((building) => pointInPolygon(polygonCentroid(building.polygon), boundary));
+  const shelterForBuildingRoof = (
+    id: string,
+    label: string,
+    weatherProtection: number,
+    padX = 0.5,
+    padZ = 0.5
+  ): StructureShelter | null => {
+    const building = mappedBuildings.find((candidate) => candidate.id === id);
+    if (!building) return null;
+    const footprint = footprintFromPolygon(building.polygon);
+    return {
+      id: `${id}-shelter`,
+      label,
+      kind: "roof",
+      footprint: raisedBox(footprint.center, footprint.halfX + padX, footprint.halfZ + padZ, footprint.angle),
+      weatherProtection,
+      linkedStructureId: building.id,
+      source: `${building.source}; ${STRUCTURE_SHELTER_SOURCE}; roof/eave shelter footprint is inferred from the mapped OSM building outline`
+    };
+  };
+  const shelterForBuildingFrontage = (
+    id: string,
+    label: string,
+    kind: StructureShelter["kind"],
+    weatherProtection: number,
+    depth: number,
+    extraWidth = 0.8,
+    front = true
+  ): StructureShelter | null => {
+    const building = mappedBuildings.find((candidate) => candidate.id === id);
+    if (!building) return null;
+    const footprint = footprintFromPolygon(building.polygon);
+    const frontageLocal = building.facade?.frontagePoint ? localPointFromWorld(footprint.center, footprint.angle, building.facade.frontagePoint) : null;
+    const frontageSign = (frontageLocal?.z ?? footprint.halfZ) >= 0 ? 1 : -1;
+    const sideSign = front ? frontageSign : -frontageSign;
+    const center = offsetPoint(footprint.center, footprint.angle, 0, sideSign * (footprint.halfZ + depth * 0.38));
+    return {
+      id: `${id}-${kind}-shelter`,
+      label,
+      kind,
+      footprint: raisedBox(center, footprint.halfX + extraWidth, depth, footprint.angle),
+      weatherProtection,
+      linkedStructureId: building.id,
+      source: `${building.facade?.source ?? building.source}; ${STRUCTURE_SHELTER_SOURCE}; exact awning/shade extents are inferred from the documented building use and reachable frontage`
+    };
+  };
+  const structureShelters: StructureShelter[] = [
+    {
+      id: "rotunda-roof-shelter",
+      label: "Rotunda roof shelter",
+      kind: "roof",
+      footprint: raisedCircle(rotundaCenter, 5.65),
+      weatherProtection: 0.76,
+      linkedStructureId: "osm-building-543505640",
+      source: `${rotundaBuildingSource.source}; ${STRUCTURE_SHELTER_SOURCE}; the rotunda remains unpowered per the Yarra venue page, so this shelter does not imply a utility switchboard`
+    },
+    {
+      id: "grandstand-covered-seats-shelter",
+      label: "Kevin Murray Stand covered seats",
+      kind: "grandstand-cover",
+      footprint: raisedBox(grandstandCenter, grandstandFootprint.halfX + 1.35, grandstandFootprint.halfZ + 1.05, grandstandFootprint.angle),
+      weatherProtection: 0.82,
+      linkedStructureId: "grandstand",
+      source: `${STRUCTURE_SHELTER_SOURCE}; grandstand cover footprint is fitted from the Kevin Murray Stand polygon and current grandstand works context`
+    },
+    shelterForBuildingFrontage("osm-building-403753784", "Tennis pavilion verandah", "verandah", 0.62, 1.8, 1.1, true),
+    shelterForBuildingFrontage("osm-building-543505639", "Bowling club verandah", "verandah", 0.62, 1.9, 1.0, true),
+    shelterForBuildingFrontage("osm-building-543505702", "Emely Baker shade-sail yard", "shade-sail", 0.56, 2.6, 0.9, false),
+    shelterForBuildingRoof("osm-building-242003562", "South amenities roof eaves", 0.7, 0.72, 0.72),
+    {
+      id: "north-toilets-roof-shelter",
+      label: "North toilet block roof eaves",
+      kind: "roof",
+      footprint: raisedBox(northToiletsCenter, northToiletsFootprint.halfX + 0.72, northToiletsFootprint.halfZ + 0.72, northToiletsFootprint.angle),
+      weatherProtection: 0.7,
+      linkedStructureId: "north-toilets",
+      source: `${STRUCTURE_SHELTER_SOURCE}; CMP toilet-block context supports a simple functional roof/eave shelter, with exact eave projection inferred from the mapped footprint`
+    },
+    shelterForBuildingRoof("osm-building-543505638", "Freeman Street gatehouse roof", 0.64, 0.7, 0.7)
+  ]
+    .filter((shelter): shelter is StructureShelter => shelter !== null)
+    .filter((shelter) => pointInPolygon(shelter.footprint.center, boundary));
   const mappedFences: MappedFence[] = OSM_FENCES_GEO.map((fence) => ({
     id: fence.id,
     label: fence.label,
@@ -4356,6 +4442,7 @@ export function createLevelData(): LevelData {
     terrainModifiers,
     skateBowls,
     mappedBuildings,
+    structureShelters,
     mappedFences,
     hardscapeLines,
     pathSurfacePatches,

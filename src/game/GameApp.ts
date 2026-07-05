@@ -20,7 +20,7 @@ import {
 } from "./weapons";
 import { resolveObstacle, shouldBypassObstacle as shouldBypassObstacleByContext } from "./collision";
 import { clampToPolygon, distance } from "./geo";
-import { pointInInteractableRaisedFootprint } from "./interactables";
+import { pointInInteractableRaisedFootprint, pointInRaisedFootprint } from "./interactables";
 import { createLevelData } from "./levelData";
 import {
   chooseZombiePickup,
@@ -125,6 +125,7 @@ import type {
   InteractableFixture,
   LevelData,
   ParkLifeDetail,
+  StructureShelter,
   UpgradeStation,
   Vec2,
   WeaponSpawn
@@ -940,7 +941,8 @@ export class GameApp {
       resting: false,
       searching: false,
       crouching: player.crouching,
-      bleeding: player.condition.bleedTimer > 0
+      bleeding: player.condition.bleedTimer > 0,
+      sheltered: this.structureShelterProtectionForCombatant(this.combatantRefForNetworkPlayer(player)) >= 0.56
     });
   }
 
@@ -1022,7 +1024,8 @@ export class GameApp {
       aimAmount: player.input.aim ? 1 : 0,
       aimHeld: player.input.aim,
       stamina: player.condition.stamina,
-      weather: this.currentWeather
+      weather: this.currentWeather,
+      weatherProtection: this.structureShelterProtectionForCombatant(this.combatantRefForNetworkPlayer(player))
     });
     for (let pellet = 0; pellet < stats.pellets; pellet += 1) {
       const direction = this.directionFromYawPitch(player.yaw, player.pitch);
@@ -1610,7 +1613,8 @@ export class GameApp {
       searching: Boolean(this.activeAmenitySearch),
       crouching: this.player.crouching,
       bleeding: this.condition.bleedTimer > 0,
-      bikePumpBoosted: this.bike?.mounted === true && this.condition.bikePumpTimer > 0
+      bikePumpBoosted: this.bike?.mounted === true && this.condition.bikePumpTimer > 0,
+      sheltered: this.structureShelterProtectionForLocalPlayer() >= 0.56
     });
     if (scoped && this.condition.stamina <= 1) {
       this.aimHeld = false;
@@ -2311,6 +2315,26 @@ export class GameApp {
     return combatants;
   }
 
+  private combatantRefForNetworkPlayer(player: NetworkRemotePlayer): CombatantRef {
+    return {
+      id: player.id,
+      isLocal: false,
+      remote: player,
+      position: player.position,
+      velocity: player.velocity,
+      yaw: player.yaw,
+      pitch: player.pitch,
+      health: player.health,
+      crouching: player.crouching,
+      crouchAmount: player.crouchAmount,
+      height: player.height,
+      jumpHeight: player.jumpHeight,
+      activeFixtureId: player.activeFixtureId,
+      condition: player.condition,
+      loadout: player.loadout
+    };
+  }
+
   private combatantPoint(combatant: CombatantRef): Vec2 {
     return { x: combatant.position.x, z: combatant.position.z };
   }
@@ -2375,6 +2399,7 @@ export class GameApp {
       elevatedHeight: this.combatantElevation(combatant),
       flashlightOn: combatant.condition.flashlightOn,
       structureLit: this.isPointInStructureUtilityLight(playerPoint),
+      structureShelter: this.structureShelterProtectionForCombatant(combatant),
       weather: this.currentWeather
     });
     if (distanceToPlayer > sightRange) {
@@ -2402,6 +2427,9 @@ export class GameApp {
     }
     const playerPoint = this.combatantPoint(combatant);
     if (this.isCoverNearPoint(playerPoint, 4.2, 5.8)) {
+      return true;
+    }
+    if (!this.isPointInStructureUtilityLight(playerPoint) && this.structureShelterProtectionForCombatant(combatant) >= 0.56) {
       return true;
     }
     return surface === "dirt" && this.currentWeather.fog > 0.25;
@@ -2530,7 +2558,8 @@ export class GameApp {
       aimAmount: this.scopeAmount,
       aimHeld: this.aimHeld,
       stamina: this.condition.stamina,
-      weather: this.currentWeather
+      weather: this.currentWeather,
+      weatherProtection: this.structureShelterProtectionForLocalPlayer()
     });
     let registeredHit = false;
     let playedImpact = false;
@@ -3277,11 +3306,55 @@ export class GameApp {
     return false;
   }
 
+  private structureShelterAtPoint(point: Vec2): StructureShelter | null {
+    let best: StructureShelter | null = null;
+    for (const shelter of this.level.structureShelters) {
+      if (!pointInRaisedFootprint(point, shelter.footprint, 0.15)) {
+        continue;
+      }
+      if (!best || shelter.weatherProtection > best.weatherProtection) {
+        best = shelter;
+      }
+    }
+    return best;
+  }
+
+  private structureShelterProtectionAtPoint(point: Vec2): number {
+    return this.structureShelterAtPoint(point)?.weatherProtection ?? 0;
+  }
+
+  private structureShelterProtectionForCombatant(combatant: CombatantRef): number {
+    if (combatant.activeFixtureId?.endsWith("-roof")) {
+      return 0;
+    }
+    return this.structureShelterProtectionAtPoint(this.combatantPoint(combatant));
+  }
+
+  private structureShelterProtectionForLocalPlayer(): number {
+    return this.structureShelterProtectionForCombatant({
+      id: this.network.localId,
+      isLocal: true,
+      position: this.player.position,
+      velocity: this.player.velocity,
+      yaw: this.player.yaw,
+      pitch: this.player.pitch,
+      health: this.player.health,
+      crouching: this.player.crouching,
+      crouchAmount: this.player.crouchAmount,
+      height: this.player.height,
+      jumpHeight: this.player.jumpHeight,
+      activeFixtureId: this.player.activeFixtureId,
+      condition: this.condition,
+      loadout: this.loadout
+    });
+  }
+
   private lootSearchContext(amenity: AmenityPoint): LootSearchContext {
     const nearbyZombies = this.zombies.filter((zombie) => distance({ x: zombie.position.x, z: zombie.position.z }, amenity.position) < 56).length;
     const surface = this.movementSurfaceAt(amenity.position);
     const exposedSurface = surface === "asphalt" || surface === "concrete" || surface === "rail" || surface === "gravel";
-    const exposed = nearbyZombies >= 2 || exposedSurface || !this.isCoverNearPoint(amenity.position, 8, 9);
+    const sheltered = this.structureShelterProtectionAtPoint(amenity.position) >= 0.56;
+    const exposed = !sheltered && (nearbyZombies >= 2 || exposedSurface || !this.isCoverNearPoint(amenity.position, 8, 9));
     return {
       nearbyZombies,
       exposed,
@@ -3705,6 +3778,7 @@ export class GameApp {
   }
 
   private snapshot(): Snapshot {
+    const shelterProtection = this.structureShelterProtectionForLocalPlayer();
     return {
       ready: true,
       state: this.state,
@@ -3730,6 +3804,8 @@ export class GameApp {
       weatherCloudCover: Number(this.currentWeather.cloudCover.toFixed(2)),
       weatherFog: Number(this.currentWeather.fog.toFixed(2)),
       weatherWind: Number(this.currentWeather.wind.toFixed(2)),
+      sheltered: shelterProtection >= 0.56,
+      shelterProtection: Number(shelterProtection.toFixed(2)),
       lastHitZone: this.lastHitZone,
       meleeSwing: Number(this.meleeSwing.toFixed(3)),
       shotBloom: Number(this.shotBloom.toFixed(4)),
@@ -3959,7 +4035,11 @@ export class GameApp {
       this.muzzleLight.visible = this.muzzleTimer > 0 && stats.kind === "firearm";
       this.muzzleLight.intensity = 2.2 + this.rng.next() * 2.8;
     }
-    const weatherGripSway = 1 + this.currentWeather.precipitation * 0.08 + this.currentWeather.wind * 0.05;
+    const weatherProtection = this.structureShelterProtectionForLocalPlayer();
+    const weatherGripSway =
+      1 +
+      this.currentWeather.precipitation * (1 - weatherProtection * 0.72) * 0.08 +
+      this.currentWeather.wind * (1 - weatherProtection * 0.42) * 0.05;
     const stanceSway = (this.player.crouching ? 0.48 : 1) * weatherGripSway;
     const bob = Math.min(1, this.player.velocity.length() / 18) * stats.sway * stanceSway;
     const t = this.frame * 0.08;

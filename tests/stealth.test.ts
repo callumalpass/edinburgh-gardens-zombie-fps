@@ -50,6 +50,40 @@ describe("stealth tuning", () => {
     expect(lit).toBeGreaterThan(unlit);
   });
 
+  it("lets unlit structure shelter help crouched players without beating floodlights", () => {
+    const exposed = playerVisibilityMultiplier({
+      surface: "concrete",
+      crouching: true,
+      inCover: false,
+      elevatedHeight: 0,
+      flashlightOn: false,
+      structureShelter: 0,
+      weather: rainyWeather
+    });
+    const sheltered = playerVisibilityMultiplier({
+      surface: "concrete",
+      crouching: true,
+      inCover: false,
+      elevatedHeight: 0,
+      flashlightOn: false,
+      structureShelter: 0.8,
+      weather: rainyWeather
+    });
+    const shelteredLit = playerVisibilityMultiplier({
+      surface: "concrete",
+      crouching: true,
+      inCover: false,
+      elevatedHeight: 0,
+      flashlightOn: false,
+      structureLit: true,
+      structureShelter: 0.8,
+      weather: rainyWeather
+    });
+
+    expect(sheltered).toBeLessThan(exposed);
+    expect(shelteredLit).toBeGreaterThan(sheltered);
+  });
+
   it("masks subtle noises in rain but keeps hard alerts loud", () => {
     expect(weatherNoiseMaskForKind("scavenge", rainyWeather)).toBeLessThan(weatherNoiseMaskForKind("scavenge", dryWeather));
     expect(weatherNoiseMaskForKind("gunshot", rainyWeather)).toBe(1);

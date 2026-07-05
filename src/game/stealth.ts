@@ -8,6 +8,7 @@ export interface PlayerVisibilityContext {
   elevatedHeight: number;
   flashlightOn: boolean;
   structureLit?: boolean;
+  structureShelter?: number;
   weather: Pick<WeatherState, "precipitation" | "fog" | "cloudCover">;
 }
 
@@ -22,7 +23,9 @@ export function playerVisibilityMultiplier(context: PlayerVisibilityContext): nu
   const weatherConcealment = 1 - context.weather.fog * 0.18 - context.weather.precipitation * 0.08;
   const flashlightRisk = context.flashlightOn ? 1.18 + context.weather.cloudCover * 0.2 + context.weather.fog * 0.08 : 1;
   const structureLightRisk = context.structureLit ? 1.16 + context.weather.cloudCover * 0.08 : 1;
-  return Math.max(0.24, surfaceCover * crouchCover * elevation * weatherConcealment * flashlightRisk * structureLightRisk);
+  const shelter = Math.max(0, Math.min(1, context.structureShelter ?? 0));
+  const shelterCover = context.structureLit ? 1 : 1 - shelter * (context.crouching ? 0.16 : 0.05);
+  return Math.max(0.24, surfaceCover * crouchCover * elevation * weatherConcealment * flashlightRisk * structureLightRisk * shelterCover);
 }
 
 export function zombieFacingThreshold(crouching: boolean, inCover: boolean, flashlightOn: boolean): number {

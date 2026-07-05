@@ -32,6 +32,7 @@ import type {
   RandomSource,
   SkateBowlFeature,
   SportsFixture,
+  StructureShelter,
   StreetEdge,
   TreeProfile,
   UpgradeStation,
@@ -219,6 +220,7 @@ export class WorldBuilder {
     this.addLandmarks();
     this.addSportsFixtures();
     this.addMappedBuildings();
+    this.addStructureShelters();
     this.addMappedFences();
     this.addAmenities();
     this.addParkLifeDetails();
@@ -1697,6 +1699,56 @@ export class WorldBuilder {
   private addMappedBuildings(): void {
     for (const building of this.level.mappedBuildings) {
       this.addMappedBuilding(building);
+    }
+  }
+
+  private addStructureShelters(): void {
+    for (const shelter of this.level.structureShelters) {
+      this.addStructureShelter(shelter);
+    }
+  }
+
+  private addStructureShelter(shelter: StructureShelter): void {
+    const dryPatch = this.washDetailMaterial(`structure-shelter-dry-${shelter.kind}`, 0xc9bea0, 0.13 + shelter.weatherProtection * 0.08);
+    const dripMaterial = this.washDetailMaterial(`structure-shelter-drip-${shelter.kind}`, 0x3f4c48, 0.18);
+    if (shelter.footprint.shape === "circle") {
+      const patch = this.createTerrainOverlayDisc(shelter.footprint.center, shelter.footprint.radius, PATH_PATCH_SURFACE_Y + 0.012, dryPatch);
+      patch.receiveShadow = false;
+      patch.renderOrder = 1;
+      this.scene.add(patch);
+      const ring = this.createTerrainOverlayDisc(shelter.footprint.center, shelter.footprint.radius + 0.32, PATH_PATCH_SURFACE_Y + 0.014, dripMaterial);
+      ring.scale.setScalar(1.02);
+      ring.receiveShadow = false;
+      ring.renderOrder = 0;
+      this.scene.add(ring);
+      return;
+    }
+
+    const patch = this.createTerrainOverlayRect(
+      shelter.footprint.center,
+      shelter.footprint.angle,
+      shelter.footprint.halfX * 2,
+      shelter.footprint.halfZ * 2,
+      PATH_PATCH_SURFACE_Y + 0.012,
+      dryPatch
+    );
+    patch.receiveShadow = false;
+    patch.renderOrder = 1;
+    this.scene.add(patch);
+
+    for (const side of [-1, 1]) {
+      const edgeCenter = this.localPoint(shelter.footprint.center, shelter.footprint.angle, 0, side * shelter.footprint.halfZ);
+      const drip = this.createTerrainOverlayRect(
+        edgeCenter,
+        shelter.footprint.angle,
+        shelter.footprint.halfX * 2,
+        0.18,
+        PATH_PATCH_SURFACE_Y + 0.016,
+        dripMaterial
+      );
+      drip.receiveShadow = false;
+      drip.renderOrder = 2;
+      this.scene.add(drip);
     }
   }
 

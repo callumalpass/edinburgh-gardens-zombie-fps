@@ -16,6 +16,7 @@ export interface StaminaFrame {
   crouching: boolean;
   bleeding: boolean;
   bikePumpBoosted?: boolean;
+  sheltered?: boolean;
 }
 
 export const MAX_STAMINA = 100;
@@ -38,7 +39,7 @@ export function createInitialPlayerCondition(): PlayerCondition {
 export function nextStamina(stamina: number, dt: number, frame: StaminaFrame): number {
   let next = stamina;
   if (frame.sprinting) {
-    next -= 17 * (frame.bikePumpBoosted ? 0.62 : 1) * dt;
+    next -= 17 * (frame.bikePumpBoosted ? 0.62 : 1) * (frame.sheltered ? 0.94 : 1) * dt;
   }
   if (frame.scoped) {
     next -= 5.5 * dt;
@@ -50,7 +51,8 @@ export function nextStamina(stamina: number, dt: number, frame: StaminaFrame): n
       frame.searching ? 8 :
       frame.crouching ? 18 :
       14;
-    next += recovery * (frame.bleeding ? 0.78 : 1) * (frame.bikePumpBoosted ? 1.16 : 1) * dt;
+    const shelterRecovery = frame.sheltered ? 2.5 : 0;
+    next += (recovery + shelterRecovery) * (frame.bleeding ? 0.78 : 1) * (frame.bikePumpBoosted ? 1.16 : 1) * dt;
   }
 
   return clampStamina(next);

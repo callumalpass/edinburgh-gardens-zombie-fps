@@ -410,6 +410,41 @@ describe("map geometry", () => {
     expect(utilityBoxes.some((amenity) => amenity.linkedStructureId === "osm-building-543505640")).toBe(false);
   });
 
+  it("adds source-backed structure shelter zones around real buildings", () => {
+    const shelterIds = new Set(level.structureShelters.map((shelter) => shelter.id));
+    const landmarks = new Set(level.landmarks.map((landmark) => landmark.id));
+    const mappedBuildings = new Set(level.mappedBuildings.map((building) => building.id));
+
+    for (const id of [
+      "rotunda-roof-shelter",
+      "grandstand-covered-seats-shelter",
+      "osm-building-403753784-verandah-shelter",
+      "osm-building-543505702-shade-sail-shelter",
+      "north-toilets-roof-shelter"
+    ]) {
+      expect(shelterIds.has(id)).toBe(true);
+    }
+
+    for (const shelter of level.structureShelters) {
+      expect(shelter.source, `${shelter.id} missing source`).toBeTruthy();
+      expect(shelter.weatherProtection, `${shelter.id} weak protection`).toBeGreaterThan(0.5);
+      expect(shelter.weatherProtection, `${shelter.id} overpowered protection`).toBeLessThanOrEqual(0.85);
+      expect(pointInPolygon(shelter.footprint.center, level.boundary), `${shelter.id} outside boundary`).toBe(true);
+      expect(landmarks.has(shelter.linkedStructureId) || mappedBuildings.has(shelter.linkedStructureId)).toBe(true);
+    }
+
+    const rotunda = level.interactables.find((fixture) => fixture.id === "rotunda-deck");
+    const rotundaShelter = level.structureShelters.find((shelter) => shelter.id === "rotunda-roof-shelter");
+    const grandstand = level.interactables.find((fixture) => fixture.id === "grandstand-seats");
+    const grandstandShelter = level.structureShelters.find((shelter) => shelter.id === "grandstand-covered-seats-shelter");
+    const southRoof = level.interactables.find((fixture) => fixture.id === "south-toilets-roof");
+    const southAmenitiesShelter = level.structureShelters.find((shelter) => shelter.id === "osm-building-242003562-shelter");
+
+    expect(rotunda?.landingPosition && rotundaShelter && pointInRaisedFootprint(rotunda.landingPosition, rotundaShelter.footprint)).toBe(true);
+    expect(grandstand?.landingPosition && grandstandShelter && pointInRaisedFootprint(grandstand.landingPosition, grandstandShelter.footprint)).toBe(true);
+    expect(southRoof?.landingPosition && southAmenitiesShelter && pointInRaisedFootprint(southRoof.landingPosition, southAmenitiesShelter.footprint)).toBe(true);
+  });
+
   it("includes researched hardscape edge and drain features", () => {
     const hardscapeIds = new Set(level.hardscapeLines.map((line) => line.id));
     expect(level.hardscapeLines.length).toBeGreaterThanOrEqual(3);
