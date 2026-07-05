@@ -10,6 +10,7 @@ import {
   getWeaponStats,
   hasWeapon,
   startReload,
+  switchWeapon,
   upgradeCost
 } from "../src/game/weapons";
 
@@ -32,9 +33,11 @@ describe("weapon upgrades", () => {
   });
 
   it("supports magazine consumption and timed reloads", () => {
-    let loadout = createInitialLoadout();
+    let loadout = addWeapon(createInitialLoadout(), "carbine");
+    const beforeShot = loadout.ammoInMagazine;
+    expect(beforeShot).toBeGreaterThan(0);
     loadout = consumeRound(loadout);
-    expect(loadout.ammoInMagazine).toBe(getWeaponStats(loadout).magazineSize - 1);
+    expect(loadout.ammoInMagazine).toBe(beforeShot - 1);
     loadout = startReload(loadout, 10);
     expect(loadout.reloadingUntil).toBeGreaterThan(10);
     loadout = finishReloadIfReady(loadout, 100);
@@ -43,11 +46,25 @@ describe("weapon upgrades", () => {
 
   it("adds discovered weapons and switches active stats", () => {
     let loadout = createInitialLoadout();
+    expect(loadout.weaponId).toBe("knife");
+    expect(hasWeapon(loadout, "knife")).toBe(true);
+    expect(getWeaponStats(loadout).kind).toBe("melee");
     expect(hasWeapon(loadout, "shotgun")).toBe(false);
     loadout = addWeapon(loadout, "shotgun");
     expect(hasWeapon(loadout, "shotgun")).toBe(true);
     expect(loadout.weaponId).toBe("shotgun");
     expect(getWeaponStats(loadout).pellets).toBeGreaterThan(1);
+  });
+
+  it("preserves firearm magazines when switching through melee weapons", () => {
+    let loadout = addWeapon(createInitialLoadout(), "carbine");
+    loadout = consumeRound(loadout);
+    const carbineAmmo = loadout.ammoInMagazine;
+    loadout = addWeapon(loadout, "machete");
+    expect(getWeaponStats(loadout).kind).toBe("melee");
+    expect(loadout.ammoInMagazine).toBe(0);
+    loadout = switchWeapon(loadout, "carbine");
+    expect(loadout.ammoInMagazine).toBe(carbineAmmo);
   });
 
   it("models scoped damage falloff and hit zones", () => {

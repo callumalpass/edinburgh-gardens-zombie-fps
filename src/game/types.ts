@@ -100,6 +100,16 @@ export interface MappedFence {
   points: Vec2[];
 }
 
+export interface HardscapeLine {
+  id: string;
+  label: string;
+  kind: "basalt-edging" | "bluestone-wall" | "bluestone-drain";
+  points: Vec2[];
+  width: number;
+  height: number;
+  source?: string;
+}
+
 export interface UpgradeStation {
   id: string;
   label: string;
@@ -129,7 +139,7 @@ export interface AmenityPoint {
 export interface WeaponSpawn {
   id: string;
   label: string;
-  weaponId: "carbine" | "shotgun" | "smg" | "rifle";
+  weaponId: "knife" | "machete" | "carbine" | "shotgun" | "smg" | "rifle";
   position: Vec2;
 }
 
@@ -145,6 +155,7 @@ export interface LevelData {
   elevationMax: number;
   mappedBuildings: MappedBuilding[];
   mappedFences: MappedFence[];
+  hardscapeLines: HardscapeLine[];
   obstacles: CollisionObstacle[];
   spawnPoints: Vec2[];
   pickupPoints: Vec2[];

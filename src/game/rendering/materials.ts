@@ -55,6 +55,11 @@ export function createGameMaterials(rng: RandomSource): GameMaterials {
   const timber = new THREE.MeshStandardMaterial({ color: 0x7b5636, roughness: 0.78 });
   const metal = new THREE.MeshStandardMaterial({ color: 0x8a928a, metalness: 0.35, roughness: 0.48 });
   const brick = new THREE.MeshStandardMaterial({ color: 0x9b5a43, roughness: 0.8 });
+  const basalt = new THREE.MeshStandardMaterial({
+    map: createCanvasTexture("basalt", rng),
+    color: 0x56615d,
+    roughness: 0.93
+  });
   const darkOpening = new THREE.MeshBasicMaterial({ color: 0x141813 });
   const zombie = new THREE.MeshStandardMaterial({ color: 0x6f7752, roughness: 0.9 });
   const zombieDark = new THREE.MeshStandardMaterial({ color: 0x33402d, roughness: 0.95 });
@@ -76,13 +81,14 @@ export function createGameMaterials(rng: RandomSource): GameMaterials {
     timber,
     metal,
     brick,
+    basalt,
     darkOpening,
     zombie,
     zombieDark
   };
 }
 
-function createCanvasTexture(kind: "grass" | "path" | "gravel" | "asphalt" | "concrete" | "rubber" | "mulch", rng: RandomSource): THREE.CanvasTexture {
+function createCanvasTexture(kind: "grass" | "path" | "gravel" | "asphalt" | "concrete" | "rubber" | "mulch" | "basalt", rng: RandomSource): THREE.CanvasTexture {
   const specs = {
     grass: { base: "#6f865c", fleck: [38, 72, 38], repeat: 34, count: 1050 },
     path: { base: "#b79962", fleck: [83, 63, 42], repeat: 11, count: 900 },
@@ -90,7 +96,8 @@ function createCanvasTexture(kind: "grass" | "path" | "gravel" | "asphalt" | "co
     asphalt: { base: "#2f332f", fleck: [74, 78, 72], repeat: 18, count: 1100 },
     concrete: { base: "#979486", fleck: [107, 106, 97], repeat: 10, count: 850 },
     rubber: { base: "#704b41", fleck: [54, 40, 36], repeat: 12, count: 1100 },
-    mulch: { base: "#644833", fleck: [42, 29, 21], repeat: 13, count: 1000 }
+    mulch: { base: "#644833", fleck: [42, 29, 21], repeat: 13, count: 1000 },
+    basalt: { base: "#4e5a56", fleck: [28, 35, 34], repeat: 7, count: 1250 }
   } as const;
   const spec = specs[kind];
   const canvas = document.createElement("canvas");
@@ -106,7 +113,7 @@ function createCanvasTexture(kind: "grass" | "path" | "gravel" | "asphalt" | "co
     const size = kind === "asphalt" || kind === "gravel" ? rng.range(1, 3) : rng.range(1, 4);
     ctx.fillRect(rng.range(0, 256), rng.range(0, 256), size, size);
   }
-  if (kind === "concrete" || kind === "asphalt") {
+  if (kind === "concrete" || kind === "asphalt" || kind === "basalt") {
     ctx.strokeStyle = kind === "concrete" ? "rgba(70, 72, 66, 0.12)" : "rgba(180, 180, 162, 0.08)";
     ctx.lineWidth = 1;
     for (let i = 0; i < 10; i += 1) {

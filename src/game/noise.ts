@@ -1,7 +1,7 @@
 import { distance } from "./geo";
 import type { Vec2 } from "./types";
 
-export type NoiseKind = "footstep" | "sprint" | "gunshot" | "reload" | "climb" | "objective" | "scream";
+export type NoiseKind = "footstep" | "sprint" | "gunshot" | "melee" | "reload" | "climb" | "objective" | "scream";
 
 export interface NoiseEvent {
   id: number;
@@ -21,7 +21,8 @@ export interface NoiseProfile {
 export const NOISE_PROFILES: Record<NoiseKind, NoiseProfile> = {
   footstep: { radius: 13, intensity: 0.34, ttl: 1.2 },
   sprint: { radius: 31, intensity: 0.72, ttl: 1.65 },
-  gunshot: { radius: 118, intensity: 1, ttl: 3.8 },
+  gunshot: { radius: 210, intensity: 1.18, ttl: 5.2 },
+  melee: { radius: 10, intensity: 0.22, ttl: 0.9 },
   reload: { radius: 16, intensity: 0.28, ttl: 1.4 },
   climb: { radius: 44, intensity: 0.68, ttl: 2.2 },
   objective: { radius: 58, intensity: 0.78, ttl: 2.6 },

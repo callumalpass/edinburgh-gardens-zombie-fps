@@ -54,6 +54,17 @@ describe("map geometry", () => {
     expect(level.mappedBuildings.filter((building) => pointInPolygon(polygonCentroid(building.polygon), level.boundary)).length).toBe(level.mappedBuildings.length);
   });
 
+  it("includes researched hardscape edge and drain features", () => {
+    const level = createLevelData();
+    const hardscapeIds = new Set(level.hardscapeLines.map((line) => line.id));
+    expect(level.hardscapeLines.length).toBeGreaterThanOrEqual(4);
+    expect(hardscapeIds.has("hardscape-elm-avenue-basalt-edging")).toBe(true);
+    expect(hardscapeIds.has("hardscape-oval-east-bluestone-drain")).toBe(true);
+    expect(hardscapeIds.has("hardscape-alfred-crescent-retaining-wall")).toBe(true);
+    expect(level.hardscapeLines.every((line) => line.source?.includes("CMP"))).toBe(true);
+    expect(level.hardscapeLines.filter((line) => line.points.some((point) => pointInPolygon(point, level.boundary))).length).toBe(level.hardscapeLines.length);
+  });
+
   it("includes the major memorial and plinth landmarks", () => {
     const level = createLevelData();
     const landmarkIds = new Set(level.landmarks.map((landmark) => landmark.id));

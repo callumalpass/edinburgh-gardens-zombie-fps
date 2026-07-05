@@ -46,6 +46,7 @@ export function chooseZombieWeaponDrop(type: ZombieType, wave: number, rng: Rand
     return null;
   }
   const roll = rng.next();
+  if (roll < 0.14) return "machete";
   if (wave >= 4 && roll > 0.82) return "rifle";
   if (roll > 0.64) return "shotgun";
   if (roll > 0.3) return "smg";

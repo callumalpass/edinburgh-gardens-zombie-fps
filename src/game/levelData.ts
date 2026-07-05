@@ -12,6 +12,7 @@ import type {
   BoxObstacle,
   CircularObstacle,
   GeoPoint,
+  HardscapeLine,
   Landmark,
   LevelData,
   LevelPath,
@@ -33,6 +34,7 @@ export const RESEARCH_NOTES = [
   "Yarra public-art records identify the Queen Victoria statue plinth in a circular garden bed, the Sportsman's War Memorial behind the bowls club, and the rotating Plinth Program work currently represented as Zone Red.",
   "Vicmap Elevation open metro contour/ground-point services show sampled park elevations from roughly 27m to 32m AHD inside the mapped boundary; those samples drive the terrain interpolation.",
   "A 2026-07-05 bounded OSM path/service inventory added missing asphalt connectors around the northern paths, Queen Victoria plinth, central rail-trail link, southern entries and bowling-club service path.",
+  "The Edinburgh Gardens CMP records asphalt paths with remnant basalt/bluestone edging, a bluestone-pitcher open drain on the oval's eastern perimeter and a bluestone retaining wall along Alfred Crescent; these are represented as hardscape lines.",
   "See docs/edinburgh-gardens-research.md for source URLs, query notes, data licensing notes and implementation decisions."
 ];
 
@@ -334,6 +336,40 @@ const RAIL_TRAIL_GEO = [
   g(-37.7857044, 144.9844439),
   g(-37.7856436, 144.9845177),
   g(-37.7855758, 144.9845932)
+];
+
+const ELM_AVENUE_PATH_GEO = [
+  g(-37.78572, 144.98226),
+  g(-37.78642, 144.98247),
+  g(-37.78712, 144.98272),
+  g(-37.78801, 144.98299),
+  g(-37.78905, 144.98332)
+];
+
+const ALFRED_CRESCENT_PATH_GEO = [
+  g(-37.78939, 144.98354),
+  g(-37.78900, 144.98433),
+  g(-37.78841, 144.98515),
+  g(-37.78750, 144.98564),
+  g(-37.78653, 144.98547),
+  g(-37.78595, 144.98492),
+  g(-37.78563, 144.98431)
+];
+
+const OVAL_EAST_DRAIN_GEO = [
+  g(-37.78840, 144.98191),
+  g(-37.78857, 144.98203),
+  g(-37.78887, 144.98212),
+  g(-37.78918, 144.98210),
+  g(-37.78945, 144.98196)
+];
+
+const ALFRED_CRESCENT_RETAINING_WALL_GEO = [
+  g(-37.78944, 144.98345),
+  g(-37.78919, 144.98400),
+  g(-37.78883, 144.98458),
+  g(-37.78838, 144.98510),
+  g(-37.78772, 144.98546)
 ];
 
 const OSM_TREE_GEO = [
@@ -1534,6 +1570,53 @@ const OSM_FENCES_GEO: Array<{ id: string; label: string; points: GeoPoint[] }> =
   }
 ];
 
+const HARDSCAPE_LINES_GEO: Array<{
+  id: string;
+  label: string;
+  kind: HardscapeLine["kind"];
+  width: number;
+  height: number;
+  source: string;
+  points: GeoPoint[];
+}> = [
+  {
+    id: "hardscape-elm-avenue-basalt-edging",
+    label: "Remnant basalt edging along the formal north-south path",
+    kind: "basalt-edging",
+    width: 3.2,
+    height: 0.18,
+    source: "Edinburgh Gardens CMP 2004 section 3.4.26; 3068 Group CMP summary",
+    points: ELM_AVENUE_PATH_GEO
+  },
+  {
+    id: "hardscape-alfred-crescent-basalt-edging",
+    label: "Bluestone and basalt edging on Alfred Crescent path sections",
+    kind: "basalt-edging",
+    width: 3.5,
+    height: 0.16,
+    source: "Edinburgh Gardens CMP 2004 section 3.4.26",
+    points: ALFRED_CRESCENT_PATH_GEO
+  },
+  {
+    id: "hardscape-oval-east-bluestone-drain",
+    label: "Bluestone-pitcher open drain east of the oval",
+    kind: "bluestone-drain",
+    width: 0.9,
+    height: 0.12,
+    source: "Edinburgh Gardens CMP 2004 section 3.4.27",
+    points: OVAL_EAST_DRAIN_GEO
+  },
+  {
+    id: "hardscape-alfred-crescent-retaining-wall",
+    label: "Bluestone retaining wall along southern Alfred Crescent",
+    kind: "bluestone-wall",
+    width: 0.46,
+    height: 0.72,
+    source: "Edinburgh Gardens CMP 2004 section 3.4.28",
+    points: ALFRED_CRESCENT_RETAINING_WALL_GEO
+  }
+];
+
 function obstacleFromPolygon(id: string, label: string, polygon: Vec2[], padding: number): CircularObstacle {
   const center = polygonCentroid(polygon);
   return {
@@ -1638,28 +1721,14 @@ export function createLevelData(): LevelData {
     "elm-avenue-main",
     "Elm Avenue",
     "footway",
-    [
-      g(-37.78572, 144.98226),
-      g(-37.78642, 144.98247),
-      g(-37.78712, 144.98272),
-      g(-37.78801, 144.98299),
-      g(-37.78905, 144.98332)
-    ],
+    ELM_AVENUE_PATH_GEO,
     3.2
   );
   const crescentPath = pathFromGeo(
     "alfred-crescent-inside-path",
     "Alfred Crescent path",
     "perimeter",
-    [
-      g(-37.78939, 144.98354),
-      g(-37.78900, 144.98433),
-      g(-37.78841, 144.98515),
-      g(-37.78750, 144.98564),
-      g(-37.78653, 144.98547),
-      g(-37.78595, 144.98492),
-      g(-37.78563, 144.98431)
-    ],
+    ALFRED_CRESCENT_PATH_GEO,
     3.5
   );
   const ovalPath = pathFromGeo(
@@ -1716,6 +1785,15 @@ export function createLevelData(): LevelData {
     label: fence.label,
     points: polygonFromGeo(fence.points)
   })).filter((fence) => fence.points.some((point) => pointInPolygon(point, boundary)));
+  const hardscapeLines: HardscapeLine[] = HARDSCAPE_LINES_GEO.map((line) => ({
+    id: line.id,
+    label: line.label,
+    kind: line.kind,
+    points: polygonFromGeo(line.points),
+    width: line.width,
+    height: line.height,
+    source: line.source
+  })).filter((line) => line.points.some((point) => pointInPolygon(point, boundary)));
 
   const landmarks: Landmark[] = [
     { id: "park", label: "Edinburgh Gardens", kind: "park", polygon: boundary },
@@ -1820,6 +1898,7 @@ export function createLevelData(): LevelData {
     elevationMax,
     mappedBuildings,
     mappedFences,
+    hardscapeLines,
     obstacles: [
       boxObstacleFromPolygon("grandstand", "Kevin Murray Stand", grandstand, 1.0, 0.45),
       polygonObstacleFromPolygon("tennis", "Fitzroy Tennis Club", tennis),
@@ -1946,6 +2025,7 @@ export function createLevelData(): LevelData {
     ],
     amenities,
     weaponSpawns: [
+      { id: "north-bbq-machete", label: "Machete near the north BBQ shelter", weaponId: "machete", position: northBbq },
       { id: "grandstand-shotgun", label: "Shotgun under the stand", weaponId: "shotgun", position: grandstandCenter },
       { id: "tennis-smg", label: "SMG in the tennis locker", weaponId: "smg", position: geoToWorld(g(-37.78808, 144.98224)) },
       { id: "rail-rifle", label: "Rifle by the rail trail", weaponId: "rifle", position: geoToWorld(g(-37.78708, 144.98304)) },

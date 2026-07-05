@@ -45,6 +45,7 @@ test("game loop advances and gameplay helpers mutate state", async ({ page }) =>
   await page.waitForFunction(() => window.__EGAME__?.ready === true);
   const first = await page.evaluate(() => window.__EGAME__!.snapshot());
   expect(first.renderedTrees).toBeGreaterThanOrEqual(145);
+  expect(first.weapon).toBe("knife");
   await page.waitForFunction((frame) => window.__EGAME__!.snapshot().frame > frame, first.frame);
   const second = await page.evaluate(() => window.__EGAME__!.snapshot());
   expect(second.frame).toBeGreaterThan(first.frame);
@@ -63,11 +64,29 @@ test("game loop advances and gameplay helpers mutate state", async ({ page }) =>
   const spawned = await page.evaluate(() => window.__EGAME__!.snapshot());
   expect(spawned.zombies).toBeGreaterThan(0);
   expect(spawned.miniMapVisibleZombies).toBeLessThanOrEqual(spawned.zombies);
+  const zombieStates = await page.evaluate(() => window.__EGAME__!.testZombieStates());
+  expect(zombieStates.some((zombie) => zombie.aiState === "wander" && zombie.hasTarget && (zombie.targetDistance ?? 0) > 3)).toBe(true);
+  const grounding = await page.evaluate(() => window.__EGAME__!.testGrounding());
+  expect(grounding.zombiesMeasured).toBeGreaterThan(0);
+  expect(Math.abs(grounding.playerGroundDelta)).toBeLessThan(0.01);
+  expect(grounding.maxZombieGroundDelta).toBeLessThan(0.01);
+  expect(grounding.maxZombieFootPenetration).toBeLessThan(0.085);
+  expect(grounding.maxZombieFootGap).toBeLessThan(0.18);
+  const afterKnife = await page.evaluate(() => {
+    window.__EGAME__!.testShoot();
+    return window.__EGAME__!.snapshot();
+  });
+  expect(afterKnife.weapon).toBe("knife");
+  expect(afterKnife.ammo).toBe(0);
+  expect(await page.evaluate(() => window.__EGAME__!.testPickupWeapon("carbine"))).toBe(true);
+  const beforeShot = await page.evaluate(() => window.__EGAME__!.snapshot());
+  expect(beforeShot.weapon).toBe("carbine");
+  expect(beforeShot.ammo).toBeGreaterThan(0);
   const afterShot = await page.evaluate(() => {
     window.__EGAME__!.testShoot();
     return window.__EGAME__!.snapshot();
   });
-  expect(afterShot.ammo).toBeLessThan(spawned.ammo);
+  expect(afterShot.ammo).toBeLessThan(beforeShot.ammo);
   expect(afterShot.shotBloom).toBeGreaterThan(0);
   const objective = await page.evaluate(() => window.__EGAME__!.testStartIntermission());
   expect(objective?.id).toBeTruthy();

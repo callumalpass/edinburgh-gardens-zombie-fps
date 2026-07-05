@@ -203,6 +203,8 @@ export class GameApp {
       testInteract: (fixtureId?: string) => this.testInteract(fixtureId),
       testUseAmenity: (kind?: AmenityPoint["kind"]) => this.testUseAmenity(kind),
       testMiniMapVisibility: () => this.testMiniMapVisibility(),
+      testGrounding: () => this.testGrounding(),
+      testZombieStates: () => this.testZombieStates(),
       testSetCrouching: (crouching: boolean) => this.testSetCrouching(crouching),
       testStartIntermission: () => this.testStartIntermission()
     };
@@ -278,7 +280,7 @@ export class GameApp {
       if (event.code === "KeyE") {
         this.handleInteract();
       }
-      if (["Digit1", "Digit2", "Digit3", "Digit4"].includes(event.code)) {
+      if (["Digit1", "Digit2", "Digit3", "Digit4", "Digit5"].includes(event.code)) {
         const index = Number(event.code.replace("Digit", "")) - 1;
         const weaponId = this.loadout.inventory[index];
         if (weaponId) {
@@ -619,15 +621,18 @@ export class GameApp {
 
   private addZombie(spawn: ZombieSpawn): void {
     const mesh = this.meshFactory.createZombieMesh(spawn.type);
-    mesh.position.set(spawn.position.x, this.groundY(spawn.position), spawn.position.z);
+    const groundY = this.groundY(spawn.position);
+    const position = new THREE.Vector3(spawn.position.x, groundY, spawn.position.z);
+    mesh.position.copy(position);
     this.scene.add(mesh);
     const maxHealth = spawn.health;
     const profile = zombieProfile(spawn.type);
+    const spawnPoint = { x: spawn.position.x, z: spawn.position.z };
     this.zombies.push({
       id: this.nextZombieId++,
       type: spawn.type,
       mesh,
-      position: mesh.position,
+      position,
       health: maxHealth,
       maxHealth,
       speed: spawn.speed,
@@ -635,9 +640,10 @@ export class GameApp {
       reward: spawn.reward,
       attackCooldown: 0,
       walkOffset: this.rng.range(0, Math.PI * 2),
-      aiState: "idle",
-      target: null,
+      aiState: "wander",
+      target: this.chooseWanderTarget(spawnPoint, profile.radius),
       lastKnownPlayer: null,
+      wanderTimer: this.rng.range(3.5, 8.5),
       staggerTimer: 0,
       screamCooldown: this.rng.range(2.5, 6)
     });
@@ -655,20 +661,25 @@ export class GameApp {
       zombie.attackCooldown -= dt;
       zombie.staggerTimer = Math.max(0, zombie.staggerTimer - dt);
       zombie.screamCooldown = Math.max(0, zombie.screamCooldown - dt);
+      zombie.wanderTimer = Math.max(0, zombie.wanderTimer - dt);
+      const targetReached = zombie.target ? distance(zombiePoint, zombie.target) < (zombie.aiState === "wander" ? 3.8 : 2.8) : true;
 
       if (seesPlayer) {
         zombie.aiState = "chase";
         zombie.lastKnownPlayer = playerPoint;
         zombie.target = playerPoint;
-      } else if (heardNoise && zombie.aiState !== "chase") {
-        zombie.aiState = "investigate";
-        zombie.target = heardNoise.position;
       } else if (zombie.aiState === "chase" && zombie.lastKnownPlayer) {
         zombie.aiState = "investigate";
         zombie.target = zombie.lastKnownPlayer;
-      } else if (zombie.target && distance(zombiePoint, zombie.target) < 2.8) {
-        zombie.aiState = "idle";
-        zombie.target = null;
+      } else if (heardNoise) {
+        zombie.aiState = "investigate";
+        zombie.target = { ...heardNoise.position };
+      } else if (zombie.aiState === "investigate" && targetReached) {
+        this.setZombieWanderTarget(zombie, zombiePoint);
+      } else if (zombie.aiState === "wander" && (targetReached || zombie.wanderTimer <= 0)) {
+        this.setZombieWanderTarget(zombie, zombiePoint);
+      } else if (!zombie.target) {
+        this.setZombieWanderTarget(zombie, zombiePoint);
       }
 
       if (zombie.type === "screamer" && zombie.aiState === "chase" && zombie.screamCooldown <= 0) {
@@ -685,9 +696,18 @@ export class GameApp {
       if (distanceToTarget > 0.001) {
         toTarget.normalize();
       }
-      const chaseBoost = zombie.aiState === "chase" && distanceToPlayer < 18 ? 1.18 : zombie.aiState === "idle" ? 0 : 1;
+      const stateSpeed =
+        zombie.aiState === "wander"
+          ? zombie.type === "crawler"
+            ? 0.42
+            : 0.34
+          : zombie.aiState === "investigate"
+            ? 0.82
+            : distanceToPlayer < 18
+              ? 1.18
+              : 1;
       const staggerScale = zombie.staggerTimer > 0 ? 0.24 : 1;
-      const speed = zombie.speed * chaseBoost * staggerScale;
+      const speed = zombie.speed * stateSpeed * staggerScale;
       const candidate = zombie.position.clone().addScaledVector(toTarget, speed * dt);
       let next = clampToPolygon({ x: candidate.x, z: candidate.z }, this.level.boundary, 2.5);
       for (const obstacle of this.level.obstacles) {
@@ -698,7 +718,7 @@ export class GameApp {
       if (distanceToTarget > 0.1) {
         zombie.mesh.rotation.y = Math.atan2(toTarget.x, toTarget.z);
       }
-      zombie.mesh.position.y = groundY + Math.sin(now * 7 + zombie.walkOffset) * 0.07;
+      zombie.mesh.position.set(next.x, groundY + (Math.sin(now * 7 + zombie.walkOffset) + 1) * 0.035, next.z);
       this.animateZombie(zombie, now, distanceToPlayer);
       if (this.player.height < 1.4 && distanceToPlayer < zombie.radius + PLAYER_RADIUS + 0.8 && zombie.attackCooldown <= 0) {
         this.player.health -= profile.attackDamage;
@@ -724,12 +744,63 @@ export class GameApp {
     return !this.isLineOfSightBlocked(zombiePoint, playerPoint, PLAYER_RADIUS);
   }
 
+  private setZombieWanderTarget(zombie: Zombie, origin: Vec2): void {
+    zombie.aiState = "wander";
+    zombie.lastKnownPlayer = null;
+    zombie.target = this.chooseWanderTarget(origin, zombie.radius);
+    zombie.wanderTimer = this.rng.range(3.5, 8.5);
+  }
+
+  private chooseWanderTarget(origin: Vec2, zombieRadius: number): Vec2 {
+    let best = { ...origin };
+    let bestDistance = 0;
+
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const angle = this.rng.range(0, Math.PI * 2);
+      const radius = this.rng.range(12, 42);
+      let point = clampToPolygon(
+        {
+          x: origin.x + Math.cos(angle) * radius,
+          z: origin.z + Math.sin(angle) * radius
+        },
+        this.level.boundary,
+        4
+      );
+      for (const obstacle of this.level.obstacles) {
+        point = resolveObstacle(point, zombieRadius + 0.2, obstacle);
+      }
+
+      const travelDistance = distance(origin, point);
+      if (travelDistance > 6) {
+        return point;
+      }
+      if (travelDistance > bestDistance) {
+        best = point;
+        bestDistance = travelDistance;
+      }
+    }
+
+    if (bestDistance > 1) {
+      return best;
+    }
+
+    const fallbackPoints = this.level.pickupPoints.length > 0 ? this.level.pickupPoints : this.level.spawnPoints;
+    if (fallbackPoints.length === 0) {
+      return { ...origin };
+    }
+    return clampToPolygon(this.rng.pick(fallbackPoints), this.level.boundary, 4);
+  }
+
   private shoot(now: number, force = false): void {
     if (this.state !== "playing") {
       return;
     }
     const stats = getWeaponStats(this.loadout);
     if (!force && now - this.lastShotAt < stats.fireDelay) {
+      return;
+    }
+    if (stats.kind === "melee") {
+      this.swingMelee(now, stats);
       return;
     }
     if (this.loadout.reloadingUntil > now) {
@@ -748,7 +819,7 @@ export class GameApp {
     this.recoil = Math.min(1.75, this.recoil + stats.recoilKick * aimRecoil);
     this.recoilYaw += this.rng.range(-stats.recoilDrift, stats.recoilDrift) * aimRecoil;
     this.shotBloom = Math.min(stats.maxBloom, this.shotBloom + stats.bloomPerShot);
-    this.noise.emit("gunshot", { x: this.player.position.x, z: this.player.position.z }, stats.noiseMultiplier * (this.player.crouching ? 0.86 : 1));
+    this.noise.emit("gunshot", { x: this.player.position.x, z: this.player.position.z }, stats.noiseMultiplier * (this.player.crouching ? 0.96 : 1));
     this.muzzleTimer = 0.055;
     if (this.muzzleFlash) this.muzzleFlash.visible = true;
     if (this.muzzleLight) this.muzzleLight.visible = true;
@@ -789,6 +860,39 @@ export class GameApp {
     }
     if (!registeredHit) {
       this.lastHitZone = null;
+    }
+  }
+
+  private swingMelee(now: number, stats: ReturnType<typeof getWeaponStats>): void {
+    this.lastShotAt = now;
+    this.aimHeld = false;
+    this.recoil = Math.min(1.25, this.recoil + stats.recoilKick);
+    this.recoilYaw += this.rng.range(-stats.recoilDrift, stats.recoilDrift);
+    this.noise.emit("melee", { x: this.player.position.x, z: this.player.position.z }, stats.noiseMultiplier * (this.player.crouching ? 0.7 : 1));
+    this.playTone(this.loadout.weaponId === "machete" ? 210 : 280, 0.045, "triangle", 0.035);
+
+    const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion);
+    const hits = this.findZombieHits(this.camera.position, direction, stats.range, 1);
+    const hit = hits[0];
+    if (!hit) {
+      this.lastHitZone = null;
+      return;
+    }
+
+    hit.zombie.health -= damageAtDistance(stats, hit.distance, hit.zone);
+    const profile = zombieProfile(hit.zombie.type);
+    hit.zombie.staggerTimer = Math.max(hit.zombie.staggerTimer, (stats.staggerPower + (hit.zone === "head" ? 0.18 : 0)) / profile.staggerResistance);
+    hit.zombie.aiState = "chase";
+    hit.zombie.target = { x: this.player.position.x, z: this.player.position.z };
+    hit.zombie.lastKnownPlayer = hit.zombie.target;
+    this.lastHitZone = hit.zone;
+    this.createHitSpark(hit.point);
+    this.playTone(this.loadout.weaponId === "machete" ? 130 : 150, 0.05, "sawtooth", 0.025);
+    if (hit.zone === "head") {
+      this.flashStatus("Clean strike");
+    }
+    if (hit.zombie.health <= 0) {
+      this.killZombie(hit.zombie);
     }
   }
 
@@ -1212,6 +1316,43 @@ export class GameApp {
     return result;
   }
 
+  private testGrounding(): ReturnType<GameTestApi["testGrounding"]> {
+    const playerGroundDelta = this.player.position.y - this.groundY({ x: this.player.position.x, z: this.player.position.z });
+    let maxZombieGroundDelta = 0;
+    let maxZombieFootGap = 0;
+    let maxZombieFootPenetration = 0;
+    const bounds = new THREE.Box3();
+
+    for (const zombie of this.zombies) {
+      bounds.setFromObject(zombie.mesh);
+      const groundY = this.groundY({ x: zombie.position.x, z: zombie.position.z });
+      maxZombieGroundDelta = Math.max(maxZombieGroundDelta, Math.abs(zombie.position.y - groundY));
+      const delta = bounds.min.y - groundY;
+      maxZombieFootGap = Math.max(maxZombieFootGap, delta);
+      maxZombieFootPenetration = Math.max(maxZombieFootPenetration, -delta);
+    }
+
+    return {
+      playerGroundDelta: Number(playerGroundDelta.toFixed(4)),
+      maxZombieGroundDelta: Number(maxZombieGroundDelta.toFixed(4)),
+      maxZombieFootGap: Number(maxZombieFootGap.toFixed(4)),
+      maxZombieFootPenetration: Number(maxZombieFootPenetration.toFixed(4)),
+      zombiesMeasured: this.zombies.length
+    };
+  }
+
+  private testZombieStates(): ReturnType<GameTestApi["testZombieStates"]> {
+    return this.zombies.map((zombie) => ({
+      id: zombie.id,
+      type: zombie.type,
+      aiState: zombie.aiState,
+      hasTarget: Boolean(zombie.target),
+      targetDistance: zombie.target ? Number(distance({ x: zombie.position.x, z: zombie.position.z }, zombie.target).toFixed(2)) : null,
+      x: Number(zombie.position.x.toFixed(2)),
+      z: Number(zombie.position.z.toFixed(2))
+    }));
+  }
+
   private testSetCrouching(crouching: boolean): boolean {
     this.testCrouchOverride = crouching;
     this.player.crouching = crouching;
@@ -1395,9 +1536,15 @@ export class GameApp {
 
   private rebuildViewWeapon(): void {
     this.weaponModel.clear();
+    const stats = getWeaponStats(this.loadout);
     const weapon = this.meshFactory.createWeaponMesh(this.loadout.weaponId, true);
-    weapon.position.set(0.42, -0.42, -0.78);
-    weapon.rotation.set(0.03, -0.08, 0.02);
+    if (stats.kind === "melee") {
+      weapon.position.set(0.46, -0.5, -0.54);
+      weapon.rotation.set(-0.34, -0.28, 0.34);
+    } else {
+      weapon.position.set(0.42, -0.42, -0.78);
+      weapon.rotation.set(0.03, -0.08, 0.02);
+    }
     this.weaponModel.add(weapon);
 
     const flash = new THREE.Mesh(
@@ -1443,12 +1590,12 @@ export class GameApp {
     this.shotBloom = Math.max(0, this.shotBloom - dt * (this.loadout.weaponId === "smg" ? 0.018 : 0.028));
     this.muzzleTimer = Math.max(0, this.muzzleTimer - dt);
     if (this.muzzleFlash) {
-      this.muzzleFlash.visible = this.muzzleTimer > 0;
+      this.muzzleFlash.visible = this.muzzleTimer > 0 && stats.kind === "firearm";
       this.muzzleFlash.scale.setScalar(0.85 + this.rng.next() * 0.55);
       this.muzzleFlash.rotation.z += dt * 21;
     }
     if (this.muzzleLight) {
-      this.muzzleLight.visible = this.muzzleTimer > 0;
+      this.muzzleLight.visible = this.muzzleTimer > 0 && stats.kind === "firearm";
       this.muzzleLight.intensity = 2.2 + this.rng.next() * 2.8;
     }
     const stanceSway = this.player.crouching ? 0.48 : 1;
@@ -1457,15 +1604,16 @@ export class GameApp {
     const reloadProgress = this.reloadProgress(performance.now() / 1000);
     const reloadPose = reloadProgress > 0 ? 0.62 + Math.sin(reloadProgress * Math.PI) * 0.38 : 0;
     const scopeTuck = THREE.MathUtils.smoothstep(this.scopeAmount, 0, 1);
+    const meleeSwing = stats.kind === "melee" ? Math.min(1, this.recoil) : 0;
     this.weaponModel.position.set(
-      Math.sin(t) * 0.018 * bob + scopeTuck * 0.26,
-      Math.abs(Math.cos(t)) * -0.018 * bob - reloadPose * 0.16 - scopeTuck * 0.5 - this.player.crouchAmount * 0.04,
-      this.recoil * 0.07 + reloadPose * 0.06 + scopeTuck * 0.14
+      Math.sin(t) * 0.018 * bob + scopeTuck * 0.26 + meleeSwing * 0.16,
+      Math.abs(Math.cos(t)) * -0.018 * bob - reloadPose * 0.16 - scopeTuck * 0.5 - this.player.crouchAmount * 0.04 - meleeSwing * 0.08,
+      this.recoil * 0.07 + reloadPose * 0.06 + scopeTuck * 0.14 - meleeSwing * 0.18
     );
     this.weaponModel.rotation.set(
-      this.recoil * 0.05 + reloadPose * 0.22 - scopeTuck * 0.08,
-      -this.recoilYaw * 0.01 - reloadPose * 0.12 - scopeTuck * 0.24,
-      Math.sin(t * 0.5) * 0.015 * bob + reloadPose * 0.16 - scopeTuck * 0.12
+      this.recoil * 0.05 + reloadPose * 0.22 - scopeTuck * 0.08 - meleeSwing * 0.7,
+      -this.recoilYaw * 0.01 - reloadPose * 0.12 - scopeTuck * 0.24 - meleeSwing * 0.22,
+      Math.sin(t * 0.5) * 0.015 * bob + reloadPose * 0.16 - scopeTuck * 0.12 + meleeSwing * 0.55
     );
     this.weaponModel.scale.setScalar(THREE.MathUtils.lerp(1, 0.56, scopeTuck));
   }
@@ -1541,7 +1689,8 @@ export class GameApp {
   private animateZombie(zombie: Zombie, now: number, distanceToPlayer: number): void {
     const arms = zombie.mesh.userData.arms as THREE.Mesh[] | undefined;
     const head = zombie.mesh.userData.head as THREE.Mesh | undefined;
-    const pace = zombie.type === "sprinter" ? 10 : zombie.type === "bloater" ? 4.2 : zombie.type === "crawler" ? 5.4 : zombie.type === "screamer" ? 7.6 : 6.8;
+    const basePace = zombie.type === "sprinter" ? 10 : zombie.type === "bloater" ? 4.2 : zombie.type === "crawler" ? 5.4 : zombie.type === "screamer" ? 7.6 : 6.8;
+    const pace = basePace * (zombie.aiState === "wander" ? 0.56 : zombie.aiState === "investigate" ? 0.82 : 1);
     const swing = Math.sin(now * pace + zombie.walkOffset);
     if (arms) {
       arms.forEach((arm, index) => {

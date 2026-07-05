@@ -30,6 +30,7 @@ These notes record the real-world sources and implementation decisions used to s
   - Used for context only. The 1 m DEM is documented as higher-resolution terrain data, but general public web-service access is licensed rather than open, so it is not embedded in this project.
 - 3068 Group Edinburgh Gardens heritage review archive: https://the3068group.org/edinburgh-gardens-studies/
   - Used for heritage emphasis: elm avenues and rows, Peterson Oval, English Oak Avenue, Holm Oak specimen, Dutch Elm circles, former railway/shared path and rotunda.
+  - Also used to locate the CMP source for asphalt paths with remnant basalt/bluestone edging, the bluestone-pitcher open drain and the Alfred Crescent retaining wall.
 - Yarra northern precinct consultation: https://yoursayyarra.com.au/eg-north
   - Used for the northern activity precinct: playground, BBQ/picnic tables, chess/game elements, table tennis, skate/BMX and basketball half-court context.
 - City of Yarra significant trees dataset metadata: https://data.gov.au/data/dataset/yarra-significant-trees
@@ -53,6 +54,7 @@ These notes record the real-world sources and implementation decisions used to s
 - Paths, amenities, mapped buildings, trees, fixtures, memorials, entrances and pickups are placed relative to interpolated terrain height.
 - Existing OSM-derived paths, amenities, trees, sports facilities, memorials and park landmarks remain in `src/game/levelData.ts`.
 - Detailed OSM path/service research is stored in `docs/research/osm-path-service-inventory-2026-07-05.md`.
+- Hardscape and terrain-edge research is stored in `docs/research/hardscape-terrain-edges-2026-07-05.md`.
 
 ## Data Notes
 

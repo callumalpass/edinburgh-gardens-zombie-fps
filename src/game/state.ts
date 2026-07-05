@@ -6,7 +6,7 @@ import type { ActiveObjective } from "./objectives";
 
 export type GameStateName = "ready" | "playing" | "gameover";
 export type HitZone = "head" | "body" | "legs";
-export type ZombieAiState = "idle" | "investigate" | "chase";
+export type ZombieAiState = "wander" | "investigate" | "chase";
 export type WavePhase = "active" | "intermission";
 
 export interface Zombie {
@@ -24,6 +24,7 @@ export interface Zombie {
   aiState: ZombieAiState;
   target: { x: number; z: number } | null;
   lastKnownPlayer: { x: number; z: number } | null;
+  wanderTimer: number;
   staggerTimer: number;
   screamCooldown: number;
 }
@@ -106,6 +107,14 @@ export interface GameTestApi {
   testInteract: (fixtureId?: string) => boolean;
   testUseAmenity: (kind?: AmenityPoint["kind"]) => boolean;
   testMiniMapVisibility: () => { front: boolean; behind: boolean; occluded: boolean };
+  testGrounding: () => {
+    playerGroundDelta: number;
+    maxZombieGroundDelta: number;
+    maxZombieFootGap: number;
+    maxZombieFootPenetration: number;
+    zombiesMeasured: number;
+  };
+  testZombieStates: () => Array<{ id: number; type: ZombieType; aiState: ZombieAiState; hasTarget: boolean; targetDistance: number | null; x: number; z: number }>;
   testSetCrouching: (crouching: boolean) => boolean;
   testStartIntermission: () => ActiveObjective | null;
 }

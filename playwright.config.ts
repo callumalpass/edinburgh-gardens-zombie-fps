@@ -1,5 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const baseURL = process.env.E2E_BASE_URL ?? "http://127.0.0.1:5481";
+
 export default defineConfig({
   testDir: "./tests",
   testMatch: "**/*.spec.ts",
@@ -9,7 +11,7 @@ export default defineConfig({
     timeout: 8_000
   },
   use: {
-    baseURL: "http://127.0.0.1:5480",
+    baseURL,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
     launchOptions: {
@@ -26,10 +28,12 @@ export default defineConfig({
       use: { ...devices["Pixel 7"], viewport: { width: 412, height: 915 } }
     }
   ],
-  webServer: {
-    command: "npm run dev -- --host 127.0.0.1",
-    url: "http://127.0.0.1:5480",
-    reuseExistingServer: !process.env.CI,
-    timeout: 90_000
-  }
+  webServer: process.env.PW_SKIP_WEB_SERVER
+    ? undefined
+    : {
+        command: "node node_modules/vite/bin/vite.js preview --host 127.0.0.1 --port 5481 --strictPort",
+        url: baseURL,
+        reuseExistingServer: true,
+        timeout: 90_000
+      }
 });

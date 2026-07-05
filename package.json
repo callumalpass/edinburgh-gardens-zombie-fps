@@ -8,7 +8,8 @@
     "build": "tsc --noEmit && vite build",
     "test": "vitest",
     "test:run": "vitest run",
-    "test:e2e": "playwright test"
+    "preview:e2e": "vite preview --host 127.0.0.1 --port 5481 --strictPort",
+    "test:e2e": "node scripts/run-e2e.mjs"
   },
   "dependencies": {
     "three": "^0.185.1"

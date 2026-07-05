@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { distance, geoToWorld, makeCircle, pointInPolygon, polygonCentroid } from "../geo";
-import type { LevelData, LevelPath, Landmark, MappedBuilding, RandomSource, SignificantTreePoint, Vec2 } from "../types";
+import type { HardscapeLine, LevelData, LevelPath, Landmark, MappedBuilding, RandomSource, SignificantTreePoint, Vec2 } from "../types";
 
 const COLLISION_Y = 0.04;
 const TERRAIN_GRID_STEP = 7.5;
@@ -27,6 +27,7 @@ export interface GameMaterials {
   timber: THREE.MeshStandardMaterial;
   metal: THREE.MeshStandardMaterial;
   brick: THREE.MeshStandardMaterial;
+  basalt: THREE.MeshStandardMaterial;
   darkOpening: THREE.MeshBasicMaterial;
   zombie: THREE.MeshStandardMaterial;
   zombieDark: THREE.MeshStandardMaterial;
@@ -64,6 +65,7 @@ export class WorldBuilder {
     this.addMownLawnBands();
     this.addLawnWearPatches();
     this.addPaths();
+    this.addHardscapeLines();
     this.addDampGroundDetails();
     this.addRailTrailRemnants();
     this.addLandmarks();
@@ -87,7 +89,7 @@ export class WorldBuilder {
       const lamp = new THREE.PointLight(0xd5a948, 1.2, 18);
       lamp.position.y = 2.4;
       group.add(lamp);
-      group.position.set(station.position.x, this.groundY(station.position), station.position.z);
+      group.position.set(station.position.x, this.boxSupportY(station.position, 0, 1.3, 0.9), station.position.z);
       this.scene.add(group);
     }
   }
@@ -102,6 +104,38 @@ export class WorldBuilder {
 
   private averageGroundY(points: readonly Vec2[]): number {
     return this.averageGroundYAt(points);
+  }
+
+  private cleanPolygon(polygon: readonly Vec2[]): Vec2[] {
+    return distance(polygon[0], polygon[polygon.length - 1]) < 0.01 ? polygon.slice(0, -1) : [...polygon];
+  }
+
+  private supportY(points: readonly Vec2[], pad = 0): number {
+    return Math.max(...points.map((point) => this.groundY(point))) + pad;
+  }
+
+  private boxSupportY(center: Vec2, rotation: number, halfX: number, halfZ: number, pad = 0): number {
+    return this.supportY(
+      [
+        this.localPoint(center, rotation, -halfX, -halfZ),
+        this.localPoint(center, rotation, halfX, -halfZ),
+        this.localPoint(center, rotation, halfX, halfZ),
+        this.localPoint(center, rotation, -halfX, halfZ)
+      ],
+      pad
+    );
+  }
+
+  private radialSupportY(center: Vec2, radius: number, pad = 0): number {
+    const points = Array.from({ length: 8 }, (_, index) => {
+      const angle = (index / 8) * Math.PI * 2;
+      return {
+        x: center.x + Math.cos(angle) * radius,
+        z: center.z + Math.sin(angle) * radius
+      };
+    });
+    points.push(center);
+    return this.supportY(points, pad);
   }
 
   private addGround(): void {
@@ -236,11 +270,9 @@ export class WorldBuilder {
   private addPathSegment(a: Vec2, b: Vec2, width: number, material: THREE.Material, y: number, height: number): void {
     const length = distance(a, b);
     if (length < 0.05) return;
-    const center = { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 };
-    const geometry = new THREE.BoxGeometry(length, height, width);
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(center.x, this.groundY(center) + y, center.z);
-    mesh.rotation.y = -Math.atan2(b.z - a.z, b.x - a.x);
+    const angle = Math.atan2(b.z - a.z, b.x - a.x);
+    const center = { x: (a.x + b.x) * 0.5, z: (a.z + b.z) * 0.5 };
+    const mesh = this.createTerrainRect(center, angle, length, width, y, height, material);
     mesh.receiveShadow = true;
     this.scene.add(mesh);
   }
@@ -289,10 +321,8 @@ export class WorldBuilder {
       for (let along = dashLength * 0.5; along < segmentLength; along += dashLength + gap) {
         const actualLength = Math.min(dashLength, segmentLength - along + dashLength * 0.5);
         const t = along / segmentLength;
-        const mesh = new THREE.Mesh(new THREE.BoxGeometry(actualLength, 0.018, width), material);
         const point = { x: a.x + dx * t + nx * offset, z: a.z + dz * t + nz * offset };
-        mesh.position.set(point.x, this.groundY(point) + 0.132, point.z);
-        mesh.rotation.y = -angle;
+        const mesh = this.createTerrainRect(point, angle, actualLength, width, 0.132, 0.018, material);
         this.scene.add(mesh);
       }
     }
@@ -308,12 +338,111 @@ export class WorldBuilder {
       const dz = b.z - a.z;
       const nx = -dz / segmentLength;
       const nz = dx / segmentLength;
-      const mesh = new THREE.Mesh(new THREE.BoxGeometry(segmentLength, 0.014, width), material);
       const center = { x: (a.x + b.x) / 2 + nx * offset, z: (a.z + b.z) / 2 + nz * offset };
-      mesh.position.set(center.x, this.groundY(center) + 0.13, center.z);
-      mesh.rotation.y = -Math.atan2(dz, dx);
+      const mesh = this.createTerrainRect(center, Math.atan2(dz, dx), segmentLength, width, 0.13, 0.014, material);
       this.scene.add(mesh);
     }
+  }
+
+  private addHardscapeLines(): void {
+    for (const line of this.level.hardscapeLines) {
+      if (line.kind === "basalt-edging") {
+        this.addBasaltEdging(line);
+      } else if (line.kind === "bluestone-drain") {
+        this.addBluestoneDrain(line);
+      } else {
+        this.addWallLine(line);
+      }
+    }
+  }
+
+  private addWallLine(line: HardscapeLine): void {
+    for (let i = 0; i < line.points.length - 1; i += 1) {
+      const a = line.points[i];
+      const b = line.points[i + 1];
+      const segmentLength = distance(a, b);
+      if (segmentLength < 0.5) continue;
+      const center = { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 };
+      const wall = this.createTerrainRect(center, Math.atan2(b.z - a.z, b.x - a.x), segmentLength, line.width, line.height * 0.5, line.height, this.materials.basalt);
+      wall.castShadow = true;
+      wall.receiveShadow = true;
+      this.scene.add(wall);
+    }
+  }
+
+  private addBluestoneDrain(line: HardscapeLine): void {
+    for (let i = 0; i < line.points.length - 1; i += 1) {
+      const a = line.points[i];
+      const b = line.points[i + 1];
+      const segmentLength = distance(a, b);
+      if (segmentLength < 0.5) continue;
+      const angle = Math.atan2(b.z - a.z, b.x - a.x);
+      const center = { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 };
+      const channel = this.createTerrainRect(center, angle, segmentLength, line.width, 0.055, 0.045, this.materials.puddle);
+      channel.receiveShadow = true;
+      this.scene.add(channel);
+      for (const side of [-1, 1]) {
+        const offset = side * (line.width * 0.45);
+        const nx = -Math.sin(angle);
+        const nz = Math.cos(angle);
+        const edgeCenter = { x: center.x + nx * offset, z: center.z + nz * offset };
+        const edge = this.createTerrainRect(edgeCenter, angle, segmentLength, 0.16, line.height * 0.5, line.height, this.materials.basalt);
+        edge.castShadow = true;
+        edge.receiveShadow = true;
+        this.scene.add(edge);
+      }
+    }
+  }
+
+  private addBasaltEdging(line: HardscapeLine): void {
+    const placements: Array<{ position: Vec2; angle: number; scale: number }> = [];
+    const spacing = 4.8;
+    for (let i = 0; i < line.points.length - 1; i += 1) {
+      const a = line.points[i];
+      const b = line.points[i + 1];
+      const segmentLength = distance(a, b);
+      if (segmentLength < spacing) continue;
+      const dx = b.x - a.x;
+      const dz = b.z - a.z;
+      const angle = Math.atan2(dz, dx);
+      const nx = -dz / segmentLength;
+      const nz = dx / segmentLength;
+      const count = Math.floor(segmentLength / spacing);
+      for (let step = 1; step <= count; step += 1) {
+        if ((step + i) % 5 === 0) continue;
+        const t = step / (count + 1);
+        const wobble = ((step * 17 + i * 11) % 9 - 4) * 0.035;
+        for (const side of [-1, 1]) {
+          const offset = side * (line.width * 0.5 + 0.32 + wobble);
+          placements.push({
+            position: { x: a.x + dx * t + nx * offset, z: a.z + dz * t + nz * offset },
+            angle,
+            scale: 0.84 + ((step + i * 3) % 5) * 0.055
+          });
+        }
+      }
+    }
+
+    if (placements.length === 0) return;
+    const geometry = new THREE.BoxGeometry(0.52, line.height, 0.36);
+    const mesh = new THREE.InstancedMesh(geometry, this.materials.basalt, placements.length);
+    const matrix = new THREE.Matrix4();
+    const quaternion = new THREE.Quaternion();
+    const scale = new THREE.Vector3();
+    for (let i = 0; i < placements.length; i += 1) {
+      const placement = placements[i];
+      quaternion.setFromEuler(new THREE.Euler(0, -placement.angle + ((i % 7) - 3) * 0.025, 0));
+      scale.set(placement.scale, 0.9 + (i % 4) * 0.08, 0.88 + (i % 3) * 0.06);
+      matrix.compose(
+        new THREE.Vector3(placement.position.x, this.groundY(placement.position) + line.height * 0.48, placement.position.z),
+        quaternion,
+        scale
+      );
+      mesh.setMatrixAt(i, matrix);
+    }
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    this.scene.add(mesh);
   }
 
   private addRailTrailRemnants(): void {
@@ -336,8 +465,8 @@ export class WorldBuilder {
           const t = step / (sleeperCount + 1);
           const sleeper = new THREE.Mesh(new THREE.BoxGeometry(path.width * 0.92, 0.065, 0.28), sleeperMaterial);
           const point = { x: a.x + dx * t, z: a.z + dz * t };
-          sleeper.position.set(point.x, this.groundY(point) + 0.145, point.z);
           sleeper.rotation.y = -angle + Math.PI / 2;
+          sleeper.position.set(point.x, this.boxSupportY(point, sleeper.rotation.y, path.width * 0.46, 0.14) + 0.145, point.z);
           sleeper.castShadow = true;
           sleeper.receiveShadow = true;
           this.scene.add(sleeper);
@@ -404,14 +533,15 @@ export class WorldBuilder {
     const center = polygonCentroid(polygon);
     const pad = new THREE.Mesh(new THREE.CircleGeometry(3.4, 24), this.materials.concrete);
     const padPoint = { x: center.x - 6.2, z: center.z + 4.4 };
-    pad.position.set(padPoint.x, this.groundY(padPoint) + 0.07, padPoint.z);
+    const padGroundY = this.radialSupportY(padPoint, 3.4);
+    pad.position.set(padPoint.x, padGroundY + 0.07, padPoint.z);
     pad.rotation.x = -Math.PI / 2;
     pad.receiveShadow = true;
     this.scene.add(pad);
     for (const offset of [-0.7, 0.7]) {
       const chess = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.08, 0.65), new THREE.MeshStandardMaterial({ color: offset < 0 ? 0xe6dfc2 : 0x343a34, roughness: 0.6 }));
       const chessPoint = { x: center.x - 6.2 + offset, z: center.z + 4.4 };
-      chess.position.set(chessPoint.x, this.groundY(chessPoint) + 0.76, chessPoint.z);
+      chess.position.set(chessPoint.x, padGroundY + 0.76, chessPoint.z);
       chess.castShadow = true;
       this.scene.add(chess);
     }
@@ -486,19 +616,17 @@ export class WorldBuilder {
   }
 
   private addPrismPolygon(polygon: Vec2[], height: number, material: THREE.Material, yOffset = 0): THREE.Mesh {
-    const cleanPolygon =
-      distance(polygon[0], polygon[polygon.length - 1]) < 0.01 ? polygon.slice(0, -1) : polygon;
-    const baseY = this.averageGroundY(cleanPolygon) + yOffset;
+    const cleanPolygon = this.cleanPolygon(polygon);
     const shapePoints = cleanPolygon.map((point) => new THREE.Vector2(point.x, point.z));
     const triangles = THREE.ShapeUtils.triangulateShape(shapePoints, []);
     const vertices: number[] = [];
     const indices: number[] = [];
 
     for (const point of cleanPolygon) {
-      vertices.push(point.x, baseY, point.z);
+      vertices.push(point.x, this.groundY(point) + yOffset, point.z);
     }
     for (const point of cleanPolygon) {
-      vertices.push(point.x, baseY + height, point.z);
+      vertices.push(point.x, this.groundY(point) + yOffset + height, point.z);
     }
 
     for (const triangle of triangles) {
@@ -522,14 +650,26 @@ export class WorldBuilder {
   }
 
   private addFlatPolygon(polygon: Vec2[], material: THREE.Material, y = 0.08, opacity = 1): THREE.Mesh {
-    const shape = new THREE.Shape();
-    polygon.forEach((point, index) => (index === 0 ? shape.moveTo(point.x, point.z) : shape.lineTo(point.x, point.z)));
-    shape.closePath();
-    const geometry = new THREE.ShapeGeometry(shape);
-    geometry.rotateX(Math.PI / 2);
+    const cleanPolygon = this.cleanPolygon(polygon);
+    const shapePoints = cleanPolygon.map((point) => new THREE.Vector2(point.x, point.z));
+    const triangles = THREE.ShapeUtils.triangulateShape(shapePoints, []);
+    const vertices: number[] = [];
+    const uvs: number[] = [];
+    const indices: number[] = [];
+    for (const point of cleanPolygon) {
+      vertices.push(point.x, this.groundY(point) + y, point.z);
+      uvs.push(point.x * 0.04, point.z * 0.04);
+    }
+    for (const triangle of triangles) {
+      indices.push(triangle[0], triangle[1], triangle[2]);
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+    geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+    geometry.setIndex(indices);
+    geometry.computeVertexNormals();
     const meshMaterial = opacity < 1 ? material.clone() : material;
     const mesh = new THREE.Mesh(geometry, meshMaterial);
-    mesh.position.y = this.averageGroundY(polygon) + y;
     if (opacity < 1) {
       meshMaterial.transparent = true;
       meshMaterial.opacity = opacity;
@@ -542,11 +682,12 @@ export class WorldBuilder {
   private addBlockPolygon(polygon: Vec2[], height: number, material: THREE.Material): void {
     const footprint = this.fitBoxFromPolygon(polygon, 0.8, 0.45);
     const center = footprint.center;
-    const baseY = this.groundY(center);
+    const rotation = -footprint.angle;
+    const baseY = this.boxSupportY(center, rotation, footprint.halfX, footprint.halfZ);
     const geometry = new THREE.BoxGeometry(footprint.halfX * 2, height, footprint.halfZ * 2);
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.set(center.x, baseY + height / 2, center.z);
-    mesh.rotation.y = -footprint.angle;
+    mesh.rotation.y = rotation;
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     this.scene.add(mesh);
@@ -559,12 +700,56 @@ export class WorldBuilder {
     for (let row = 0; row < 4; row += 1) {
       const seat = new THREE.Mesh(new THREE.BoxGeometry(footprint.halfX * 1.65, 0.18, 0.34), this.materials.timber);
       seat.position.set(center.x, baseY + 1.2 + row * 0.45, center.z);
-      seat.rotation.y = mesh.rotation.y;
-      const forward = new THREE.Vector3(Math.sin(mesh.rotation.y), 0, Math.cos(mesh.rotation.y));
+      seat.rotation.y = rotation;
+      const forward = new THREE.Vector3(Math.sin(rotation), 0, Math.cos(rotation));
       seat.position.addScaledVector(forward, -footprint.halfZ + 0.6 + row * 0.35);
       seat.castShadow = true;
       this.scene.add(seat);
     }
+  }
+
+  private createTerrainRect(
+    center: Vec2,
+    angle: number,
+    length: number,
+    width: number,
+    y: number,
+    height: number,
+    material: THREE.Material
+  ): THREE.Mesh {
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const hx = length * 0.5;
+    const hz = width * 0.5;
+    const corners = [
+      { x: center.x - cos * hx + sin * hz, z: center.z - sin * hx - cos * hz },
+      { x: center.x + cos * hx + sin * hz, z: center.z + sin * hx - cos * hz },
+      { x: center.x + cos * hx - sin * hz, z: center.z + sin * hx + cos * hz },
+      { x: center.x - cos * hx - sin * hz, z: center.z - sin * hx + cos * hz }
+    ];
+    const vertices: number[] = [];
+    const uvs: number[] = [];
+    for (const point of corners) {
+      vertices.push(point.x, this.groundY(point) + y + height * 0.5, point.z);
+      uvs.push(point.x * 0.04, point.z * 0.04);
+    }
+    for (const point of corners) {
+      vertices.push(point.x, this.groundY(point) + y - height * 0.5, point.z);
+      uvs.push(point.x * 0.04, point.z * 0.04);
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+    geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+    geometry.setIndex([
+      0, 1, 2, 0, 2, 3,
+      5, 4, 7, 5, 7, 6,
+      4, 5, 1, 4, 1, 0,
+      5, 6, 2, 5, 2, 1,
+      6, 7, 3, 6, 3, 2,
+      7, 4, 0, 7, 0, 3
+    ]);
+    geometry.computeVertexNormals();
+    return new THREE.Mesh(geometry, material);
   }
 
   private fitBoxFromPolygon(polygon: Vec2[], paddingX: number, paddingZ: number): { center: Vec2; halfX: number; halfZ: number; angle: number } {
@@ -610,7 +795,7 @@ export class WorldBuilder {
   ): THREE.Mesh {
     const position = this.localPoint(center, rotation, localX, localZ);
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), material);
-    mesh.position.set(position.x, this.groundY(position) + y, position.z);
+    mesh.position.set(position.x, this.boxSupportY(position, rotation, width * 0.5, depth * 0.5) + y, position.z);
     mesh.rotation.y = rotation;
     mesh.castShadow = castShadow;
     mesh.receiveShadow = true;
@@ -733,7 +918,7 @@ export class WorldBuilder {
     const angle = -Math.atan2(endPoint.z - startPoint.z, endPoint.x - startPoint.x);
     const rail = new THREE.Mesh(new THREE.BoxGeometry(segmentLength, 0.16, 0.14), railMaterial);
     const center = { x: (startPoint.x + endPoint.x) / 2, z: (startPoint.z + endPoint.z) / 2 };
-    rail.position.set(center.x, this.groundY(center) + height * 0.55, center.z);
+    rail.position.set(center.x, this.supportY([startPoint, endPoint]) + height * 0.55, center.z);
     rail.rotation.y = angle;
     rail.castShadow = true;
     this.scene.add(rail);
@@ -754,10 +939,8 @@ export class WorldBuilder {
       const b = polygon[(i + 1) % polygon.length];
       const segmentLength = distance(a, b);
       if (segmentLength < 0.3) continue;
-      const hedge = new THREE.Mesh(new THREE.BoxGeometry(segmentLength, height, width), this.materials.hedge);
       const center = { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 };
-      hedge.position.set(center.x, this.groundY(center) + height / 2, center.z);
-      hedge.rotation.y = -Math.atan2(b.z - a.z, b.x - a.x);
+      const hedge = this.createTerrainRect(center, Math.atan2(b.z - a.z, b.x - a.x), segmentLength, width, height * 0.5, height, this.materials.hedge);
       hedge.castShadow = true;
       hedge.receiveShadow = true;
       this.scene.add(hedge);
@@ -840,9 +1023,7 @@ export class WorldBuilder {
   private addOvalSportsDetails(polygon: Vec2[], center: Vec2): void {
     const minZ = Math.min(...polygon.map((point) => point.z));
     const maxZ = Math.max(...polygon.map((point) => point.z));
-    const pitch = new THREE.Mesh(new THREE.BoxGeometry(4.6, 0.06, 20), new THREE.MeshStandardMaterial({ color: 0xb8a36e, roughness: 0.93 }));
-    pitch.position.set(center.x, this.groundY(center) + 0.14, center.z);
-    pitch.rotation.y = 0.12;
+    const pitch = this.createTerrainRect(center, 0.12, 4.6, 20, 0.14, 0.06, new THREE.MeshStandardMaterial({ color: 0xb8a36e, roughness: 0.93 }));
     pitch.receiveShadow = true;
     this.scene.add(pitch);
     this.addFieldLines(center, 4.8, 20.5, 0.12, [
@@ -966,7 +1147,7 @@ export class WorldBuilder {
     slide.rotation.x = -0.38;
     slide.castShadow = true;
     frame.add(slide);
-    frame.position.set(center.x, this.groundY(center), center.z);
+    frame.position.set(center.x, this.boxSupportY(center, 0, 2.6, 2.35), center.z);
     this.scene.add(frame);
     this.addSwingSet({ x: center.x - 5.6, z: center.z - 3.2 }, 0.25);
     this.addBalanceLogs({ x: center.x + 4.5, z: center.z + 3.8 }, -0.45);
@@ -1001,7 +1182,7 @@ export class WorldBuilder {
       seat.castShadow = true;
       group.add(seat);
     }
-    group.position.set(position.x, this.groundY(position), position.z);
+    group.position.set(position.x, this.boxSupportY(position, rotation, 2.05, 0.65), position.z);
     group.rotation.y = rotation;
     this.scene.add(group);
   }
@@ -1015,7 +1196,7 @@ export class WorldBuilder {
       log.castShadow = true;
       group.add(log);
     }
-    group.position.set(position.x, this.groundY(position), position.z);
+    group.position.set(position.x, this.boxSupportY(position, rotation, 2.25, 0.9), position.z);
     group.rotation.y = rotation;
     this.scene.add(group);
   }
@@ -1027,7 +1208,7 @@ export class WorldBuilder {
     for (const offset of [-6, 6]) {
       const ramp = new THREE.Mesh(new THREE.BoxGeometry(9, 1.2, 4), new THREE.MeshStandardMaterial({ color: 0x6d706c, roughness: 0.76 }));
       const point = { x: center.x + offset, z: center.z };
-      ramp.position.set(point.x, this.groundY(point) + 0.65, point.z);
+      ramp.position.set(point.x, this.boxSupportY(point, 0, 4.5, 2) + 0.65, point.z);
       ramp.rotation.z = offset < 0 ? 0.22 : -0.22;
       ramp.castShadow = true;
       ramp.receiveShadow = true;
@@ -1051,7 +1232,7 @@ export class WorldBuilder {
       post.castShadow = true;
       group.add(post);
     }
-    group.position.set(position.x, this.groundY(position), position.z);
+    group.position.set(position.x, this.boxSupportY(position, rotation, length * 0.5, 0.18), position.z);
     group.rotation.y = rotation;
     this.scene.add(group);
   }
@@ -1102,7 +1283,7 @@ export class WorldBuilder {
   private addToilets(landmark: Landmark): void {
     const center = landmark.polygon ? polygonCentroid(landmark.polygon) : landmark.position;
     if (!center) return;
-    const groundY = this.groundY(center);
+    const groundY = this.boxSupportY(center, 0, 3.55, 3.1);
     const pad = new THREE.Mesh(new THREE.BoxGeometry(7.1, 0.08, 6.2), this.materials.concrete);
     pad.position.set(center.x, groundY + 0.07, center.z);
     pad.receiveShadow = true;
@@ -1132,17 +1313,18 @@ export class WorldBuilder {
   }
 
   private addBbq(position: Vec2): void {
+    const groundY = this.radialSupportY(position, 3.2);
     const pad = new THREE.Mesh(new THREE.CircleGeometry(3.2, 24), this.materials.concrete);
-    pad.position.set(position.x, this.groundY(position) + 0.075, position.z);
+    pad.position.set(position.x, groundY + 0.075, position.z);
     pad.rotation.x = -Math.PI / 2;
     pad.receiveShadow = true;
     this.scene.add(pad);
     const base = new THREE.Mesh(new THREE.BoxGeometry(2.1, 1.0, 1.4), this.materials.metal);
-    base.position.set(position.x, this.groundY(position) + 0.55, position.z);
+    base.position.set(position.x, groundY + 0.55, position.z);
     base.castShadow = true;
     this.scene.add(base);
     const shelter = new THREE.Mesh(new THREE.CylinderGeometry(2.4, 2.8, 0.32, 4), this.materials.timber);
-    shelter.position.set(position.x, this.groundY(position) + 3.2, position.z);
+    shelter.position.set(position.x, groundY + 3.2, position.z);
     shelter.rotation.y = Math.PI / 4;
     shelter.castShadow = true;
     this.scene.add(shelter);
@@ -1263,7 +1445,7 @@ export class WorldBuilder {
         group.add(leg);
       }
     }
-    group.position.set(position.x, this.groundY(position), position.z);
+    group.position.set(position.x, this.boxSupportY(position, angle, 1.6, 0.78), position.z);
     group.rotation.y = angle;
     this.scene.add(group);
   }
@@ -1291,7 +1473,7 @@ export class WorldBuilder {
       leg.castShadow = true;
       group.add(leg);
     }
-    group.position.set(position.x, this.groundY(position), position.z);
+    group.position.set(position.x, this.boxSupportY(position, angle, 1.68, 1.23), position.z);
     group.rotation.y = angle;
     this.scene.add(group);
   }
@@ -1333,7 +1515,7 @@ export class WorldBuilder {
       paddle.castShadow = true;
       group.add(paddle);
     }
-    group.position.set(position.x, this.groundY(position), position.z);
+    group.position.set(position.x, this.boxSupportY(position, angle, 2.1, 1.4), position.z);
     group.rotation.y = angle;
     this.scene.add(group);
   }
@@ -1380,14 +1562,14 @@ export class WorldBuilder {
       rack.castShadow = true;
       group.add(rack);
     }
-    group.position.set(position.x, this.groundY(position), position.z);
+    group.position.set(position.x, this.boxSupportY(position, angle, 1.15, 0.45), position.z);
     group.rotation.y = angle;
     this.scene.add(group);
   }
 
   private addSupplyCrate(position: Vec2, angle: number): void {
     const crate = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.72, 0.95), new THREE.MeshStandardMaterial({ color: 0x80603b, roughness: 0.76 }));
-    crate.position.set(position.x, this.groundY(position) + 0.38, position.z);
+    crate.position.set(position.x, this.boxSupportY(position, angle, 0.65, 0.48) + 0.38, position.z);
     crate.rotation.y = angle;
     crate.castShadow = true;
     crate.receiveShadow = true;
@@ -1443,7 +1625,7 @@ export class WorldBuilder {
     roof.position.y = 5.65;
     roof.castShadow = true;
     group.add(roof);
-    group.position.set(position.x, this.groundY(position), position.z);
+    group.position.set(position.x, this.radialSupportY(position, 5.7), position.z);
     this.scene.add(group);
     this.addLabel("Rotunda", position, 7);
   }
@@ -1463,26 +1645,27 @@ export class WorldBuilder {
   }
 
   private addQueenVictoriaPlinth(position: Vec2): void {
-    const groundY = this.groundY(position);
+    const bedGroundY = this.radialSupportY(position, 5.7);
+    const plinthGroundY = this.boxSupportY(position, 0, 1.45, 1.45);
     const bed = new THREE.Mesh(new THREE.CircleGeometry(5.7, 40), new THREE.MeshStandardMaterial({ color: 0x4e693f, roughness: 0.96 }));
-    bed.position.set(position.x, groundY + 0.11, position.z);
+    bed.position.set(position.x, bedGroundY + 0.11, position.z);
     bed.rotation.x = -Math.PI / 2;
     bed.receiveShadow = true;
     this.scene.add(bed);
 
     const stone = new THREE.MeshStandardMaterial({ color: 0xb8ad91, roughness: 0.72 });
     const base = new THREE.Mesh(new THREE.BoxGeometry(2.9, 0.55, 2.9), stone);
-    base.position.set(position.x, groundY + 0.38, position.z);
+    base.position.set(position.x, plinthGroundY + 0.38, position.z);
     base.castShadow = true;
     base.receiveShadow = true;
     this.scene.add(base);
     const plinth = new THREE.Mesh(new THREE.BoxGeometry(2.15, 1.45, 2.15), stone);
-    plinth.position.set(position.x, groundY + 1.35, position.z);
+    plinth.position.set(position.x, plinthGroundY + 1.35, position.z);
     plinth.castShadow = true;
     plinth.receiveShadow = true;
     this.scene.add(plinth);
     const cap = new THREE.Mesh(new THREE.BoxGeometry(2.55, 0.28, 2.55), stone);
-    cap.position.set(position.x, groundY + 2.22, position.z);
+    cap.position.set(position.x, plinthGroundY + 2.22, position.z);
     cap.castShadow = true;
     this.scene.add(cap);
 
@@ -1498,14 +1681,14 @@ export class WorldBuilder {
       bar.position.set(0, 1.28 - row * 0.34, -0.165);
       sculpture.add(bar);
     }
-    sculpture.position.set(position.x, groundY + 2.36, position.z);
+    sculpture.position.set(position.x, plinthGroundY + 2.36, position.z);
     sculpture.rotation.y = -0.45;
     this.scene.add(sculpture);
     this.addLabel("Queen Victoria plinth", position, 5.2);
   }
 
   private addSportsmansMemorial(position: Vec2): void {
-    const groundY = this.groundY(position);
+    const groundY = this.boxSupportY(position, 0, 1.9, 1.1);
     const stone = new THREE.MeshStandardMaterial({ color: 0xd0c2a2, roughness: 0.68 });
     const bronze = new THREE.MeshStandardMaterial({ color: 0x8a5d2d, metalness: 0.35, roughness: 0.5 });
     const base = new THREE.Mesh(new THREE.BoxGeometry(3.8, 0.35, 2.2), stone);
@@ -1533,7 +1716,7 @@ export class WorldBuilder {
   }
 
   private addCookMemorialSite(position: Vec2): void {
-    const groundY = this.groundY(position);
+    const groundY = this.radialSupportY(position, 1.95);
     const stone = new THREE.MeshStandardMaterial({ color: 0xaea58e, roughness: 0.78 });
     const metal = new THREE.MeshStandardMaterial({ color: 0x39403c, metalness: 0.25, roughness: 0.46 });
     const pad = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 1.95, 0.22, 18), stone);
@@ -1629,10 +1812,8 @@ export class WorldBuilder {
       const b = this.level.boundary[(i + 1) % this.level.boundary.length];
       const segmentLength = distance(a, b);
       if (segmentLength < 3) continue;
-      const street = new THREE.Mesh(new THREE.BoxGeometry(segmentLength + 1.5, 0.035, 7.4), material);
       const center = { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 };
-      street.position.set(center.x, this.groundY(center) + 0.018, center.z);
-      street.rotation.y = -Math.atan2(b.z - a.z, b.x - a.x);
+      const street = this.createTerrainRect(center, Math.atan2(b.z - a.z, b.x - a.x), segmentLength + 1.5, 7.4, 0.018, 0.035, material);
       street.receiveShadow = true;
       this.scene.add(street);
     }

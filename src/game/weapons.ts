@@ -1,8 +1,9 @@
 export type UpgradeId = "damage" | "fireRate" | "magazine" | "reload" | "spread";
-export type WeaponId = "carbine" | "shotgun" | "smg" | "rifle";
+export type WeaponId = "knife" | "machete" | "carbine" | "shotgun" | "smg" | "rifle";
 
 export interface WeaponStats {
   id?: WeaponId;
+  kind: "melee" | "firearm";
   name: string;
   damage: number;
   fireDelay: number;
@@ -25,7 +26,7 @@ export interface WeaponStats {
   scopeZoom: number;
   aimSpreadMultiplier: number;
   aimRecoilMultiplier: number;
-  reloadStyle: "magazine" | "single";
+  reloadStyle: "magazine" | "single" | "none";
   pickupAmmo?: number;
 }
 
@@ -41,6 +42,7 @@ export interface Loadout {
   weaponId: WeaponId;
   inventory: WeaponId[];
   upgrades: Record<UpgradeId, number>;
+  magazines: Record<WeaponId, number>;
   ammoInMagazine: number;
   reserveAmmo: number;
   reloadingUntil: number;
@@ -48,8 +50,65 @@ export interface Loadout {
 }
 
 export const WEAPON_DEFINITIONS: Record<WeaponId, WeaponStats & { id: WeaponId; pickupAmmo: number }> = {
+  knife: {
+    id: "knife",
+    kind: "melee",
+    name: "Emergency knife",
+    damage: 34,
+    fireDelay: 0.48,
+    magazineSize: 0,
+    reloadTime: 0,
+    spread: 0,
+    pellets: 1,
+    range: 4.4,
+    falloffStart: 3.2,
+    recoilKick: 0.22,
+    recoilDrift: 0.18,
+    movingSpread: 0,
+    bloomPerShot: 0,
+    maxBloom: 0,
+    headshotMultiplier: 1.65,
+    staggerPower: 0.38,
+    penetration: 1,
+    noiseMultiplier: 0.24,
+    sway: 0.35,
+    scopeZoom: 1,
+    aimSpreadMultiplier: 1,
+    aimRecoilMultiplier: 1,
+    reloadStyle: "none",
+    pickupAmmo: 0
+  },
+  machete: {
+    id: "machete",
+    kind: "melee",
+    name: "Garden machete",
+    damage: 54,
+    fireDelay: 0.72,
+    magazineSize: 0,
+    reloadTime: 0,
+    spread: 0,
+    pellets: 1,
+    range: 5.4,
+    falloffStart: 4,
+    recoilKick: 0.34,
+    recoilDrift: 0.22,
+    movingSpread: 0,
+    bloomPerShot: 0,
+    maxBloom: 0,
+    headshotMultiplier: 1.7,
+    staggerPower: 0.62,
+    penetration: 1,
+    noiseMultiplier: 0.34,
+    sway: 0.42,
+    scopeZoom: 1,
+    aimSpreadMultiplier: 1,
+    aimRecoilMultiplier: 1,
+    reloadStyle: "none",
+    pickupAmmo: 0
+  },
   carbine: {
     id: "carbine",
+    kind: "firearm",
     name: "Emergency carbine",
     damage: 31,
     fireDelay: 0.27,
@@ -77,6 +136,7 @@ export const WEAPON_DEFINITIONS: Record<WeaponId, WeaponStats & { id: WeaponId; 
   },
   shotgun: {
     id: "shotgun",
+    kind: "firearm",
     name: "Grandstand shotgun",
     damage: 18,
     fireDelay: 0.82,
@@ -104,6 +164,7 @@ export const WEAPON_DEFINITIONS: Record<WeaponId, WeaponStats & { id: WeaponId; 
   },
   smg: {
     id: "smg",
+    kind: "firearm",
     name: "Tennis club SMG",
     damage: 18,
     fireDelay: 0.095,
@@ -131,6 +192,7 @@ export const WEAPON_DEFINITIONS: Record<WeaponId, WeaponStats & { id: WeaponId; 
   },
   rifle: {
     id: "rifle",
+    kind: "firearm",
     name: "Rail trail rifle",
     damage: 68,
     fireDelay: 0.62,
@@ -158,7 +220,7 @@ export const WEAPON_DEFINITIONS: Record<WeaponId, WeaponStats & { id: WeaponId; 
   }
 };
 
-export const BASE_WEAPON: WeaponStats = WEAPON_DEFINITIONS.carbine;
+export const BASE_WEAPON: WeaponStats = WEAPON_DEFINITIONS.knife;
 
 export const UPGRADE_DEFINITIONS: Record<UpgradeId, UpgradeDefinition> = {
   damage: {
@@ -200,8 +262,8 @@ export const UPGRADE_DEFINITIONS: Record<UpgradeId, UpgradeDefinition> = {
 
 export function createInitialLoadout(): Loadout {
   return {
-    weaponId: "carbine",
-    inventory: ["carbine"],
+    weaponId: "knife",
+    inventory: ["knife"],
     upgrades: {
       damage: 0,
       fireRate: 0,
@@ -209,7 +271,15 @@ export function createInitialLoadout(): Loadout {
       reload: 0,
       spread: 0
     },
-    ammoInMagazine: BASE_WEAPON.magazineSize,
+    magazines: {
+      knife: 0,
+      machete: 0,
+      carbine: 0,
+      shotgun: 0,
+      smg: 0,
+      rifle: 0
+    },
+    ammoInMagazine: 0,
     reserveAmmo: 72,
     reloadingUntil: 0,
     reloadStartedAt: 0
@@ -223,6 +293,15 @@ export function getWeaponStats(loadout: Loadout): WeaponStats {
   const magazineLevel = loadout.upgrades.magazine;
   const reloadLevel = loadout.upgrades.reload;
   const spreadLevel = loadout.upgrades.spread;
+
+  if (base.kind === "melee") {
+    return {
+      ...base,
+      damage: Math.round(base.damage * (1 + damageLevel * 0.18)),
+      fireDelay: Math.max(0.32, base.fireDelay * (1 - fireRateLevel * 0.1)),
+      staggerPower: base.staggerPower * (1 + damageLevel * 0.08)
+    };
+  }
 
   return {
     ...base,
@@ -266,17 +345,25 @@ export function applyUpgrade(loadout: Loadout, upgradeId: UpgradeId): Loadout {
     }
   };
   const nextStats = getWeaponStats(next);
-  next.ammoInMagazine = Math.min(nextStats.magazineSize, next.ammoInMagazine + 3);
-  return next;
+  const ammoInMagazine = Math.min(nextStats.magazineSize, next.ammoInMagazine + (nextStats.kind === "melee" ? 0 : 3));
+  return {
+    ...next,
+    ammoInMagazine,
+    magazines: {
+      ...next.magazines,
+      [next.weaponId]: ammoInMagazine
+    }
+  };
 }
 
 export function startReload(loadout: Loadout, now: number): Loadout {
-  if (loadout.reserveAmmo <= 0 || loadout.ammoInMagazine >= getWeaponStats(loadout).magazineSize) {
+  const stats = getWeaponStats(loadout);
+  if (stats.kind === "melee" || loadout.reserveAmmo <= 0 || loadout.ammoInMagazine >= stats.magazineSize) {
     return loadout;
   }
   return {
     ...loadout,
-    reloadingUntil: now + getWeaponStats(loadout).reloadTime,
+    reloadingUntil: now + stats.reloadTime,
     reloadStartedAt: now
   };
 }
@@ -286,6 +373,13 @@ export function finishReloadIfReady(loadout: Loadout, now: number): Loadout {
     return loadout;
   }
   const stats = getWeaponStats(loadout);
+  if (stats.kind === "melee") {
+    return {
+      ...loadout,
+      reloadingUntil: 0,
+      reloadStartedAt: 0
+    };
+  }
   if (stats.reloadStyle === "single") {
     let ammoInMagazine = loadout.ammoInMagazine;
     let reserveAmmo = loadout.reserveAmmo;
@@ -298,6 +392,10 @@ export function finishReloadIfReady(loadout: Loadout, now: number): Loadout {
     return {
       ...loadout,
       ammoInMagazine,
+      magazines: {
+        ...loadout.magazines,
+        [loadout.weaponId]: ammoInMagazine
+      },
       reserveAmmo,
       reloadingUntil: ammoInMagazine >= stats.magazineSize || reserveAmmo <= 0 ? 0 : reloadingUntil,
       reloadStartedAt: ammoInMagazine >= stats.magazineSize || reserveAmmo <= 0 ? 0 : loadout.reloadStartedAt
@@ -308,6 +406,10 @@ export function finishReloadIfReady(loadout: Loadout, now: number): Loadout {
   return {
     ...loadout,
     ammoInMagazine: loadout.ammoInMagazine + loaded,
+    magazines: {
+      ...loadout.magazines,
+      [loadout.weaponId]: loadout.ammoInMagazine + loaded
+    },
     reserveAmmo: loadout.reserveAmmo - loaded,
     reloadingUntil: 0,
     reloadStartedAt: 0
@@ -315,12 +417,17 @@ export function finishReloadIfReady(loadout: Loadout, now: number): Loadout {
 }
 
 export function consumeRound(loadout: Loadout): Loadout {
-  if (loadout.ammoInMagazine <= 0) {
+  if (getWeaponStats(loadout).kind === "melee" || loadout.ammoInMagazine <= 0) {
     return loadout;
   }
+  const ammoInMagazine = loadout.ammoInMagazine - 1;
   return {
     ...loadout,
-    ammoInMagazine: loadout.ammoInMagazine - 1
+    ammoInMagazine,
+    magazines: {
+      ...loadout.magazines,
+      [loadout.weaponId]: ammoInMagazine
+    }
   };
 }
 
@@ -337,18 +444,27 @@ export function hasWeapon(loadout: Loadout, weaponId: WeaponId): boolean {
 
 export function addWeapon(loadout: Loadout, weaponId: WeaponId): Loadout {
   const alreadyOwned = hasWeapon(loadout, weaponId);
+  const definition = WEAPON_DEFINITIONS[weaponId];
   const next: Loadout = {
     ...loadout,
     weaponId,
     inventory: alreadyOwned ? loadout.inventory : [...loadout.inventory, weaponId],
     reloadingUntil: 0,
     reloadStartedAt: 0,
-    reserveAmmo: Math.min(360, loadout.reserveAmmo + WEAPON_DEFINITIONS[weaponId].pickupAmmo)
+    reserveAmmo: Math.min(360, loadout.reserveAmmo + definition.pickupAmmo)
   };
   const stats = getWeaponStats(next);
+  const ammoInMagazine =
+    stats.kind === "melee"
+      ? 0
+      : Math.min(stats.magazineSize, Math.max(next.magazines[weaponId] ?? 0, Math.ceil(stats.magazineSize * 0.7)));
   return {
     ...next,
-    ammoInMagazine: Math.min(stats.magazineSize, Math.max(next.ammoInMagazine, Math.ceil(stats.magazineSize * 0.7)))
+    ammoInMagazine,
+    magazines: {
+      ...next.magazines,
+      [weaponId]: ammoInMagazine
+    }
   };
 }
 
@@ -363,8 +479,9 @@ export function switchWeapon(loadout: Loadout, weaponId: WeaponId): Loadout {
     reloadStartedAt: 0
   };
   const stats = getWeaponStats(next);
+  const ammoInMagazine = stats.kind === "melee" ? 0 : Math.min(next.magazines[weaponId] ?? 0, stats.magazineSize);
   return {
     ...next,
-    ammoInMagazine: Math.min(loadout.ammoInMagazine, stats.magazineSize)
+    ammoInMagazine
   };
 }

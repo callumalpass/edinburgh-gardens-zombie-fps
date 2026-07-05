@@ -16,9 +16,9 @@ describe("noise system", () => {
     noise.emit("gunshot", { x: 72, z: 0 });
 
     expect(noise.strongestAt({ x: 80, z: 0 })?.kind).toBe("gunshot");
-    expect(noise.strongestAt({ x: 200, z: 0 })).toBeNull();
+    expect(noise.strongestAt({ x: 300, z: 0 })).toBeNull();
 
-    noise.update(4);
+    noise.update(6);
     expect(noise.strongestAt({ x: 72, z: 0 })).toBeNull();
   });
 
@@ -28,5 +28,12 @@ describe("noise system", () => {
 
     expect(noise.strongestAt({ x: 21, z: 0 }, 1)).toBeNull();
     expect(noise.strongestAt({ x: 21, z: 0 }, 1.55)?.kind).toBe("reload");
+  });
+
+  it("keeps melee much quieter than gunshots", () => {
+    const noise = new NoiseSystem();
+    noise.emit("melee", { x: 0, z: 0 });
+    expect(noise.strongestAt({ x: 8, z: 0 })?.kind).toBe("melee");
+    expect(noise.strongestAt({ x: 20, z: 0 })).toBeNull();
   });
 });

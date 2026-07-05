@@ -90,13 +90,13 @@ export class HudController {
   update(view: HudUpdate): void {
     const stats = getWeaponStats(view.loadout);
     this.refs.health.textContent = `${Math.max(0, Math.round(view.health))}`;
-    this.refs.ammo.textContent = `${view.loadout.ammoInMagazine}`;
-    this.refs.reserve.textContent = `${view.loadout.reserveAmmo}`;
+    this.refs.ammo.textContent = stats.kind === "melee" ? "MELEE" : `${view.loadout.ammoInMagazine}`;
+    this.refs.reserve.textContent = stats.kind === "melee" ? "" : `${view.loadout.reserveAmmo}`;
     this.refs.wave.textContent = `${view.wave}`;
     this.refs.scrap.textContent = `${view.scrap}`;
     this.refs.zombies.textContent = `${view.zombieCount}`;
 
-    if (view.loadout.reloadingUntil > performance.now() / 1000) {
+    if (stats.kind !== "melee" && view.loadout.reloadingUntil > performance.now() / 1000) {
       const percent = Math.round(view.reloadProgress * 100);
       this.refs.status.textContent = view.loadout.weaponId === "shotgun" ? `Loading shell ${percent}%` : `Reloading ${percent}%`;
     } else if (view.nearestWeaponDrop) {
@@ -185,7 +185,7 @@ function createMarkup(): string {
             <span>E interact</span>
             <span>Shift sprint</span>
             <span>C crouch</span>
-            <span>1-4 weapons</span>
+            <span>1-5 weapons</span>
           </div>
           <button class="primary-action" data-action="start">Enter the gardens</button>
         </div>
