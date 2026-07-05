@@ -1,5 +1,8 @@
 import { boundingRadius, distance, polygonCentroid } from "../geo";
 import type { LevelData, LevelPath, PathSurfacePatch, Vec2 } from "../types";
+import { WEAPON_DEFINITIONS, type WeaponId } from "../weapons";
+import type { ZombieType } from "../waves";
+import type { PickupKind } from "./MeshFactory";
 
 export type ObjectPreviewTargetKind =
   | "landmark"
@@ -13,7 +16,11 @@ export type ObjectPreviewTargetKind =
   | "amenity"
   | "park-life-detail"
   | "tree"
-  | "upgrade-station";
+  | "upgrade-station"
+  | "weapon-spawn"
+  | "weapon-model"
+  | "pickup-item"
+  | "zombie-model";
 
 export interface ObjectPreviewTarget {
   id: string;
@@ -24,6 +31,9 @@ export interface ObjectPreviewTarget {
   position: Vec2;
   radius: number;
   height: number;
+  weaponId?: WeaponId;
+  pickupKind?: PickupKind;
+  zombieType?: ZombieType;
 }
 
 export function createObjectPreviewTargets(level: LevelData): ObjectPreviewTarget[] {
@@ -182,6 +192,56 @@ export function createObjectPreviewTargets(level: LevelData): ObjectPreviewTarge
       position: station.position,
       radius: 2.8,
       height: 2.8
+    });
+  }
+
+  for (const [sourceIndex, spawn] of level.weaponSpawns.entries()) {
+    add({
+      sourceId: spawn.id,
+      sourceIndex,
+      kind: "weapon-spawn",
+      label: spawn.label,
+      position: spawn.position,
+      radius: 3.1,
+      height: 2.4,
+      weaponId: spawn.weaponId
+    });
+  }
+
+  for (const weaponId of Object.keys(WEAPON_DEFINITIONS) as WeaponId[]) {
+    const definition = WEAPON_DEFINITIONS[weaponId];
+    add({
+      sourceId: weaponId,
+      kind: "weapon-model",
+      label: definition.name,
+      position: { x: 0, z: 0 },
+      radius: weaponId === "rifle" || weaponId === "shotgun" ? 2.6 : 2.1,
+      height: 1.8,
+      weaponId
+    });
+  }
+
+  for (const pickupKind of ["ammo", "health", "scrap"] as PickupKind[]) {
+    add({
+      sourceId: pickupKind,
+      kind: "pickup-item",
+      label: `${pickupKind[0].toUpperCase()}${pickupKind.slice(1)} pickup`,
+      position: { x: 0, z: 0 },
+      radius: 1.8,
+      height: 1.8,
+      pickupKind
+    });
+  }
+
+  for (const zombieType of ["shambler", "sprinter", "bloater", "crawler", "screamer"] as ZombieType[]) {
+    add({
+      sourceId: zombieType,
+      kind: "zombie-model",
+      label: `${zombieType[0].toUpperCase()}${zombieType.slice(1)} zombie`,
+      position: { x: 0, z: 0 },
+      radius: zombieType === "bloater" ? 2.8 : 2.2,
+      height: zombieType === "crawler" ? 1.8 : zombieType === "bloater" ? 4.5 : 3.5,
+      zombieType
     });
   }
 

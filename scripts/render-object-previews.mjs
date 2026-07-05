@@ -31,10 +31,7 @@ try {
 
   for (const [targetIndex, target] of targets.entries()) {
     for (let angleIndex = 0; angleIndex < angles.length; angleIndex += 1) {
-      const result = await page.evaluate(
-        ({ targetId, angle }) => window.__OBJECT_PREVIEW__.render(targetId, angle),
-        { targetId: target.id, angle: angleIndex }
-      );
+      const result = await renderWithRetry(page, target.id, angleIndex);
       const fileName = `${String(targetIndex + 1).padStart(4, "0")}-${safeFileName(target.kind)}-${safeFileName(target.sourceId)}-${result.angle}.png`;
       const filePath = path.join(outDir, fileName);
       await writeFile(filePath, Buffer.from(result.dataUrl.replace(/^data:image\/png;base64,/, ""), "base64"));
@@ -75,6 +72,28 @@ try {
   if (server) {
     server.kill("SIGTERM");
   }
+}
+
+async function renderWithRetry(page, targetId, angleIndex) {
+  let lastError = null;
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    try {
+      await page.waitForFunction(() => window.__OBJECT_PREVIEW__?.ready === true);
+      return await page.evaluate(
+        ({ targetId: renderTargetId, angle }) => window.__OBJECT_PREVIEW__.render(renderTargetId, angle),
+        { targetId, angle: angleIndex }
+      );
+    } catch (error) {
+      lastError = error;
+      const message = String(error?.message ?? error);
+      if (!message.includes("Execution context was destroyed") && !message.includes("Target closed") && !message.includes("navigation")) {
+        throw error;
+      }
+      await page.waitForLoadState("domcontentloaded").catch(() => {});
+      await page.waitForFunction(() => window.__OBJECT_PREVIEW__?.ready === true).catch(() => {});
+    }
+  }
+  throw lastError;
 }
 
 function parseArgs(args) {

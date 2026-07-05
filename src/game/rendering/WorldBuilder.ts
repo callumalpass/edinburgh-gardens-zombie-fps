@@ -20,6 +20,7 @@ import type {
   Vec2
 } from "../types";
 import { createAnimeToonRamp } from "./animeStyle";
+import { MeshFactory } from "./MeshFactory";
 import { pathPreviewMaterialKey, type ObjectPreviewTarget } from "./objectPreview";
 import {
   createTerrainOverlayDiscGeometry,
@@ -93,6 +94,7 @@ export class WorldBuilder {
   private renderedGrassClumpCount = 0;
   private renderedWetPathSheenCount = 0;
   private renderedLampSpillCount = 0;
+  private suppressLabels = false;
   private readonly detailMaterialCache = new Map<string, THREE.Material>();
   private readonly treeMaterialCache = new Map<string, TreeMaterialSet>();
   private readonly treeTrunkGeometry = new THREE.CylinderGeometry(0.72, 1, 1, 8);
@@ -166,6 +168,7 @@ export class WorldBuilder {
   }
 
   createObjectPreview(target: ObjectPreviewTarget): void {
+    this.suppressLabels = true;
     this.addPreviewLighting();
     this.addPreviewGround(target);
 
@@ -205,6 +208,12 @@ export class WorldBuilder {
     } else if (target.kind === "upgrade-station") {
       const station = this.level.upgradeStations.find((candidate) => candidate.id === target.sourceId);
       if (station) this.addUpgradeStation(station);
+    } else if (target.kind === "weapon-spawn" || target.kind === "weapon-model") {
+      if (target.weaponId) this.addWeaponItemPreview(target);
+    } else if (target.kind === "pickup-item") {
+      if (target.pickupKind) this.addPickupItemPreview(target);
+    } else if (target.kind === "zombie-model") {
+      if (target.zombieType) this.addZombieModelPreview(target);
     }
   }
 
@@ -443,6 +452,37 @@ export class WorldBuilder {
 
     group.position.set(station.position.x, this.boxSupportY(station.position, 0, 1.3, 0.9), station.position.z);
     this.scene.add(group);
+  }
+
+  private addWeaponItemPreview(target: ObjectPreviewTarget): void {
+    if (!target.weaponId) return;
+    const factory = new MeshFactory(this.materials);
+    const mesh = target.kind === "weapon-spawn" ? factory.createWeaponDropMesh(target.weaponId) : factory.createWeaponMesh(target.weaponId, false);
+    if (target.kind === "weapon-model") {
+      mesh.scale.setScalar(2.35);
+      mesh.rotation.x = 0.18;
+    }
+    mesh.position.set(target.position.x, this.groundY(target.position) + 0.82, target.position.z);
+    mesh.rotation.y = target.kind === "weapon-model" ? -0.42 : 0;
+    this.scene.add(mesh);
+  }
+
+  private addPickupItemPreview(target: ObjectPreviewTarget): void {
+    if (!target.pickupKind) return;
+    const factory = new MeshFactory(this.materials);
+    const mesh = factory.createPickupMesh(target.pickupKind);
+    mesh.position.set(target.position.x, this.groundY(target.position) + 0.75, target.position.z);
+    mesh.rotation.y = -0.35;
+    this.scene.add(mesh);
+  }
+
+  private addZombieModelPreview(target: ObjectPreviewTarget): void {
+    if (!target.zombieType) return;
+    const factory = new MeshFactory(this.materials);
+    const mesh = factory.createZombieMesh(target.zombieType);
+    mesh.position.set(target.position.x, this.groundY(target.position), target.position.z);
+    mesh.rotation.y = -0.28;
+    this.scene.add(mesh);
   }
 
   getRenderedTreeCount(): number {
@@ -1698,8 +1738,8 @@ export class WorldBuilder {
       mesh.receiveShadow = true;
       this.scene.add(mesh);
     }
-    const roof = new THREE.Mesh(new THREE.BoxGeometry(footprint.halfX * 2 + 1.8, 0.45, footprint.halfZ * 2 + 1.6), this.materials.timber);
-    roof.position.set(center.x, baseY + height + 0.25, center.z);
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(footprint.halfX * 2 + 1.8, 0.28, footprint.halfZ * 2 + 1.6), this.materials.timber);
+    roof.position.set(center.x, baseY + height + 0.2, center.z);
     roof.rotation.y = rotation;
     roof.castShadow = true;
     this.scene.add(roof);
@@ -1711,6 +1751,25 @@ export class WorldBuilder {
       seat.rotation.y = rotation;
       seat.castShadow = true;
       this.scene.add(seat);
+    }
+    if (options.openFront) {
+      for (let bay = -4; bay <= 4; bay += 1) {
+        const x = (bay / 4) * footprint.halfX * 0.9;
+        this.addLocalBox(center, rotation, x, frontSign * (footprint.halfZ - 0.34), 0.07, height * 0.58, 0.08, this.materials.metal, height * 0.32);
+      }
+      for (let truss = -3; truss <= 3; truss += 1) {
+        this.addLocalBox(
+          center,
+          rotation,
+          (truss / 3) * footprint.halfX * 0.72,
+          frontSign * (footprint.halfZ - 0.42),
+          0.08,
+          0.08,
+          footprint.halfZ * 1.62,
+          this.materials.metal,
+          height - 0.18
+        );
+      }
     }
   }
 
@@ -2311,17 +2370,26 @@ export class WorldBuilder {
     const segmentLength = distance(startPoint, endPoint);
     if (segmentLength < 0.45) return;
     const angle = -Math.atan2(endPoint.z - startPoint.z, endPoint.x - startPoint.x);
-    const rail = new THREE.Mesh(new THREE.BoxGeometry(segmentLength, 0.16, 0.14), railMaterial);
     const center = { x: (startPoint.x + endPoint.x) / 2, z: (startPoint.z + endPoint.z) / 2 };
-    rail.position.set(center.x, this.supportY([startPoint, endPoint]) + height * 0.55, center.z);
-    rail.rotation.y = angle;
-    rail.castShadow = true;
-    this.scene.add(rail);
-    const postCount = Math.max(1, Math.floor(segmentLength / 8));
+    const baseY = this.supportY([startPoint, endPoint]);
+    const meshMaterial = new THREE.MeshBasicMaterial({ color: 0xaebdb3, transparent: true, opacity: 0.2, depthWrite: false, side: THREE.DoubleSide });
+    const panel = new THREE.Mesh(new THREE.BoxGeometry(segmentLength, height * 0.66, 0.025), meshMaterial);
+    panel.position.set(center.x, baseY + height * 0.52, center.z);
+    panel.rotation.y = angle;
+    panel.receiveShadow = false;
+    this.scene.add(panel);
+    for (const railY of [0.24, 0.58, 0.9]) {
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(segmentLength, 0.08, 0.1), railMaterial);
+      rail.position.set(center.x, baseY + height * railY, center.z);
+      rail.rotation.y = angle;
+      rail.castShadow = true;
+      this.scene.add(rail);
+    }
+    const postCount = Math.max(1, Math.floor(segmentLength / 4.2));
     for (let postIndex = 0; postIndex <= postCount; postIndex += 1) {
       const t = postIndex / postCount;
       const point = { x: startPoint.x + (endPoint.x - startPoint.x) * t, z: startPoint.z + (endPoint.z - startPoint.z) * t };
-      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.16, height, 6), postMaterial);
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.12, height, 8), postMaterial);
       post.position.set(point.x, this.groundY(point) + height / 2, point.z);
       post.castShadow = true;
       this.scene.add(post);
@@ -2979,7 +3047,8 @@ export class WorldBuilder {
 
   private addCricketNets(detail: ParkLifeDetail): void {
     const group = new THREE.Group();
-    const netMaterial = new THREE.MeshBasicMaterial({ color: 0xc9d4c6, transparent: true, opacity: 0.42, side: THREE.DoubleSide });
+    const netMaterial = new THREE.MeshBasicMaterial({ color: 0xc9d4c6, transparent: true, opacity: 0.18, side: THREE.DoubleSide, depthWrite: false });
+    const netLineMaterial = new THREE.LineBasicMaterial({ color: 0xdde6d8, transparent: true, opacity: 0.58 });
     const frameMaterial = this.materials.metal;
     const width = 3.2;
     const length = 8.5;
@@ -2994,6 +3063,19 @@ export class WorldBuilder {
       }
     }
 
+    const addFrameRail = (x: number, y: number, z: number, railWidth: number, railHeight: number, railDepth: number) => {
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(railWidth, railHeight, railDepth), frameMaterial);
+      rail.position.set(x, y, z);
+      rail.castShadow = true;
+      group.add(rail);
+    };
+    for (const x of [-width * 0.5, width * 0.5]) {
+      addFrameRail(x, height, 0, 0.06, 0.06, length);
+    }
+    for (const z of [-length * 0.5, length * 0.5]) {
+      addFrameRail(0, height, z, width, 0.06, 0.06);
+    }
+
     for (const x of [-width * 0.5, width * 0.5]) {
       const side = new THREE.Mesh(new THREE.BoxGeometry(0.03, height, length), netMaterial);
       side.position.set(x, height * 0.5, 0);
@@ -3002,6 +3084,29 @@ export class WorldBuilder {
     const rear = new THREE.Mesh(new THREE.BoxGeometry(width, height, 0.03), netMaterial);
     rear.position.set(0, height * 0.5, length * 0.5);
     group.add(rear);
+    const top = new THREE.Mesh(new THREE.BoxGeometry(width, 0.025, length), netMaterial);
+    top.position.set(0, height, 0);
+    group.add(top);
+
+    const linePoints: THREE.Vector3[] = [];
+    for (const x of [-width * 0.5, width * 0.5]) {
+      for (const y of [0.62, 1.2, 1.78, 2.34]) {
+        linePoints.push(new THREE.Vector3(x, y, -length * 0.5), new THREE.Vector3(x, y, length * 0.5));
+      }
+      for (let step = 0; step <= 4; step += 1) {
+        const z = -length * 0.5 + (length * step) / 4;
+        linePoints.push(new THREE.Vector3(x, 0.18, z), new THREE.Vector3(x, height, z));
+      }
+    }
+    for (const y of [0.62, 1.2, 1.78, 2.34]) {
+      linePoints.push(new THREE.Vector3(-width * 0.5, y, length * 0.5), new THREE.Vector3(width * 0.5, y, length * 0.5));
+    }
+    for (let step = 0; step <= 4; step += 1) {
+      const x = -width * 0.5 + (width * step) / 4;
+      linePoints.push(new THREE.Vector3(x, 0.18, length * 0.5), new THREE.Vector3(x, height, length * 0.5));
+    }
+    const netLines = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(linePoints), netLineMaterial);
+    group.add(netLines);
 
     const mat = new THREE.MeshStandardMaterial({ color: 0x7a725f, roughness: 0.92 });
     const pitch = new THREE.Mesh(new THREE.BoxGeometry(width * 0.55, 0.05, length * 0.74), mat);
@@ -3903,6 +4008,9 @@ export class WorldBuilder {
   }
 
   private addLabel(text: string, position: Vec2, height: number): void {
+    if (this.suppressLabels) {
+      return;
+    }
     const canvas = document.createElement("canvas");
     canvas.width = 512;
     canvas.height = 128;

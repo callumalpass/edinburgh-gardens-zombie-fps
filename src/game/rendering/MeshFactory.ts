@@ -57,15 +57,21 @@ export class MeshFactory {
       group.add(edge);
 
       const tip = new THREE.Mesh(new THREE.ConeGeometry(width * 0.52, 0.22, 4), bladeMaterial);
-      tip.rotation.x = Math.PI / 2 + blade.rotation.x;
+      tip.rotation.x = -Math.PI / 2 + blade.rotation.x;
       tip.rotation.z = Math.PI / 4;
       tip.position.set(0, 0.08, -length * 0.83);
       tip.castShadow = true;
       group.add(tip);
 
-      const grip = new THREE.Mesh(new THREE.BoxGeometry(width * 1.35, 0.15, 0.34), gripMaterial);
+      const spine = new THREE.Mesh(new THREE.BoxGeometry(width * 0.32, 0.02, length * 0.74), edgeMaterial);
+      spine.position.set(-width * 0.28, 0.118, -length * 0.32);
+      spine.rotation.x = blade.rotation.x;
+      group.add(spine);
+
+      const grip = new THREE.Mesh(new THREE.CapsuleGeometry(width * 0.68, 0.3, 4, 10), gripMaterial);
       grip.position.set(0, -0.02, length * 0.26);
-      grip.rotation.x = -0.16;
+      grip.rotation.x = Math.PI / 2 - 0.16;
+      grip.scale.set(1.12, 1, 0.76);
       grip.castShadow = true;
       group.add(grip);
 
@@ -74,9 +80,16 @@ export class MeshFactory {
       guard.castShadow = true;
       group.add(guard);
 
+      for (const z of [length * 0.16, length * 0.29, length * 0.42]) {
+        const rivet = new THREE.Mesh(new THREE.CylinderGeometry(width * 0.16, width * 0.16, 0.018, 8), guardMaterial);
+        rivet.rotation.x = Math.PI / 2;
+        rivet.position.set(width * 0.28, 0.058, z);
+        group.add(rivet);
+      }
+      this.addGripWraps(group, length * 0.26, width, guardMaterial);
+
       if (firstPerson) {
         this.addFirstPersonArm(group, 1, { x: 0.12, y: -0.34, z: 0.28 }, { x: -0.62, y: 0.08, z: 0.22 }, { x: 0.05, y: -0.2, z: 0.1 });
-        this.addGripWraps(group, length * 0.26, width, gripMaterial);
       }
 
       this.applyAnimeMeshStyle(group, firstPerson ? 1.025 : 1.04);
@@ -129,6 +142,25 @@ export class MeshFactory {
     magazine.rotation.x = isShotgun ? Math.PI / 2 : -0.08;
     magazine.castShadow = true;
     group.add(magazine);
+
+    const ejectionPort = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.055, isSmg ? 0.16 : 0.2), new THREE.MeshBasicMaterial({ color: 0x0b1112 }));
+    ejectionPort.position.set(0.085, 0.07, -length * 0.22);
+    group.add(ejectionPort);
+
+    const trigger = new THREE.Mesh(new THREE.BoxGeometry(0.022, 0.11, 0.035), metalMaterial);
+    trigger.position.set(0, -0.18, length * 0.05);
+    trigger.rotation.x = -0.32;
+    group.add(trigger);
+
+    const foreEnd = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.09, isShotgun ? 0.48 : isSmg ? 0.24 : 0.36), accentMaterial);
+    foreEnd.position.set(0, -0.03, -length * 0.48);
+    foreEnd.castShadow = true;
+    group.add(foreEnd);
+
+    const stockPad = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.22, 0.055), metalMaterial);
+    stockPad.position.set(0, -0.01, length * (isSmg ? 0.62 : 0.74));
+    stockPad.castShadow = true;
+    group.add(stockPad);
 
     const sightPost = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.095, 0.035), accentMaterial);
     sightPost.position.set(0, 0.24, -length * 0.88);
@@ -625,12 +657,60 @@ export class MeshFactory {
   }
 
   createPickupMesh(type: PickupKind): THREE.Object3D {
-    const color = type === "ammo" ? 0xd4aa4c : type === "health" ? 0xc84138 : 0x9ebf86;
-    const geometry =
-      type === "ammo" ? new THREE.BoxGeometry(1.1, 0.7, 1.6) : type === "health" ? new THREE.OctahedronGeometry(0.9) : new THREE.DodecahedronGeometry(0.75);
-    const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.18, roughness: 0.64, flatShading: true }));
-    this.applyAnimeMeshStyle(mesh, 1.08);
-    return mesh;
+    const group = new THREE.Group();
+    if (type === "ammo") {
+      const boxMaterial = new THREE.MeshStandardMaterial({ color: 0xb98932, emissive: 0x2a1d08, emissiveIntensity: 0.18, roughness: 0.66 });
+      const metalMaterial = new THREE.MeshStandardMaterial({ color: 0x4f5147, metalness: 0.38, roughness: 0.42 });
+      const brassMaterial = new THREE.MeshStandardMaterial({ color: 0xd7a64b, metalness: 0.5, roughness: 0.36 });
+      const box = new THREE.Mesh(new THREE.BoxGeometry(1.18, 0.52, 1.46), boxMaterial);
+      box.position.y = 0.28;
+      box.castShadow = true;
+      group.add(box);
+      const latch = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.08, 0.05), metalMaterial);
+      latch.position.set(0, 0.43, -0.75);
+      group.add(latch);
+      for (const x of [-0.32, 0, 0.32]) {
+        const round = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.52, 10), brassMaterial);
+        round.rotation.x = Math.PI / 2;
+        round.position.set(x, 0.64, 0.16);
+        round.castShadow = true;
+        group.add(round);
+      }
+    } else if (type === "health") {
+      const caseMaterial = new THREE.MeshStandardMaterial({ color: 0xc84138, emissive: 0x35100c, emissiveIntensity: 0.2, roughness: 0.62 });
+      const crossMaterial = new THREE.MeshBasicMaterial({ color: 0xf2e8d4 });
+      const kit = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.72, 0.82), caseMaterial);
+      kit.position.y = 0.38;
+      kit.castShadow = true;
+      group.add(kit);
+      const barA = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.035, 0.5), crossMaterial);
+      barA.position.set(0, 0.76, -0.43);
+      group.add(barA);
+      const barB = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.035, 0.16), crossMaterial);
+      barB.position.set(0, 0.76, -0.43);
+      group.add(barB);
+      const handle = new THREE.Mesh(new THREE.TorusGeometry(0.28, 0.025, 8, 18), this.materials.metal);
+      handle.position.y = 0.82;
+      handle.rotation.x = Math.PI / 2;
+      group.add(handle);
+    } else {
+      const scrapMaterial = new THREE.MeshStandardMaterial({ color: 0x8fa693, metalness: 0.3, roughness: 0.5 });
+      const darkMaterial = new THREE.MeshStandardMaterial({ color: 0x4f5c54, metalness: 0.35, roughness: 0.56 });
+      for (let index = 0; index < 5; index += 1) {
+        const shard = new THREE.Mesh(new THREE.BoxGeometry(0.78 - index * 0.05, 0.11, 0.3 + index * 0.04), index % 2 === 0 ? scrapMaterial : darkMaterial);
+        shard.position.set((index - 2) * 0.25, 0.14 + index * 0.045, Math.sin(index) * 0.22);
+        shard.rotation.set(0.18 * index, index * 0.44, -0.2 + index * 0.13);
+        shard.castShadow = true;
+        group.add(shard);
+      }
+      const wire = new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.025, 8, 20), darkMaterial);
+      wire.position.set(0.08, 0.42, -0.06);
+      wire.rotation.set(0.8, 0.2, 0.35);
+      wire.castShadow = true;
+      group.add(wire);
+    }
+    this.applyAnimeMeshStyle(group, 1.08);
+    return group;
   }
 
   private applyAnimeMeshStyle(root: THREE.Object3D, outlineScale: number): void {

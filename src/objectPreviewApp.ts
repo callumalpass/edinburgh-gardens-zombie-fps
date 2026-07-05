@@ -105,7 +105,7 @@ function createCamera(target: ObjectPreviewTarget, angleIndex: number): THREE.Pe
   const radius = Math.max(3.2, target.radius);
   const centerY = terrain.groundY(target.position) + Math.max(0.55, target.height * 0.38);
   const lookAt = new THREE.Vector3(target.position.x, centerY, target.position.z);
-  const distance = Math.max(radius * 2.35, target.height * 1.55, 7);
+  const distance = Math.max(radius * 2.35, target.height * 1.55, 5.2);
   const cameraY = centerY + Math.max(target.height * 0.72, radius * 0.62, 3.2);
   camera.position.set(
     target.position.x + Math.cos(angle) * distance,
