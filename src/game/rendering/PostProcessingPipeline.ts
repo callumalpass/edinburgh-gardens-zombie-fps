@@ -58,18 +58,18 @@ const ANIME_GRADE_SHADER = {
       vec3 highlights = vec3(1.09, 1.035, 0.82);
       color = color * mids + shadowLift * (1.0 - smoothstep(0.08, 0.62, center)) * 0.54;
       color = mix(color, color * highlights + vec3(0.006, 0.003, 0.0), smoothstep(0.56, 0.98, center) * 0.18);
-      color = mix(color, floor(color * 14.0) / 14.0, 0.055 * strength);
-      color = mix(color, vec3(0.018, 0.048, 0.052), edge * 0.2 * strength);
+      color = mix(color, floor(color * 16.0) / 16.0, 0.038 * strength);
+      color = mix(color, vec3(0.018, 0.048, 0.052), edge * 0.13 * strength);
       color = mix(color, color * vec3(0.72, 0.84, 0.92) + vec3(0.004, 0.016, 0.022), nightAmount * 0.21 * strength);
       color = mix(color, color * vec3(1.05, 1.03, 0.95) + vec3(0.014, 0.008, 0.0), daylight * 0.11 * strength);
       float weatherAmount = clamp(precipitation * 0.72 + weatherFog * 0.36 + cloudCover * 0.22, 0.0, 1.0);
       color = mix(color, color * vec3(0.8, 0.9, 1.0) + vec3(0.004, 0.014, 0.024), weatherAmount * 0.2 * strength);
       color = mix(color, vec3(animeLuminance(color)) * vec3(0.92, 1.0, 1.06), weatherFog * 0.075 * strength);
 
-      float vignette = smoothstep(0.82, 0.22, distance(vUv, vec2(0.5)));
-      float vignetteFloor = mix(0.78, 0.87, daylight);
-      vignetteFloor = mix(vignetteFloor, 0.72, cloudCover * 0.18 + precipitation * 0.14);
-      color *= mix(vignetteFloor, 1.035, vignette);
+      float vignette = smoothstep(0.88, 0.18, distance(vUv, vec2(0.5)));
+      float vignetteFloor = mix(0.9, 0.95, daylight);
+      vignetteFloor = mix(vignetteFloor, 0.84, cloudCover * 0.12 + precipitation * 0.1);
+      color *= mix(vignetteFloor, 1.018, vignette);
 
       gl_FragColor = vec4(color, base.a);
     }

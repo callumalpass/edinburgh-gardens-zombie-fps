@@ -173,6 +173,7 @@ export const RESEARCH_NOTES = [
   "A 2026-07-06 Fitzy Bowl pass removed the old invisible full-skatepark blocker, added source-backed depressed skate bowls, and made bowl exits constrained to roll-out gaps so dropping in is easy and climbing out is deliberately awkward.",
   "A 2026-07-06 public-use pass added source-backed rule signs for dog-leash edges, alcohol hours, access-friendly venue cues and the rotunda stair/no-power constraint so the park reads like the current public Edinburgh Gardens rather than a generic arena.",
   "A 2026-07-06 structure-depth pass added additional source-backed building affordances: grandstand umpire access, Emely Baker kitchenette/service cues, bowling-green shed supplies, north toilet service access and an interactable rotunda memorial plaque.",
+  "A 2026-07-06 heritage-furniture and winter-weather pass adds CMP-backed Chandler Fountain, cast-iron gas-lamp, bollard, reproduction-seat and interpretive-sign cues, and retunes weather toward Bureau of Meteorology Melbourne July cloud/rain/wind normals.",
   "See docs/edinburgh-gardens-research.md for source URLs, query notes, data licensing notes and implementation decisions."
 ];
 
@@ -461,6 +462,8 @@ const FITZY_BOWL_SOURCE =
   "Yarra Fitzy Bowl upgrade page: 2022 upgraded Fitzy Bowl doubled the facility, kept the original bowls and added beginner/accessibility features; GOSKATE lists two deep concrete bowls around 1.2m and 1.5m deep plus a shallow 0.3m beginners bowl, roll-over/spine/hip transfer and street section; Time Out and Skater Maps confirm multiple concrete bowls and a beginner double bowl";
 const STRUCTURE_ACCESS_SOURCE =
   "Yarra Edinburgh Gardens facility listing; OSM building footprints; Edinburgh Gardens CMP 2004 built-feature inventory; Yarra Brunswick Street Oval redevelopment scope for changerooms, accessible public toilets, tennis social/community space, external stairs and secure access gates";
+const HERITAGE_FURNITURE_SOURCE =
+  "Edinburgh Gardens CMP 2004 sections 3.4.17-3.4.25 and 6.5.25: Chandler Drinking Fountain, gas lamp standards around the Rotunda/remnant cast-iron lanterns, reproduction seats, interpretive signs and Fitzroy cast-iron bollards";
 
 const GARDEN_BED_SOURCE =
   "Edinburgh Gardens CMP 2004 sections 3.4.13 and 4.2.16-4.2.20; Lovell Chen 2021 CMP sections 3.8.1-3.8.3 and Queen Victoria/stormwater filtration garden descriptions; hand-placed where no public GIS vertices were available";
@@ -3154,6 +3157,7 @@ export function createLevelData(): LevelData {
     source: "OSM way 543505640 rotunda footprint centroid; CMP rotunda path context"
   };
   const queenVictoriaPlinth = geoToWorld(g(-37.7872762, 144.9837025));
+  const chandlerFountain = geoToWorld(g(-37.789505, 144.980304));
   const cookMemorial = geoToWorld(g(-37.7873520, 144.9855420));
   const sportsmansMemorial = geoToWorld(g(-37.78754, 144.98066));
   const northEastBluestonePlanter = geoToWorld(g(-37.78718, 144.98533));
@@ -3525,6 +3529,102 @@ export function createLevelData(): LevelData {
       position: offsetPoint(rotundaCenter, -0.34, 2.8, -8.35),
       angle: -0.34,
       source: "Yarra Edinburgh Gardens Rotunda venue page: rotunda is not wheelchair accessible and has no power currently available"
+    },
+    {
+      id: "chandler-drinking-fountain",
+      label: "Chandler Drinking Fountain",
+      kind: "chandler-fountain",
+      position: chandlerFountain,
+      angle: 1.35,
+      source: `${HERITAGE_FURNITURE_SOURCE}; CMP places it north of the Freeman Street ticket booth/entrance-gate setting, so the in-game point is hand-placed just north-east of the mapped gatehouse`
+    },
+    {
+      id: "rotunda-north-gas-lamp",
+      label: "Rotunda cast-iron gas lamp standard",
+      kind: "heritage-gas-lamp",
+      position: offsetPoint(rotundaCenter, -0.34, -6.8, -7.8),
+      angle: -0.34,
+      source: `${HERITAGE_FURNITURE_SOURCE}; one of the CMP-noted gas standards surrounding the Rotunda`
+    },
+    {
+      id: "rotunda-east-gas-lamp",
+      label: "Rotunda cast-iron gas lamp standard",
+      kind: "heritage-gas-lamp",
+      position: offsetPoint(rotundaCenter, -0.34, 7.0, -6.4),
+      angle: 0.42,
+      source: `${HERITAGE_FURNITURE_SOURCE}; one of the CMP-noted gas standards surrounding the Rotunda`
+    },
+    {
+      id: "rotunda-south-gas-lamp",
+      label: "Rotunda cast-iron gas lamp standard",
+      kind: "heritage-gas-lamp",
+      position: offsetPoint(rotundaCenter, -0.34, 5.8, 7.7),
+      angle: 2.35,
+      source: `${HERITAGE_FURNITURE_SOURCE}; one of the CMP-noted gas standards surrounding the Rotunda`
+    },
+    {
+      id: "bowling-south-gas-lamp",
+      label: "Bowling-club remnant cast-iron lamp",
+      kind: "heritage-gas-lamp",
+      position: geoToWorld(g(-37.788155, 144.981090)),
+      angle: 0.95,
+      source: `${HERITAGE_FURNITURE_SOURCE}; CMP notes a remnant gas standard south of the bowling club`
+    },
+    {
+      id: "freeman-entrance-cast-iron-bollards",
+      label: "Freeman Street cast-iron bollards",
+      kind: "heritage-bollards",
+      position: geoToWorld(g(-37.789575, 144.980145)),
+      angle: -0.22,
+      source: `${HERITAGE_FURNITURE_SOURCE}; Fitzroy cast-iron bollards are concentrated at historic entrance settings`
+    },
+    {
+      id: "rowe-street-cast-iron-bollards",
+      label: "Rowe Street cast-iron bollards",
+      kind: "heritage-bollards",
+      position: geoToWorld(g(-37.787360, 144.985455)),
+      angle: 2.55,
+      source: `${HERITAGE_FURNITURE_SOURCE}; Fitzroy cast-iron bollard style used at the Rowe Street/Alfred Crescent entry setting`
+    },
+    {
+      id: "rotunda-reproduction-seat",
+      label: "Rotunda reproduction heritage seat",
+      kind: "heritage-seat",
+      position: offsetPoint(rotundaCenter, -0.34, -8.9, 3.6),
+      angle: -0.18,
+      source: `${HERITAGE_FURNITURE_SOURCE}; CMP figure notes reproduction seats as part of the garden furniture suite`
+    },
+    {
+      id: "queen-victoria-reproduction-seat",
+      label: "Queen Victoria plinth reproduction heritage seat",
+      kind: "heritage-seat",
+      position: geoToWorld(g(-37.787225, 144.983585)),
+      angle: 0.64,
+      source: `${HERITAGE_FURNITURE_SOURCE}; positioned on the plinth path approach where seating and interpretive furniture are visually appropriate but exact seat GIS is unavailable`
+    },
+    {
+      id: "grandstand-interpretive-sign",
+      label: "Grandstand interpretive sign",
+      kind: "interpretive-sign",
+      position: geoToWorld(g(-37.788430, 144.981760)),
+      angle: -0.18,
+      source: `${HERITAGE_FURNITURE_SOURCE}; CMP figure 66 identifies contemporary interpretive signs, translated beside the heritage grandstand approach`
+    },
+    {
+      id: "rotunda-interpretive-sign",
+      label: "Rotunda interpretive sign",
+      kind: "interpretive-sign",
+      position: offsetPoint(rotundaCenter, -0.34, -2.8, -10.6),
+      angle: -0.34,
+      source: `${HERITAGE_FURNITURE_SOURCE}; CMP figure 66 identifies contemporary interpretive signs, translated beside the rotunda approach`
+    },
+    {
+      id: "queen-victoria-interpretive-sign",
+      label: "Queen Victoria plinth interpretive sign",
+      kind: "interpretive-sign",
+      position: geoToWorld(g(-37.787330, 144.983780)),
+      angle: 0.38,
+      source: `${HERITAGE_FURNITURE_SOURCE}; CMP records the Queen Victoria pedestal as primary-significance fabric, so the sign sits on the path edge rather than on the plinth`
     },
     {
       id: "south-picnic-blanket-1",

@@ -50,6 +50,8 @@ These notes record the real-world sources and implementation decisions used to s
   - Also used to locate the CMP source for asphalt paths with remnant basalt/bluestone edging, the bluestone-pitcher open drain and the Alfred Crescent retaining wall.
 - Lovell Chen 2021 Edinburgh Gardens Conservation Management Plan copy archived by the 3068 Group: https://the3068group.org/wp-content/uploads/2025/11/2021-conservation-management-plan-_merged.pdf
   - Used to confirm the bluestone circular planter north of Rowe Street, the periodically refreshed Rowe Street entrance planters, renewed St Georges Road display beds, Queen Victoria display garden and stormwater filtration garden/storage-tank split. Figure 96 controls the visible stormwater garden placement west of the former railway/current rail trail, with the underground tank to the east.
+- Bureau of Meteorology Melbourne Regional Office climate statistics: https://www.bom.gov.au/climate/averages/tables/cw_086071.shtml
+  - Used on 2026-07-06 to retune the accelerated weather loop toward Melbourne July conditions: frequent cloud, damp ground, drizzle/showers, high morning humidity, moderate wind and rare short squalls rather than constant heavy storms.
 - Yarra Edinburgh Gardens Plinth Program: https://www.yarracity.vic.gov.au/things-to-do/arts/arts-programs/public-art/edinburgh-gardens-plinth-program
   - Used to confirm the Queen Victoria plinth remains in the middle of a circular garden bed.
 - Captain Cook Society, Plaque to Cook at Edinburgh Gardens: https://www.captaincooksociety.com/remembering-cook/memorials/types-of-cook-memorials/plaque-to-cook-at-edinburgh-gardens-melbourne-victoria-australia
@@ -123,6 +125,7 @@ These notes record the real-world sources and implementation decisions used to s
 - The 2026-07-06 building access pass adds source-linked searchable structure access points at the grandstand changerooms, tennis clubroom, bowling club gate, Freeman Street gatehouse, Emely Baker Centre and south amenities service room, with distinct loot profiles and visible access hardware.
 - The 2026-07-06 public-use/weather pass adds source-backed non-colliding rule signs for dog-leash edges, picnic alcohol hours, Emely Baker access-friendly status and the rotunda stair/no-power constraint, plus a modest rain/wind/wetness firearm-spread modifier shared by local and LAN players.
 - The 2026-07-06 structure-depth pass adds source-backed grandstand umpire-room, Emely Baker kitchenette, bowling shed service-locker, north toilet service-room and rotunda memorial-plaque interactions, plus richer building details for tennis social-space, Emely Baker venue use, grandstand secure gates, toilet service hardware and rotunda memorial setting.
+- The 2026-07-06 heritage-furniture/weather pass adds non-colliding CMP-backed Chandler Fountain, cast-iron gas-lamp, cast-iron bollard, reproduction-seat and interpretive-sign artifacts, and retunes weather phases against BOM Melbourne July climate normals while preserving the existing 420 second gameplay loop.
 - Tree placement refresh research is stored in `docs/research/tree-placement-refresh-2026-07-05.md`.
 - Detailed OSM path/service research is stored in `docs/research/osm-path-service-inventory-2026-07-05.md`.
 - Hardscape and terrain-edge research is stored in `docs/research/hardscape-terrain-edges-2026-07-05.md`.
@@ -149,6 +152,7 @@ These notes record the real-world sources and implementation decisions used to s
 - Building access interaction research is stored in `docs/research/building-access-interactions-2026-07-06.md`.
 - Public-use and weather realism research is stored in `docs/research/public-use-weather-realism-2026-07-06.md`.
 - Structure depth research is stored in `docs/research/structure-depth-pass-2026-07-06.md`.
+- Heritage furniture and winter-weather research is stored in `docs/research/heritage-furniture-winter-weather-2026-07-06.md`.
 - Local raw research asset guidance is stored in `docs/research/raw-assets.md`.
 - Research/data pipeline automation is stored in `docs/research/data-pipeline-automation-2026-07-05.md` and `docs/research/research-manifest.json`.
 
@@ -159,6 +163,7 @@ These notes record the real-world sources and implementation decisions used to s
 - On 2026-07-06, the playground/fence pass used small OSM map API XML extracts for the two playgrounds and oval access connectors after a targeted Overpass playground/fence/gate request returned busy-server HTML.
 - The north playground fence decision changed on follow-up review: older visit/CMP sources can describe an earlier or pre-relocation north playground, while current/recent north-playground sources do not support a fence around the relocated OSM footprint.
 - No public measured Fitzy Bowl CAD geometry was found. Bowl depths and feature families are source-backed, while bowl ellipses, roll-out gaps and street-section object positions are approximate within the OSM skatepark polygon.
+- No public GIS point layer was found for each individual heritage furniture item. The Chandler Fountain, gas lamps, bollards, reproduction seats and interpretive signs are hand-placed from CMP setting descriptions and nearby mapped landmarks.
 - Raw API responses are kept locally under ignored `docs/research/raw/` when useful. The durable checked-in artifacts are source notes plus compact derived constants in `src/game/levelData.ts`.
 - The Vicmap elevation samples are sparse. They are appropriate for broad park slope and local rise/fall, not for fine kerbs, gutters, steps or detailed drainage modelling.
 - Fine ground details such as crowns, shoulders, root mounds, swales and oval banking are represented as deterministic local terrain modifiers layered over the broad Vicmap interpolation.

@@ -3,6 +3,7 @@ export interface PlayerCondition {
   bleedTimer: number;
   limpTimer: number;
   blurTimer: number;
+  bikePumpTimer: number;
   throwables: number;
   flashlightOn: boolean;
 }
@@ -14,10 +15,13 @@ export interface StaminaFrame {
   searching: boolean;
   crouching: boolean;
   bleeding: boolean;
+  bikePumpBoosted?: boolean;
 }
 
 export const MAX_STAMINA = 100;
 export const MAX_THROWABLES = 5;
+export const BIKE_PUMP_BOOST_SECONDS = 75;
+export const BIKE_PUMP_SPEED_MULTIPLIER = 1.18;
 
 export function createInitialPlayerCondition(): PlayerCondition {
   return {
@@ -25,6 +29,7 @@ export function createInitialPlayerCondition(): PlayerCondition {
     bleedTimer: 0,
     limpTimer: 0,
     blurTimer: 0,
+    bikePumpTimer: 0,
     throwables: 2,
     flashlightOn: true
   };
@@ -33,7 +38,7 @@ export function createInitialPlayerCondition(): PlayerCondition {
 export function nextStamina(stamina: number, dt: number, frame: StaminaFrame): number {
   let next = stamina;
   if (frame.sprinting) {
-    next -= 17 * dt;
+    next -= 17 * (frame.bikePumpBoosted ? 0.62 : 1) * dt;
   }
   if (frame.scoped) {
     next -= 5.5 * dt;
@@ -45,10 +50,25 @@ export function nextStamina(stamina: number, dt: number, frame: StaminaFrame): n
       frame.searching ? 8 :
       frame.crouching ? 18 :
       14;
-    next += recovery * (frame.bleeding ? 0.78 : 1) * dt;
+    next += recovery * (frame.bleeding ? 0.78 : 1) * (frame.bikePumpBoosted ? 1.16 : 1) * dt;
   }
 
   return clampStamina(next);
+}
+
+export function applyBikePumpBoost(
+  condition: PlayerCondition,
+  duration = BIKE_PUMP_BOOST_SECONDS
+): PlayerCondition {
+  return {
+    ...condition,
+    bikePumpTimer: Math.max(condition.bikePumpTimer, duration),
+    stamina: Math.min(MAX_STAMINA, condition.stamina + 18)
+  };
+}
+
+export function bikePumpSpeedMultiplier(condition: Pick<PlayerCondition, "bikePumpTimer">): number {
+  return condition.bikePumpTimer > 0 ? BIKE_PUMP_SPEED_MULTIPLIER : 1;
 }
 
 export function spendStamina(stamina: number, cost: number): { stamina: number; spent: boolean } {

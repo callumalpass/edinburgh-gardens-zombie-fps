@@ -55,6 +55,7 @@ export interface NetworkPlayerSnapshot {
   bleedTimer: number;
   limpTimer: number;
   blurTimer: number;
+  bikePumpTimer: number;
   crouching: boolean;
   aim: boolean;
   height: number;

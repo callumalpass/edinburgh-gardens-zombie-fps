@@ -73,6 +73,11 @@
       "url": "https://www.yarracity.vic.gov.au/sites/default/files/2024-05/www.yarracity.vic.gov.au/-/media/files/ycc/the-area/heritage/edinburgh-gardens-conservation-management-plan-2004.pdf"
     },
     {
+      "id": "bom-melbourne-regional-office-climate",
+      "label": "Bureau of Meteorology Melbourne Regional Office climate statistics",
+      "url": "https://www.bom.gov.au/climate/averages/tables/cw_086071.shtml"
+    },
+    {
       "id": "edinburgh-gardens-cmp-2021-3068",
       "label": "Lovell Chen 2021 Edinburgh Gardens CMP copy archived by the 3068 Group",
       "url": "https://the3068group.org/wp-content/uploads/2025/11/2021-conservation-management-plan-_merged.pdf"
@@ -261,6 +266,7 @@
         "vicmap-elevation-1m-dem",
         "edinburgh-gardens-3068-archive",
         "edinburgh-gardens-cmp",
+        "bom-melbourne-regional-office-climate",
         "edinburgh-gardens-cmp-2021-3068",
         "captain-cook-society-edinburgh-gardens",
         "yarra-northern-precinct",
@@ -575,6 +581,12 @@
         "osm-way-api",
         "fitzroy-bowls-official"
       ]
+    },
+    {
+      "id": "heritage-furniture-winter-weather",
+      "path": "docs/research/heritage-furniture-winter-weather-2026-07-06.md",
+      "requiredHeadings": ["## Sources", "## Findings", "## Implementation Translation", "## Uncertainty", "## Validation"],
+      "sourceIds": ["edinburgh-gardens-cmp", "bom-melbourne-regional-office-climate"]
     },
     {
       "id": "data-pipeline-automation",

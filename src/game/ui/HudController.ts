@@ -57,6 +57,7 @@ export interface HudUpdate {
   stamina: number;
   throwables: number;
   flashlightOn: boolean;
+  bikePumpBoostRemaining: number;
   bikeMounted: boolean;
   injuryStatus: string | null;
   amenityPrompt: (amenity: AmenityPoint) => string;
@@ -107,14 +108,15 @@ export class HudController {
     this.refs.scrap.textContent = `${view.scrap}`;
     this.refs.zombies.textContent = `${view.zombieCount}`;
     this.refs.stamina.textContent = `${Math.round(view.stamina)}`;
-    this.refs.tools.textContent = `${view.throwables} / ${view.flashlightOn ? "on" : "off"}`;
+    const pumpText = view.bikePumpBoostRemaining > 0 ? " / pump" : "";
+    this.refs.tools.textContent = `${view.throwables} / ${view.flashlightOn ? "on" : "off"}${pumpText}`;
 
     if (stats.kind !== "melee" && view.loadout.reloadingUntil > performance.now() / 1000) {
       const percent = Math.round(view.reloadProgress * 100);
       this.refs.status.textContent = view.loadout.weaponId === "shotgun" ? `Loading shell ${percent}%` : `Reloading ${percent}%`;
     } else if (view.bikeMounted) {
       this.refs.prompt.textContent = "E: dismount bike";
-      this.refs.status.textContent = "Riding hidden bike";
+      this.refs.status.textContent = view.bikePumpBoostRemaining > 0 ? "Riding tuned bike" : "Riding hidden bike";
     } else if (view.nearestWeaponDrop) {
       this.refs.prompt.textContent = `E: pick up ${WEAPON_DEFINITIONS[view.nearestWeaponDrop.weaponId].name}`;
       this.refs.status.textContent = view.nearestWeaponDrop.label;
@@ -122,7 +124,10 @@ export class HudController {
       this.refs.prompt.textContent = "E: ride bike";
       this.refs.status.textContent = view.nearestBike.label;
     } else if (view.nearestBrokenBike) {
-      this.refs.prompt.textContent = "E: inspect bike";
+      this.refs.prompt.textContent =
+        view.nearestBrokenBike.bikeIssue === "flat-tyres" && view.bikePumpBoostRemaining > 0
+          ? "E: pump tyres"
+          : "E: inspect bike";
       this.refs.status.textContent = view.nearestBrokenBike.label;
     } else if (view.nearestFixture) {
       const active = view.activeFixtureId === view.nearestFixture.id;
@@ -149,7 +154,8 @@ export class HudController {
       const stance = view.isCrouching ? ", crouched" : "";
       const injury = view.injuryStatus ? `, ${view.injuryStatus.toLowerCase()}` : "";
       const light = view.flashlightOn ? ", light on" : ", light off";
-      this.refs.status.textContent = `${stats.name}${optic}${stance}${injury}${light}${view.playerHeight > 0.4 ? `, height ${view.playerHeight.toFixed(1)}m` : ""}`;
+      const pump = view.bikePumpBoostRemaining > 0 ? `, bike pump ${Math.ceil(view.bikePumpBoostRemaining)}s` : "";
+      this.refs.status.textContent = `${stats.name}${optic}${stance}${injury}${light}${pump}${view.playerHeight > 0.4 ? `, height ${view.playerHeight.toFixed(1)}m` : ""}`;
     }
 
     const weapons = view.loadout.inventory

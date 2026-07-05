@@ -72,6 +72,8 @@ test("game loop advances and gameplay helpers mutate state", async ({ page }) =>
   expect(first.throwables).toBe(2);
   expect(first.flashlightOn).toBe(true);
   expect(first.activeDistractions).toBe(0);
+  expect(first.bikePumpBoostRemaining).toBe(0);
+  expect(first.repairedBrokenBikes).toBe(0);
   expect(first.bleeding).toBe(false);
   expect(first.limp).toBe(false);
   expect(first.blur).toBe(false);
@@ -168,6 +170,15 @@ test("game loop advances and gameplay helpers mutate state", async ({ page }) =>
   expect(usedAmenity).toBe(true);
   const afterAmenity = await page.evaluate(() => window.__EGAME__!.snapshot());
   expect(afterAmenity.scrap).toBeGreaterThan(beforeAmenity.scrap);
+  const foundPump = await page.evaluate(() => window.__EGAME__!.testUseAmenity("bicycle_parking"));
+  expect(foundPump).toBe(true);
+  const afterPump = await page.evaluate(() => window.__EGAME__!.snapshot());
+  expect(afterPump.bikePumpBoostRemaining).toBeGreaterThan(60);
+  const repairedBike = await page.evaluate(() => window.__EGAME__!.testRepairFlatBike());
+  expect(repairedBike).toBe(true);
+  const afterRepair = await page.evaluate(() => window.__EGAME__!.snapshot());
+  expect(afterRepair.repairedBrokenBikes).toBe(1);
+  expect(afterRepair.bikePumpBoostRemaining).toBeGreaterThan(50);
   const startedRest = await page.evaluate(() => window.__EGAME__!.testUseAmenity("bench"));
   expect(startedRest).toBe(true);
   const duringRest = await page.evaluate(() => window.__EGAME__!.snapshot());

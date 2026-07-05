@@ -28,14 +28,19 @@ interface WeatherPhase {
 
 const TRANSITION_SECONDS = 18;
 
+// Melbourne Regional Office July normals are cool, cloudy and wet: around 17
+// cloudy days, roughly 10 rain days, high morning humidity and stronger 3pm
+// winds. Keep the arcade-fast loop, but weight it toward low cloud, drizzle
+// and short cold-front squalls rather than constant cinematic thunderstorms.
 const WEATHER_PHASES: WeatherPhase[] = [
-  { duration: 52, kind: "drizzle", label: "drizzle", cloudCover: 0.74, precipitation: 0.34, wind: 0.42, fog: 0.52, wetness: 0.72, thunder: 0 },
-  { duration: 74, kind: "rain", label: "steady rain", cloudCover: 0.88, precipitation: 0.68, wind: 0.58, fog: 0.64, wetness: 0.88, thunder: 0.08 },
-  { duration: 46, kind: "storm", label: "storm cell", cloudCover: 1, precipitation: 1, wind: 0.9, fog: 0.78, wetness: 1, thunder: 1 },
-  { duration: 62, kind: "rain", label: "passing rain", cloudCover: 0.82, precipitation: 0.58, wind: 0.66, fog: 0.55, wetness: 0.92, thunder: 0.18 },
-  { duration: 76, kind: "overcast", label: "low cloud", cloudCover: 0.7, precipitation: 0.08, wind: 0.46, fog: 0.34, wetness: 0.62, thunder: 0 },
-  { duration: 58, kind: "clear", label: "clear break", cloudCover: 0.24, precipitation: 0, wind: 0.26, fog: 0.12, wetness: 0.28, thunder: 0 },
-  { duration: 52, kind: "overcast", label: "cloud building", cloudCover: 0.58, precipitation: 0.12, wind: 0.38, fog: 0.28, wetness: 0.46, thunder: 0 }
+  { duration: 74, kind: "overcast", label: "anticyclonic gloom", cloudCover: 0.82, precipitation: 0.06, wind: 0.42, fog: 0.4, wetness: 0.56, thunder: 0 },
+  { duration: 60, kind: "drizzle", label: "fine drizzle", cloudCover: 0.9, precipitation: 0.3, wind: 0.48, fog: 0.58, wetness: 0.76, thunder: 0 },
+  { duration: 60, kind: "rain", label: "cold showers", cloudCover: 0.95, precipitation: 0.62, wind: 0.66, fog: 0.64, wetness: 0.9, thunder: 0.06 },
+  { duration: 66, kind: "overcast", label: "low cloud", cloudCover: 0.78, precipitation: 0.1, wind: 0.5, fog: 0.42, wetness: 0.68, thunder: 0 },
+  { duration: 58, kind: "clear", label: "brief clear break", cloudCover: 0.36, precipitation: 0, wind: 0.34, fog: 0.18, wetness: 0.42, thunder: 0 },
+  { duration: 42, kind: "rain", label: "southerly burst", cloudCover: 0.92, precipitation: 0.72, wind: 0.78, fog: 0.6, wetness: 0.94, thunder: 0.12 },
+  { duration: 28, kind: "storm", label: "hail squall", cloudCover: 1, precipitation: 0.88, wind: 0.94, fog: 0.72, wetness: 1, thunder: 0.58 },
+  { duration: 32, kind: "overcast", label: "cloud returning", cloudCover: 0.84, precipitation: 0.12, wind: 0.52, fog: 0.42, wetness: 0.64, thunder: 0 }
 ];
 
 const WEATHER_CYCLE_SECONDS = WEATHER_PHASES.reduce((sum, phase) => sum + phase.duration, 0);

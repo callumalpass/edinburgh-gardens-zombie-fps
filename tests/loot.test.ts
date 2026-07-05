@@ -11,6 +11,8 @@ describe("location and zombie loot", () => {
     expect(bbq.ammo).toBeGreaterThan(bin.ammo);
     expect(bbq.health).toBeGreaterThan(0);
     expect(rack.scrap).toBeGreaterThan(bin.scrap);
+    expect(rack.bikePump).toBe(true);
+    expect(bbq.bikePump).toBe(false);
   });
 
   it("gives source-backed structure access points distinct utility profiles", () => {

@@ -115,6 +115,8 @@ export interface Snapshot {
   flashlightOn: boolean;
   activeDistractions: number;
   bikeMounted: boolean;
+  bikePumpBoostRemaining: number;
+  repairedBrokenBikes: number;
 }
 
 export interface GameTestApi {
@@ -127,6 +129,7 @@ export interface GameTestApi {
   testScope: (weaponId?: WeaponId) => boolean;
   testInteract: (fixtureId?: string) => boolean;
   testUseAmenity: (kind?: AmenityPoint["kind"]) => boolean;
+  testRepairFlatBike: () => boolean;
   testThrowDistraction: () => boolean;
   testToggleFlashlight: () => boolean;
   testMiniMapVisibility: () => { front: boolean; behind: boolean; occluded: boolean };

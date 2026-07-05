@@ -171,6 +171,10 @@ export function createObjectPreviewTargets(level: LevelData): ObjectPreviewTarge
       height:
         detail.kind === "cricket-nets"
           ? 3.2
+          : detail.kind === "heritage-gas-lamp"
+            ? 4.4
+            : detail.kind === "chandler-fountain"
+              ? 3.0
           : detail.kind === "construction-fence" || detail.kind === "works-materials"
             ? 2.4
             : detail.kind === "removed-tree-stump"
@@ -319,6 +323,11 @@ function parkLifeRadius(kind: LevelData["parkLifeDetails"][number]["kind"]): num
   if (kind === "works-materials") return 3.6;
   if (kind === "removed-tree-stump") return 2.2;
   if (kind === "park-rule-sign") return 1.9;
+  if (kind === "heritage-gas-lamp") return 2.8;
+  if (kind === "heritage-bollards") return 3.1;
+  if (kind === "heritage-seat") return 2.7;
+  if (kind === "interpretive-sign") return 2.3;
+  if (kind === "chandler-fountain") return 2.6;
   if (kind === "chalk-mark") return 1.9;
   return 2.2;
 }

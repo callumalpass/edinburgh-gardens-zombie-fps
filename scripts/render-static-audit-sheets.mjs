@@ -28,6 +28,10 @@ const sheets = [
   {
     name: "public-use-rule-sign-audit",
     svg: publicUseSheet()
+  },
+  {
+    name: "heritage-furniture-audit",
+    svg: heritageFurnitureSheet()
   }
 ];
 
@@ -287,6 +291,170 @@ function publicUseSheet() {
   return svgShell("Public-Use Rule Sign and Weather Handling Audit", content);
 }
 
+function heritageFurnitureSheet() {
+  const content = `
+  <g transform="translate(70 112)">
+    <rect class="panel" x="0" y="0" width="460" height="356" rx="8"/>
+    <text x="24" y="44" class="label">Chandler Drinking Fountain</text>
+    ${heritageFountain(144, 72)}
+    ${noteText(24, 296, 398, "CMP-backed fountain cue uses a stepped stone plinth, column, plaque and shallow bronze basins near Freeman Street.", "small", 18)}
+  </g>
+
+  <g transform="translate(570 112)">
+    <rect class="panel" x="0" y="0" width="460" height="356" rx="8"/>
+    <text x="24" y="44" class="label">Cast-Iron Gas Lamp Standards</text>
+    ${heritageLamp(132, 58, 0.96)}
+    ${heritageLamp(260, 94, 0.44)}
+    ${noteText(24, 296, 398, "Rotunda and bowling-club lamps now use cast-iron bases, collars, brackets, glass lanterns and warm spill.", "small", 18)}
+  </g>
+
+  <g transform="translate(1070 112)">
+    <rect class="panel" x="0" y="0" width="460" height="356" rx="8"/>
+    <text x="24" y="44" class="label">Fitzroy Cast-Iron Bollards</text>
+    ${heritageBollards(62, 116)}
+    ${noteText(24, 296, 398, "Entrance bollards use a repeated capped profile with ring bands, matching the CMP preference for Fitzroy cast-iron forms.", "small", 18)}
+  </g>
+
+  <g transform="translate(70 548)">
+    <rect class="panel" x="0" y="0" width="460" height="322" rx="8"/>
+    <text x="24" y="44" class="label">Reproduction Timber Seat</text>
+    ${heritageSeat(80, 92)}
+    ${noteText(24, 266, 398, "Seats are low-collision park furniture with timber slats, cast-metal end frames and a small concrete pad.", "small", 18)}
+  </g>
+
+  <g transform="translate(570 548)">
+    <rect class="panel" x="0" y="0" width="460" height="322" rx="8"/>
+    <text x="24" y="44" class="label">Interpretive Heritage Signs</text>
+    ${interpretiveSignDiagram(124, 72)}
+    ${interpretiveSignDiagram(272, 104)}
+    ${noteText(24, 266, 398, "Small two-post signs mark the grandstand, rotunda and Queen Victoria pedestal without cluttering movement paths.", "small", 18)}
+  </g>
+
+  <g transform="translate(1070 548)">
+    <rect class="panel" x="0" y="0" width="460" height="322" rx="8"/>
+    <text x="24" y="44" class="label">Melbourne July Weather Cycle</text>
+    ${winterWeatherStrip(44, 98)}
+    ${noteText(24, 266, 398, "BOM July normals shift the 420-second cycle toward cloud, drizzle, wet ground and brief clear breaks.", "small", 18)}
+  </g>`;
+  return svgShell("Heritage Furniture and Winter Weather Audit", content);
+}
+
+function heritageFountain(x, y) {
+  return `<g transform="translate(${x} ${y})">
+    ${circle(84, 196, 88, "#b6b09e", 0.32)}
+    ${polygon("18,196 150,164 250,198 118,236", "#827b68")}
+    ${polygon("54,160 170,132 222,154 104,186", "#b9b199")}
+    ${rect(104, 88, 44, 94, "#c5bba0")}
+    ${rect(94, 78, 64, 16, "#90866e")}
+    ${rect(100, 116, 52, 26, "#5f4b38")}
+    ${textBox(106, 120, 40, 16, "1893", "#5f4b38", "#e9d8a8")}
+    ${[0, 1, 2, 3].map((i) => {
+      const angle = i * Math.PI * 0.5 + 0.25;
+      const bx = 126 + Math.cos(angle) * 56;
+      const by = 130 + Math.sin(angle) * 28;
+      return `${ellipse(bx, by, 34, 12, "#8c6a3c")}${ellipse(bx, by - 3, 24, 7, "#89aebb", 0.78)}`;
+    }).join("")}
+    ${rect(112, 50, 28, 34, "#c5bba0")}
+    ${polygon("102,50 150,50 136,30 116,30", "#8c6a3c")}
+    ${circle(126, 24, 7, "#8c6a3c")}
+  </g>`;
+}
+
+function heritageLamp(x, y, strength) {
+  return `<g transform="translate(${x} ${y}) scale(${0.92 + strength * 0.08})">
+    ${circle(72, 202, 74, "#c49a55", 0.12 + strength * 0.3)}
+    ${rect(64, 90, 16, 128, "#353c39")}
+    ${rect(56, 208, 32, 16, "#252b29")}
+    ${rect(50, 224, 44, 10, "#252b29")}
+    ${rect(56, 72, 32, 16, "#353c39")}
+    ${circle(72, 72, 24, "none", 1, "#353c39", 6)}
+    ${line(50, 104, 94, 104, "#353c39", 7)}
+    ${line(54, 104, 72, 82, "#353c39", 5)}
+    ${line(90, 104, 72, 82, "#353c39", 5)}
+    ${rect(48, 28, 48, 46, "#f0d99b", 0.42 + strength * 0.4)}
+    ${line(48, 28, 96, 28, "#252b29", 5)}
+    ${line(48, 74, 96, 74, "#252b29", 5)}
+    ${line(48, 28, 48, 74, "#252b29", 4)}
+    ${line(72, 28, 72, 74, "#252b29", 3)}
+    ${line(96, 28, 96, 74, "#252b29", 4)}
+    ${polygon("42,28 102,28 88,12 56,12", "#252b29")}
+    ${circle(72, 8, 6, "#252b29")}
+  </g>`;
+}
+
+function heritageBollards(x, y) {
+  return `<g transform="translate(${x} ${y})">
+    ${[0, 1, 2, 3, 4].map((i) => {
+      const bx = i * 76;
+      return `<g transform="translate(${bx} 0)">
+        ${circle(36, 130, 32, "#9ca19a", 0.32)}
+        ${rect(26, 54, 20, 86, "#252b29")}
+        ${circle(36, 48, 14, "#252b29")}
+        ${rect(20, 132, 32, 12, "#252b29")}
+        ${circle(36, 92, 18, "none", 1, "#d1b46f", 4)}
+      </g>`;
+    }).join("")}
+    ${line(36, 104, 340, 104, "#6f6a5d", 3)}
+  </g>`;
+}
+
+function heritageSeat(x, y) {
+  return `<g transform="translate(${x} ${y})">
+    ${polygon("18,144 272,112 332,144 76,182", "#9ca19a", 0.42)}
+    ${[0, 1, 2].map((i) => rect(56, 64 + i * 22, 230, 14, "#8c613d")).join("")}
+    ${rect(64, 126, 228, 16, "#8c613d")}
+    ${line(72, 140, 54, 186, "#252b29", 9)}
+    ${line(278, 140, 298, 186, "#252b29", 9)}
+    ${line(72, 70, 54, 116, "#252b29", 7)}
+    ${line(278, 70, 298, 116, "#252b29", 7)}
+    ${circle(58, 120, 22, "none", 1, "#252b29", 5)}
+    ${circle(294, 120, 22, "none", 1, "#252b29", 5)}
+  </g>`;
+}
+
+function interpretiveSignDiagram(x, y) {
+  return `<g transform="translate(${x} ${y})">
+    ${circle(70, 188, 48, "#9ca19a", 0.25)}
+    ${rect(26, 72, 8, 126, "#3b4844")}
+    ${rect(116, 72, 8, 126, "#3b4844")}
+    ${rect(20, 54, 110, 92, "#2f4f49")}
+    ${rect(30, 68, 90, 62, "#e4d9b0")}
+    ${textBox(42, 74, 66, 18, "HISTORY", "#e4d9b0", "#2f4f49")}
+    ${rect(40, 98, 28, 22, "#8c613d")}
+    ${line(76, 100, 108, 100, "#2f4f49", 3)}
+    ${line(76, 112, 104, 112, "#2f4f49", 3)}
+    ${line(76, 124, 96, 124, "#2f4f49", 3)}
+  </g>`;
+}
+
+function winterWeatherStrip(x, y) {
+  const phases = [
+    ["over", 74, "#7f8987"],
+    ["drizzle", 60, "#5e7f91"],
+    ["rain", 60, "#426f8e"],
+    ["low", 66, "#6f7e80"],
+    ["clear", 58, "#d6b45c"],
+    ["shwr", 42, "#365f7c"],
+    ["sq", 28, "#263847"],
+    ["cld", 32, "#758382"]
+  ];
+  let cursor = x;
+  const bars = phases.map(([label, seconds, color]) => {
+    const width = seconds * 0.82;
+    const mark = `${rect(cursor, y, width, 44, color)}<text x="${cursor + width / 2}" y="${y + 28}" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" font-weight="700" fill="#17201a">${escapeXml(label)}</text>`;
+    cursor += width;
+    return mark;
+  }).join("");
+  return `<g>
+    ${bars}
+    ${line(x, y + 62, x + 344, y + 62, "#384139", 4)}
+    <text x="${x}" y="${y + 90}" class="tiny">420s loop, mostly cloudy and wet</text>
+    ${[0, 1, 2, 3, 4].map((i) => line(x + 36 + i * 54, y + 126, x + 62 + i * 54, y + 96, "#61a8d3", 5)).join("")}
+    ${circle(x + 304, y + 112, 34, "#c49a55", 0.3)}
+    ${rect(x + 298, y + 76, 10, 70, "#353c39")}
+  </g>`;
+}
+
 function buildingPanel(x, y, title, wall, roof, elements, note) {
   return `<g transform="translate(${x} ${y})">
     <rect class="panel" x="0" y="0" width="452" height="382" rx="8"/>
@@ -409,6 +577,10 @@ function line(x1, y1, x2, y2, stroke, width) {
 
 function polygon(points, fill, opacity = 1) {
   return `<polygon points="${points}" fill="${fill}" opacity="${opacity}"/>`;
+}
+
+function ellipse(x, y, radiusX, radiusY, fill, opacity = 1) {
+  return `<ellipse cx="${x}" cy="${y}" rx="${radiusX}" ry="${radiusY}" fill="${fill}" opacity="${opacity}"/>`;
 }
 
 function textBox(x, y, width, height, label, fill, color = "#f2e6a8") {

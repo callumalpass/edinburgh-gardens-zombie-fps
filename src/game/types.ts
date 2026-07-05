@@ -354,7 +354,12 @@ export interface ParkLifeDetail {
     | "construction-fence"
     | "works-materials"
     | "removed-tree-stump"
-    | "park-rule-sign";
+    | "park-rule-sign"
+    | "heritage-gas-lamp"
+    | "heritage-bollards"
+    | "heritage-seat"
+    | "interpretive-sign"
+    | "chandler-fountain";
   position: Vec2;
   angle: number;
   bikeIssue?: "flat-tyres" | "broken-chain";

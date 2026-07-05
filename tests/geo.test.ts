@@ -719,10 +719,27 @@ describe("map geometry", () => {
   it("keeps park-life details sourceable and non-colliding", () => {
     const level = createLevelData();
     const detailKinds = new Set(level.parkLifeDetails.map((detail) => detail.kind));
-    for (const kind of ["dog-sign", "park-rule-sign", "picnic-blanket", "notice-board", "broken-bike", "training-cones", "dog-water-bowl", "picnic-cooler", "sports-bag", "chalk-mark", "cricket-nets"] as const) {
+    for (const kind of [
+      "dog-sign",
+      "park-rule-sign",
+      "picnic-blanket",
+      "notice-board",
+      "broken-bike",
+      "training-cones",
+      "dog-water-bowl",
+      "picnic-cooler",
+      "sports-bag",
+      "chalk-mark",
+      "cricket-nets",
+      "heritage-gas-lamp",
+      "heritage-bollards",
+      "heritage-seat",
+      "interpretive-sign",
+      "chandler-fountain"
+    ] as const) {
       expect(detailKinds.has(kind)).toBe(true);
     }
-    expect(level.parkLifeDetails.length).toBeGreaterThanOrEqual(24);
+    expect(level.parkLifeDetails.length).toBeGreaterThanOrEqual(36);
     expect(level.parkLifeDetails.every((detail) => detail.source && pointInPolygon(detail.position, level.boundary))).toBe(true);
     const ruleSigns = level.parkLifeDetails.filter((detail) => detail.kind === "park-rule-sign");
     expect(ruleSigns.length).toBeGreaterThanOrEqual(6);
@@ -732,6 +749,23 @@ describe("map geometry", () => {
     const brokenBikes = level.parkLifeDetails.filter((detail) => detail.kind === "broken-bike");
     expect(brokenBikes.length).toBeGreaterThanOrEqual(1);
     expect(brokenBikes.every((detail) => detail.bikeIssue === "flat-tyres" || detail.bikeIssue === "broken-chain")).toBe(true);
+    const heritageIds = new Set(level.parkLifeDetails.filter((detail) => detail.source?.includes("Edinburgh Gardens CMP 2004")).map((detail) => detail.id));
+    for (const id of [
+      "chandler-drinking-fountain",
+      "rotunda-north-gas-lamp",
+      "rotunda-east-gas-lamp",
+      "rotunda-south-gas-lamp",
+      "bowling-south-gas-lamp",
+      "freeman-entrance-cast-iron-bollards",
+      "rowe-street-cast-iron-bollards",
+      "rotunda-reproduction-seat",
+      "queen-victoria-reproduction-seat",
+      "grandstand-interpretive-sign",
+      "rotunda-interpretive-sign",
+      "queen-victoria-interpretive-sign"
+    ]) {
+      expect(heritageIds.has(id)).toBe(true);
+    }
     const obstacleIds = new Set(level.obstacles.map((obstacle) => obstacle.id));
     expect(level.parkLifeDetails.some((detail) => obstacleIds.has(detail.id))).toBe(false);
   });

@@ -12,6 +12,7 @@ export interface LootResult {
   attachment: UpgradeId | null;
   medicine: number;
   throwables: number;
+  bikePump: boolean;
   junk: boolean;
   quality: "junk" | "basic" | "useful" | "valuable";
   noiseMultiplier: number;
@@ -104,11 +105,12 @@ export function searchAmenityLoot(kind: AmenityPoint["kind"], rng: RandomSource,
       health: 0,
       attachment,
       throwables,
+      bikePump: true,
       junk: quality === "junk",
       quality,
       noiseMultiplier,
       searchSecondsMultiplier,
-      status: attachment ? "Recovered bike-tool attachment" : quality === "junk" ? "Mostly bent bike parts" : "Stripped bike rack supplies"
+      status: "Found a working bike pump"
     });
   }
   if (kind === "bbq") {
@@ -272,9 +274,10 @@ function amenityLootBias(kind: AmenityPoint["kind"]): number {
   return -0.08;
 }
 
-function withLootDefaults(result: Omit<LootResult, "medicine"> & { medicine?: number }): LootResult {
+function withLootDefaults(result: Omit<LootResult, "medicine" | "bikePump"> & { medicine?: number; bikePump?: boolean }): LootResult {
   return {
     medicine: 0,
+    bikePump: false,
     ...result
   };
 }

@@ -15,7 +15,7 @@ const WEATHER_NUMERIC_FIELDS: Array<keyof Pick<WeatherState, "phase" | "cloudCov
 
 describe("variable weather cycle", () => {
   it("moves through distinct weather states over time", () => {
-    const samples = [10, 70, 140, 260, 340].map(weatherFromElapsed);
+    const samples = [10, 88, 150, 282, 372].map(weatherFromElapsed);
     const kinds = new Set(samples.map((sample) => sample.kind));
 
     expect(kinds).toContain("drizzle");
@@ -26,8 +26,8 @@ describe("variable weather cycle", () => {
   });
 
   it("keeps weather intensities bounded and makes storms heavier than clear breaks", () => {
-    const storm = weatherFromElapsed(140);
-    const clear = weatherFromElapsed(340);
+    const storm = weatherFromElapsed(372);
+    const clear = weatherFromElapsed(282);
 
     for (const sample of [storm, clear]) {
       for (const field of WEATHER_NUMERIC_FIELDS) {

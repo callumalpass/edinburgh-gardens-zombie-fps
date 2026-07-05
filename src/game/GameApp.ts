@@ -18,7 +18,7 @@ import {
   type Loadout,
   type WeaponId
 } from "./weapons";
-import { resolveObstacle } from "./collision";
+import { resolveObstacle, shouldBypassObstacle as shouldBypassObstacleByContext } from "./collision";
 import { clampToPolygon, distance } from "./geo";
 import { pointInInteractableRaisedFootprint } from "./interactables";
 import { createLevelData } from "./levelData";
@@ -35,11 +35,12 @@ import { GameAudio, type NoisePlaybackOptions } from "./audio";
 import { movementNoiseKind, movementNoiseMultiplier, NoiseSystem, type MovementSurface, type NoiseKind } from "./noise";
 import {
   MAX_THROWABLES,
+  applyBikePumpBoost,
   bleedDamagePerSecond,
+  bikePumpSpeedMultiplier,
   createInitialPlayerCondition,
   injuryStatus,
   nextStamina,
-  speedMultiplierForCondition,
   spendStamina
 } from "./playerCondition";
 import { SeededRandom } from "./random";
@@ -90,17 +91,10 @@ import {
   BASE_CAMERA_FOV,
   BIKE_ALLOWED_WEAPONS,
   BIKE_CAMERA_HEIGHT_BONUS,
-  BIKE_FORWARD_SPEED,
   BIKE_INTERACTION_RADIUS,
-  BIKE_REVERSE_SPEED,
-  BIKE_SPRINT_SPEED,
-  BIKE_STRAFE_SPEED,
   CLIMB_STAMINA_COST,
-  CROUCH_SPEED,
   DISTRACTION_STAMINA_COST,
   INTERMISSION_SECONDS,
-  JUMP_GRAVITY,
-  JUMP_INITIAL_VELOCITY,
   JUMP_STAMINA_COST,
   MACHETE_STAMINA_COST,
   MELEE_STAMINA_COST,
@@ -109,9 +103,7 @@ import {
   PLAYER_HEIGHT,
   PLAYER_RADIUS,
   REST_SECONDS,
-  SPRINT_SPEED,
   START_POSITION,
-  WALK_SPEED,
   ZOMBIE_SEPARATION_GAP,
   ZOMBIE_SEPARATION_GRID_SIZE,
   ZOMBIE_SEPARATION_ITERATIONS,
@@ -127,13 +119,14 @@ import type {
   ThrownDistraction
 } from "./runtimeTypes";
 import { FrameLoop } from "./runtime/FrameLoop";
+import { GameEntityStore } from "./runtime/GameEntityStore";
+import { PlayerLocomotion, type LocomotionInput } from "./systems/PlayerLocomotion";
 import type {
   AmenityPoint,
   CollisionObstacle,
   InteractableFixture,
   LevelData,
   ParkLifeDetail,
-  SkateBowlFeature,
   UpgradeStation,
   Vec2,
   WeaponSpawn
@@ -145,10 +138,11 @@ export class GameApp {
   private readonly obstacleIndex: ObstacleIndex;
   private readonly terrain: TerrainSampler;
   private readonly movementSurfaces: MovementSurfaceSampler;
+  private readonly locomotion: PlayerLocomotion;
   private readonly interactableById: Map<string, InteractableFixture>;
-  private readonly autoInteractables: InteractableFixture[];
   private readonly toggleInteractables: InteractableFixture[];
   private readonly brokenBikeDetails: ParkLifeDetail[];
+  private readonly entities = new GameEntityStore();
   private readonly noise = new NoiseSystem();
   private readonly rng = new SeededRandom(0xed1b97);
   private readonly waveDirector: WaveDirector;
@@ -181,14 +175,6 @@ export class GameApp {
   private movementNoiseTimer = 0;
   private elevatedNoiseTimer = 0;
   private testCrouchOverride: boolean | null = null;
-  private nextZombieId = 1;
-  private nextPickupId = 1;
-  private zombies: Zombie[] = [];
-  private pickups: Pickup[] = [];
-  private weaponDrops: WeaponDrop[] = [];
-  private tracers: Tracer[] = [];
-  private shells: ShellCasing[] = [];
-  private smokePuffs: SmokePuff[] = [];
   private lastDamageAt = 0;
   private nearestStation: UpgradeStation | null = null;
   private nearestFixture: InteractableFixture | null = null;
@@ -196,7 +182,6 @@ export class GameApp {
   private nearestWeaponDrop: WeaponDrop | null = null;
   private nearestBike: RideableBike | null = null;
   private nearestBrokenBike: ParkLifeDetail | null = null;
-  private searchedAmenityIds = new Set<string>();
   private activeAmenitySearch: AmenitySearch | null = null;
   private activeAmenityRest: AmenityRest | null = null;
   private condition = createInitialPlayerCondition();
@@ -204,11 +189,7 @@ export class GameApp {
   private distractionCooldown = 0;
   private flashlightNoiseTimer = 0;
   private playerTorch: THREE.SpotLight | null = null;
-  private readonly distractions: ThrownDistraction[] = [];
   private scratchVector = new THREE.Vector3();
-  private readonly scratchInputVector = new THREE.Vector3();
-  private readonly scratchForwardVector = new THREE.Vector3();
-  private readonly scratchRightVector = new THREE.Vector3();
   private readonly frameCombatants: CombatantRef[] = [];
   private weaponModel = new THREE.Group();
   private muzzleFlash: THREE.Object3D | null = null;
@@ -240,6 +221,66 @@ export class GameApp {
   private networkWavePhase: WavePhase = "active";
   private networkIntermissionTimer = 0;
   private readonly networkPlayers = new Map<string, NetworkRemotePlayer>();
+
+  private get zombies(): Zombie[] {
+    return this.entities.zombies;
+  }
+
+  private set zombies(zombies: Zombie[]) {
+    this.entities.zombies = zombies;
+  }
+
+  private get pickups(): Pickup[] {
+    return this.entities.pickups;
+  }
+
+  private set pickups(pickups: Pickup[]) {
+    this.entities.pickups = pickups;
+  }
+
+  private get weaponDrops(): WeaponDrop[] {
+    return this.entities.weaponDrops;
+  }
+
+  private set weaponDrops(weaponDrops: WeaponDrop[]) {
+    this.entities.weaponDrops = weaponDrops;
+  }
+
+  private get tracers(): Tracer[] {
+    return this.entities.tracers;
+  }
+
+  private set tracers(tracers: Tracer[]) {
+    this.entities.tracers = tracers;
+  }
+
+  private get shells(): ShellCasing[] {
+    return this.entities.shells;
+  }
+
+  private set shells(shells: ShellCasing[]) {
+    this.entities.shells = shells;
+  }
+
+  private get smokePuffs(): SmokePuff[] {
+    return this.entities.smokePuffs;
+  }
+
+  private set smokePuffs(smokePuffs: SmokePuff[]) {
+    this.entities.smokePuffs = smokePuffs;
+  }
+
+  private get distractions(): ThrownDistraction[] {
+    return this.entities.distractions;
+  }
+
+  private get searchedAmenityIds(): Set<string> {
+    return this.entities.searchedAmenityIds;
+  }
+
+  private get repairedBrokenBikeIds(): Set<string> {
+    return this.entities.repairedBrokenBikeIds;
+  }
 
   private get aimHeld(): boolean {
     return this.input?.aimHeld ?? false;
@@ -284,8 +325,17 @@ export class GameApp {
     this.obstacleIndex = new ObstacleIndex(this.level.obstacles);
     this.terrain = new TerrainSampler(this.level);
     this.movementSurfaces = new MovementSurfaceSampler(this.level);
+    this.locomotion = new PlayerLocomotion({
+      boundary: this.level.boundary,
+      skateBowls: this.level.skateBowls,
+      interactables: this.level.interactables,
+      obstacleIndex: this.obstacleIndex,
+      groundY: (point) => this.groundY(point),
+      movementSurfaceAt: (point) => this.movementSurfaceAt(point),
+      surfaceSpeedMultiplier: (surface) => this.movementSurfaces.speedMultiplier(surface),
+      bikeSurfaceSpeedMultiplier: (surface) => this.movementSurfaces.bikeSpeedMultiplier(surface)
+    });
     this.interactableById = new Map(this.level.interactables.map((fixture) => [fixture.id, fixture]));
-    this.autoInteractables = this.level.interactables.filter((fixture) => fixture.mode === "auto");
     this.toggleInteractables = this.level.interactables.filter((fixture) => fixture.mode === "toggle");
     this.brokenBikeDetails = this.level.parkLifeDetails.filter((detail) => detail.kind === "broken-bike");
     this.waveDirector = new WaveDirector(this.level.spawnPoints, this.rng, {
@@ -349,6 +399,7 @@ export class GameApp {
       testScope: (weaponId?: WeaponId) => this.testScope(weaponId),
       testInteract: (fixtureId?: string) => this.testInteract(fixtureId),
       testUseAmenity: (kind?: AmenityPoint["kind"]) => this.testUseAmenity(kind),
+      testRepairFlatBike: () => this.testRepairFlatBike(),
       testThrowDistraction: () => this.throwDistraction(),
       testToggleFlashlight: () => this.toggleFlashlight(),
       testMiniMapVisibility: () => this.testMiniMapVisibility(),
@@ -578,20 +629,7 @@ export class GameApp {
     this.condition = createInitialPlayerCondition();
     this.applyFlashlightVisibility();
     this.testCrouchOverride = null;
-    this.zombies.forEach((zombie) => this.scene.remove(zombie.mesh));
-    this.pickups.forEach((pickup) => this.scene.remove(pickup.mesh));
-    this.weaponDrops.forEach((drop) => this.scene.remove(drop.mesh));
-    this.tracers.forEach((tracer) => this.scene.remove(tracer.mesh));
-    this.shells.forEach((shell) => this.scene.remove(shell.mesh));
-    this.smokePuffs.forEach((puff) => this.scene.remove(puff.mesh));
-    this.distractions.forEach((distraction) => this.scene.remove(distraction.mesh));
-    this.zombies = [];
-    this.pickups = [];
-    this.weaponDrops = [];
-    this.tracers = [];
-    this.shells = [];
-    this.smokePuffs = [];
-    this.distractions.length = 0;
+    this.entities.clearSceneEntities(this.scene);
     this.recoil = 0;
     this.recoilYaw = 0;
     this.meleeSwing = 0;
@@ -609,7 +647,7 @@ export class GameApp {
     this.noise.clear();
     this.activeAmenitySearch = null;
     this.activeAmenityRest = null;
-    this.searchedAmenityIds.clear();
+    this.entities.clearInteractionMemory();
     this.nearestBike = null;
     this.nearestBrokenBike = null;
     this.resetRideableBike();
@@ -823,6 +861,7 @@ export class GameApp {
       bleedTimer: this.condition.bleedTimer,
       limpTimer: this.condition.limpTimer,
       blurTimer: this.condition.blurTimer,
+      bikePumpTimer: this.condition.bikePumpTimer,
       crouching: this.player.crouching,
       aim: this.aimHeld,
       height: this.player.height,
@@ -851,6 +890,7 @@ export class GameApp {
       bleedTimer: player.condition.bleedTimer,
       limpTimer: player.condition.limpTimer,
       blurTimer: player.condition.blurTimer,
+      bikePumpTimer: player.condition.bikePumpTimer,
       crouching: player.crouching,
       aim: player.input.aim,
       height: player.height,
@@ -900,61 +940,31 @@ export class GameApp {
   }
 
   private updateNetworkPlayerCrouch(player: NetworkRemotePlayer, dt: number): void {
-    player.crouching = player.input.crouch;
-    const target = player.crouching ? 1 : 0;
-    const t = 1 - Math.pow(0.0008, dt);
-    player.crouchAmount += (target - player.crouchAmount) * t;
-    if (player.crouchAmount < 0.01) player.crouchAmount = 0;
+    this.locomotion.updateCrouch(player, dt, player.input.crouch);
   }
 
   private updateNetworkPlayerMovement(player: NetworkRemotePlayer, dt: number, now: number): void {
     const stale = now - player.lastInputAt > 1.5;
-    const input = this.scratchInputVector.set(stale ? 0 : player.input.moveX, 0, stale ? 0 : player.input.moveZ);
-    const inputLength = Math.min(1, Math.hypot(input.x, input.z));
-
-    if (inputLength > 0.001) {
-      input.normalize();
-      const sin = Math.sin(player.yaw);
-      const cos = Math.cos(player.yaw);
-      const forward = this.scratchForwardVector.set(sin, 0, cos);
-      const right = this.scratchRightVector.set(cos, 0, -sin);
-      const wantsSprint = !player.crouching && player.input.sprint;
-      const sprinting = wantsSprint && player.condition.stamina > 8 && player.condition.limpTimer <= 0;
-      player.isSprinting = sprinting;
-      const surface = this.movementSurfaceAt({ x: player.position.x, z: player.position.z });
-      const speed =
-        (player.crouching ? CROUCH_SPEED : sprinting ? SPRINT_SPEED : WALK_SPEED) *
-        this.surfaceSpeedMultiplier(surface) *
-        speedMultiplierForCondition(player.condition);
-      player.velocity.copy(forward.multiplyScalar(input.z).add(right.multiplyScalar(input.x))).multiplyScalar(speed);
-      this.emitNetworkPlayerMovementNoise(player, dt, sprinting);
-    } else {
-      player.isSprinting = false;
-      player.velocity.multiplyScalar(0.78);
-      if (player.velocity.lengthSq() < 0.01) {
-        player.velocity.set(0, 0, 0);
-      }
-    }
-
-    let next = clampToPolygon(
-      { x: player.position.x + player.velocity.x * dt, z: player.position.z + player.velocity.z * dt },
-      this.level.boundary,
-      3
-    );
-    next = this.resolveNearbyObstacles(next, PLAYER_RADIUS, (obstacle, point) => {
-      if (obstacle.jumpable === true && player.jumpHeight >= (obstacle.jumpBypassMinHeight ?? 0.5)) {
-        return true;
-      }
-      return this.shouldBypassObstacleForFixture(obstacle.id, point, player.activeFixtureId);
+    const input = {
+      x: stale ? 0 : player.input.moveX,
+      z: stale ? 0 : player.input.moveZ,
+      length: stale ? 0 : Math.hypot(player.input.moveX, player.input.moveZ)
+    };
+    const movement = this.locomotion.moveOnFoot(player, dt, input, {
+      wantsSprint: !stale && player.input.sprint,
+      condition: player.condition
     });
-    next = this.resolveSkateBowlExit({ x: player.position.x, z: player.position.z }, next, player.velocity);
-    player.position.set(next.x, this.groundY(next), next.z);
+    player.isSprinting = movement.sprinting;
+    if (movement.moved) {
+      this.emitNetworkPlayerMovementNoise(player, dt, movement.sprinting);
+    }
   }
 
   private updateNetworkPlayerCondition(player: NetworkRemotePlayer, dt: number): void {
     player.condition.bleedTimer = Math.max(0, player.condition.bleedTimer - dt);
     player.condition.limpTimer = Math.max(0, player.condition.limpTimer - dt);
     player.condition.blurTimer = Math.max(0, player.condition.blurTimer - dt);
+    player.condition.bikePumpTimer = Math.max(0, player.condition.bikePumpTimer - dt);
     const bleedDamage = bleedDamagePerSecond(player.condition.bleedTimer) * dt;
     if (bleedDamage > 0) {
       player.health -= bleedDamage;
@@ -971,49 +981,11 @@ export class GameApp {
   }
 
   private updateNetworkPlayerJumpState(player: NetworkRemotePlayer, dt: number): void {
-    if (player.activeFixtureId || player.height > 0.2) {
-      player.jumpHeight = 0;
-      player.jumpVelocity = 0;
-      return;
-    }
-    if (player.jumpHeight <= 0 && player.jumpVelocity <= 0) {
-      player.jumpHeight = 0;
-      player.jumpVelocity = 0;
-      return;
-    }
-    player.jumpVelocity -= JUMP_GRAVITY * dt;
-    player.jumpHeight += player.jumpVelocity * dt;
-    if (player.jumpHeight <= 0) {
-      player.jumpHeight = 0;
-      player.jumpVelocity = 0;
-    }
+    this.locomotion.updateJumpState(player, dt);
   }
 
   private updateNetworkPlayerVerticalState(player: NetworkRemotePlayer, dt: number): void {
-    let target = 0;
-    const playerPoint = { x: player.position.x, z: player.position.z };
-    const active = player.activeFixtureId ? this.interactableById.get(player.activeFixtureId) : undefined;
-
-    if (active) {
-      if (pointInInteractableRaisedFootprint(playerPoint, active, 1.2)) {
-        target = Math.max(target, active.height);
-      } else {
-        player.activeFixtureId = null;
-      }
-    }
-
-    for (const fixture of this.autoInteractables) {
-      if (pointInInteractableRaisedFootprint(playerPoint, fixture, 0.8)) {
-        target = Math.max(target, fixture.height);
-      }
-    }
-
-    player.heightTarget = target;
-    const t = 1 - Math.pow(0.001, dt);
-    player.height += (player.heightTarget - player.height) * t;
-    if (Math.abs(player.height) < 0.01) {
-      player.height = 0;
-    }
+    this.locomotion.updateFixtureElevation(player, dt);
   }
 
   private emitNetworkPlayerMovementNoise(player: NetworkRemotePlayer, dt: number, sprinting: boolean): void {
@@ -1312,7 +1284,7 @@ export class GameApp {
   }
 
   private jumpNetworkPlayer(player: NetworkRemotePlayer): boolean {
-    if (player.activeFixtureId || player.height > 0.2 || player.jumpHeight > 0.02 || player.crouching) {
+    if (!this.locomotion.canStartJump(player)) {
       return false;
     }
     const stamina = spendStamina(player.condition.stamina, JUMP_STAMINA_COST);
@@ -1320,8 +1292,7 @@ export class GameApp {
       return false;
     }
     player.condition.stamina = stamina.stamina;
-    player.jumpVelocity = JUMP_INITIAL_VELOCITY;
-    player.jumpHeight = 0.04;
+    this.locomotion.startJump(player);
     this.emitNoise("footstep", { x: player.position.x, z: player.position.z }, 0.46, { volume: 0.38 });
     return true;
   }
@@ -1442,6 +1413,9 @@ export class GameApp {
       player.condition.blurTimer = Math.max(0, player.condition.blurTimer - loot.medicine * 0.35);
       player.condition.limpTimer = Math.max(0, player.condition.limpTimer - loot.medicine * 0.25);
     }
+    if (loot.bikePump) {
+      player.condition = applyBikePumpBoost(player.condition);
+    }
     player.condition.throwables = Math.min(MAX_THROWABLES, player.condition.throwables + loot.throwables);
     this.emitNoise("scavenge", amenity.position, loot.noiseMultiplier * 0.75);
     return true;
@@ -1501,6 +1475,7 @@ export class GameApp {
     this.condition.bleedTimer = snapshot.bleedTimer;
     this.condition.limpTimer = snapshot.limpTimer;
     this.condition.blurTimer = snapshot.blurTimer;
+    this.condition.bikePumpTimer = snapshot.bikePumpTimer;
     this.condition.throwables = snapshot.throwables;
     this.condition.flashlightOn = snapshot.flashlightOn;
     this.applyFlashlightVisibility();
@@ -1525,6 +1500,7 @@ export class GameApp {
       player.condition.bleedTimer = snapshot.bleedTimer;
       player.condition.limpTimer = snapshot.limpTimer;
       player.condition.blurTimer = snapshot.blurTimer;
+      player.condition.bikePumpTimer = snapshot.bikePumpTimer;
       player.condition.throwables = snapshot.throwables;
       player.condition.flashlightOn = snapshot.flashlightOn;
       player.crouching = snapshot.crouching;
@@ -1673,31 +1649,14 @@ export class GameApp {
   }
 
   private clearNetworkAuthoritativeEntities(): void {
-    for (const zombie of this.zombies) this.scene.remove(zombie.mesh);
-    for (const pickup of this.pickups) this.scene.remove(pickup.mesh);
-    for (const drop of this.weaponDrops) this.scene.remove(drop.mesh);
-    for (const tracer of this.tracers) this.scene.remove(tracer.mesh);
-    for (const shell of this.shells) this.scene.remove(shell.mesh);
-    for (const puff of this.smokePuffs) this.scene.remove(puff.mesh);
-    for (const distraction of this.distractions) this.scene.remove(distraction.mesh);
-    this.zombies = [];
-    this.pickups = [];
-    this.weaponDrops = [];
-    this.tracers = [];
-    this.shells = [];
-    this.smokePuffs = [];
-    this.distractions.length = 0;
+    this.entities.clearSceneEntities(this.scene);
   }
 
   private updateCrouch(dt: number): void {
     const inputCrouching =
       !this.bike?.mounted &&
       (this.input?.isCrouching() ?? false);
-    this.player.crouching = this.testCrouchOverride ?? inputCrouching;
-    const target = this.player.crouching ? 1 : 0;
-    const t = 1 - Math.pow(0.0008, dt);
-    this.player.crouchAmount += (target - this.player.crouchAmount) * t;
-    if (this.player.crouchAmount < 0.01) this.player.crouchAmount = 0;
+    this.locomotion.updateCrouch(this.player, dt, this.testCrouchOverride ?? inputCrouching);
     this.root.classList.toggle("is-crouched", this.player.crouching);
   }
 
@@ -1777,51 +1736,27 @@ export class GameApp {
     }
 
     const movement = this.input?.movement() ?? { x: 0, z: 0, length: 0 };
-    const input = this.scratchInputVector.set(movement.x, 0, movement.z);
 
     if (this.bike?.mounted) {
-      this.updateBikeMovement(dt, input);
+      this.updateBikeMovement(dt, movement);
       return;
     }
 
-    if (movement.length > 0) {
-      const sin = Math.sin(this.player.yaw);
-      const cos = Math.cos(this.player.yaw);
-      const forward = this.scratchForwardVector.set(sin, 0, cos);
-      const right = this.scratchRightVector.set(cos, 0, -sin);
-      const wantsSprint = !this.player.crouching && (this.input?.isSprinting() ?? false);
-      const sprinting = wantsSprint && this.condition.stamina > 8 && this.condition.limpTimer <= 0;
-      this.isSprinting = sprinting;
-      const surface = this.movementSurfaceAt({ x: this.player.position.x, z: this.player.position.z });
-      const speed =
-        (this.player.crouching ? CROUCH_SPEED : sprinting ? SPRINT_SPEED : WALK_SPEED) *
-        this.surfaceSpeedMultiplier(surface) *
-        speedMultiplierForCondition(this.condition);
-      this.player.velocity.copy(forward.multiplyScalar(input.z).add(right.multiplyScalar(input.x))).multiplyScalar(speed);
-      this.emitMovementNoise(dt, sprinting);
-    } else {
-      this.isSprinting = false;
-      this.player.velocity.multiplyScalar(0.78);
-      if (this.player.velocity.lengthSq() < 0.01) {
-        this.player.velocity.set(0, 0, 0);
-      }
+    const movementResult = this.locomotion.moveOnFoot(this.player, dt, movement, {
+      wantsSprint: this.input?.isSprinting() ?? false,
+      condition: this.condition
+    });
+    this.isSprinting = movementResult.sprinting;
+    if (movementResult.moved) {
+      this.emitMovementNoise(dt, movementResult.sprinting);
     }
-
-    let next = clampToPolygon(
-      { x: this.player.position.x + this.player.velocity.x * dt, z: this.player.position.z + this.player.velocity.z * dt },
-      this.level.boundary,
-      3
-    );
-    next = this.resolveNearbyObstacles(next, PLAYER_RADIUS, (obstacle, point) => this.shouldJumpBypassObstacle(obstacle) || this.shouldBypassObstacle(obstacle.id, point));
-    next = this.resolveSkateBowlExit({ x: this.player.position.x, z: this.player.position.z }, next, this.player.velocity);
-    this.player.position.set(next.x, this.groundY(next), next.z);
   }
 
   private jump(): boolean {
     if (this.state !== "playing" || this.bike?.mounted || this.activeAmenityRest || this.activeAmenitySearch) {
       return false;
     }
-    if (this.player.activeFixtureId || this.player.height > 0.2 || this.player.jumpHeight > 0.02) {
+    if (!this.locomotion.canStartJump(this.player)) {
       return false;
     }
     if (this.player.crouching || this.testCrouchOverride === true) {
@@ -1834,62 +1769,29 @@ export class GameApp {
       return false;
     }
     this.condition.stamina = stamina.stamina;
-    this.player.jumpVelocity = JUMP_INITIAL_VELOCITY;
-    this.player.jumpHeight = 0.04;
+    this.locomotion.startJump(this.player);
     this.flashStatus("Jumped");
     this.emitNoise("footstep", { x: this.player.position.x, z: this.player.position.z }, 0.46, { volume: 0.38 });
     return true;
   }
 
-  private updateBikeMovement(dt: number, input: THREE.Vector3): void {
-    this.player.activeFixtureId = null;
-    this.player.heightTarget = 0;
-    this.player.crouching = false;
-    const wantsSprint = this.input?.isSprinting() ?? false;
-    const sprinting = wantsSprint && this.condition.stamina > 8 && this.condition.limpTimer <= 0;
-    this.isSprinting = sprinting;
-
-    const forwardInput = (input.z < 0 ? 1 : 0) - (input.z > 0 ? 1 : 0);
-    const sideInput = (input.x > 0 ? 1 : 0) - (input.x < 0 ? 1 : 0);
-
-    if (forwardInput !== 0 || sideInput !== 0) {
-      const sin = Math.sin(this.player.yaw);
-      const cos = Math.cos(this.player.yaw);
-      const forwardSpeed = sprinting && forwardInput > 0 ? BIKE_SPRINT_SPEED : BIKE_FORWARD_SPEED;
-      const forward = this.scratchForwardVector
-        .set(-sin, 0, -cos)
-        .multiplyScalar(forwardInput >= 0 ? forwardInput * forwardSpeed : forwardInput * BIKE_REVERSE_SPEED);
-      const right = this.scratchRightVector.set(cos, 0, -sin).multiplyScalar(sideInput * BIKE_STRAFE_SPEED);
-      const surface = this.movementSurfaceAt({ x: this.player.position.x, z: this.player.position.z });
-      const conditionScale = Math.max(0.72, speedMultiplierForCondition(this.condition));
-      this.player.velocity.copy(forward.add(right)).multiplyScalar(this.bikeSurfaceSpeedMultiplier(surface) * conditionScale);
-      this.emitMovementNoise(dt, sprinting);
-    } else {
-      this.isSprinting = false;
-      this.player.velocity.multiplyScalar(0.9);
-      if (this.player.velocity.lengthSq() < 0.01) {
-        this.player.velocity.set(0, 0, 0);
-      }
+  private updateBikeMovement(dt: number, input: LocomotionInput): void {
+    const movement = this.locomotion.moveOnBike(this.player, dt, input, {
+      wantsSprint: this.input?.isSprinting() ?? false,
+      condition: this.condition,
+      pumpSpeedMultiplier: bikePumpSpeedMultiplier(this.condition)
+    });
+    this.isSprinting = movement.sprinting;
+    if (movement.moved) {
+      this.emitMovementNoise(dt, movement.sprinting);
     }
-
-    let next = clampToPolygon(
-      { x: this.player.position.x + this.player.velocity.x * dt, z: this.player.position.z + this.player.velocity.z * dt },
-      this.level.boundary,
-      3
-    );
-    next = this.resolveNearbyObstacles(next, PLAYER_RADIUS + 0.45);
-    next = this.resolveSkateBowlExit({ x: this.player.position.x, z: this.player.position.z }, next, this.player.velocity);
-    this.player.position.set(next.x, this.groundY(next), next.z);
-  }
-
-  private bikeSurfaceSpeedMultiplier(surface: MovementSurface): number {
-    return this.movementSurfaces.bikeSpeedMultiplier(surface);
   }
 
   private updatePlayerCondition(dt: number): void {
     this.condition.bleedTimer = Math.max(0, this.condition.bleedTimer - dt);
     this.condition.limpTimer = Math.max(0, this.condition.limpTimer - dt);
     this.condition.blurTimer = Math.max(0, this.condition.blurTimer - dt);
+    this.condition.bikePumpTimer = Math.max(0, this.condition.bikePumpTimer - dt);
     this.distractionCooldown = Math.max(0, this.distractionCooldown - dt);
 
     const bleedDamage = bleedDamagePerSecond(this.condition.bleedTimer) * dt;
@@ -1904,7 +1806,8 @@ export class GameApp {
       resting: Boolean(this.activeAmenityRest),
       searching: Boolean(this.activeAmenitySearch),
       crouching: this.player.crouching,
-      bleeding: this.condition.bleedTimer > 0
+      bleeding: this.condition.bleedTimer > 0,
+      bikePumpBoosted: this.bike?.mounted === true && this.condition.bikePumpTimer > 0
     });
     if (scoped && this.condition.stamina <= 1) {
       this.aimHeld = false;
@@ -2155,10 +2058,6 @@ export class GameApp {
     return this.movementSurfaces.at(point);
   }
 
-  private surfaceSpeedMultiplier(surface: MovementSurface): number {
-    return this.movementSurfaces.speedMultiplier(surface);
-  }
-
   private groundY(point: Vec2): number {
     return this.terrain.groundY(point);
   }
@@ -2207,7 +2106,7 @@ export class GameApp {
     const profile = zombieProfile(spawn.type);
     const spawnPoint = { x: spawn.position.x, z: spawn.position.z };
     this.zombies.push({
-      id: this.nextZombieId++,
+      id: this.entities.nextZombieId(),
       type: spawn.type,
       mesh,
       position,
@@ -2963,7 +2862,7 @@ export class GameApp {
     mesh.position.set(position.x, this.groundY({ x: position.x, z: position.z }) + 0.75, position.z);
     this.scene.add(mesh);
     this.pickups.push({
-      id: this.nextPickupId++,
+      id: this.entities.nextPickupId(),
       type,
       amount,
       mesh,
@@ -3037,7 +2936,7 @@ export class GameApp {
     mesh.position.set(position.x, groundY + (source === "cache" ? 0.8 : 0.65), position.z);
     this.scene.add(mesh);
     this.weaponDrops.push({
-      id: this.nextPickupId++,
+      id: this.entities.nextPickupId(),
       weaponId,
       label: spawn?.label ?? WEAPON_DEFINITIONS[weaponId].name,
       mesh,
@@ -3182,10 +3081,31 @@ export class GameApp {
   }
 
   private inspectBrokenBike(detail: ParkLifeDetail): boolean {
+    if (this.repairedBrokenBikeIds.has(detail.id)) {
+      this.flashStatus("Bike already rideable");
+      return true;
+    }
+
+    if (detail.bikeIssue === "flat-tyres" && this.condition.bikePumpTimer > 0 && this.bike) {
+      this.repairedBrokenBikeIds.add(detail.id);
+      this.bike.mounted = false;
+      this.bike.position.set(detail.position.x, this.groundY(detail.position), detail.position.z);
+      this.bike.angle = detail.angle ?? this.player.yaw;
+      this.syncBikeMesh();
+      this.nearestBrokenBike = null;
+      this.nearestBike = this.bike;
+      this.emitNoise("scavenge", detail.position, 0.64, { volume: 0.58 });
+      this.flashStatus("Inflated flat tyres. Bike rideable.");
+      this.audio.playWorld("equip", detail.position);
+      return true;
+    }
+
     const message =
       detail.bikeIssue === "broken-chain"
         ? "Broken chain. This bike is going nowhere."
-        : "Flat tyres. This bike will not outrun anything.";
+        : this.condition.bikePumpTimer > 0
+          ? "No rideable frame left here."
+          : "Flat tyres. Search bike racks for a pump.";
     this.flashStatus(message);
     this.audio.playWorld("deny");
     return true;
@@ -3399,6 +3319,9 @@ export class GameApp {
       this.condition.blurTimer = Math.max(0, this.condition.blurTimer - loot.medicine * 0.35);
       this.condition.limpTimer = Math.max(0, this.condition.limpTimer - loot.medicine * 0.25);
     }
+    if (loot.bikePump) {
+      this.condition = applyBikePumpBoost(this.condition);
+    }
     this.condition.throwables = Math.min(MAX_THROWABLES, this.condition.throwables + loot.throwables);
     this.emitNoise("scavenge", amenity.position, loot.noiseMultiplier * 0.75);
     this.flashStatus(loot.status);
@@ -3491,6 +3414,9 @@ export class GameApp {
     let nearestDistance = Number.POSITIVE_INFINITY;
     const playerPoint = { x: this.player.position.x, z: this.player.position.z };
     for (const detail of this.brokenBikeDetails) {
+      if (this.repairedBrokenBikeIds.has(detail.id)) {
+        continue;
+      }
       const detailDistance = distance(playerPoint, detail.position);
       if (detailDistance < nearestDistance && detailDistance < BIKE_INTERACTION_RADIUS) {
         nearest = detail;
@@ -3542,60 +3468,11 @@ export class GameApp {
   }
 
   private updateVerticalState(dt: number): void {
-    if (this.bike?.mounted) {
-      this.player.activeFixtureId = null;
-      this.player.heightTarget = 0;
-      const t = 1 - Math.pow(0.001, dt);
-      this.player.height += (this.player.heightTarget - this.player.height) * t;
-      if (Math.abs(this.player.height) < 0.01) {
-        this.player.height = 0;
-      }
-      return;
-    }
-
-    let target = 0;
-    const playerPoint = { x: this.player.position.x, z: this.player.position.z };
-    const active = this.player.activeFixtureId ? this.interactableById.get(this.player.activeFixtureId) : undefined;
-
-    if (active) {
-      if (pointInInteractableRaisedFootprint(playerPoint, active, 1.2)) {
-        target = Math.max(target, active.height);
-      } else {
-        this.player.activeFixtureId = null;
-      }
-    }
-
-    for (const fixture of this.autoInteractables) {
-      if (pointInInteractableRaisedFootprint(playerPoint, fixture, 0.8)) {
-        target = Math.max(target, fixture.height);
-      }
-    }
-
-    this.player.heightTarget = target;
-    const t = 1 - Math.pow(0.001, dt);
-    this.player.height += (this.player.heightTarget - this.player.height) * t;
-    if (Math.abs(this.player.height) < 0.01) {
-      this.player.height = 0;
-    }
+    this.locomotion.updateFixtureElevation(this.player, dt, { forceGrounded: this.bike?.mounted === true });
   }
 
   private updateJumpState(dt: number): void {
-    if (this.bike?.mounted || this.player.activeFixtureId || this.player.height > 0.2) {
-      this.player.jumpHeight = 0;
-      this.player.jumpVelocity = 0;
-      return;
-    }
-    if (this.player.jumpHeight <= 0 && this.player.jumpVelocity <= 0) {
-      this.player.jumpHeight = 0;
-      this.player.jumpVelocity = 0;
-      return;
-    }
-    this.player.jumpVelocity -= JUMP_GRAVITY * dt;
-    this.player.jumpHeight += this.player.jumpVelocity * dt;
-    if (this.player.jumpHeight <= 0) {
-      this.player.jumpHeight = 0;
-      this.player.jumpVelocity = 0;
-    }
+    this.locomotion.updateJumpState(this.player, dt, { disabled: this.bike?.mounted === true });
   }
 
   private updateElevatedNoise(dt: number): void {
@@ -3617,67 +3494,10 @@ export class GameApp {
   }
 
   private shouldBypassObstacleForFixture(obstacleId: string, point: Vec2, activeFixtureId: string | null): boolean {
-    const active = activeFixtureId ? this.interactableById.get(activeFixtureId) : undefined;
-    if (active?.bypassObstacleIds?.includes(obstacleId) && pointInInteractableRaisedFootprint(point, active, 1.2)) {
-      return true;
-    }
-
-    for (const fixture of this.autoInteractables) {
-      if (fixture.bypassObstacleIds?.includes(obstacleId) && pointInInteractableRaisedFootprint(point, fixture, 0.8)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  private shouldJumpBypassObstacle(obstacle: LevelData["obstacles"][number]): boolean {
-    return obstacle.jumpable === true && this.player.jumpHeight >= (obstacle.jumpBypassMinHeight ?? 0.5);
-  }
-
-  private resolveSkateBowlExit(current: Vec2, candidate: Vec2, velocity: THREE.Vector3): Vec2 {
-    let next = candidate;
-    for (const bowl of this.level.skateBowls) {
-      const currentLocal = this.skateBowlLocalPoint(bowl, current);
-      const nextLocal = this.skateBowlLocalPoint(bowl, next);
-      const currentNorm = this.skateBowlNorm(bowl, currentLocal);
-      const nextNorm = this.skateBowlNorm(bowl, nextLocal);
-      if (currentNorm < 0.96 && nextNorm >= 1 && !this.isSkateBowlExitGap(bowl, nextLocal)) {
-        const scale = 0.94 / Math.max(nextNorm, 0.001);
-        next = this.skateBowlWorldPoint(bowl, { x: nextLocal.x * scale, z: nextLocal.z * scale });
-        velocity.multiplyScalar(0.28);
-      }
-    }
-    return next;
-  }
-
-  private skateBowlLocalPoint(bowl: SkateBowlFeature, point: Vec2): Vec2 {
-    const dx = point.x - bowl.center.x;
-    const dz = point.z - bowl.center.z;
-    const cos = Math.cos(bowl.angle);
-    const sin = Math.sin(bowl.angle);
-    return {
-      x: dx * cos + dz * sin,
-      z: -dx * sin + dz * cos
-    };
-  }
-
-  private skateBowlWorldPoint(bowl: SkateBowlFeature, point: Vec2): Vec2 {
-    const cos = Math.cos(bowl.angle);
-    const sin = Math.sin(bowl.angle);
-    return {
-      x: bowl.center.x + point.x * cos - point.z * sin,
-      z: bowl.center.z + point.x * sin + point.z * cos
-    };
-  }
-
-  private skateBowlNorm(bowl: SkateBowlFeature, point: Vec2): number {
-    return Math.hypot(point.x / bowl.radiusX, point.z / bowl.radiusZ);
-  }
-
-  private isSkateBowlExitGap(bowl: SkateBowlFeature, point: Vec2): boolean {
-    const angle = Math.atan2(point.z / bowl.radiusZ, point.x / bowl.radiusX);
-    const delta = Math.atan2(Math.sin(angle - bowl.exitAngle), Math.cos(angle - bowl.exitAngle));
-    return Math.abs(delta) <= bowl.exitWidth;
+    return shouldBypassObstacleByContext(obstacleId, point, {
+      activeFixtureId,
+      interactables: this.level.interactables
+    });
   }
 
   private playerElevation(): number {
@@ -3753,6 +3573,18 @@ export class GameApp {
       this.updateBike(0);
     }
     return this.toggleBike();
+  }
+
+  private testRepairFlatBike(): boolean {
+    const detail = this.brokenBikeDetails.find((candidate) => candidate.bikeIssue === "flat-tyres") ?? null;
+    if (!detail) {
+      return false;
+    }
+    this.player.position.set(detail.position.x, this.groundY(detail.position), detail.position.z);
+    this.updateNearestBrokenBike();
+    const wasRepaired = this.repairedBrokenBikeIds.has(detail.id);
+    this.inspectBrokenBike(detail);
+    return !wasRepaired && this.repairedBrokenBikeIds.has(detail.id);
   }
 
   private testUseAmenity(kind?: AmenityPoint["kind"]): boolean {
@@ -3969,7 +3801,9 @@ export class GameApp {
       throwables: this.condition.throwables,
       flashlightOn: this.condition.flashlightOn,
       activeDistractions: this.distractions.length,
-      bikeMounted: this.bike?.mounted === true
+      bikeMounted: this.bike?.mounted === true,
+      bikePumpBoostRemaining: Number(this.condition.bikePumpTimer.toFixed(1)),
+      repairedBrokenBikes: this.repairedBrokenBikeIds.size
     };
   }
 
@@ -4011,6 +3845,7 @@ export class GameApp {
       stamina: this.condition.stamina,
       throwables: this.condition.throwables,
       flashlightOn: this.condition.flashlightOn,
+      bikePumpBoostRemaining: this.condition.bikePumpTimer,
       bikeMounted: this.bike?.mounted === true,
       injuryStatus: injuryStatus(this.condition),
       amenityPrompt: (amenity) => this.amenityPrompt(amenity)

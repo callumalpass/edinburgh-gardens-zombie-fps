@@ -457,6 +457,16 @@ export class WorldBuilder {
       this.addSportsBag(detail);
     } else if (detail.kind === "cricket-nets") {
       this.addCricketNets(detail);
+    } else if (detail.kind === "heritage-gas-lamp") {
+      this.addHeritageGasLamp(detail);
+    } else if (detail.kind === "heritage-bollards") {
+      this.addHeritageBollards(detail);
+    } else if (detail.kind === "heritage-seat") {
+      this.addHeritageSeat(detail);
+    } else if (detail.kind === "interpretive-sign") {
+      this.addInterpretiveSign(detail);
+    } else if (detail.kind === "chandler-fountain") {
+      this.addChandlerFountain(detail);
     } else {
       this.addChalkMark(detail);
     }
@@ -3700,6 +3710,16 @@ export class WorldBuilder {
         this.addSportsBag(detail);
       } else if (detail.kind === "cricket-nets") {
         this.addCricketNets(detail);
+      } else if (detail.kind === "heritage-gas-lamp") {
+        this.addHeritageGasLamp(detail);
+      } else if (detail.kind === "heritage-bollards") {
+        this.addHeritageBollards(detail);
+      } else if (detail.kind === "heritage-seat") {
+        this.addHeritageSeat(detail);
+      } else if (detail.kind === "interpretive-sign") {
+        this.addInterpretiveSign(detail);
+      } else if (detail.kind === "chandler-fountain") {
+        this.addChandlerFountain(detail);
       } else {
         this.addChalkMark(detail);
       }
@@ -3802,6 +3822,211 @@ export class WorldBuilder {
       group.add(wheel);
     }
 
+    group.position.set(detail.position.x, this.groundY(detail.position), detail.position.z);
+    group.rotation.y = detail.angle;
+    this.scene.add(group);
+  }
+
+  private addChandlerFountain(detail: ParkLifeDetail): void {
+    const group = new THREE.Group();
+    const stone = this.standardDetailMaterial("chandler-fountain-stone", 0xb9ae92, 0.72, 0.03);
+    const darkStone = this.standardDetailMaterial("chandler-fountain-dark-stone", 0x766f61, 0.82, 0.02);
+    const bronze = this.standardDetailMaterial("chandler-fountain-bronze", 0x575f58, 0.44, 0.34);
+    const water = this.materials.puddle;
+
+    const plinth = new THREE.Mesh(new THREE.BoxGeometry(1.65, 0.22, 1.65), stone);
+    plinth.position.y = 0.11;
+    plinth.castShadow = true;
+    plinth.receiveShadow = true;
+    group.add(plinth);
+
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.64, 0.78, 0.48, 8), darkStone);
+    base.position.y = 0.46;
+    base.rotation.y = Math.PI / 8;
+    base.castShadow = true;
+    group.add(base);
+
+    const column = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.34, 1.55, 12), stone);
+    column.position.y = 1.42;
+    column.castShadow = true;
+    group.add(column);
+
+    for (const angle of [0, Math.PI / 2, Math.PI, Math.PI * 1.5]) {
+      const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.24, 0.16, 14), bronze);
+      bowl.position.set(Math.cos(angle) * 0.52, 1.12, Math.sin(angle) * 0.52);
+      bowl.scale.z = 0.7;
+      bowl.rotation.y = -angle;
+      bowl.castShadow = true;
+      group.add(bowl);
+      const basinWater = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.26, 0.018, 14), water);
+      basinWater.position.set(Math.cos(angle) * 0.52, 1.22, Math.sin(angle) * 0.52);
+      group.add(basinWater);
+    }
+
+    const plaque = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.22, 0.045), this.materials.metal);
+    plaque.position.set(0, 1.52, -0.295);
+    group.add(plaque);
+
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.45, 0.18, 12), stone);
+    cap.position.y = 2.26;
+    cap.castShadow = true;
+    group.add(cap);
+    const finial = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 8), bronze);
+    finial.position.y = 2.48;
+    finial.castShadow = true;
+    group.add(finial);
+
+    group.position.set(detail.position.x, this.groundY(detail.position), detail.position.z);
+    group.rotation.y = detail.angle;
+    this.scene.add(group);
+  }
+
+  private addHeritageGasLamp(detail: ParkLifeDetail): void {
+    const group = new THREE.Group();
+    const iron = this.standardDetailMaterial("heritage-cast-iron", 0x1d2522, 0.54, 0.42);
+    const glass = this.standardDetailMaterial("heritage-lamp-warm-glass", 0xf2cf82, 0.24, 0.02, true, 0.82);
+
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.36, 0.36, 12), iron);
+    base.position.y = 0.18;
+    base.castShadow = true;
+    group.add(base);
+    const collar = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.24, 0.18, 10), iron);
+    collar.position.y = 0.48;
+    collar.castShadow = true;
+    group.add(collar);
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.085, 2.75, 10), iron);
+    post.position.y = 1.78;
+    post.castShadow = true;
+    group.add(post);
+    for (const y of [0.92, 1.48, 2.04]) {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.105, 0.012, 6, 20), iron);
+      ring.position.y = y;
+      ring.rotation.x = Math.PI / 2;
+      group.add(ring);
+    }
+    for (const side of [-1, 1]) {
+      const brace = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.045, 0.045), iron);
+      brace.position.set(side * 0.18, 2.88, 0);
+      brace.rotation.z = side * 0.64;
+      brace.castShadow = true;
+      group.add(brace);
+    }
+    const lantern = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.58, 0.46), glass);
+    lantern.position.y = 3.22;
+    lantern.castShadow = true;
+    group.add(lantern);
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(0.38, 0.22, 4), iron);
+    roof.position.y = 3.62;
+    roof.rotation.y = Math.PI / 4;
+    roof.castShadow = true;
+    group.add(roof);
+    const glow = new THREE.PointLight(0xf0c96a, 0.82, 24);
+    glow.position.y = 3.22;
+    group.add(glow);
+    this.lampLights.push(glow);
+
+    const spillMaterial = new THREE.MeshBasicMaterial({
+      color: 0xc49a55,
+      transparent: true,
+      opacity: 0.16,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending
+    });
+    const spill = new THREE.Mesh(new THREE.CircleGeometry(5.2, 26), spillMaterial);
+    spill.position.y = 0.045;
+    spill.rotation.x = -Math.PI / 2;
+    spill.userData.kind = "heritage-lamp-ground-spill";
+    group.add(spill);
+    this.lampSpillMaterials.push(spillMaterial);
+    this.renderedLampSpillCount += 1;
+
+    group.position.set(detail.position.x, this.groundY(detail.position), detail.position.z);
+    group.rotation.y = detail.angle;
+    this.scene.add(group);
+  }
+
+  private addHeritageBollards(detail: ParkLifeDetail): void {
+    const group = new THREE.Group();
+    const iron = this.standardDetailMaterial("fitzroy-cast-iron-bollard", 0x202622, 0.52, 0.36);
+    for (let index = -2; index <= 2; index += 1) {
+      const x = index * 0.82;
+      const bollard = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.13, 0.72, 10), iron);
+      bollard.position.set(x, 0.36, 0);
+      bollard.castShadow = true;
+      group.add(bollard);
+      const cap = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 7), iron);
+      cap.position.set(x, 0.78, 0);
+      cap.castShadow = true;
+      group.add(cap);
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.13, 0.012, 6, 16), iron);
+      ring.position.set(x, 0.55, 0);
+      ring.rotation.x = Math.PI / 2;
+      group.add(ring);
+    }
+    group.position.set(detail.position.x, this.groundY(detail.position), detail.position.z);
+    group.rotation.y = detail.angle;
+    this.scene.add(group);
+  }
+
+  private addHeritageSeat(detail: ParkLifeDetail): void {
+    const group = new THREE.Group();
+    const timber = this.materials.timber;
+    const iron = this.standardDetailMaterial("heritage-seat-iron-frame", 0x25302c, 0.56, 0.32);
+    const pad = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.045, 1.25), this.materials.concrete);
+    pad.position.y = 0.025;
+    pad.receiveShadow = true;
+    group.add(pad);
+    for (const z of [-0.32, -0.1, 0.12]) {
+      const slat = new THREE.Mesh(new THREE.BoxGeometry(2.82, 0.09, 0.12), timber);
+      slat.position.set(0, 0.62, z);
+      slat.castShadow = true;
+      group.add(slat);
+    }
+    for (const y of [0.9, 1.1, 1.3]) {
+      const back = new THREE.Mesh(new THREE.BoxGeometry(2.82, 0.09, 0.12), timber);
+      back.position.set(0, y, 0.43);
+      back.rotation.x = -0.22;
+      back.castShadow = true;
+      group.add(back);
+    }
+    for (const x of [-1.16, 1.16]) {
+      const side = new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.035, 8, 20, Math.PI * 1.08), iron);
+      side.position.set(x, 0.58, 0.1);
+      side.rotation.set(Math.PI / 2, 0, Math.PI * 0.07);
+      group.add(side);
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.72, 0.08), iron);
+      leg.position.set(x, 0.38, -0.34);
+      leg.castShadow = true;
+      group.add(leg);
+    }
+    group.position.set(detail.position.x, this.boxSupportY(detail.position, detail.angle, 1.65, 0.68), detail.position.z);
+    group.rotation.y = detail.angle;
+    this.scene.add(group);
+  }
+
+  private addInterpretiveSign(detail: ParkLifeDetail): void {
+    const group = new THREE.Group();
+    const postMaterial = this.standardDetailMaterial("interpretive-sign-post", 0x4d5954, 0.58, 0.24);
+    const panelMaterial = this.canvasSignMaterial(`interpretive-${detail.id}`, "HISTORY", "#33453d", "#f2e6a8");
+    const mapMaterial = this.basicDetailMaterial("interpretive-map-panel", 0xd8ceaa);
+    for (const x of [-0.5, 0.5]) {
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.055, 1.2, 8), postMaterial);
+      post.position.set(x, 0.6, 0);
+      post.castShadow = true;
+      group.add(post);
+    }
+    const panel = new THREE.Mesh(new THREE.BoxGeometry(1.55, 0.78, 0.08), panelMaterial);
+    panel.position.y = 1.28;
+    panel.castShadow = true;
+    group.add(panel);
+    const inset = new THREE.Mesh(new THREE.BoxGeometry(1.12, 0.32, 0.085), mapMaterial);
+    inset.position.set(0, 1.1, -0.048);
+    group.add(inset);
+    for (const y of [1.02, 1.12, 1.22]) {
+      const line = new THREE.Mesh(new THREE.BoxGeometry(0.86, 0.025, 0.09), this.basicDetailMaterial("interpretive-text-lines", 0x374239));
+      line.position.set(0, y, -0.095);
+      group.add(line);
+    }
     group.position.set(detail.position.x, this.groundY(detail.position), detail.position.z);
     group.rotation.y = detail.angle;
     this.scene.add(group);

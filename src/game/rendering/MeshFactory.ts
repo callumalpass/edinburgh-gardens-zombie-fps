@@ -1444,6 +1444,11 @@ export class MeshFactory {
     ctx.fillStyle = background;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+    for (let i = 0; i < 90; i += 1) {
+      ctx.fillStyle = i % 2 === 0 ? `${foreground}10` : `${accent}14`;
+      ctx.fillRect((i * 47) % canvas.width, (i * 29) % canvas.height, 1 + (i % 3), 1 + (i % 2));
+    }
+
     ctx.globalAlpha = 0.18;
     ctx.fillStyle = accent;
     ctx.fillRect(0, 0, canvas.width, 18);
@@ -1461,9 +1466,23 @@ export class MeshFactory {
       ctx.stroke();
     }
 
+    ctx.strokeStyle = `${accent}55`;
+    ctx.lineWidth = 12;
+    ctx.beginPath();
+    ctx.moveTo(8, 17);
+    ctx.bezierCurveTo(52, 8, 148, 18, 248, 12);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(10, 111);
+    ctx.bezierCurveTo(82, 120, 169, 104, 248, 114);
+    ctx.stroke();
+
     ctx.strokeStyle = foreground;
     ctx.lineWidth = 6;
     ctx.strokeRect(10, 10, canvas.width - 20, canvas.height - 20);
+    ctx.strokeStyle = `${background}cc`;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(18, 18, canvas.width - 36, canvas.height - 36);
     ctx.fillStyle = foreground;
     ctx.font = text.length > 3 ? "800 42px system-ui, sans-serif" : "900 52px system-ui, sans-serif";
     ctx.textAlign = "center";
@@ -1529,15 +1548,44 @@ export class MeshFactory {
   private addPickupBrushMarker(group: THREE.Group, type: PickupKind): void {
     const color =
       type === "ammo" ? MELBOURNE_ANIME_PALETTE.tramOchre : type === "health" ? MELBOURNE_ANIME_PALETTE.brick : MELBOURNE_ANIME_PALETTE.wetBluestone;
-    const ring = new THREE.Mesh(
-      new THREE.TorusGeometry(0.68, 0.018, 7, 30),
-      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.4, depthWrite: false })
+    const wash = new THREE.Mesh(
+      new THREE.CircleGeometry(0.82, 18),
+      new THREE.MeshBasicMaterial({
+        color,
+        transparent: true,
+        opacity: 0.16,
+        depthWrite: false,
+        side: THREE.DoubleSide
+      })
     );
-    ring.rotation.x = Math.PI / 2;
-    ring.rotation.z = type === "scrap" ? 0.42 : -0.18;
-    ring.position.y = -0.34;
-    ring.scale.set(1.16, 0.72, 1);
-    group.add(ring);
+    wash.rotation.x = Math.PI / 2;
+    wash.rotation.z = type === "scrap" ? 0.42 : -0.18;
+    wash.position.y = -0.365;
+    wash.scale.set(1.34, 0.68, 1);
+    group.add(wash);
+
+    for (let arc = 0; arc < 2; arc += 1) {
+      const material = new THREE.MeshBasicMaterial({
+        color: arc === 0 ? color : MELBOURNE_ANIME_PALETTE.weatheredWhite,
+        transparent: true,
+        opacity: arc === 0 ? 0.42 : 0.22,
+        depthWrite: false
+      });
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.64 + arc * 0.16, 0.015, 6, 24, Math.PI * (1.18 + arc * 0.22)), material);
+      ring.rotation.x = Math.PI / 2;
+      ring.rotation.z = (type === "scrap" ? 0.54 : -0.22) + arc * Math.PI * 0.72;
+      ring.position.y = -0.34 - arc * 0.014;
+      ring.scale.set(1.2, 0.74, 1);
+      group.add(ring);
+    }
+
+    const strokeMaterial = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.34, depthWrite: false });
+    for (let index = 0; index < 3; index += 1) {
+      const stroke = new THREE.Mesh(new THREE.BoxGeometry(0.78 - index * 0.14, 0.006, 0.035), strokeMaterial);
+      stroke.position.set(-0.18 + index * 0.2, -0.332 - index * 0.006, 0.34 - index * 0.21);
+      stroke.rotation.y = (type === "health" ? -0.34 : 0.22) + index * 0.28;
+      group.add(stroke);
+    }
   }
 
   private groundObject(group: THREE.Group): void {
