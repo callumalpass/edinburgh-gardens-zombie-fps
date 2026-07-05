@@ -30,6 +30,7 @@ import type {
   MappedFence,
   MappedTree,
   ParkLifeDetail,
+  PathSurfacePatch,
   PolygonObstacle,
   SignificantTreePoint,
   SportsFixture,
@@ -85,6 +86,7 @@ export const RESEARCH_NOTES = [
   "Street edges now use a bounded OSM road query for Alfred Crescent, Freeman Street, Brunswick Street and St Georges Road, including trunk-road tram cues.",
   "Small park-life details are stored as sourceable level data so picnic, dog-area, cycling and sports-use cues remain separate from collision and amenity loot data.",
   "Micro-terrain modifiers now layer path crowns, worn shoulders, root mounds, oval banking and drainage swales over the broad Vicmap elevation interpolation.",
+  "Path surface transition patches now derive feathered edges and compacted junctions from mapped paths, with a small set of researched desire paths through high-use lawns.",
   "See docs/edinburgh-gardens-research.md for source URLs, query notes, data licensing notes and implementation decisions."
 ];
 
@@ -2049,6 +2051,99 @@ function pathFromGeo(
   };
 }
 
+function pathSurfacePatchesForPath(path: LevelPath, pathIndex: number): PathSurfacePatch[] {
+  const patches: PathSurfacePatch[] = [];
+  for (let segmentIndex = 0; segmentIndex < path.points.length - 1; segmentIndex += 1) {
+    const a = path.points[segmentIndex];
+    const b = path.points[segmentIndex + 1];
+    const segmentLength = distance(a, b);
+    if (segmentLength < 10 || (segmentIndex + pathIndex) % 3 !== 0) {
+      continue;
+    }
+    const angle = Math.atan2(b.z - a.z, b.x - a.x);
+    const normal = { x: -Math.sin(angle), z: Math.cos(angle) };
+    const side = (segmentIndex + path.id.length) % 2 === 0 ? 1 : -1;
+    const offset = path.width * 0.48 + 0.46;
+    const t = 0.42 + ((segmentIndex % 4) - 1.5) * 0.045;
+    const position = {
+      x: a.x + (b.x - a.x) * t + normal.x * offset * side,
+      z: a.z + (b.z - a.z) * t + normal.z * offset * side
+    };
+    patches.push({
+      id: `surface-${path.id}-${segmentIndex + 1}`,
+      label: `${path.label} feathered edge`,
+      kind: path.surface === "gravel" || path.kind === "perimeter" ? "gravel-feather" : "path-edge-wear",
+      material: path.surface === "gravel" || path.kind === "perimeter" ? "gravel" : "dirt",
+      position,
+      angle,
+      length: Math.min(segmentLength * 0.62, 19),
+      width: path.kind === "service" ? 0.74 : 0.94,
+      source: `${path.source ?? "mapped path geometry"}; path-edge transition inferred from CMP asphalt-path and remnant-edge context`
+    });
+  }
+  return patches;
+}
+
+function pathJunctionSurfacePatches(paths: readonly LevelPath[]): PathSurfacePatch[] {
+  const patches: PathSurfacePatch[] = [];
+  const used = new Set<string>();
+  const pathPoints = paths.flatMap((path) => path.points.map((point) => ({ point, path })));
+
+  pathPoints.forEach(({ point, path }, index) => {
+    const nearbyPathIds = new Set(
+      pathPoints
+        .filter((candidate) => candidate.path.id !== path.id && distance(candidate.point, point) < Math.max(4.2, path.width + candidate.path.width))
+        .map((candidate) => candidate.path.id)
+    );
+    if (nearbyPathIds.size === 0) {
+      return;
+    }
+    const key = `${Math.round(point.x / 8)}:${Math.round(point.z / 8)}`;
+    if (used.has(key)) {
+      return;
+    }
+    used.add(key);
+    patches.push({
+      id: `surface-junction-${patches.length + 1}`,
+      label: "Compacted path junction",
+      kind: "path-junction-wear",
+      material: path.surface === "gravel" ? "gravel" : "dirt",
+      position: point,
+      angle: (index % 12) * 0.26,
+      length: Math.max(2.4, path.width * 1.45),
+      width: Math.max(1.5, path.width * 1.05),
+      source: "Derived from close OSM/mapped path nodes; compacted junction wear inferred from high-use path transitions"
+    });
+  });
+
+  return patches.slice(0, 42);
+}
+
+function surfacePatchBetweenGeo(
+  id: string,
+  label: string,
+  kind: PathSurfacePatch["kind"],
+  material: PathSurfacePatch["material"],
+  a: GeoPoint,
+  b: GeoPoint,
+  width: number,
+  source: string
+): PathSurfacePatch {
+  const start = geoToWorld(a);
+  const end = geoToWorld(b);
+  return {
+    id,
+    label,
+    kind,
+    material,
+    position: { x: (start.x + end.x) / 2, z: (start.z + end.z) / 2 },
+    angle: Math.atan2(end.z - start.z, end.x - start.x),
+    length: distance(start, end),
+    width,
+    source
+  };
+}
+
 export function createLevelData(): LevelData {
   const boundary = polygonFromGeo(PARK_BOUNDARY_GEO);
   const oval = polygonFromGeo(OVAL_GEO);
@@ -2493,6 +2588,50 @@ export function createLevelData(): LevelData {
         source: `${line.source ?? "CMP hardscape line"}; local drainage depression inferred from bluestone-pitcher drain`
       }))
   ];
+  const pathSurfacePatches = [
+    ...paths.flatMap(pathSurfacePatchesForPath),
+    ...pathJunctionSurfacePatches(paths),
+    surfacePatchBetweenGeo(
+      "surface-north-bbq-dog-lawn-desire-path",
+      "North BBQ to open lawn desire path",
+      "desire-path",
+      "worn-grass",
+      g(-37.7859107, 144.9831484),
+      g(-37.786125, 144.984020),
+      1.05,
+      "Yarra Edinburgh Gardens facilities list: BBQ, picnic and dog areas; desire path inferred from north lawn high-use movement"
+    ),
+    surfacePatchBetweenGeo(
+      "surface-south-picnic-lawn-desire-path",
+      "South picnic lawn worn shortcut",
+      "desire-path",
+      "worn-grass",
+      g(-37.789090, 144.983760),
+      g(-37.788735, 144.984280),
+      1.0,
+      "Yarra Edinburgh Gardens facilities list: picnic areas; desire path inferred between south picnic tables and Alfred Crescent path"
+    ),
+    surfacePatchBetweenGeo(
+      "surface-rotunda-platform-threshold",
+      "Rotunda stair threshold wear",
+      "muddy-threshold",
+      "dirt",
+      g(-37.787255, 144.981785),
+      g(-37.787330, 144.981955),
+      1.15,
+      "CMP rotunda and path context; compacted stair threshold inferred at the rendered rotunda access side"
+    ),
+    surfacePatchBetweenGeo(
+      "surface-grandstand-oval-threshold",
+      "Grandstand to oval worn threshold",
+      "muddy-threshold",
+      "dirt",
+      g(-37.789235, 144.980680),
+      g(-37.789170, 144.981015),
+      1.25,
+      "CMP W.T. Peterson Oval and Kevin Murray Stand context; compacted transition inferred between stand and oval"
+    )
+  ].filter((patch) => pointInPolygon(patch.position, boundary));
 
   return {
     boundary,
@@ -2510,6 +2649,7 @@ export function createLevelData(): LevelData {
     mappedBuildings,
     mappedFences,
     hardscapeLines,
+    pathSurfacePatches,
     streetEdges,
     sportsFixtures,
     obstacles: [

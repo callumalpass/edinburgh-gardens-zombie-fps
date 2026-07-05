@@ -172,6 +172,18 @@ export interface HardscapeLine {
   source?: string;
 }
 
+export interface PathSurfacePatch {
+  id: string;
+  label: string;
+  kind: "path-edge-wear" | "path-junction-wear" | "desire-path" | "gravel-feather" | "muddy-threshold";
+  material: "dirt" | "worn-grass" | "gravel" | "leaf-litter";
+  position: Vec2;
+  angle: number;
+  length: number;
+  width: number;
+  source?: string;
+}
+
 export interface StreetEdge {
   id: string;
   label: string;
@@ -256,6 +268,7 @@ export interface LevelData {
   mappedBuildings: MappedBuilding[];
   mappedFences: MappedFence[];
   hardscapeLines: HardscapeLine[];
+  pathSurfacePatches: PathSurfacePatch[];
   streetEdges: StreetEdge[];
   sportsFixtures: SportsFixture[];
   obstacles: CollisionObstacle[];

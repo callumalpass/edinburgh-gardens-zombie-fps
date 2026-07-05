@@ -183,6 +183,19 @@ describe("map geometry", () => {
     expect(level.hardscapeLines.filter((line) => line.points.some((point) => pointInPolygon(point, level.boundary))).length).toBe(level.hardscapeLines.length);
   });
 
+  it("adds sourceable path material transition patches without collision", () => {
+    const level = createLevelData();
+    const patchKinds = new Set(level.pathSurfacePatches.map((patch) => patch.kind));
+    for (const kind of ["path-edge-wear", "path-junction-wear", "desire-path", "gravel-feather", "muddy-threshold"] as const) {
+      expect(patchKinds.has(kind)).toBe(true);
+    }
+    expect(level.pathSurfacePatches.length).toBeGreaterThan(35);
+    expect(level.pathSurfacePatches.every((patch) => patch.source && pointInPolygon(patch.position, level.boundary))).toBe(true);
+    expect(level.pathSurfacePatches.every((patch) => patch.length > 0.5 && patch.width > 0.4)).toBe(true);
+    const obstacleIds = new Set(level.obstacles.map((obstacle) => obstacle.id));
+    expect(level.pathSurfacePatches.some((patch) => obstacleIds.has(patch.id))).toBe(false);
+  });
+
   it("includes OSM-derived street-edge context around the park", () => {
     const level = createLevelData();
     const streetIds = new Set(level.streetEdges.map((street) => street.id));

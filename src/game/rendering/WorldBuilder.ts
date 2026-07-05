@@ -1,7 +1,20 @@
 import * as THREE from "three";
 import { distance, geoToWorld, makeCircle, pointInPolygon, polygonCentroid } from "../geo";
 import { AUSTRALIAN_RULES_BEHIND_POST_HEIGHT_METRES, footballPostLocalOffsets } from "../sportsFixtures";
-import type { HardscapeLine, LevelData, LevelPath, Landmark, MappedBuilding, MappedTree, ParkLifeDetail, RandomSource, SportsFixture, TreeProfile, Vec2 } from "../types";
+import type {
+  HardscapeLine,
+  LevelData,
+  LevelPath,
+  Landmark,
+  MappedBuilding,
+  MappedTree,
+  ParkLifeDetail,
+  PathSurfacePatch,
+  RandomSource,
+  SportsFixture,
+  TreeProfile,
+  Vec2
+} from "../types";
 
 const COLLISION_Y = 0.04;
 const TERRAIN_GRID_STEP = 7.5;
@@ -77,6 +90,7 @@ export class WorldBuilder {
     this.addMownLawnBands();
     this.addLawnWearPatches();
     this.addPaths();
+    this.addPathSurfacePatches();
     this.addHardscapeLines();
     this.addDampGroundDetails();
     this.addRailTrailRemnants();
@@ -297,6 +311,29 @@ export class WorldBuilder {
     cap.position.set(point.x, this.groundY(point) + y, point.z);
     cap.receiveShadow = true;
     this.scene.add(cap);
+  }
+
+  private addPathSurfacePatches(): void {
+    for (const patch of this.level.pathSurfacePatches) {
+      const mesh = this.createTerrainRect(
+        patch.position,
+        patch.angle,
+        patch.length,
+        patch.width,
+        patch.kind === "path-junction-wear" ? 0.156 : 0.136,
+        0.014,
+        this.pathSurfacePatchMaterial(patch)
+      );
+      mesh.receiveShadow = true;
+      this.scene.add(mesh);
+    }
+  }
+
+  private pathSurfacePatchMaterial(patch: PathSurfacePatch): THREE.Material {
+    if (patch.material === "worn-grass") return this.materials.wornGrass;
+    if (patch.material === "gravel") return this.materials.gravel;
+    if (patch.material === "leaf-litter") return this.materials.leafLitter;
+    return this.materials.dirt;
   }
 
   private addPathMarkings(path: LevelPath): void {
