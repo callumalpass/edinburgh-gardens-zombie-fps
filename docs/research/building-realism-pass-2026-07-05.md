@@ -49,6 +49,7 @@ Purpose: track the building-by-building realism pass for every structure current
 
 - `osm-building-242003562` / South service and amenities building:
   - Implemented public-toilet door bank with high louvre vents, a blue accessible-facility sign, front/rear gutters, multiple roof vents, wall light, short bollards and a rear service ladder.
+  - Follow-up visual correction: rendered the door bank as solid painted metal panels and made mapped building prism materials double-sided, because the irregular OSM footprint and black opening panels made the block read as partially see-through from some walking angles.
   - Source basis: OSM way `242003562` for the irregular footprint; Yarra Edinburgh Gardens facility/accessibility listing for public toilets and accessible park context; CMP guidance that toilet blocks are functional facilities rather than heritage showpieces.
 
 ## Implementation Notes

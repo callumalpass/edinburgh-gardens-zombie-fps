@@ -1006,9 +1006,11 @@ export class WorldBuilder {
     }
 
     if (building.detailProfile === "amenities") {
+      const amenitiesDoorMaterial = this.standardDetailMaterial("amenities-painted-door", 0x3f5556, 0.72, 0.03);
       this.addBuildingApron(center, rotation, 0, frontZ + 0.34, footprint.halfX * 1.3, 0.84, 0.09);
       for (const x of [-0.42, 0, 0.42]) {
-        this.addBuildingDoor(center, rotation, x * footprint.halfX, frontZ + 0.02, footprint.halfX * 0.28, 1.38, 1.02);
+        this.addLocalBox(center, rotation, x * footprint.halfX, frontZ + 0.02, footprint.halfX * 0.28, 1.38, 0.08, amenitiesDoorMaterial, 1.02, false);
+        this.addLocalBox(center, rotation, x * footprint.halfX + footprint.halfX * 0.1, frontZ + 0.075, 0.055, 0.12, 0.05, this.materials.darkOpening, 1.1, false);
         this.addLocalBox(center, rotation, x * footprint.halfX, frontZ + 0.075, footprint.halfX * 0.22, 0.14, 0.055, this.materials.metal, 1.86, false);
       }
       this.addBuildingSign(center, rotation, 0, frontZ + 0.03, footprint.halfX * 0.48, 0.45, 2.48, 0xe8e0b6);
@@ -1073,7 +1075,9 @@ export class WorldBuilder {
     geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
     geometry.setIndex(indices);
     geometry.computeVertexNormals();
-    const mesh = new THREE.Mesh(geometry, material);
+    const prismMaterial = material.clone();
+    prismMaterial.side = THREE.DoubleSide;
+    const mesh = new THREE.Mesh(geometry, prismMaterial);
     this.scene.add(mesh);
     return mesh;
   }
