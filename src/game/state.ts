@@ -113,6 +113,7 @@ export interface Snapshot {
   throwables: number;
   flashlightOn: boolean;
   activeDistractions: number;
+  bikeMounted: boolean;
 }
 
 export interface GameTestApi {
@@ -139,5 +140,6 @@ export interface GameTestApi {
   testZombieFacing: () => Array<{ id: number; faceAlignment: number; targetDistance: number }>;
   testSetCrouching: (crouching: boolean) => boolean;
   testStartIntermission: () => boolean;
+  testToggleBike: () => boolean;
   dispose: () => void;
 }

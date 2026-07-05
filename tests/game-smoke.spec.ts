@@ -167,6 +167,34 @@ test("game loop advances and gameplay helpers mutate state", async ({ page }) =>
   expect(duringRest.health).toBeLessThanOrEqual(70);
 });
 
+test("hidden bike can be ridden but blocks climbing and bulky weapons", async ({ page }) => {
+  await page.goto("/?smoke=1");
+  await page.waitForFunction(() => window.__EGAME__?.ready === true);
+  expect(await page.evaluate(() => window.__EGAME__!.testScope("rifle"))).toBe(true);
+  expect(await page.evaluate(() => window.__EGAME__!.testToggleBike())).toBe(true);
+  const onBike = await page.evaluate(() => window.__EGAME__!.snapshot());
+  expect(onBike.bikeMounted).toBe(true);
+  expect(onBike.elevation).toBeLessThan(0.1);
+  const afterRifleAttempt = await page.evaluate(() => {
+    window.__EGAME__!.testShoot();
+    return window.__EGAME__!.snapshot();
+  });
+  expect(afterRifleAttempt.ammo).toBe(onBike.ammo);
+  expect(await page.evaluate(() => window.__EGAME__!.testInteract("rotunda-deck"))).toBe(false);
+  const afterClimbAttempt = await page.evaluate(() => window.__EGAME__!.snapshot());
+  expect(afterClimbAttempt.bikeMounted).toBe(true);
+  expect(afterClimbAttempt.elevation).toBeLessThan(0.1);
+  expect(await page.evaluate(() => window.__EGAME__!.testPickupWeapon("smg"))).toBe(true);
+  const beforeSmg = await page.evaluate(() => window.__EGAME__!.snapshot());
+  const afterSmg = await page.evaluate(() => {
+    window.__EGAME__!.testShoot();
+    return window.__EGAME__!.snapshot();
+  });
+  expect(afterSmg.ammo).toBeLessThan(beforeSmg.ammo);
+  expect(await page.evaluate(() => window.__EGAME__!.testToggleBike())).toBe(true);
+  expect((await page.evaluate(() => window.__EGAME__!.snapshot())).bikeMounted).toBe(false);
+});
+
 test("desktop and mobile layouts keep controls visible", async ({ page, viewport }) => {
   await page.goto("/?smoke=1");
   await page.waitForFunction(() => window.__EGAME__?.ready === true);

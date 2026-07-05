@@ -54,10 +54,13 @@ import { zombieProfile } from "./zombieProfiles";
 import { HudController } from "./ui/HudController";
 import { MiniMapRenderer } from "./ui/MiniMapRenderer";
 import { playerVisibilityMultiplier, weatherNoiseMaskForKind, zombieFacingThreshold } from "./stealth";
+import { separateCircularAgents } from "./spatial/AgentSeparation";
+import { ObstacleIndex } from "./spatial/ObstacleIndex";
 import type {
   AmenityPoint,
   InteractableFixture,
   LevelData,
+  ParkLifeDetail,
   UpgradeStation,
   Vec2,
   WeaponSpawn
@@ -76,6 +79,17 @@ const DISTRACTION_STAMINA_COST = 8;
 const CLIMB_STAMINA_COST = 14;
 const MELEE_STAMINA_COST = 12;
 const MACHETE_STAMINA_COST = 18;
+const ZOMBIE_SEPARATION_GAP = 0.16;
+const ZOMBIE_SEPARATION_GRID_SIZE = 8;
+const ZOMBIE_SEPARATION_ITERATIONS = 3;
+const ZOMBIE_STATIC_COLLISION_PASSES = 2;
+const BIKE_FORWARD_SPEED = 18.2;
+const BIKE_SPRINT_SPEED = 24.6;
+const BIKE_REVERSE_SPEED = 5.2;
+const BIKE_STRAFE_SPEED = 4.4;
+const BIKE_INTERACTION_RADIUS = 5.6;
+const BIKE_CAMERA_HEIGHT_BONUS = 0.34;
+const BIKE_ALLOWED_WEAPONS = new Set<WeaponId>(["knife", "machete", "carbine", "smg"]);
 
 interface AmenitySearch {
   amenity: AmenityPoint;
@@ -99,9 +113,19 @@ interface ThrownDistraction {
   pulseTimer: number;
 }
 
+interface RideableBike {
+  id: string;
+  label: string;
+  mesh: THREE.Group;
+  position: THREE.Vector3;
+  angle: number;
+  mounted: boolean;
+}
+
 export class GameApp {
   private readonly root: HTMLElement;
   private readonly level: LevelData;
+  private readonly obstacleIndex: ObstacleIndex;
   private readonly terrain: TerrainSampler;
   private readonly noise = new NoiseSystem();
   private readonly rng = new SeededRandom(0xed1b97);
@@ -165,6 +189,8 @@ export class GameApp {
   private nearestFixture: InteractableFixture | null = null;
   private nearestAmenity: AmenityPoint | null = null;
   private nearestWeaponDrop: WeaponDrop | null = null;
+  private nearestBike: RideableBike | null = null;
+  private nearestBrokenBike: ParkLifeDetail | null = null;
   private searchedAmenityIds = new Set<string>();
   private activeAmenitySearch: AmenitySearch | null = null;
   private activeAmenityRest: AmenityRest | null = null;
@@ -193,10 +219,13 @@ export class GameApp {
   private miniMapVisibleZombieCount = 0;
   private lastHitZone: HitZone | null = null;
   private materials!: GameMaterials;
+  private bike: RideableBike | null = null;
+  private bikePedalPhase = 0;
 
   constructor(root: HTMLElement) {
     this.root = root;
     this.level = createLevelData();
+    this.obstacleIndex = new ObstacleIndex(this.level.obstacles);
     this.terrain = new TerrainSampler(this.level);
     this.player.position.set(START_POSITION.x, this.groundY({ x: START_POSITION.x, z: START_POSITION.z }), START_POSITION.z);
   }
@@ -233,6 +262,7 @@ export class GameApp {
     this.createWorld();
     this.world.createUpgradeStations();
     freezeStaticScene(this.scene, [this.camera, this.atmosphere.root, this.atmosphere.worldWeatherRoot]);
+    this.spawnRideableBike();
     this.spawnInitialWeapons();
     this.bindEvents();
     this.resize();
@@ -261,6 +291,7 @@ export class GameApp {
       testZombieFacing: () => this.testZombieFacing(),
       testSetCrouching: (crouching: boolean) => this.testSetCrouching(crouching),
       testStartIntermission: () => this.testStartIntermission(),
+      testToggleBike: () => this.testToggleBike(),
       dispose: () => this.dispose()
     };
     installGameTestDriver(this.testApi);
@@ -444,6 +475,9 @@ export class GameApp {
     this.activeAmenitySearch = null;
     this.activeAmenityRest = null;
     this.searchedAmenityIds.clear();
+    this.nearestBike = null;
+    this.nearestBrokenBike = null;
+    this.resetRideableBike();
     this.hud.setRestartVisible(false);
     this.state = "playing";
     this.spawnInitialWeapons();
@@ -469,7 +503,7 @@ export class GameApp {
     const atmosphere = this.atmosphere.update(dt, this.camera.position, time / 1000);
     const { timeOfDay, weather } = atmosphere;
     this.currentWeather = weather;
-    this.world.updateTimeOfDay(timeOfDay);
+    this.world.updateTimeOfDay(timeOfDay, weather);
     this.postProcessing.setTimeOfDay(timeOfDay);
     this.postProcessing.setWeather(weather);
     this.renderer.toneMappingExposure = timeOfDay.exposure * weather.exposureMultiplier;
@@ -490,6 +524,7 @@ export class GameApp {
     this.updateZombies(dt, now);
     this.updatePickups(dt);
     this.updateWeaponDrops(dt);
+    this.updateBike(dt);
     this.updateAmenityRest(dt);
     this.updateAmenitySearch(dt);
     this.updateTracers(dt);
@@ -497,6 +532,7 @@ export class GameApp {
     this.updateSmokePuffs(dt);
     this.updateNearestStation();
     this.updateNearestAmenity();
+    this.updateNearestBrokenBike();
     this.updateNearestFixture();
     this.updateScope(dt, now);
     this.updatePlayerCondition(dt);
@@ -513,9 +549,10 @@ export class GameApp {
 
   private updateCrouch(dt: number): void {
     const inputCrouching =
-      this.keys.has("KeyC") ||
-      this.keys.has("ControlLeft") ||
-      this.keys.has("ControlRight");
+      !this.bike?.mounted &&
+      (this.keys.has("KeyC") ||
+        this.keys.has("ControlLeft") ||
+        this.keys.has("ControlRight"));
     this.player.crouching = this.testCrouchOverride ?? inputCrouching;
     const target = this.player.crouching ? 1 : 0;
     const t = 1 - Math.pow(0.0008, dt);
@@ -581,6 +618,11 @@ export class GameApp {
     if (this.keys.has("KeyA")) input.x -= 1;
     if (this.keys.has("KeyD")) input.x += 1;
 
+    if (this.bike?.mounted) {
+      this.updateBikeMovement(dt, input);
+      return;
+    }
+
     if (input.lengthSq() > 0) {
       input.normalize();
       const sin = Math.sin(this.player.yaw);
@@ -614,6 +656,52 @@ export class GameApp {
       next = resolveObstacle(next, PLAYER_RADIUS, obstacle);
     }
     this.player.position.set(next.x, this.groundY(next), next.z);
+  }
+
+  private updateBikeMovement(dt: number, input: THREE.Vector3): void {
+    this.player.activeFixtureId = null;
+    this.player.heightTarget = 0;
+    this.player.crouching = false;
+    const wantsSprint = this.keys.has("ShiftLeft") || this.keys.has("ShiftRight");
+    const sprinting = wantsSprint && this.condition.stamina > 8 && this.condition.limpTimer <= 0;
+    this.isSprinting = sprinting;
+
+    const forwardInput = (input.z < 0 ? 1 : 0) - (input.z > 0 ? 1 : 0);
+    const sideInput = (input.x > 0 ? 1 : 0) - (input.x < 0 ? 1 : 0);
+
+    if (forwardInput !== 0 || sideInput !== 0) {
+      const sin = Math.sin(this.player.yaw);
+      const cos = Math.cos(this.player.yaw);
+      const forwardSpeed = sprinting && forwardInput > 0 ? BIKE_SPRINT_SPEED : BIKE_FORWARD_SPEED;
+      const forward = new THREE.Vector3(-sin, 0, -cos).multiplyScalar(forwardInput >= 0 ? forwardInput * forwardSpeed : forwardInput * BIKE_REVERSE_SPEED);
+      const right = new THREE.Vector3(cos, 0, -sin).multiplyScalar(sideInput * BIKE_STRAFE_SPEED);
+      const surface = this.movementSurfaceAt({ x: this.player.position.x, z: this.player.position.z });
+      const conditionScale = Math.max(0.72, speedMultiplierForCondition(this.condition));
+      this.player.velocity.copy(forward.add(right)).multiplyScalar(this.bikeSurfaceSpeedMultiplier(surface) * conditionScale);
+      this.emitMovementNoise(dt, sprinting);
+    } else {
+      this.isSprinting = false;
+      this.player.velocity.multiplyScalar(0.9);
+      if (this.player.velocity.lengthSq() < 0.01) {
+        this.player.velocity.set(0, 0, 0);
+      }
+    }
+
+    const candidate = this.player.position.clone().addScaledVector(this.player.velocity, dt);
+    let next = clampToPolygon({ x: candidate.x, z: candidate.z }, this.level.boundary, 3);
+    for (const obstacle of this.level.obstacles) {
+      next = resolveObstacle(next, PLAYER_RADIUS + 0.45, obstacle);
+    }
+    this.player.position.set(next.x, this.groundY(next), next.z);
+  }
+
+  private bikeSurfaceSpeedMultiplier(surface: MovementSurface): number {
+    if (surface === "rail") return 1.2;
+    if (surface === "asphalt") return 1.18;
+    if (surface === "concrete") return 1.1;
+    if (surface === "gravel") return 0.88;
+    if (surface === "dirt") return 0.72;
+    return 0.82;
   }
 
   private updatePlayerCondition(dt: number): void {
@@ -849,6 +937,7 @@ export class GameApp {
 
     this.level.upgradeStations.forEach((station) => addAnchor(station.position));
     this.level.weaponSpawns.forEach((spawn) => addAnchor(spawn.position));
+    addAnchor(this.level.rideableBike.position);
     this.level.landmarks.forEach((landmark) => addAnchor(landmark.position ?? (landmark.polygon ? polygonCentroid(landmark.polygon) : undefined)));
     this.level.amenities.forEach((amenity, index) => {
       if (index % 8 === 0) {
@@ -893,7 +982,7 @@ export class GameApp {
     }
     this.camera.position.set(
       this.player.position.x,
-      this.player.position.y + PLAYER_HEIGHT + this.player.height - this.player.crouchAmount * 0.58,
+      this.player.position.y + PLAYER_HEIGHT + this.player.height + (this.bike?.mounted ? BIKE_CAMERA_HEIGHT_BONUS : 0) - this.player.crouchAmount * 0.58,
       this.player.position.z
     );
     this.camera.rotation.order = "YXZ";
@@ -1078,7 +1167,7 @@ export class GameApp {
       if (distanceToTarget > 0.1) {
         zombie.mesh.rotation.y = Math.atan2(toTarget.x, toTarget.z) + Math.PI;
       }
-      zombie.mesh.position.set(next.x, groundY + (Math.sin(now * 7 + zombie.walkOffset) + 1) * 0.035, next.z);
+      this.syncZombieMeshPosition(zombie, now);
       this.animateZombie(zombie, now, distanceToPlayer);
       this.updateZombieAudio(zombie, dt, distanceToPlayer, distanceToTarget);
       if (this.player.height < 1.4 && distanceToPlayer < zombie.radius + PLAYER_RADIUS + 0.8 && zombie.attackCooldown <= 0) {
@@ -1088,6 +1177,57 @@ export class GameApp {
         this.audio.playWorld("playerHit");
       }
     }
+    this.resolveZombieCrowding(now);
+  }
+
+  private resolveZombieCrowding(now: number): void {
+    const largestOverlap = separateCircularAgents(this.zombies, {
+      gap: ZOMBIE_SEPARATION_GAP,
+      gridSize: ZOMBIE_SEPARATION_GRID_SIZE,
+      iterations: ZOMBIE_SEPARATION_ITERATIONS,
+      afterIteration: (zombies) => {
+        for (const zombie of zombies) {
+          this.settleZombiePosition(zombie);
+        }
+      }
+    });
+
+    if (largestOverlap <= 0) {
+      return;
+    }
+
+    for (const zombie of this.zombies) {
+      this.syncZombieMeshPosition(zombie, now);
+    }
+  }
+
+  private settleZombiePosition(zombie: Zombie): void {
+    let next = clampToPolygon({ x: zombie.position.x, z: zombie.position.z }, this.level.boundary, 2.5);
+
+    for (let pass = 0; pass < ZOMBIE_STATIC_COLLISION_PASSES; pass += 1) {
+      let moved = false;
+      this.obstacleIndex.forNearby(next, zombie.radius, (obstacle) => {
+        const resolved = resolveObstacle(next, zombie.radius, obstacle);
+        if (distance(next, resolved) > 0.0001) {
+          moved = true;
+        }
+        next = resolved;
+      });
+      next = clampToPolygon(next, this.level.boundary, 2.5);
+      if (!moved) {
+        break;
+      }
+    }
+
+    zombie.position.set(next.x, this.groundY(next), next.z);
+  }
+
+  private syncZombieMeshPosition(zombie: Zombie, now: number): void {
+    zombie.mesh.position.set(zombie.position.x, this.zombieVisualY(zombie, now), zombie.position.z);
+  }
+
+  private zombieVisualY(zombie: Zombie, now: number): number {
+    return zombie.position.y + (Math.sin(now * 7 + zombie.walkOffset) + 1) * 0.035;
   }
 
   private applyZombieHit(zombie: Zombie, profile: ReturnType<typeof zombieProfile>, now: number): void {
@@ -1270,6 +1410,12 @@ export class GameApp {
     if (!force && now - this.lastShotAt < stats.fireDelay) {
       return;
     }
+    if (this.bike?.mounted && !this.weaponCanFireOnBike(this.loadout.weaponId)) {
+      this.flashStatus("Too bulky to fire while riding");
+      this.audio.playWorld("deny");
+      this.aimHeld = false;
+      return;
+    }
     if (stats.kind === "melee") {
       this.swingMelee(now, stats);
       return;
@@ -1341,6 +1487,10 @@ export class GameApp {
     if (!registeredHit) {
       this.lastHitZone = null;
     }
+  }
+
+  private weaponCanFireOnBike(weaponId: WeaponId): boolean {
+    return BIKE_ALLOWED_WEAPONS.has(weaponId);
   }
 
   private swingMelee(now: number, stats: ReturnType<typeof getWeaponStats>): void {
@@ -1580,6 +1730,116 @@ export class GameApp {
     this.nearestWeaponDrop = nearest;
   }
 
+  private spawnRideableBike(): void {
+    const spawn = this.level.rideableBike;
+    const mesh = this.meshFactory.createBikeMesh();
+    mesh.scale.setScalar(1.45);
+    mesh.userData.dynamic = true;
+    this.scene.add(mesh);
+    this.bike = {
+      id: spawn.id,
+      label: spawn.label,
+      mesh,
+      position: new THREE.Vector3(),
+      angle: spawn.angle,
+      mounted: false
+    };
+    this.resetRideableBike();
+  }
+
+  private resetRideableBike(): void {
+    if (!this.bike) {
+      return;
+    }
+    const spawn = this.level.rideableBike;
+    this.bike.mounted = false;
+    this.bike.position.set(spawn.position.x, this.groundY(spawn.position), spawn.position.z);
+    this.bike.angle = spawn.angle;
+    this.syncBikeMesh();
+  }
+
+  private updateBike(dt: number): void {
+    if (!this.bike) {
+      this.nearestBike = null;
+      return;
+    }
+
+    if (this.bike.mounted) {
+      this.bike.position.set(this.player.position.x, this.groundY({ x: this.player.position.x, z: this.player.position.z }), this.player.position.z);
+      this.bike.angle = this.player.yaw;
+      const speed = this.player.velocity.length();
+      if (speed > 0.15) {
+        this.bikePedalPhase += speed * dt * 0.9;
+        const wheels = (this.bike.mesh.userData.wheels as THREE.Mesh[] | undefined) ?? [];
+        for (const wheel of wheels) {
+          wheel.rotation.z += speed * dt * 0.52;
+        }
+      }
+      this.syncBikeMesh();
+      this.nearestBike = this.bike;
+      return;
+    }
+
+    const distanceToBike = this.bike.position.distanceTo(this.player.position);
+    this.nearestBike = distanceToBike < BIKE_INTERACTION_RADIUS ? this.bike : null;
+  }
+
+  private syncBikeMesh(): void {
+    if (!this.bike) {
+      return;
+    }
+    this.bike.mesh.position.copy(this.bike.position);
+    this.bike.mesh.rotation.y = this.bike.angle;
+    this.bike.mesh.rotation.z = this.bike.mounted ? Math.sin(this.bikePedalPhase * 0.65) * 0.035 : 0;
+    this.bike.mesh.visible = true;
+  }
+
+  private toggleBike(): boolean {
+    if (!this.bike) {
+      return false;
+    }
+
+    if (this.bike.mounted) {
+      this.bike.mounted = false;
+      this.bike.position.set(this.player.position.x, this.groundY({ x: this.player.position.x, z: this.player.position.z }), this.player.position.z);
+      this.bike.angle = this.player.yaw;
+      this.player.velocity.multiplyScalar(0.35);
+      this.syncBikeMesh();
+      this.flashStatus("Dismounted bike");
+      this.audio.playWorld("equip");
+      return true;
+    }
+
+    if (this.player.height > 0.4 || this.player.activeFixtureId) {
+      this.flashStatus("Get down before riding");
+      this.audio.playWorld("deny");
+      return false;
+    }
+
+    this.bike.mounted = true;
+    this.bikePedalPhase = 0;
+    this.player.crouching = false;
+    this.player.crouchAmount = 0;
+    this.player.height = 0;
+    this.player.heightTarget = 0;
+    this.player.activeFixtureId = null;
+    this.aimHeld = false;
+    this.scopeAmount = 0;
+    this.flashStatus("Mounted hidden bike");
+    this.audio.playWorld("equip");
+    return true;
+  }
+
+  private inspectBrokenBike(detail: ParkLifeDetail): boolean {
+    const message =
+      detail.bikeIssue === "broken-chain"
+        ? "Broken chain. This bike is going nowhere."
+        : "Flat tyres. This bike will not outrun anything.";
+    this.flashStatus(message);
+    this.audio.playWorld("deny");
+    return true;
+  }
+
   private pickupWeapon(drop: WeaponDrop): boolean {
     this.loadout = addWeapon(this.loadout, drop.weaponId);
     this.aimHeld = false;
@@ -1593,8 +1853,17 @@ export class GameApp {
   }
 
   private handleInteract(): boolean {
+    if (this.bike?.mounted) {
+      return this.toggleBike();
+    }
     if (this.nearestWeaponDrop) {
       return this.pickupWeapon(this.nearestWeaponDrop);
+    }
+    if (this.nearestBike) {
+      return this.toggleBike();
+    }
+    if (this.nearestBrokenBike) {
+      return this.inspectBrokenBike(this.nearestBrokenBike);
     }
     if (this.nearestFixture) {
       return this.toggleFixture(this.nearestFixture);
@@ -1806,6 +2075,11 @@ export class GameApp {
   }
 
   private updateNearestFixture(): void {
+    if (this.bike?.mounted) {
+      this.nearestFixture = null;
+      return;
+    }
+
     let nearest: InteractableFixture | null = null;
     let nearestDistance = Number.POSITIVE_INFINITY;
     const playerPoint = { x: this.player.position.x, z: this.player.position.z };
@@ -1829,7 +2103,32 @@ export class GameApp {
     this.nearestFixture = nearest;
   }
 
+  private updateNearestBrokenBike(): void {
+    if (this.bike?.mounted) {
+      this.nearestBrokenBike = null;
+      return;
+    }
+
+    let nearest: ParkLifeDetail | null = null;
+    let nearestDistance = Number.POSITIVE_INFINITY;
+    const playerPoint = { x: this.player.position.x, z: this.player.position.z };
+    for (const detail of this.level.parkLifeDetails.filter((candidate) => candidate.kind === "broken-bike")) {
+      const detailDistance = distance(playerPoint, detail.position);
+      if (detailDistance < nearestDistance && detailDistance < BIKE_INTERACTION_RADIUS) {
+        nearest = detail;
+        nearestDistance = detailDistance;
+      }
+    }
+    this.nearestBrokenBike = nearest;
+  }
+
   private toggleFixture(fixture: InteractableFixture): boolean {
+    if (this.bike?.mounted) {
+      this.flashStatus("Dismount before climbing");
+      this.audio.playWorld("deny");
+      return false;
+    }
+
     if (this.player.activeFixtureId === fixture.id) {
       this.player.activeFixtureId = null;
       this.player.heightTarget = 0;
@@ -1865,6 +2164,17 @@ export class GameApp {
   }
 
   private updateVerticalState(dt: number): void {
+    if (this.bike?.mounted) {
+      this.player.activeFixtureId = null;
+      this.player.heightTarget = 0;
+      const t = 1 - Math.pow(0.001, dt);
+      this.player.height += (this.player.heightTarget - this.player.height) * t;
+      if (Math.abs(this.player.height) < 0.01) {
+        this.player.height = 0;
+      }
+      return;
+    }
+
     let target = 0;
     const playerPoint = { x: this.player.position.x, z: this.player.position.z };
     const active = this.level.interactables.find((fixture) => fixture.id === this.player.activeFixtureId);
@@ -1950,6 +2260,11 @@ export class GameApp {
   }
 
   private testInteract(fixtureId?: string): boolean {
+    if (this.bike?.mounted) {
+      const fixture = this.level.interactables.find((candidate) => candidate.id === fixtureId) ?? this.level.interactables[0] ?? null;
+      return fixture ? this.toggleFixture(fixture) : false;
+    }
+
     const fixture = fixtureId
       ? this.level.interactables.find((candidate) => candidate.id === fixtureId) ?? null
       : this.level.interactables[0] ?? null;
@@ -1964,6 +2279,20 @@ export class GameApp {
       this.player.height = fixture.height;
     }
     return toggled;
+  }
+
+  private testToggleBike(): boolean {
+    if (!this.bike) {
+      return false;
+    }
+    if (!this.bike.mounted) {
+      this.player.position.set(this.bike.position.x, this.groundY({ x: this.bike.position.x, z: this.bike.position.z }), this.bike.position.z);
+      this.player.height = 0;
+      this.player.heightTarget = 0;
+      this.player.activeFixtureId = null;
+      this.updateBike(0);
+    }
+    return this.toggleBike();
   }
 
   private testUseAmenity(kind?: AmenityPoint["kind"]): boolean {
@@ -2172,7 +2501,8 @@ export class GameApp {
       blur: this.condition.blurTimer > 0,
       throwables: this.condition.throwables,
       flashlightOn: this.condition.flashlightOn,
-      activeDistractions: this.distractions.length
+      activeDistractions: this.distractions.length,
+      bikeMounted: this.bike?.mounted === true
     };
   }
 
@@ -2203,6 +2533,8 @@ export class GameApp {
       playerHeight: this.player.height,
       activeFixtureId: this.player.activeFixtureId,
       nearestWeaponDrop: this.nearestWeaponDrop,
+      nearestBike: this.nearestBike,
+      nearestBrokenBike: this.nearestBrokenBike,
       nearestFixture: this.nearestFixture,
       nearestAmenity: this.nearestAmenity,
       nearestStation: this.nearestStation,
@@ -2212,6 +2544,7 @@ export class GameApp {
       stamina: this.condition.stamina,
       throwables: this.condition.throwables,
       flashlightOn: this.condition.flashlightOn,
+      bikeMounted: this.bike?.mounted === true,
       injuryStatus: injuryStatus(this.condition),
       amenityPrompt: (amenity) => this.amenityPrompt(amenity)
     });
@@ -2315,7 +2648,14 @@ export class GameApp {
 
   private updateScope(dt: number, now: number): void {
     const stats = getWeaponStats(this.loadout);
-    const wantsScope = this.state === "playing" && this.aimHeld && stats.scopeZoom > 1.05 && this.loadout.reloadingUntil <= now && this.condition.stamina > 0.5;
+    const bikeAllowsWeapon = !this.bike?.mounted || this.weaponCanFireOnBike(this.loadout.weaponId);
+    const wantsScope =
+      this.state === "playing" &&
+      this.aimHeld &&
+      bikeAllowsWeapon &&
+      stats.scopeZoom > 1.05 &&
+      this.loadout.reloadingUntil <= now &&
+      this.condition.stamina > 0.5;
     const target = wantsScope ? 1 : 0;
     const t = 1 - Math.pow(0.0008, dt);
     this.scopeAmount += (target - this.scopeAmount) * t;

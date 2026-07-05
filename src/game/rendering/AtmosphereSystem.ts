@@ -56,37 +56,37 @@ export class AtmosphereSystem {
     background: new THREE.Color()
   };
   private readonly nightPalette = {
-    top: new THREE.Color(0x142437),
-    mid: new THREE.Color(0x07131a),
-    horizon: new THREE.Color(0x311d1b),
-    bottom: new THREE.Color(0x02070a),
-    fog: new THREE.Color(0x0d1a20),
-    background: new THREE.Color(0x071019)
+    top: new THREE.Color(0x172f46),
+    mid: new THREE.Color(0x0b2029),
+    horizon: new THREE.Color(0x553a35),
+    bottom: new THREE.Color(0x061013),
+    fog: new THREE.Color(0x172d33),
+    background: new THREE.Color(0x0b1821)
   };
   private readonly dayPalette = {
-    top: new THREE.Color(0x668daa),
-    mid: new THREE.Color(0x5f7f85),
-    horizon: new THREE.Color(0xb99067),
-    bottom: new THREE.Color(0x263d36),
-    fog: new THREE.Color(0x6f8580),
-    background: new THREE.Color(0x536f80)
+    top: new THREE.Color(0x79a3bf),
+    mid: new THREE.Color(0x86a39a),
+    horizon: new THREE.Color(0xd2a06d),
+    bottom: new THREE.Color(0x3e5a45),
+    fog: new THREE.Color(0x8fa69d),
+    background: new THREE.Color(0x718a92)
   };
   private readonly dawnPalette = {
-    top: new THREE.Color(0x31445c),
-    mid: new THREE.Color(0x4e5d5e),
-    horizon: new THREE.Color(0xc1784c),
-    bottom: new THREE.Color(0x172019),
-    fog: new THREE.Color(0x755c4b),
-    background: new THREE.Color(0x2f3d45)
+    top: new THREE.Color(0x3a4f69),
+    mid: new THREE.Color(0x616a70),
+    horizon: new THREE.Color(0xd98757),
+    bottom: new THREE.Color(0x24362c),
+    fog: new THREE.Color(0x8d755e),
+    background: new THREE.Color(0x3c4b55)
   };
-  private readonly cloudNightColor = new THREE.Color(0x6d8587);
-  private readonly cloudDayColor = new THREE.Color(0xa8b5aa);
-  private readonly cloudDawnColor = new THREE.Color(0x8d7866);
-  private readonly cloudStormColor = new THREE.Color(0x3f5360);
-  private readonly stormSkyColor = new THREE.Color(0x152531);
-  private readonly stormHorizonColor = new THREE.Color(0x30414a);
-  private readonly stormGroundColor = new THREE.Color(0x081216);
-  private readonly stormFogColor = new THREE.Color(0x44535b);
+  private readonly cloudNightColor = new THREE.Color(0x789096);
+  private readonly cloudDayColor = new THREE.Color(0xb4bcae);
+  private readonly cloudDawnColor = new THREE.Color(0xa78671);
+  private readonly cloudStormColor = new THREE.Color(0x465d67);
+  private readonly stormSkyColor = new THREE.Color(0x1a3140);
+  private readonly stormHorizonColor = new THREE.Color(0x455661);
+  private readonly stormGroundColor = new THREE.Color(0x0a1518);
+  private readonly stormFogColor = new THREE.Color(0x53666b);
   private readonly cloudColor = new THREE.Color();
   private skyMaterial: THREE.ShaderMaterial | null = null;
   private starMaterial: THREE.PointsMaterial | null = null;
@@ -110,8 +110,8 @@ export class AtmosphereSystem {
     this.worldWeatherRoot.userData.dynamic = true;
     this.worldWeatherRoot.frustumCulled = false;
 
-    this.scene.background = new THREE.Color(0x101823);
-    this.scene.fog = new THREE.FogExp2(0x16262c, smokeMode ? 0.00135 : 0.00175);
+    this.scene.background = new THREE.Color(0x0b1821);
+    this.scene.fog = new THREE.FogExp2(0x172d33, smokeMode ? 0.00135 : 0.00175);
 
     this.addSkyDome();
     this.addStars();
@@ -202,15 +202,15 @@ export class AtmosphereSystem {
   }
 
   private applyTimeOfDay(timeOfDay: TimeOfDayState, weather: WeatherState): void {
-    const dawnMix = timeOfDay.dawnDusk * 0.62;
+    const dawnMix = timeOfDay.dawnDusk * 0.72;
     this.skyColors.top.lerpColors(this.nightPalette.top, this.dayPalette.top, timeOfDay.daylight).lerp(this.dawnPalette.top, dawnMix);
     this.skyColors.mid.lerpColors(this.nightPalette.mid, this.dayPalette.mid, timeOfDay.daylight).lerp(this.dawnPalette.mid, dawnMix);
     this.skyColors.horizon.lerpColors(this.nightPalette.horizon, this.dayPalette.horizon, timeOfDay.daylight).lerp(this.dawnPalette.horizon, dawnMix);
     this.skyColors.bottom.lerpColors(this.nightPalette.bottom, this.dayPalette.bottom, timeOfDay.daylight).lerp(this.dawnPalette.bottom, dawnMix * 0.55);
     this.skyColors.fog.lerpColors(this.nightPalette.fog, this.dayPalette.fog, timeOfDay.daylight).lerp(this.dawnPalette.fog, dawnMix * 0.48);
     this.skyColors.background.lerpColors(this.nightPalette.background, this.dayPalette.background, timeOfDay.daylight).lerp(this.dawnPalette.background, dawnMix * 0.45);
-    const stormSkyMix = THREE.MathUtils.clamp(weather.cloudCover * 0.16 + weather.precipitation * 0.2 + weather.thunder * 0.1, 0, 0.58);
-    const stormHorizonMix = THREE.MathUtils.clamp(weather.cloudCover * 0.1 + weather.precipitation * 0.16 + weather.fog * 0.12, 0, 0.42);
+    const stormSkyMix = THREE.MathUtils.clamp(weather.cloudCover * 0.12 + weather.precipitation * 0.18 + weather.thunder * 0.1, 0, 0.5);
+    const stormHorizonMix = THREE.MathUtils.clamp(weather.cloudCover * 0.08 + weather.precipitation * 0.14 + weather.fog * 0.1, 0, 0.36);
     this.skyColors.top.lerp(this.stormSkyColor, stormSkyMix);
     this.skyColors.mid.lerp(this.stormSkyColor, stormSkyMix * 0.86);
     this.skyColors.horizon.lerp(this.stormHorizonColor, stormHorizonMix);
@@ -310,9 +310,11 @@ export class AtmosphereSystem {
           vec4 brush = texture2D(brushMap, brushUv);
           float painterMask = smoothstep(0.12, 0.34, y) * (1.0 - smoothstep(0.86, 1.0, y));
           float horizonWarmth = smoothstep(0.22, 0.38, y) * (1.0 - smoothstep(0.52, 0.72, y));
-          color = mix(color, brush.rgb, brush.a * painterMask * 0.28);
-          color += vec3(0.072, 0.038, 0.014) * horizonWarmth * (0.4 + brush.a * 0.5);
-          color = floor(color * 30.0) / 30.0 + 0.012;
+          float paperLift = (brush.r + brush.g + brush.b) * 0.33;
+          color = mix(color, brush.rgb, brush.a * painterMask * 0.34);
+          color += vec3(0.088, 0.046, 0.016) * horizonWarmth * (0.42 + brush.a * 0.52);
+          color += vec3(0.012, 0.018, 0.014) * paperLift * painterMask;
+          color = floor(color * 32.0) / 32.0 + 0.012;
           gl_FragColor = vec4(color, 1.0);
         }
       `
@@ -338,7 +340,7 @@ export class AtmosphereSystem {
       positions[i * 3] = Math.cos(theta) * planar;
       positions[i * 3 + 1] = y * radius;
       positions[i * 3 + 2] = Math.sin(theta) * planar;
-      color.setHSL(this.rng.range(0.12, 0.18), this.rng.range(0.08, 0.22), this.rng.range(0.68, 0.96));
+      color.setHSL(this.rng.range(0.1, 0.17), this.rng.range(0.08, 0.2), this.rng.range(0.7, 0.96));
       colors[i * 3] = color.r;
       colors[i * 3 + 1] = color.g;
       colors[i * 3 + 2] = color.b;
@@ -385,8 +387,8 @@ export class AtmosphereSystem {
     const textureA = this.createCloudTexture(0.42);
     const textureB = this.createCloudTexture(0.28);
     const layers = [
-      { texture: textureA, y: 138, scale: 620, opacity: 0.34, color: 0x8ca3a2 },
-      { texture: textureB, y: 92, scale: 470, opacity: 0.25, color: 0x617c84 }
+      { texture: textureA, y: 138, scale: 620, opacity: 0.32, color: 0x9aaba7 },
+      { texture: textureB, y: 92, scale: 470, opacity: 0.24, color: 0x6f8790 }
     ];
 
     for (const layer of layers) {
@@ -419,8 +421,8 @@ export class AtmosphereSystem {
     const bankTexture = this.createMistTexture();
     const center = this.mistCenter();
     const layers = [
-      { texture: textureA, y: 0.42, scale: 250, opacity: this.smokeMode ? 0.1 : 0.18, color: 0xa5aaa0, drift: 9 },
-      { texture: textureB, y: 1.05, scale: 190, opacity: this.smokeMode ? 0.07 : 0.12, color: 0x6f8584, drift: 7 }
+      { texture: textureA, y: 0.42, scale: 250, opacity: this.smokeMode ? 0.1 : 0.16, color: 0xb0b2a0, drift: 9 },
+      { texture: textureB, y: 1.05, scale: 190, opacity: this.smokeMode ? 0.07 : 0.11, color: 0x78908d, drift: 7 }
     ];
 
     for (const layer of layers) {
@@ -458,7 +460,7 @@ export class AtmosphereSystem {
       const baseY = this.rng.range(0.75, 1.45);
       const material = new THREE.SpriteMaterial({
         map: bankTexture,
-        color: index % 2 === 0 ? 0xc2c4ad : 0x96a9a4,
+        color: index % 2 === 0 ? 0xc7c5ab : 0x9db1aa,
         transparent: true,
         opacity: this.smokeMode ? 0.46 : 0.38,
         depthWrite: false,
@@ -580,11 +582,12 @@ export class AtmosphereSystem {
     ctx.lineJoin = "round";
 
     const palette = [
-      "rgba(42, 78, 101, 0.32)",
-      "rgba(72, 104, 110, 0.26)",
-      "rgba(120, 88, 62, 0.24)",
-      "rgba(177, 118, 70, 0.18)",
-      "rgba(22, 43, 52, 0.34)"
+      "rgba(55, 89, 113, 0.34)",
+      "rgba(86, 118, 119, 0.28)",
+      "rgba(128, 101, 85, 0.24)",
+      "rgba(208, 132, 78, 0.2)",
+      "rgba(28, 55, 62, 0.34)",
+      "rgba(120, 105, 116, 0.18)"
     ];
 
     for (let i = 0; i < 96; i += 1) {
@@ -593,7 +596,7 @@ export class AtmosphereSystem {
       const length = this.rng.range(150, 460);
       const lift = this.rng.range(-20, 20);
       ctx.strokeStyle = this.rng.pick(palette);
-      ctx.lineWidth = this.rng.range(4, 18);
+      ctx.lineWidth = this.rng.range(4, 20);
       ctx.beginPath();
       ctx.moveTo(x, y);
       ctx.bezierCurveTo(
@@ -610,11 +613,19 @@ export class AtmosphereSystem {
     for (let band = 0; band < 6; band += 1) {
       const y = 290 + band * 21 + this.rng.range(-6, 6);
       const gradient = ctx.createLinearGradient(0, y - 18, 0, y + 18);
-      gradient.addColorStop(0, "rgba(185, 119, 62, 0)");
-      gradient.addColorStop(0.5, "rgba(185, 119, 62, 0.11)");
-      gradient.addColorStop(1, "rgba(185, 119, 62, 0)");
+      gradient.addColorStop(0, "rgba(207, 132, 74, 0)");
+      gradient.addColorStop(0.5, "rgba(207, 132, 74, 0.13)");
+      gradient.addColorStop(1, "rgba(207, 132, 74, 0)");
       ctx.fillStyle = gradient;
       ctx.fillRect(0, y - 18, canvas.width, 36);
+    }
+
+    for (let i = 0; i < 210; i += 1) {
+      ctx.fillStyle =
+        this.rng.next() > 0.5
+          ? `rgba(241, 220, 178, ${this.rng.range(0.014, 0.035)})`
+          : `rgba(17, 39, 47, ${this.rng.range(0.012, 0.032)})`;
+      ctx.fillRect(this.rng.range(0, 1024), this.rng.range(0, 512), this.rng.range(1, 3), this.rng.range(1, 3));
     }
 
     const texture = new THREE.CanvasTexture(canvas);
@@ -631,10 +642,10 @@ export class AtmosphereSystem {
     canvas.height = 256;
     const ctx = canvas.getContext("2d")!;
     const glow = ctx.createRadialGradient(128, 128, 5, 128, 128, 128);
-    glow.addColorStop(0, "rgba(245, 235, 198, 1)");
-    glow.addColorStop(0.18, "rgba(235, 228, 188, 0.9)");
-    glow.addColorStop(0.42, "rgba(151, 194, 206, 0.3)");
-    glow.addColorStop(1, "rgba(151, 194, 206, 0)");
+    glow.addColorStop(0, "rgba(247, 229, 187, 1)");
+    glow.addColorStop(0.18, "rgba(238, 219, 178, 0.88)");
+    glow.addColorStop(0.42, "rgba(156, 198, 205, 0.28)");
+    glow.addColorStop(1, "rgba(156, 198, 205, 0)");
     ctx.fillStyle = glow;
     ctx.fillRect(0, 0, 256, 256);
     const texture = new THREE.CanvasTexture(canvas);
@@ -654,12 +665,31 @@ export class AtmosphereSystem {
       const radiusX = this.rng.range(28, 120);
       const radiusY = this.rng.range(12, 58);
       const gradient = ctx.createRadialGradient(x, y, 0, x, y, radiusX);
-      gradient.addColorStop(0, `rgba(196, 220, 218, ${this.rng.range(0.04, 0.14) * alphaScale})`);
-      gradient.addColorStop(1, "rgba(196, 220, 218, 0)");
+      gradient.addColorStop(0, `rgba(204, 222, 215, ${this.rng.range(0.04, 0.14) * alphaScale})`);
+      gradient.addColorStop(1, "rgba(204, 222, 215, 0)");
       ctx.fillStyle = gradient;
       ctx.beginPath();
       ctx.ellipse(x, y, radiusX, radiusY, this.rng.range(0, Math.PI), 0, Math.PI * 2);
       ctx.fill();
+    }
+    ctx.lineCap = "round";
+    for (let i = 0; i < 44; i += 1) {
+      const y = this.rng.range(70, 442);
+      const x = this.rng.range(-60, 420);
+      const length = this.rng.range(110, 260);
+      ctx.strokeStyle = `rgba(236, 219, 182, ${this.rng.range(0.018, 0.052) * alphaScale})`;
+      ctx.lineWidth = this.rng.range(2, 9);
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.bezierCurveTo(
+        x + length * 0.25,
+        y + this.rng.range(-10, 10),
+        x + length * 0.72,
+        y + this.rng.range(-16, 16),
+        x + length,
+        y + this.rng.range(-8, 8)
+      );
+      ctx.stroke();
     }
     const texture = new THREE.CanvasTexture(canvas);
     texture.wrapS = THREE.RepeatWrapping;
@@ -677,10 +707,10 @@ export class AtmosphereSystem {
     ctx.clearRect(0, 0, 512, 256);
 
     const floorFade = ctx.createLinearGradient(0, 0, 0, 256);
-    floorFade.addColorStop(0, "rgba(214, 222, 204, 0)");
-    floorFade.addColorStop(0.32, "rgba(214, 222, 204, 0.14)");
-    floorFade.addColorStop(0.72, "rgba(214, 222, 204, 0.3)");
-    floorFade.addColorStop(1, "rgba(214, 222, 204, 0)");
+    floorFade.addColorStop(0, "rgba(218, 222, 203, 0)");
+    floorFade.addColorStop(0.32, "rgba(218, 222, 203, 0.13)");
+    floorFade.addColorStop(0.72, "rgba(218, 222, 203, 0.28)");
+    floorFade.addColorStop(1, "rgba(218, 222, 203, 0)");
     ctx.fillStyle = floorFade;
     ctx.fillRect(0, 0, 512, 256);
 
@@ -690,9 +720,9 @@ export class AtmosphereSystem {
       const radiusX = this.rng.range(36, 126);
       const radiusY = this.rng.range(8, 32);
       const gradient = ctx.createRadialGradient(x, y, 0, x, y, radiusX);
-      gradient.addColorStop(0, `rgba(234, 232, 205, ${this.rng.range(0.2, 0.44)})`);
-      gradient.addColorStop(0.45, `rgba(198, 220, 213, ${this.rng.range(0.08, 0.18)})`);
-      gradient.addColorStop(1, "rgba(198, 220, 213, 0)");
+      gradient.addColorStop(0, `rgba(235, 226, 200, ${this.rng.range(0.18, 0.4)})`);
+      gradient.addColorStop(0.45, `rgba(202, 220, 212, ${this.rng.range(0.08, 0.17)})`);
+      gradient.addColorStop(1, "rgba(202, 220, 212, 0)");
       ctx.fillStyle = gradient;
       ctx.beginPath();
       ctx.ellipse(x, y, radiusX, radiusY, this.rng.range(-0.24, 0.24), 0, Math.PI * 2);

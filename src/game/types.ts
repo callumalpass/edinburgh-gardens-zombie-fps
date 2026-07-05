@@ -278,15 +278,19 @@ export interface ParkLifeDetail {
     | "dog-sign"
     | "picnic-blanket"
     | "notice-board"
-    | "casual-bike"
+    | "broken-bike"
     | "training-cones"
     | "dog-water-bowl"
     | "picnic-cooler"
     | "sports-bag"
     | "chalk-mark"
-    | "cricket-nets";
+    | "cricket-nets"
+    | "construction-fence"
+    | "works-materials"
+    | "removed-tree-stump";
   position: Vec2;
   angle: number;
+  bikeIssue?: "flat-tyres" | "broken-chain";
   source?: string;
 }
 
@@ -295,6 +299,13 @@ export interface WeaponSpawn {
   label: string;
   weaponId: "knife" | "machete" | "carbine" | "shotgun" | "smg" | "rifle";
   position: Vec2;
+}
+
+export interface RideableBikeSpawn {
+  id: string;
+  label: string;
+  position: Vec2;
+  angle: number;
 }
 
 export interface LevelData {
@@ -324,6 +335,7 @@ export interface LevelData {
   amenities: AmenityPoint[];
   parkLifeDetails: ParkLifeDetail[];
   weaponSpawns: WeaponSpawn[];
+  rideableBike: RideableBikeSpawn;
 }
 
 export interface RandomSource {

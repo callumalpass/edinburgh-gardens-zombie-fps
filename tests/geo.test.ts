@@ -612,11 +612,14 @@ describe("map geometry", () => {
   it("keeps park-life details sourceable and non-colliding", () => {
     const level = createLevelData();
     const detailKinds = new Set(level.parkLifeDetails.map((detail) => detail.kind));
-    for (const kind of ["dog-sign", "picnic-blanket", "notice-board", "casual-bike", "training-cones", "dog-water-bowl", "picnic-cooler", "sports-bag", "chalk-mark", "cricket-nets"] as const) {
+    for (const kind of ["dog-sign", "picnic-blanket", "notice-board", "broken-bike", "training-cones", "dog-water-bowl", "picnic-cooler", "sports-bag", "chalk-mark", "cricket-nets"] as const) {
       expect(detailKinds.has(kind)).toBe(true);
     }
     expect(level.parkLifeDetails.length).toBeGreaterThanOrEqual(18);
     expect(level.parkLifeDetails.every((detail) => detail.source && pointInPolygon(detail.position, level.boundary))).toBe(true);
+    const brokenBikes = level.parkLifeDetails.filter((detail) => detail.kind === "broken-bike");
+    expect(brokenBikes.length).toBeGreaterThanOrEqual(1);
+    expect(brokenBikes.every((detail) => detail.bikeIssue === "flat-tyres" || detail.bikeIssue === "broken-chain")).toBe(true);
     const obstacleIds = new Set(level.obstacles.map((obstacle) => obstacle.id));
     expect(level.parkLifeDetails.some((detail) => obstacleIds.has(detail.id))).toBe(false);
   });
@@ -720,6 +723,8 @@ describe("map geometry", () => {
     for (const detail of level.parkLifeDetails) {
       expect(pointInPolygon(detail.position, level.boundary), `park-life detail ${detail.id} outside boundary`).toBe(true);
     }
+    expect(pointInPolygon(level.rideableBike.position, level.boundary), `rideable bike ${level.rideableBike.id} outside boundary`).toBe(true);
+    expect(distance(level.rideableBike.position, { x: 35, z: 42 }), "rideable bike should be hidden far from the start").toBeGreaterThan(220);
     for (const patch of level.pathSurfacePatches) {
       expect(pointInPolygon(patch.position, level.boundary), `path surface patch ${patch.id} outside boundary`).toBe(true);
     }
@@ -764,6 +769,8 @@ describe("map geometry", () => {
     allow("grandstand-shotgun", "grandstand");
     allow("tennis-smg", "tennis", "osm-building-403753784");
     allow("tennis-locker", "tennis", "osm-building-403753784");
+    allow("tennis-synthetic-court-rolls", "tennis");
+    allow("brunswick-removed-tree-stump-5", "tennis");
     allow("osm-6280110915", "skate");
     allow("osm-8464870016", "skate");
     allow("skate-chalk-mark", "skate");
@@ -791,6 +798,7 @@ describe("map geometry", () => {
     level.pickupPoints.forEach((point, index) => assertClear(`pickup point ${index + 1}`, point));
     level.amenities.forEach((amenity) => assertClear(`amenity ${amenity.id}`, amenity.position, allowedById.get(amenity.id)));
     level.parkLifeDetails.forEach((detail) => assertClear(`park-life detail ${detail.id}`, detail.position, allowedById.get(detail.id)));
+    assertClear(`rideable bike ${level.rideableBike.id}`, level.rideableBike.position);
     level.upgradeStations.forEach((station) => assertClear(`upgrade station ${station.id}`, station.position, allowedById.get(station.id)));
     level.weaponSpawns.forEach((spawn) => assertClear(`weapon spawn ${spawn.id}`, spawn.position, allowedById.get(spawn.id)));
 

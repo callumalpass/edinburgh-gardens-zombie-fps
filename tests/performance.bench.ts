@@ -2,6 +2,7 @@ import { bench, describe } from "vitest";
 import { createLevelData } from "../src/game/levelData";
 import { TerrainSampler } from "../src/game/terrain";
 import { isLineOfSightBlocked } from "../src/game/visibility";
+import { separateCircularAgents, type CircularAgent } from "../src/game/spatial/AgentSeparation";
 import type { Vec2 } from "../src/game/types";
 
 const level = createLevelData();
@@ -23,8 +24,10 @@ const sightTargets = deterministicSample(
   ],
   96
 );
+const crowdBaseline = deterministicCrowd(128);
 let terrainSink = 0;
 let sightSink = 0;
+let crowdSink = 0;
 
 describe("level performance", () => {
   bench("terrain groundY over representative level points", () => {
@@ -53,6 +56,20 @@ describe("level performance", () => {
     }
     sightSink = blocked;
   });
+
+  bench("zombie separation over a dense crowd", () => {
+    const agents = crowdBaseline.map((agent) => ({
+      id: agent.id,
+      radius: agent.radius,
+      position: { ...agent.position }
+    }));
+
+    crowdSink += separateCircularAgents(agents, {
+      gap: 0.16,
+      gridSize: 8,
+      iterations: 3
+    });
+  });
 });
 
 function deterministicSample(points: readonly Vec2[], limit: number): Vec2[] {
@@ -63,4 +80,21 @@ function deterministicSample(points: readonly Vec2[], limit: number): Vec2[] {
     sampled.push(points[Math.floor(index * step)]);
   }
   return sampled;
+}
+
+function deterministicCrowd(count: number): CircularAgent[] {
+  const agents: CircularAgent[] = [];
+  for (let index = 0; index < count; index += 1) {
+    const row = Math.floor(index / 16);
+    const column = index % 16;
+    agents.push({
+      id: index + 1,
+      radius: index % 11 === 0 ? 2.2 : index % 5 === 0 ? 1.18 : 1.35,
+      position: {
+        x: column * 1.7 + ((index * 17) % 5) * 0.11,
+        z: row * 1.55 + ((index * 23) % 7) * 0.09
+      }
+    });
+  }
+  return agents;
 }

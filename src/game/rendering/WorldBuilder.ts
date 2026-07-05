@@ -28,6 +28,7 @@ import {
   createTerrainOverlayRectGeometry
 } from "./terrainOverlay";
 import type { TimeOfDayState } from "./timeOfDay";
+import type { WeatherState } from "./weather";
 
 const COLLISION_Y = 0.04;
 const PATH_SHOULDER_SURFACE_Y = COLLISION_Y;
@@ -113,6 +114,25 @@ export class WorldBuilder {
   private readonly keyNightColor = new THREE.Color(0xabc4ff);
   private readonly keyDayColor = new THREE.Color(0xffddb1);
   private readonly keyDawnColor = new THREE.Color(0xffb678);
+  private readonly grassBaseColor = new THREE.Color(0x6f8f62);
+  private readonly grassWetColor = new THREE.Color(0x557554);
+  private readonly pathBaseColor = new THREE.Color(0xa48f68);
+  private readonly pathWetColor = new THREE.Color(0x71654f);
+  private readonly asphaltBaseColor = new THREE.Color(0x293c45);
+  private readonly asphaltWetColor = new THREE.Color(0x182d35);
+  private readonly concreteBaseColor = new THREE.Color(0x9ca19a);
+  private readonly concreteWetColor = new THREE.Color(0x778485);
+  private readonly timberBaseColor = new THREE.Color(0x8c613d);
+  private readonly timberWetColor = new THREE.Color(0x674b35);
+  private readonly brickBaseColor = new THREE.Color(0xa95846);
+  private readonly brickWetColor = new THREE.Color(0x7a3f38);
+  private readonly metalBaseColor = new THREE.Color(0x94a3a2);
+  private readonly metalWetColor = new THREE.Color(0x768a8d);
+  private readonly lampLights: THREE.PointLight[] = [];
+  private readonly lampSpillMaterials: THREE.MeshBasicMaterial[] = [];
+  private readonly facadeLights: THREE.PointLight[] = [];
+  private readonly wallLightMaterials: THREE.MeshStandardMaterial[] = [];
+  private readonly scratchColor = new THREE.Color();
 
   constructor(
     private readonly scene: THREE.Scene,
@@ -203,6 +223,8 @@ export class WorldBuilder {
     } else if (target.kind === "park-life-detail") {
       const detail = this.level.parkLifeDetails.find((candidate) => candidate.id === target.sourceId);
       if (detail) this.addParkLifeDetailPreview(detail);
+    } else if (target.kind === "rideable-bike") {
+      this.addRideableBikePreview();
     } else if (target.kind === "tree") {
       const tree = this.level.trees.find((candidate) => candidate.id === target.sourceId);
       if (tree) this.addRealisticTree(tree, target.sourceIndex ?? this.level.trees.indexOf(tree));
@@ -393,8 +415,14 @@ export class WorldBuilder {
       this.addPicnicBlanket(detail);
     } else if (detail.kind === "notice-board") {
       this.addNoticeBoard(detail);
-    } else if (detail.kind === "casual-bike") {
-      this.addCasualBike(detail);
+    } else if (detail.kind === "broken-bike") {
+      this.addBrokenBike(detail);
+    } else if (detail.kind === "construction-fence") {
+      this.addConstructionFence(detail);
+    } else if (detail.kind === "works-materials") {
+      this.addWorksMaterials(detail);
+    } else if (detail.kind === "removed-tree-stump") {
+      this.addRemovedTreeStump(detail);
     } else if (detail.kind === "training-cones") {
       this.addTrainingCones(detail);
     } else if (detail.kind === "dog-water-bowl") {
@@ -410,7 +438,10 @@ export class WorldBuilder {
     }
   }
 
-  updateTimeOfDay(timeOfDay: TimeOfDayState): void {
+  updateTimeOfDay(timeOfDay: TimeOfDayState, weather?: Pick<WeatherState, "cloudCover" | "precipitation" | "wetness">): void {
+    const wetness = THREE.MathUtils.clamp((weather?.wetness ?? 0) * 0.54 + (weather?.precipitation ?? 0) * 0.22, 0, 0.78);
+    const lampT = THREE.MathUtils.clamp(0.08 + timeOfDay.night * 0.86 + (weather?.cloudCover ?? 0) * 0.18 + (weather?.precipitation ?? 0) * 0.08, 0, 1);
+
     if (this.ambientLight) {
       this.ambientLight.color.copy(this.ambientNightSky).lerp(this.ambientDaySky, timeOfDay.daylight);
       this.ambientLight.groundColor.copy(this.ambientNightGround).lerp(this.ambientDayGround, timeOfDay.daylight);
@@ -430,6 +461,39 @@ export class WorldBuilder {
     if (this.emergencyLight) {
       this.emergencyLight.intensity = 3.45 + timeOfDay.night * 1.95;
     }
+
+    this.applyWetMaterialTint(wetness);
+
+    for (const light of this.lampLights) {
+      light.intensity = 0.12 + lampT * 0.82;
+    }
+    for (const light of this.facadeLights) {
+      light.intensity = 0.04 + lampT * 1.28;
+    }
+    for (const material of this.lampSpillMaterials) {
+      material.opacity = (0.035 + lampT * 0.15) * (0.86 + wetness * 0.38);
+    }
+    for (const material of this.wallLightMaterials) {
+      material.emissive.setHex(0xf0a64d);
+      material.emissiveIntensity = 0.08 + lampT * 0.75;
+    }
+  }
+
+  private applyWetMaterialTint(wetness: number): void {
+    this.tintMaterial(this.materials.grass, this.grassBaseColor, this.grassWetColor, wetness * 0.34);
+    this.tintMaterial(this.materials.path, this.pathBaseColor, this.pathWetColor, wetness * 0.72);
+    this.tintMaterial(this.materials.gravel, this.pathBaseColor, this.pathWetColor, wetness * 0.58);
+    this.tintMaterial(this.materials.asphalt, this.asphaltBaseColor, this.asphaltWetColor, wetness);
+    this.tintMaterial(this.materials.concrete, this.concreteBaseColor, this.concreteWetColor, wetness * 0.82);
+    this.tintMaterial(this.materials.timber, this.timberBaseColor, this.timberWetColor, wetness * 0.42);
+    this.tintMaterial(this.materials.brick, this.brickBaseColor, this.brickWetColor, wetness * 0.5);
+    this.tintMaterial(this.materials.metal, this.metalBaseColor, this.metalWetColor, wetness * 0.6);
+    this.materials.puddle.opacity = 0.34 + wetness * 0.28;
+    this.materials.metal.roughness = 0.38 - wetness * 0.14;
+  }
+
+  private tintMaterial(material: { color: THREE.Color }, base: THREE.Color, wet: THREE.Color, amount: number): void {
+    material.color.copy(this.scratchColor.copy(base).lerp(wet, THREE.MathUtils.clamp(amount, 0, 1)));
   }
 
   createUpgradeStations(): void {
@@ -1573,6 +1637,8 @@ export class WorldBuilder {
       this.addBuildingGutter(center, rotation, 0, frontZ + 0.03, footprint.halfX * 1.86, building.height);
       this.addBuildingWallLight(center, rotation, -footprint.halfX * 0.72, frontZ + 0.06, 2.32);
       this.addBuildingSign(center, rotation, -footprint.halfX * 0.28, frontZ + 0.04, footprint.halfX * 0.36, 0.34, 2.28, 0x2f735c);
+      this.addBuildingTextSign(center, rotation, footprint.halfX * 0.28, frontZ + 0.055, footprint.halfX * 0.54, 0.38, 2.34, "TENNIS", "#2f735c", "#f4e7b8");
+      this.addBuildingTextSign(center, rotation, footprint.halfX * 0.68, frontZ + 1.62, footprint.halfX * 0.34, 0.34, 1.58, "WORKS", "#e36e2f", "#18110b");
       this.addLocalBox(center, rotation, -footprint.halfX * 0.62, frontZ + 1.42, footprint.halfX * 0.58, 0.07, 1.12, this.materials.concrete, 0.16, false);
       for (const side of [-1, 1]) {
         this.addLocalBox(center, rotation, -footprint.halfX * 0.62 + side * footprint.halfX * 0.34, frontZ + 1.42, 0.055, 0.72, 1.08, this.materials.metal, 0.52);
@@ -1619,6 +1685,8 @@ export class WorldBuilder {
         this.addLocalBox(center, rotation, -footprint.halfX - 0.035, placement.z * footprint.halfZ, 0.07, 1.18, footprint.halfZ * 0.38, placement.material, 1.55, false);
       }
       this.addLocalBox(center, rotation, -footprint.halfX - 0.06, footprint.halfZ * 0.08, 0.08, 0.34, 0.32, muralGold, 2.18, false);
+      this.addBowlsMuralMotifs(center, rotation, footprint);
+      this.addBuildingTextSign(center, rotation, -footprint.halfX * 0.12, frontZ + 0.055, footprint.halfX * 0.64, 0.34, 2.46, "BOWLS", "#223f64", "#f3d47d");
       for (const x of [-0.42, 0.36]) {
         this.addBuildingRoofVent(center, rotation, x * footprint.halfX, -footprint.halfZ * 0.22, building.height, 0.58, 0.34);
       }
@@ -1634,6 +1702,7 @@ export class WorldBuilder {
       this.addBuildingGutter(center, rotation, 0, frontZ + 0.02, footprint.halfX * 2.05, building.height);
       this.addBuildingWindow(center, rotation, 0, rearZ - 0.02, footprint.halfX * 0.72, 0.46, 1.48, 0.08);
       this.addBuildingSign(center, rotation, 0, rearZ - 0.035, footprint.halfX * 0.9, 0.32, 1.95, 0x5c4630);
+      this.addBuildingTextSign(center, rotation, 0, frontZ + 0.035, footprint.halfX * 1.05, 0.3, 2.18, "GATE", "#5c4630", "#f2e6a8");
       for (const x of [-0.72, 0.72]) {
         this.addBuildingSign(center, rotation, x * footprint.halfX, frontZ + 0.015, footprint.halfX * 0.42, 0.62, 1.78, 0xe8e0b6);
       }
@@ -1671,6 +1740,7 @@ export class WorldBuilder {
         this.addBuildingWindow(center, rotation, x * footprint.halfX, frontZ + 0.02, footprint.halfX * 0.32, 0.72, 1.82);
       }
       this.addBuildingSign(center, rotation, -footprint.halfX * 0.24, frontZ + 0.04, footprint.halfX * 0.52, 0.34, 2.42, 0x315d67);
+      this.addBuildingTextSign(center, rotation, footprint.halfX * 0.36, frontZ + 0.055, footprint.halfX * 0.58, 0.34, 2.5, "EMELY", "#315d67", "#f2e6a8");
       this.addLocalBox(center, rotation, -footprint.halfX * 0.62, frontZ + 1.04, footprint.halfX * 0.48, 0.07, 1.1, this.materials.concrete, 0.16, false);
       for (const side of [-1, 1]) {
         this.addLocalBox(center, rotation, -footprint.halfX * 0.62 + side * footprint.halfX * 0.28, frontZ + 1.04, 0.055, 0.7, 1.05, this.materials.metal, 0.52);
@@ -1696,6 +1766,7 @@ export class WorldBuilder {
         this.standardDetailMaterial("emely-shade-sail", 0xc8d3cf, 0.78, 0.02, true, 0.82)
       );
       this.addBuildingRoofVent(center, rotation, footprint.halfX * 0.48, -footprint.halfZ * 0.22, building.height, 0.46, 0.32);
+      this.addEmelyBakerGateDetails(center, rotation, courtyardZ, footprint);
       this.addLabel("Emely Baker Centre", center, building.height + 1.35);
       return;
     }
@@ -1709,6 +1780,7 @@ export class WorldBuilder {
         this.addLocalBox(center, rotation, x * footprint.halfX, frontZ + 0.075, footprint.halfX * 0.22, 0.14, 0.055, this.materials.metal, 1.86, false);
       }
       this.addBuildingSign(center, rotation, 0, frontZ + 0.03, footprint.halfX * 0.48, 0.45, 2.48, 0xe8e0b6);
+      this.addBuildingTextSign(center, rotation, 0, frontZ + 0.045, footprint.halfX * 0.54, 0.38, 2.54, "TOILETS", "#246ca8", "#f2e6a8");
       if (building.id === "osm-building-242003562") {
         this.addBuildingSign(center, rotation, -footprint.halfX * 0.82, frontZ + 0.04, footprint.halfX * 0.24, 0.38, 2.16, 0x246ca8);
         this.addBuildingWallLight(center, rotation, footprint.halfX * 0.82, frontZ + 0.06, 2.34);
@@ -2334,6 +2406,33 @@ export class WorldBuilder {
     return this.addLocalBox(center, rotation, localX, localZ, width, height, depth, this.basicDetailMaterial("building-sign", color), y, false);
   }
 
+  private addBuildingTextSign(
+    center: Vec2,
+    rotation: number,
+    localX: number,
+    localZ: number,
+    width: number,
+    height: number,
+    y: number,
+    text: string,
+    background = "#2e6c79",
+    foreground = "#f2e6a8",
+    depth = 0.095
+  ): THREE.Mesh {
+    return this.addLocalBox(
+      center,
+      rotation,
+      localX,
+      localZ,
+      width,
+      height,
+      depth,
+      this.canvasSignMaterial(`building-text-${text}`, text, background, foreground),
+      y,
+      false
+    );
+  }
+
   private addBuildingRoofVent(
     center: Vec2,
     rotation: number,
@@ -2348,7 +2447,14 @@ export class WorldBuilder {
 
   private addBuildingWallLight(center: Vec2, rotation: number, localX: number, localZ: number, y = 2.35): THREE.Mesh {
     const lightMaterial = this.standardDetailMaterial("warm-wall-light", 0xf0b85d, 0.42, 0.05);
-    return this.addLocalBox(center, rotation, localX, localZ, 0.28, 0.2, 0.12, lightMaterial, y, false);
+    const mesh = this.addLocalBox(center, rotation, localX, localZ, 0.28, 0.2, 0.12, lightMaterial, y, false);
+    this.wallLightMaterials.push(lightMaterial);
+    const position = this.localPoint(center, rotation, localX, localZ);
+    const glow = new THREE.PointLight(0xf0b85d, 0.8, 18);
+    glow.position.set(position.x, this.groundY(position) + y, position.z);
+    this.facadeLights.push(glow);
+    this.scene.add(glow);
+    return mesh;
   }
 
   private addBuildingGutter(
@@ -2376,6 +2482,44 @@ export class WorldBuilder {
     for (let rung = 0; rung < 5; rung += 1) {
       this.addLocalBox(center, rotation, localX, localZ + 0.01, 0.46, 0.045, 0.06, this.materials.metal, 0.48 + rung * 0.42, false);
     }
+  }
+
+  private addBowlsMuralMotifs(center: Vec2, rotation: number, footprint: { halfX: number; halfZ: number }): void {
+    const flora = this.basicDetailMaterial("bowls-mural-flora", 0x4c8f55);
+    const maroon = this.basicDetailMaterial("bowls-mural-detail-maroon", 0x7b263b);
+    const gold = this.basicDetailMaterial("bowls-mural-lion", 0xd0a13a);
+    const wallX = -footprint.halfX - 0.078;
+
+    for (const z of [-0.55, -0.22, 0.18, 0.52]) {
+      this.addLocalBox(center, rotation, wallX, z * footprint.halfZ, 0.09, 0.08, footprint.halfZ * 0.42, flora, 1.86, false);
+      this.addLocalBox(center, rotation, wallX - 0.01, z * footprint.halfZ + footprint.halfZ * 0.11, 0.092, 0.16, 0.18, maroon, 1.98, false);
+    }
+
+    this.addLocalBox(center, rotation, wallX - 0.015, footprint.halfZ * 0.08, 0.095, 0.42, 0.48, gold, 2.23, false);
+    for (const z of [-0.28, 0, 0.28]) {
+      this.addLocalBox(center, rotation, wallX - 0.018, footprint.halfZ * 0.08 + z, 0.1, 0.16, 0.08, gold, 2.55 - Math.abs(z) * 0.32, false);
+    }
+  }
+
+  private addEmelyBakerGateDetails(
+    center: Vec2,
+    rotation: number,
+    courtyardZ: number,
+    footprint: { halfX: number; halfZ: number }
+  ): void {
+    const gateMaterial = this.standardDetailMaterial("emely-baker-courtyard-gate", 0x4f5e56, 0.58, 0.28);
+    const latchMaterial = this.standardDetailMaterial("emely-baker-gate-latch", 0xd0a343, 0.44, 0.34);
+    const gateZ = courtyardZ + 1.36;
+    const gateX = footprint.halfX * 0.52;
+
+    for (const x of [gateX - 1.1, gateX + 1.1]) {
+      this.addLocalBox(center, rotation, x, gateZ, 0.08, 1.15, 0.08, gateMaterial, 0.62);
+    }
+    for (const y of [0.48, 0.94]) {
+      this.addLocalBox(center, rotation, gateX, gateZ, 2.3, 0.065, 0.08, gateMaterial, y);
+    }
+    this.addLocalBox(center, rotation, gateX + 0.18, gateZ - 0.035, 0.16, 0.18, 0.08, latchMaterial, 0.78, false);
+    this.addBuildingTextSign(center, rotation, -footprint.halfX * 0.76, courtyardZ - 1.22, footprint.halfX * 0.42, 0.28, 1.36, "BOOKED", "#315d67", "#f2e6a8", 0.065);
   }
 
   private addLocalShadeSail(
@@ -3036,8 +3180,14 @@ export class WorldBuilder {
         this.addPicnicBlanket(detail);
       } else if (detail.kind === "notice-board") {
         this.addNoticeBoard(detail);
-      } else if (detail.kind === "casual-bike") {
-        this.addCasualBike(detail);
+      } else if (detail.kind === "broken-bike") {
+        this.addBrokenBike(detail);
+      } else if (detail.kind === "construction-fence") {
+        this.addConstructionFence(detail);
+      } else if (detail.kind === "works-materials") {
+        this.addWorksMaterials(detail);
+      } else if (detail.kind === "removed-tree-stump") {
+        this.addRemovedTreeStump(detail);
       } else if (detail.kind === "training-cones") {
         this.addTrainingCones(detail);
       } else if (detail.kind === "dog-water-bowl") {
@@ -3111,34 +3261,157 @@ export class WorldBuilder {
     this.scene.add(group);
   }
 
-  private addCasualBike(detail: ParkLifeDetail): void {
-    const group = new THREE.Group();
-    const frameMaterial = new THREE.MeshStandardMaterial({ color: 0x263734, metalness: 0.35, roughness: 0.42 });
-    const wheelMaterial = new THREE.MeshStandardMaterial({ color: 0x1b211f, roughness: 0.56 });
-    for (const x of [-0.62, 0.62]) {
-      const wheel = new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.025, 8, 20), wheelMaterial);
-      wheel.position.set(x, 0.42, 0);
-      wheel.rotation.y = Math.PI / 2;
-      wheel.castShadow = true;
-      group.add(wheel);
-    }
-    const topTube = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.055, 0.055), frameMaterial);
-    topTube.position.y = 0.74;
-    topTube.castShadow = true;
-    group.add(topTube);
-    for (const x of [-0.28, 0.28]) {
-      const fork = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.58, 0.055), frameMaterial);
-      fork.position.set(x, 0.62, 0);
-      fork.rotation.z = x < 0 ? -0.34 : 0.34;
-      fork.castShadow = true;
-      group.add(fork);
-    }
-    const handlebar = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.05, 0.05), frameMaterial);
-    handlebar.position.set(0.72, 0.92, 0);
-    handlebar.rotation.z = 0.12;
-    group.add(handlebar);
+  private addBrokenBike(detail: ParkLifeDetail): void {
+    const group = new MeshFactory(this.materials).createBikeMesh({ issue: detail.bikeIssue });
+    group.scale.setScalar(1.15);
     group.position.set(detail.position.x, this.groundY(detail.position), detail.position.z);
     group.rotation.y = detail.angle;
+    this.scene.add(group);
+  }
+
+  private addConstructionFence(detail: ParkLifeDetail): void {
+    const group = new THREE.Group();
+    const isGrandstand = detail.id.includes("grandstand");
+    const length = isGrandstand ? 5.8 : 8.8;
+    const meshMaterial = this.standardDetailMaterial("works-orange-mesh", 0xe36e2f, 0.72, 0.02, true, 0.32);
+    meshMaterial.side = THREE.DoubleSide;
+    const railMaterial = this.standardDetailMaterial("works-fence-rail", 0x4d5551, 0.58, 0.32);
+    const signMaterial = this.canvasSignMaterial("works-site-sign", "WORKS", "#e36e2f", "#18110b");
+
+    const panel = new THREE.Mesh(new THREE.BoxGeometry(length, 1.15, 0.035), meshMaterial);
+    panel.position.y = 0.82;
+    panel.castShadow = false;
+    group.add(panel);
+
+    for (const y of [0.34, 1.24]) {
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(length, 0.08, 0.08), railMaterial);
+      rail.position.y = y;
+      rail.castShadow = true;
+      group.add(rail);
+    }
+
+    const postCount = Math.max(2, Math.floor(length / 1.85));
+    for (let postIndex = 0; postIndex <= postCount; postIndex += 1) {
+      const x = -length * 0.5 + (length * postIndex) / postCount;
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.055, 1.48, 8), railMaterial);
+      post.position.set(x, 0.74, 0);
+      post.castShadow = true;
+      group.add(post);
+    }
+
+    for (const x of [-length * 0.28, length * 0.24]) {
+      const brace = new THREE.Mesh(new THREE.BoxGeometry(length * 0.28, 0.055, 0.055), railMaterial);
+      brace.position.set(x, 0.79, -0.035);
+      brace.rotation.z = x < 0 ? 0.42 : -0.42;
+      brace.castShadow = true;
+      group.add(brace);
+    }
+
+    const sign = new THREE.Mesh(new THREE.BoxGeometry(isGrandstand ? 1.65 : 1.9, 0.54, 0.055), signMaterial);
+    sign.position.set(isGrandstand ? 0 : -length * 0.24, 1.18, -0.065);
+    group.add(sign);
+
+    if (isGrandstand) {
+      const gateBar = new THREE.Mesh(new THREE.BoxGeometry(1.55, 0.08, 0.1), railMaterial);
+      gateBar.position.set(0, 0.72, -0.12);
+      group.add(gateBar);
+      const lock = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.24, 0.08), this.materials.metal);
+      lock.position.set(0.38, 0.86, -0.17);
+      group.add(lock);
+    }
+
+    group.position.set(detail.position.x, this.groundY(detail.position), detail.position.z);
+    group.rotation.y = detail.angle;
+    this.scene.add(group);
+  }
+
+  private addWorksMaterials(detail: ParkLifeDetail): void {
+    const group = new THREE.Group();
+    const rollMaterial = this.standardDetailMaterial("synthetic-court-roll", 0x3f8068, 0.64, 0.04);
+    const rollEndMaterial = this.basicDetailMaterial("synthetic-court-roll-end", 0xe7e1c4);
+    const strapMaterial = this.standardDetailMaterial("works-roll-strap", 0x202b2d, 0.72, 0.16);
+    const palletMaterial = this.standardDetailMaterial("works-pallet-timber", 0x8c613d, 0.8, 0.02);
+
+    const pallet = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.16, 1.3), palletMaterial);
+    pallet.position.y = 0.08;
+    pallet.castShadow = true;
+    group.add(pallet);
+
+    for (let rollIndex = 0; rollIndex < 3; rollIndex += 1) {
+      const roll = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 2.35, 16), rollMaterial);
+      roll.position.set(0, 0.4 + rollIndex * 0.34, (rollIndex - 1) * 0.36);
+      roll.rotation.z = Math.PI / 2;
+      roll.castShadow = true;
+      group.add(roll);
+
+      for (const x of [-1.2, 1.2]) {
+        const end = new THREE.Mesh(new THREE.CircleGeometry(0.28, 16), rollEndMaterial);
+        end.position.set(x, roll.position.y, roll.position.z);
+        end.rotation.y = Math.PI / 2;
+        group.add(end);
+      }
+
+      for (const x of [-0.72, 0.72]) {
+        const strap = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.58, 0.62), strapMaterial);
+        strap.position.set(x, roll.position.y, roll.position.z);
+        strap.castShadow = true;
+        group.add(strap);
+      }
+    }
+
+    const sign = new THREE.Mesh(new THREE.BoxGeometry(1.28, 0.42, 0.055), this.canvasSignMaterial("court-rolls-sign", "COURTS", "#223f64", "#f2e6a8"));
+    sign.position.set(0.68, 1.65, -0.72);
+    sign.rotation.y = -0.2;
+    group.add(sign);
+
+    group.position.set(detail.position.x, this.boxSupportY(detail.position, detail.angle, 1.45, 0.8), detail.position.z);
+    group.rotation.y = detail.angle;
+    this.scene.add(group);
+  }
+
+  private addRemovedTreeStump(detail: ParkLifeDetail): void {
+    const group = new THREE.Group();
+    const barkMaterial = this.standardDetailMaterial("redevelopment-stump-bark", 0x6f5137, 0.88, 0.02);
+    const cutMaterial = this.standardDetailMaterial("redevelopment-stump-cut", 0xb99564, 0.82, 0.02);
+    const sawdustMaterial = this.standardDetailMaterial("redevelopment-sawdust", 0xb59a66, 0.94, 0, true, 0.58);
+
+    const sawdust = new THREE.Mesh(new THREE.CircleGeometry(0.92, 22), sawdustMaterial);
+    sawdust.rotation.x = -Math.PI / 2;
+    sawdust.position.y = 0.035;
+    sawdust.receiveShadow = true;
+    group.add(sawdust);
+
+    const stump = new THREE.Mesh(new THREE.CylinderGeometry(0.33, 0.42, 0.44, 10), barkMaterial);
+    stump.position.y = 0.24;
+    stump.castShadow = true;
+    stump.receiveShadow = true;
+    group.add(stump);
+
+    const cut = new THREE.Mesh(new THREE.CylinderGeometry(0.31, 0.34, 0.035, 10), cutMaterial);
+    cut.position.y = 0.48;
+    cut.castShadow = true;
+    group.add(cut);
+
+    for (let rootIndex = 0; rootIndex < 4; rootIndex += 1) {
+      const root = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.08, 0.18), barkMaterial);
+      const angle = rootIndex * (Math.PI / 2) + detail.angle * 0.18;
+      root.position.set(Math.cos(angle) * 0.42, 0.08, Math.sin(angle) * 0.42);
+      root.rotation.y = -angle;
+      root.castShadow = true;
+      group.add(root);
+    }
+
+    group.position.set(detail.position.x, this.groundY(detail.position), detail.position.z);
+    group.rotation.y = detail.angle;
+    this.scene.add(group);
+  }
+
+  private addRideableBikePreview(): void {
+    const bike = this.level.rideableBike;
+    const group = new MeshFactory(this.materials).createBikeMesh();
+    group.scale.setScalar(1.45);
+    group.position.set(bike.position.x, this.groundY(bike.position), bike.position.z);
+    group.rotation.y = bike.angle;
     this.scene.add(group);
   }
 
@@ -3340,21 +3613,24 @@ export class WorldBuilder {
       const glow = new THREE.PointLight(0xf0c96a, 0.72, 22);
       glow.position.set(0, 3.25, -0.9);
       group.add(glow);
+      this.lampLights.push(glow);
 
+      const spillMaterial = new THREE.MeshBasicMaterial({
+        color: 0xc49a55,
+        transparent: true,
+        opacity: 0.16,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending
+      });
       const spill = new THREE.Mesh(
         new THREE.CircleGeometry(6.2, 28),
-        new THREE.MeshBasicMaterial({
-          color: 0xc49a55,
-          transparent: true,
-          opacity: 0.16,
-          depthWrite: false,
-          blending: THREE.AdditiveBlending
-        })
+        spillMaterial
       );
       spill.position.set(0, 0.045, -0.9);
       spill.rotation.x = -Math.PI / 2;
       spill.userData.kind = "lamp-ground-spill";
       group.add(spill);
+      this.lampSpillMaterials.push(spillMaterial);
       this.renderedLampSpillCount += 1;
     }
     group.position.set(position.x, this.groundY(position), position.z);

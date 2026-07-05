@@ -10,7 +10,6 @@ import type { WeatherState } from "./weather";
 const ANIME_GRADE_SHADER = {
   uniforms: {
     tDiffuse: { value: null },
-    time: { value: 0 },
     resolution: { value: new THREE.Vector2(1, 1) },
     strength: { value: 1 },
     nightAmount: { value: 1 },
@@ -29,7 +28,6 @@ const ANIME_GRADE_SHADER = {
   `,
   fragmentShader: `
     uniform sampler2D tDiffuse;
-    uniform float time;
     uniform vec2 resolution;
     uniform float strength;
     uniform float nightAmount;
@@ -41,10 +39,6 @@ const ANIME_GRADE_SHADER = {
 
     float animeLuminance(vec3 color) {
       return dot(color, vec3(0.299, 0.587, 0.114));
-    }
-
-    float hash(vec2 p) {
-      return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
     }
 
     void main() {
@@ -59,26 +53,23 @@ const ANIME_GRADE_SHADER = {
       float down = animeLuminance(texture2D(tDiffuse, vUv - vec2(0.0, pixel.y)).rgb);
       float edge = smoothstep(0.12, 0.32, abs(center - right) + abs(center - left) + abs(center - up) + abs(center - down));
 
-      vec3 shadowLift = vec3(0.042, 0.068, 0.086);
-      vec3 mids = vec3(0.96, 0.99, 0.94);
-      vec3 highlights = vec3(1.06, 0.98, 0.78);
-      color = color * mids + shadowLift * (1.0 - smoothstep(0.08, 0.62, center)) * 0.54;
-      color = mix(color, color * highlights, smoothstep(0.6, 0.98, center) * 0.12);
-      color = mix(color, floor(color * 12.0) / 12.0, 0.05 * strength);
-      color = mix(color, vec3(0.025, 0.055, 0.075), edge * 0.18 * strength);
-      color = mix(color, color * vec3(0.68, 0.78, 0.9) + vec3(0.006, 0.012, 0.02), nightAmount * 0.26 * strength);
-      color = mix(color, color * vec3(1.04, 1.025, 0.96) + vec3(0.01, 0.008, 0.0), daylight * 0.08 * strength);
+      vec3 shadowLift = vec3(0.048, 0.076, 0.078);
+      vec3 mids = vec3(1.0, 1.005, 0.945);
+      vec3 highlights = vec3(1.075, 1.005, 0.78);
+      color = color * mids + shadowLift * (1.0 - smoothstep(0.08, 0.62, center)) * 0.58;
+      color = mix(color, color * highlights, smoothstep(0.58, 0.98, center) * 0.16);
+      color = mix(color, floor(color * 13.0) / 13.0, 0.065 * strength);
+      color = mix(color, vec3(0.022, 0.06, 0.07), edge * 0.24 * strength);
+      color = mix(color, color * vec3(0.72, 0.82, 0.92) + vec3(0.006, 0.016, 0.022), nightAmount * 0.23 * strength);
+      color = mix(color, color * vec3(1.045, 1.025, 0.945) + vec3(0.012, 0.008, 0.0), daylight * 0.1 * strength);
       float weatherAmount = clamp(precipitation * 0.72 + weatherFog * 0.36 + cloudCover * 0.22, 0.0, 1.0);
-      color = mix(color, color * vec3(0.78, 0.88, 0.99) + vec3(0.004, 0.012, 0.022), weatherAmount * 0.22 * strength);
-      color = mix(color, vec3(animeLuminance(color)) * vec3(0.9, 0.98, 1.06), weatherFog * 0.08 * strength);
+      color = mix(color, color * vec3(0.8, 0.9, 1.0) + vec3(0.004, 0.014, 0.024), weatherAmount * 0.2 * strength);
+      color = mix(color, vec3(animeLuminance(color)) * vec3(0.92, 1.0, 1.06), weatherFog * 0.075 * strength);
 
       float vignette = smoothstep(0.82, 0.22, distance(vUv, vec2(0.5)));
       float vignetteFloor = mix(0.78, 0.87, daylight);
       vignetteFloor = mix(vignetteFloor, 0.72, cloudCover * 0.18 + precipitation * 0.14);
       color *= mix(vignetteFloor, 1.035, vignette);
-
-      float grain = hash(vUv * resolution + time * 41.0) - 0.5;
-      color += grain * (0.012 + precipitation * 0.006) * strength;
 
       gl_FragColor = vec4(color, base.a);
     }
@@ -131,7 +122,6 @@ export class PostProcessingPipeline {
       renderer.render(scene, camera);
       return;
     }
-    this.gradePass.uniforms.time.value += dt;
     this.composer.render(dt);
   }
 

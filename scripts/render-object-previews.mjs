@@ -1,24 +1,40 @@
 import { chromium } from "@playwright/test";
+import { build as viteBuild } from "vite";
 import { spawn } from "node:child_process";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
+import { pathToFileURL } from "node:url";
 
 const DEFAULT_PORT = 5482;
 const ANGLES = ["front", "right", "rear", "left"];
 
 const options = parseArgs(process.argv.slice(2));
 const outDir = path.resolve(options.out ?? "docs/research/renders/object-previews/latest");
-const baseURL = options.baseURL ?? `http://127.0.0.1:${DEFAULT_PORT}`;
-const server = await ensureServer(baseURL, options.baseURL ? null : DEFAULT_PORT);
+let baseURL = options.baseURL ?? `http://127.0.0.1:${DEFAULT_PORT}`;
+let server = null;
+let staticPreviewDir = null;
 
 try {
+  try {
+    server = await ensureServer(baseURL, options.baseURL ? null : DEFAULT_PORT);
+  } catch (error) {
+    if (options.baseURL) {
+      throw error;
+    }
+    staticPreviewDir = path.join(process.env.TMPDIR ?? "/tmp", "edinburgh-gardens-object-preview");
+    await buildStaticPreview(staticPreviewDir);
+    baseURL = pathToFileURL(staticPreviewDir).href;
+    console.log(`Preview server unavailable; using static build at ${baseURL}`);
+  }
+
   await mkdir(outDir, { recursive: true });
   const browser = await chromium.launch({
     args: ["--use-gl=swiftshader", "--ignore-gpu-blocklist"]
   });
   const page = await browser.newPage({ viewport: { width: 640, height: 640 }, deviceScaleFactor: 1 });
-  await page.goto(`${baseURL}/object-preview.html`);
+  const previewUrl = previewPageUrl(baseURL);
+  await page.goto(previewUrl);
   await page.waitForFunction(() => window.__OBJECT_PREVIEW__?.ready === true);
 
   const allTargets = await page.evaluate(() => window.__OBJECT_PREVIEW__.targets());
@@ -55,7 +71,7 @@ try {
     JSON.stringify(
       {
         generatedAt: new Date().toISOString(),
-        source: `${baseURL}/object-preview.html`,
+        source: previewUrl,
         targetCount: targets.length,
         angleCount: angles.length,
         totalRenderCount: renders.length,
@@ -72,6 +88,27 @@ try {
   if (server) {
     server.kill("SIGTERM");
   }
+  if (staticPreviewDir) {
+    await rm(staticPreviewDir, { recursive: true, force: true });
+  }
+}
+
+async function buildStaticPreview(outDir) {
+  await viteBuild({
+    base: "./",
+    logLevel: "warn",
+    build: {
+      outDir,
+      emptyOutDir: true,
+      rollupOptions: {
+        input: path.resolve("object-preview.html")
+      }
+    }
+  });
+}
+
+function previewPageUrl(baseURL) {
+  return `${baseURL.replace(/\/$/, "")}/object-preview.html`;
 }
 
 async function renderWithRetry(page, targetId, angleIndex) {

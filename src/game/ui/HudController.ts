@@ -6,7 +6,7 @@ import {
   type Loadout,
   type WeaponId
 } from "../weapons";
-import type { AmenityPoint, InteractableFixture, UpgradeStation } from "../types";
+import type { AmenityPoint, InteractableFixture, ParkLifeDetail, UpgradeStation } from "../types";
 import type { WavePhase } from "../state";
 
 interface HudRefs {
@@ -32,6 +32,10 @@ export interface HudWeaponDrop {
   label: string;
 }
 
+export interface HudBikeTarget {
+  label: string;
+}
+
 export interface HudUpdate {
   health: number;
   wave: number;
@@ -42,6 +46,8 @@ export interface HudUpdate {
   playerHeight: number;
   activeFixtureId: string | null;
   nearestWeaponDrop: HudWeaponDrop | null;
+  nearestBike: HudBikeTarget | null;
+  nearestBrokenBike: ParkLifeDetail | null;
   nearestFixture: InteractableFixture | null;
   nearestAmenity: AmenityPoint | null;
   nearestStation: UpgradeStation | null;
@@ -51,6 +57,7 @@ export interface HudUpdate {
   stamina: number;
   throwables: number;
   flashlightOn: boolean;
+  bikeMounted: boolean;
   injuryStatus: string | null;
   amenityPrompt: (amenity: AmenityPoint) => string;
 }
@@ -105,9 +112,18 @@ export class HudController {
     if (stats.kind !== "melee" && view.loadout.reloadingUntil > performance.now() / 1000) {
       const percent = Math.round(view.reloadProgress * 100);
       this.refs.status.textContent = view.loadout.weaponId === "shotgun" ? `Loading shell ${percent}%` : `Reloading ${percent}%`;
+    } else if (view.bikeMounted) {
+      this.refs.prompt.textContent = "E: dismount bike";
+      this.refs.status.textContent = "Riding hidden bike";
     } else if (view.nearestWeaponDrop) {
       this.refs.prompt.textContent = `E: pick up ${WEAPON_DEFINITIONS[view.nearestWeaponDrop.weaponId].name}`;
       this.refs.status.textContent = view.nearestWeaponDrop.label;
+    } else if (view.nearestBike) {
+      this.refs.prompt.textContent = "E: ride bike";
+      this.refs.status.textContent = view.nearestBike.label;
+    } else if (view.nearestBrokenBike) {
+      this.refs.prompt.textContent = "E: inspect bike";
+      this.refs.status.textContent = view.nearestBrokenBike.label;
     } else if (view.nearestFixture) {
       const active = view.activeFixtureId === view.nearestFixture.id;
       this.refs.prompt.textContent = active ? `E: drop from ${view.nearestFixture.label}` : view.nearestFixture.prompt;

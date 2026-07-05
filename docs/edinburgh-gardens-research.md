@@ -59,6 +59,10 @@ These notes record the real-world sources and implementation decisions used to s
   - Used for current 2026 tennis works, tree-removal and replacement context around the oval/tennis precinct.
 - Brunswick Street Oval Tree Protection and Management Plan: https://www.yarracity.vic.gov.au/sites/default/files/2026-02/Tree_protection_management_plan_brunswick_street_oval.pdf
   - Used to suppress mapped OSM tree nodes that intersect the published 2026 tennis works tree-removal footprint.
+- Yarra Emely Baker Centre: https://www.yarracity.vic.gov.au/things-to-do/find-a-venue/emely-baker-centre
+  - Used for the community-room use, access-friendly entry, 11 x 7 m room scale, gated outdoor area and shade sail cues.
+- Yarra Fitzroy Bowls 150 Years Memorial Wall: https://www.yarracity.vic.gov.au/things-to-do/arts/gallery/public-art/fitzroy-bowls-150-years-memorial-wall
+  - Used for the bowling-club mural palette, flora/fauna theme and simplified club/lion facade cue.
 
 ## Current Implementation
 
@@ -81,6 +85,7 @@ These notes record the real-world sources and implementation decisions used to s
 - The path and raingarden audit added remaining OSM-mapped stand steps, short path connectors and oval links, then remodeled the skate-precinct stormwater feature as a terraced raingarden rather than an open water patch.
 - The north-east shrub planter review added the 10 m bluestone circular planter north of Rowe Street and the two 5 m Rowe Street entrance planters as dense crouch-cover garden landmarks.
 - The ornamental gardens review split the visible stormwater filtration garden south of the skate park and west of the rail trail from the east-side underground reservoir footprint, then added St Georges display beds, Rotunda Lawn shrub beds, the Queen Victoria circular display bed and the tennis Agapanthus strip.
+- The 2026-07-06 realism audit adds source-backed current-works details around the tennis/grandstand precinct, visible low stumps for OSM trees already suppressed by the redevelopment footprint, more legible mapped-building facades, and weather-aware wet material and night-light states.
 - Tree placement refresh research is stored in `docs/research/tree-placement-refresh-2026-07-05.md`.
 - Detailed OSM path/service research is stored in `docs/research/osm-path-service-inventory-2026-07-05.md`.
 - Hardscape and terrain-edge research is stored in `docs/research/hardscape-terrain-edges-2026-07-05.md`.

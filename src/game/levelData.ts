@@ -166,7 +166,7 @@ export const RESEARCH_NOTES = [
   "A 2026-07-05 ornamental gardens review split the visible GHD stormwater filtration garden from the east-side underground reservoir footprint, then added St Georges display beds, Rotunda Lawn shrub beds, the Queen Victoria circular display bed and tennis/Bowling agapanthus strips.",
   "Micro-terrain modifiers now layer path crowns, worn shoulders, root mounds, oval banking and drainage swales over the broad Vicmap elevation interpolation.",
   "Path surface transition patches now derive feathered edges and compacted junctions from mapped paths, with a small set of researched desire paths through high-use lawns.",
-  "A 2026-07-06 realism artifact audit aligned Three.js object-preview building orientation with the restored Three.js runtime, added source-backed runtime facade details, and tightened zombie/weapon silhouettes while preserving low-poly anime minimalism.",
+  "A 2026-07-06 realism artifact audit aligned Three.js object-preview building orientation with the restored Three.js runtime, added source-backed facade, current-works, suppressed-tree-stump, wet-weather and night-light details, and tightened zombie/weapon silhouettes while preserving low-poly anime minimalism.",
   "See docs/edinburgh-gardens-research.md for source URLs, query notes, data licensing notes and implementation decisions."
 ];
 
@@ -3098,7 +3098,7 @@ export function createLevelData(): LevelData {
     { id: "south-picnic-table-2", label: "South picnic table", kind: "picnic_table", position: geoToWorld(g(-37.789125, 144.983925)) }
   ];
   const amenities = [...mappedAmenities, ...featureAmenities].filter((amenity) => pointInPolygon(amenity.position, boundary));
-  const parkLifeDetails = ([
+  const baseParkLifeDetails = ([
     {
       id: "north-lawn-dog-sign",
       label: "North open lawn dog area sign",
@@ -3148,20 +3148,48 @@ export function createLevelData(): LevelData {
       source: "OpenStreetMap node 249041533 sport=cricket_nets; W.T. Peterson Oval sports context"
     },
     {
-      id: "rail-trail-casual-bike",
-      label: "Bike beside Inner Circle Rail Trail",
-      kind: "casual-bike",
+      id: "rail-trail-flat-tyre-bike",
+      label: "Flat-tyred bike beside Inner Circle Rail Trail",
+      kind: "broken-bike",
       position: geoToWorld(g(-37.787245, 144.983020)),
       angle: -0.52,
+      bikeIssue: "flat-tyres",
       source: "Yarra access context: Capital City Trail and foot/bike access"
     },
     {
-      id: "brunswick-tram-bike",
-      label: "Bike near Brunswick Street approach",
-      kind: "casual-bike",
+      id: "brunswick-broken-chain-bike",
+      label: "Broken-chain bike near Brunswick Street approach",
+      kind: "broken-bike",
       position: geoToWorld(g(-37.787140, 144.980535)),
       angle: 0.92,
+      bikeIssue: "broken-chain",
       source: "Yarra access context: Brunswick Street trams and cycling access"
+    },
+    {
+      id: "tennis-works-mesh-fence",
+      label: "2026 tennis works mesh fence",
+      kind: "construction-fence",
+      position: geoToWorld(g(-37.788020, 144.981835)),
+      angle: -0.18,
+      source:
+        "Yarra Brunswick Street Oval redevelopment: tennis court works, clubhouse relocation and 2026-2027 construction timeline"
+    },
+    {
+      id: "grandstand-secure-gate-works",
+      label: "Grandstand secure access gate works",
+      kind: "construction-fence",
+      position: geoToWorld(g(-37.788330, 144.981500)),
+      angle: -0.17,
+      source:
+        "Yarra Brunswick Street Oval redevelopment: Heritage Grandstand upgrades include new external stairs and secure access gates"
+    },
+    {
+      id: "tennis-synthetic-court-rolls",
+      label: "Synthetic court surface rolls",
+      kind: "works-materials",
+      position: geoToWorld(g(-37.788020, 144.982110)),
+      angle: -0.18,
+      source: "Yarra Brunswick Street Oval redevelopment: two new synthetic courts and renovation of six existing courts"
     },
     {
       id: "freeman-gate-notice-board",
@@ -3262,6 +3290,16 @@ export function createLevelData(): LevelData {
     position: geoToWorld(tree.point)
   }));
   const removedTreePositions = OSM_TREE_GEO.filter((tree) => REDEVELOPMENT_REMOVED_TREE_NODE_IDS.has(tree.osmId)).map((tree) => geoToWorld(tree.point));
+  const removedTreeStumpDetails = removedTreePositions.map((position, index): ParkLifeDetail => ({
+    id: `brunswick-removed-tree-stump-${index + 1}`,
+    label: "Redevelopment removed tree stump",
+    kind: "removed-tree-stump",
+    position,
+    angle: index * 0.47,
+    source:
+      "OSM natural=tree node suppressed by the Brunswick Street Oval Tree Protection and Management Plan; Yarra redevelopment notes 39 removals and 2026-2027 replacement planting"
+  }));
+  const parkLifeDetails = [...baseParkLifeDetails, ...removedTreeStumpDetails].filter((detail) => pointInPolygon(detail.position, boundary));
   const vicmapTreeRecords = VICMAP_TREE_GEO.map((tree) => ({
     ...tree,
     position: geoToWorld(tree.point)
@@ -3927,7 +3965,13 @@ export function createLevelData(): LevelData {
       { id: "tennis-smg", label: "SMG in the tennis locker", weaponId: "smg", position: geoToWorld(g(-37.78808, 144.98224)) },
       { id: "rail-rifle", label: "Rifle by the rail trail", weaponId: "rifle", position: geoToWorld(g(-37.78708, 144.98304)) },
       { id: "rotunda-carbine", label: "Carbine ammo by the rotunda", weaponId: "carbine", position: rotundaCenter }
-    ]
+    ],
+    rideableBike: {
+      id: "freeman-hidden-bike",
+      label: "Hidden commuter bike",
+      position: geoToWorld(g(-37.789330, 144.980620)),
+      angle: 0.34
+    }
   };
 }
 

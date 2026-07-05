@@ -1,27 +1,27 @@
 :root {
   color-scheme: dark;
   font-family: "Avenir Next", "Segoe UI", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-  background: oklch(12% 0.031 218);
-  color: oklch(90% 0.036 88);
+  background: oklch(14% 0.032 214);
+  color: oklch(91% 0.04 88);
   font-synthesis: none;
   text-rendering: geometricPrecision;
 
-  --night: oklch(12% 0.031 218);
-  --night-deep: oklch(8% 0.025 224);
-  --ink: oklch(16% 0.036 210);
-  --ink-soft: oklch(22% 0.041 206);
-  --paper: oklch(88% 0.038 87);
-  --muted: oklch(72% 0.042 186);
-  --bluegum: oklch(65% 0.083 151);
-  --bluegum-dark: oklch(37% 0.071 156);
-  --bluestone: oklch(48% 0.045 224);
-  --rain: oklch(74% 0.061 211);
-  --tram: oklch(82% 0.13 78);
-  --brick: oklch(61% 0.145 33);
+  --night: oklch(14% 0.032 214);
+  --night-deep: oklch(9% 0.027 224);
+  --ink: oklch(17% 0.035 207);
+  --ink-soft: oklch(24% 0.042 202);
+  --paper: oklch(91% 0.042 88);
+  --muted: oklch(75% 0.045 178);
+  --bluegum: oklch(65% 0.086 148);
+  --bluegum-dark: oklch(39% 0.073 154);
+  --bluestone: oklch(53% 0.048 214);
+  --rain: oklch(77% 0.058 199);
+  --tram: oklch(83% 0.128 75);
+  --brick: oklch(61% 0.145 31);
   --blood: oklch(49% 0.17 28);
-  --panel: oklch(15% 0.035 214 / 0.86);
-  --panel-strong: oklch(18% 0.04 208 / 0.92);
-  --line: oklch(72% 0.057 181 / 0.34);
+  --panel: oklch(17% 0.034 211 / 0.78);
+  --panel-strong: oklch(20% 0.04 205 / 0.86);
+  --line: oklch(76% 0.057 177 / 0.32);
 }
 
 * {
@@ -40,7 +40,8 @@ body,
 
 body {
   background:
-    linear-gradient(180deg, oklch(15% 0.035 215), var(--night-deep)),
+    radial-gradient(circle at 72% 28%, oklch(54% 0.07 43 / 0.16), transparent 38%),
+    linear-gradient(180deg, oklch(17% 0.035 211), var(--night-deep)),
     var(--night);
 }
 
@@ -75,8 +76,8 @@ button {
   inset: 0;
   pointer-events: none;
   background:
-    radial-gradient(circle at 50% 49%, transparent 0 34%, oklch(13% 0.03 215 / 0.28) 72%, oklch(7% 0.024 224 / 0.82) 100%),
-    linear-gradient(180deg, oklch(62% 0.055 198 / 0.15), transparent 35%, oklch(54% 0.15 32 / 0.16));
+    radial-gradient(circle at 50% 49%, transparent 0 36%, oklch(13% 0.03 215 / 0.23) 74%, oklch(7% 0.024 224 / 0.74) 100%),
+    linear-gradient(180deg, oklch(66% 0.056 196 / 0.15), transparent 35%, oklch(58% 0.14 33 / 0.14));
 }
 
 .shell::after {
@@ -85,10 +86,10 @@ button {
   inset: 0;
   pointer-events: none;
   background:
-    radial-gradient(circle at 50% 55%, transparent 0 42%, oklch(8% 0.025 224 / 0.28) 100%),
-    linear-gradient(90deg, oklch(35% 0.092 160 / 0.08), transparent 24%, transparent 76%, oklch(63% 0.145 35 / 0.06));
+    radial-gradient(circle at 50% 55%, transparent 0 43%, oklch(8% 0.025 224 / 0.24) 100%),
+    linear-gradient(90deg, oklch(41% 0.09 154 / 0.08), transparent 24%, transparent 76%, oklch(64% 0.14 34 / 0.07));
   mix-blend-mode: screen;
-  opacity: 0.34;
+  opacity: 0.32;
 }
 
 body.hit .vignette {
@@ -125,9 +126,9 @@ body.hit .vignette {
   top: 50%;
   width: 7px;
   height: 7px;
-  border: 1px solid oklch(88% 0.11 78 / 0.78);
+  border: 1px solid oklch(88% 0.11 76 / 0.72);
   border-radius: 50%;
-  box-shadow: 0 0 12px oklch(81% 0.13 76 / 0.45);
+  box-shadow: 0 0 12px oklch(81% 0.13 75 / 0.36);
   transform: translate(-50%, -50%);
 }
 
@@ -135,8 +136,8 @@ body.hit .vignette {
   position: absolute;
   left: 50%;
   top: 50%;
-  background: oklch(87% 0.116 78);
-  box-shadow: 0 0 14px oklch(82% 0.13 76 / 0.56);
+  background: oklch(87% 0.116 76);
+  box-shadow: 0 0 14px oklch(82% 0.13 75 / 0.46);
 }
 
 .crosshair span:first-child {
@@ -253,12 +254,13 @@ body.hit .vignette {
   border: 1px solid var(--line);
   border-radius: 4px;
   background:
-    linear-gradient(135deg, oklch(24% 0.048 207 / 0.9), var(--panel) 62%, oklch(11% 0.029 220 / 0.9)),
+    linear-gradient(135deg, oklch(26% 0.047 203 / 0.82), var(--panel) 62%, oklch(12% 0.029 220 / 0.84)),
+    repeating-linear-gradient(104deg, oklch(90% 0.04 88 / 0.035) 0 1px, transparent 1px 13px),
     linear-gradient(180deg, var(--panel-strong), var(--panel));
   box-shadow:
     inset 0 1px 0 oklch(88% 0.03 88 / 0.08),
-    0 9px 0 oklch(6% 0.018 224 / 0.18),
-    0 14px 34px oklch(6% 0.018 224 / 0.32);
+    0 7px 0 oklch(6% 0.018 224 / 0.14),
+    0 14px 30px oklch(6% 0.018 224 / 0.26);
 }
 
 .meter::before {
@@ -266,7 +268,7 @@ body.hit .vignette {
   position: absolute;
   inset: 0 0 auto;
   height: 2px;
-  background: linear-gradient(90deg, transparent, oklch(80% 0.086 154 / 0.35), oklch(84% 0.12 78 / 0.28), transparent);
+  background: linear-gradient(90deg, transparent, oklch(80% 0.086 150 / 0.38), oklch(84% 0.12 75 / 0.26), transparent);
 }
 
 .meter span {
@@ -284,7 +286,7 @@ body.hit .vignette {
   font-size: 1.22rem;
   line-height: 1;
   font-variant-numeric: tabular-nums;
-  text-shadow: 0 0 14px oklch(88% 0.04 86 / 0.2);
+  text-shadow: 0 0 12px oklch(88% 0.04 86 / 0.18);
 }
 
 .health-meter strong {
@@ -318,11 +320,12 @@ body.hit .vignette {
   border: 1px solid oklch(82% 0.13 78 / 0.46);
   border-radius: 4px;
   background:
-    linear-gradient(135deg, oklch(24% 0.052 207 / 0.94), oklch(13% 0.032 218 / 0.9)),
+    linear-gradient(135deg, oklch(25% 0.052 204 / 0.88), oklch(13% 0.032 218 / 0.86)),
+    repeating-linear-gradient(105deg, oklch(92% 0.04 88 / 0.03) 0 1px, transparent 1px 16px),
     var(--panel-strong);
   box-shadow:
     inset 0 1px 0 oklch(92% 0.032 86 / 0.1),
-    0 12px 34px oklch(6% 0.018 224 / 0.32);
+    0 12px 30px oklch(6% 0.018 224 / 0.28);
   font-variant-numeric: tabular-nums;
 }
 
@@ -351,7 +354,9 @@ body.hit .vignette {
   padding: 7px 10px;
   border: 1px solid oklch(72% 0.057 181 / 0.28);
   border-radius: 4px;
-  background: oklch(13% 0.033 216 / 0.78);
+  background:
+    linear-gradient(180deg, oklch(16% 0.034 212 / 0.78), oklch(12% 0.03 220 / 0.76)),
+    repeating-linear-gradient(95deg, oklch(88% 0.04 88 / 0.026) 0 1px, transparent 1px 14px);
   color: oklch(85% 0.04 92);
 }
 
@@ -375,7 +380,7 @@ body.hit .vignette {
   border: 1px solid oklch(70% 0.082 156 / 0.36);
   border-radius: 4px;
   background:
-    linear-gradient(180deg, oklch(24% 0.064 159 / 0.72), oklch(14% 0.039 176 / 0.72));
+    linear-gradient(180deg, oklch(25% 0.062 156 / 0.72), oklch(14% 0.039 176 / 0.7));
   color: oklch(81% 0.064 151);
   font-size: 0.72rem;
   font-weight: 700;
@@ -390,10 +395,11 @@ body.hit .vignette {
   border: 1px solid oklch(75% 0.058 183 / 0.42);
   border-radius: 4px;
   background:
-    linear-gradient(180deg, oklch(15% 0.037 214 / 0.84), oklch(9% 0.025 224 / 0.84));
+    linear-gradient(180deg, oklch(17% 0.036 211 / 0.8), oklch(10% 0.025 224 / 0.82)),
+    repeating-linear-gradient(90deg, oklch(88% 0.04 88 / 0.025) 0 1px, transparent 1px 18px);
   box-shadow:
     inset 0 0 0 1px oklch(92% 0.032 86 / 0.04),
-    0 12px 34px oklch(6% 0.018 224 / 0.34);
+    0 12px 30px oklch(6% 0.018 224 / 0.3);
 }
 
 .interaction-prompt {
@@ -406,10 +412,11 @@ body.hit .vignette {
   padding: 8px 13px;
   border: 1px solid oklch(82% 0.13 78 / 0.62);
   border-radius: 4px;
-  background: oklch(12% 0.032 216 / 0.88);
+  background:
+    linear-gradient(180deg, oklch(17% 0.034 212 / 0.88), oklch(11% 0.03 220 / 0.88));
   color: var(--tram);
   pointer-events: none;
-  box-shadow: 0 12px 32px oklch(6% 0.018 224 / 0.28);
+  box-shadow: 0 12px 28px oklch(6% 0.018 224 / 0.26);
 }
 
 .interaction-prompt:empty {
@@ -425,9 +432,11 @@ body.hit .vignette {
   overflow: hidden;
   padding: min(8vw, 78px);
   background:
-    linear-gradient(90deg, oklch(9% 0.026 224 / 0.99), oklch(14% 0.04 212 / 0.9) 46%, oklch(19% 0.048 198 / 0.3) 72%, oklch(21% 0.058 168 / 0.08)),
-    linear-gradient(180deg, oklch(36% 0.055 198 / 0.38), transparent 40%, oklch(50% 0.13 32 / 0.2)),
-    repeating-linear-gradient(105deg, oklch(90% 0.035 84 / 0.04) 0 1px, transparent 1px 15px);
+    linear-gradient(90deg, oklch(9% 0.026 224 / 0.98), oklch(15% 0.04 211 / 0.92) 45%, oklch(23% 0.047 195 / 0.4) 72%, oklch(34% 0.07 148 / 0.12)),
+    radial-gradient(ellipse at 72% 38%, oklch(76% 0.1 75 / 0.16), transparent 34%),
+    radial-gradient(ellipse at 56% 72%, oklch(59% 0.11 34 / 0.14), transparent 42%),
+    repeating-linear-gradient(105deg, oklch(90% 0.035 84 / 0.04) 0 1px, transparent 1px 16px),
+    repeating-linear-gradient(8deg, transparent 0 24px, oklch(70% 0.045 190 / 0.035) 24px 25px, transparent 25px 54px);
   transition: opacity 180ms ease-out, visibility 180ms ease-out;
 }
 
@@ -437,10 +446,11 @@ body.hit .vignette {
   inset: -8% -4% -8% 34%;
   pointer-events: none;
   background:
-    radial-gradient(ellipse at 65% 44%, transparent 0 26%, oklch(77% 0.052 181 / 0.13) 26.4% 26.9%, transparent 27.4%),
-    radial-gradient(ellipse at 58% 55%, transparent 0 18%, oklch(82% 0.12 78 / 0.1) 18.3% 18.8%, transparent 19.2%),
-    linear-gradient(72deg, transparent 0 43%, oklch(70% 0.066 190 / 0.18) 43.2% 43.7%, transparent 44%),
-    linear-gradient(121deg, transparent 0 54%, oklch(65% 0.08 151 / 0.14) 54.2% 54.7%, transparent 55%);
+    radial-gradient(ellipse at 65% 44%, transparent 0 26%, oklch(77% 0.052 181 / 0.14) 26.4% 26.9%, transparent 27.4%),
+    radial-gradient(ellipse at 58% 55%, transparent 0 18%, oklch(82% 0.12 75 / 0.12) 18.3% 18.8%, transparent 19.2%),
+    linear-gradient(72deg, transparent 0 43%, oklch(72% 0.066 190 / 0.18) 43.2% 43.7%, transparent 44%),
+    linear-gradient(121deg, transparent 0 54%, oklch(65% 0.08 151 / 0.15) 54.2% 54.7%, transparent 55%),
+    repeating-linear-gradient(96deg, oklch(91% 0.04 88 / 0.035) 0 2px, transparent 2px 20px);
   opacity: 0.95;
   transform: rotate(-4deg);
 }
@@ -462,7 +472,7 @@ body.hit .vignette {
   width: min(210px, 55vw);
   height: 3px;
   margin-bottom: 18px;
-  background: linear-gradient(90deg, var(--tram), var(--bluegum), transparent);
+  background: linear-gradient(90deg, var(--tram), var(--bluegum), var(--rain), transparent);
 }
 
 .kicker {
@@ -483,7 +493,7 @@ h1 {
   line-height: 0.96;
   text-shadow:
     0 3px 0 oklch(8% 0.026 224 / 0.82),
-    0 0 30px oklch(82% 0.13 78 / 0.18);
+    0 0 28px oklch(82% 0.13 75 / 0.18);
 }
 
 .brief {
@@ -511,7 +521,9 @@ h1 {
   padding: 5px 8px;
   border: 1px solid oklch(72% 0.057 181 / 0.28);
   border-radius: 4px;
-  background: oklch(13% 0.034 216 / 0.72);
+  background:
+    linear-gradient(180deg, oklch(16% 0.034 212 / 0.72), oklch(11% 0.03 220 / 0.72)),
+    repeating-linear-gradient(104deg, oklch(90% 0.04 88 / 0.03) 0 1px, transparent 1px 13px);
   color: oklch(78% 0.04 188);
   font-size: 0.78rem;
 }
@@ -521,7 +533,7 @@ h1 {
   padding: 2px 5px;
   border: 1px solid oklch(84% 0.12 78 / 0.46);
   border-radius: 3px;
-  background: oklch(27% 0.06 202 / 0.9);
+  background: oklch(28% 0.058 198 / 0.9);
   color: oklch(91% 0.045 84);
   font: inherit;
   font-weight: 900;
@@ -539,7 +551,7 @@ h1 {
   border: 1px solid oklch(90% 0.1 78 / 0.72);
   border-radius: 4px;
   background:
-    linear-gradient(180deg, oklch(84% 0.13 78), oklch(72% 0.13 70));
+    linear-gradient(180deg, oklch(85% 0.13 75), oklch(72% 0.13 68));
   color: oklch(16% 0.032 218);
   cursor: pointer;
   font-weight: 900;
@@ -556,7 +568,7 @@ h1 {
 .primary-action:hover,
 .restart-button:hover {
   background:
-    linear-gradient(180deg, oklch(88% 0.126 78), oklch(76% 0.13 70));
+    linear-gradient(180deg, oklch(88% 0.126 75), oklch(76% 0.13 68));
 }
 
 .primary-action:active,

@@ -15,6 +15,7 @@ export type ObjectPreviewTargetKind =
   | "sports-fixture"
   | "amenity"
   | "park-life-detail"
+  | "rideable-bike"
   | "tree"
   | "upgrade-station"
   | "weapon-spawn"
@@ -167,9 +168,25 @@ export function createObjectPreviewTargets(level: LevelData): ObjectPreviewTarge
       label: detail.label,
       position: detail.position,
       radius: parkLifeRadius(detail.kind),
-      height: detail.kind === "cricket-nets" ? 3.2 : 2.1
+      height:
+        detail.kind === "cricket-nets"
+          ? 3.2
+          : detail.kind === "construction-fence" || detail.kind === "works-materials"
+            ? 2.4
+            : detail.kind === "removed-tree-stump"
+              ? 1.2
+              : 2.1
     });
   }
+
+  add({
+    sourceId: level.rideableBike.id,
+    kind: "rideable-bike",
+    label: level.rideableBike.label,
+    position: level.rideableBike.position,
+    radius: 3.1,
+    height: 2.4
+  });
 
   for (const [sourceIndex, tree] of level.trees.entries()) {
     add({
@@ -283,9 +300,12 @@ function amenityRadius(kind: LevelData["amenities"][number]["kind"]): number {
 
 function parkLifeRadius(kind: LevelData["parkLifeDetails"][number]["kind"]): number {
   if (kind === "picnic-blanket") return 3.2;
-  if (kind === "casual-bike") return 2.1;
+  if (kind === "broken-bike") return 2.1;
   if (kind === "training-cones") return 3.2;
   if (kind === "cricket-nets") return 5.8;
+  if (kind === "construction-fence") return 5.2;
+  if (kind === "works-materials") return 3.6;
+  if (kind === "removed-tree-stump") return 2.2;
   if (kind === "chalk-mark") return 1.9;
   return 2.2;
 }

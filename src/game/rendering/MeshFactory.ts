@@ -5,6 +5,7 @@ import type { ZombieType } from "../waves";
 import { ANIME_OUTLINE_COLOR, tuneAnimeMaterial as tuneAnimeMaterialStyle } from "./animeStyle";
 
 export type PickupKind = "scrap" | "health" | "ammo";
+export type BikeIssue = "flat-tyres" | "broken-chain";
 
 const ZOMBIE_ACCENT_COLORS: Record<ZombieType, THREE.ColorRepresentation> = {
   shambler: 0xd0a14f,
@@ -318,6 +319,19 @@ export class MeshFactory {
     return geometry;
   }
 
+  private addTubeBetween(group: THREE.Group, start: THREE.Vector3, end: THREE.Vector3, radius: number, material: THREE.Material): THREE.Mesh {
+    const delta = end.clone().sub(start);
+    const length = delta.length();
+    const tube = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, length, 8), material);
+    tube.position.copy(start).addScaledVector(delta, 0.5);
+    if (length > 0.0001) {
+      tube.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), delta.normalize());
+    }
+    tube.castShadow = true;
+    group.add(tube);
+    return tube;
+  }
+
   createWeaponDropMesh(weaponId: WeaponId): THREE.Object3D {
     const group = this.createWeaponMesh(weaponId, false);
     group.scale.setScalar(2.0);
@@ -330,6 +344,156 @@ export class MeshFactory {
     halo.position.y = -0.28;
     group.add(halo);
     return group;
+  }
+
+  createBikeMesh(options: { issue?: BikeIssue } = {}): THREE.Group {
+    const root = new THREE.Group();
+    const group = new THREE.Group();
+    const frameMaterial = new THREE.MeshStandardMaterial({ color: 0x244a42, metalness: 0.32, roughness: 0.38 });
+    const forkMaterial = new THREE.MeshStandardMaterial({ color: 0xb7c1b8, metalness: 0.45, roughness: 0.32 });
+    const tyreMaterial = new THREE.MeshStandardMaterial({ color: 0x171c1b, roughness: 0.62 });
+    const rimMaterial = new THREE.MeshStandardMaterial({ color: 0x9ca9a1, metalness: 0.5, roughness: 0.32 });
+    const spokeMaterial = new THREE.MeshStandardMaterial({ color: 0xc5cec6, metalness: 0.48, roughness: 0.28 });
+    const rubberMaterial = new THREE.MeshStandardMaterial({ color: 0x101312, roughness: 0.72 });
+    const leatherMaterial = new THREE.MeshStandardMaterial({ color: 0x2f211a, roughness: 0.84 });
+    const reflectorMaterial = new THREE.MeshBasicMaterial({ color: 0xffbe5d });
+    const lightMaterial = new THREE.MeshBasicMaterial({ color: 0xc7edf2, transparent: true, opacity: 0.82 });
+
+    const rearHub = new THREE.Vector3(-0.78, 0.45, 0);
+    const frontHub = new THREE.Vector3(0.82, 0.45, 0);
+    const bottomBracket = new THREE.Vector3(-0.12, 0.58, 0);
+    const seatCluster = new THREE.Vector3(-0.42, 1.08, 0);
+    const headTube = new THREE.Vector3(0.52, 1.02, 0);
+    const topTubeRear = new THREE.Vector3(-0.34, 1.0, 0);
+    const wheelRadius = 0.43;
+    const wheelMeshes: THREE.Mesh[] = [];
+    const tyres: THREE.Mesh[] = [];
+
+    for (const hub of [rearHub, frontHub]) {
+      const tyre = new THREE.Mesh(new THREE.TorusGeometry(wheelRadius, 0.045, 10, 32), tyreMaterial);
+      tyre.position.copy(hub);
+      tyre.castShadow = true;
+      group.add(tyre);
+      tyres.push(tyre);
+      wheelMeshes.push(tyre);
+
+      const rim = new THREE.Mesh(new THREE.TorusGeometry(wheelRadius * 0.82, 0.018, 8, 28), rimMaterial);
+      rim.position.copy(hub);
+      rim.castShadow = true;
+      group.add(rim);
+      wheelMeshes.push(rim);
+
+      const hubMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.28, 10), forkMaterial);
+      hubMesh.position.copy(hub);
+      hubMesh.rotation.x = Math.PI / 2;
+      hubMesh.castShadow = true;
+      group.add(hubMesh);
+
+      for (let index = 0; index < 12; index += 1) {
+        const angle = (index / 12) * Math.PI * 2;
+        const rimPoint = new THREE.Vector3(hub.x + Math.cos(angle) * wheelRadius * 0.78, hub.y + Math.sin(angle) * wheelRadius * 0.78, hub.z);
+        this.addTubeBetween(group, hub, rimPoint, 0.008, spokeMaterial);
+      }
+    }
+
+    for (const [a, b, radius, material] of [
+      [rearHub, topTubeRear, 0.035, frameMaterial],
+      [topTubeRear, headTube, 0.036, frameMaterial],
+      [headTube, frontHub, 0.034, forkMaterial],
+      [rearHub, bottomBracket, 0.034, frameMaterial],
+      [bottomBracket, seatCluster, 0.036, frameMaterial],
+      [bottomBracket, headTube, 0.034, frameMaterial],
+      [rearHub, seatCluster, 0.024, forkMaterial],
+      [bottomBracket, frontHub, 0.022, forkMaterial]
+    ] as Array<[THREE.Vector3, THREE.Vector3, number, THREE.Material]>) {
+      this.addTubeBetween(group, a, b, radius, material);
+    }
+
+    const chainTop = new THREE.Mesh(new THREE.BoxGeometry(0.68, 0.026, 0.038), rubberMaterial);
+    chainTop.position.set(-0.45, 0.52, -0.08);
+    chainTop.rotation.z = -0.06;
+    group.add(chainTop);
+    const chainBottom = chainTop.clone();
+    chainBottom.position.y = 0.44;
+    group.add(chainBottom);
+
+    const crank = new THREE.Mesh(new THREE.TorusGeometry(0.13, 0.018, 8, 18), forkMaterial);
+    crank.position.copy(bottomBracket);
+    crank.rotation.y = Math.PI / 2;
+    group.add(crank);
+    this.addTubeBetween(group, bottomBracket, new THREE.Vector3(-0.12, 0.33, 0.18), 0.018, forkMaterial);
+    this.addTubeBetween(group, bottomBracket, new THREE.Vector3(-0.12, 0.81, -0.18), 0.018, forkMaterial);
+    for (const pedal of [
+      { x: -0.12, y: 0.31, z: 0.26, angle: 0.08 },
+      { x: -0.12, y: 0.83, z: -0.26, angle: -0.08 }
+    ]) {
+      const pedalMesh = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.045, 0.09), rubberMaterial);
+      pedalMesh.position.set(pedal.x, pedal.y, pedal.z);
+      pedalMesh.rotation.z = pedal.angle;
+      group.add(pedalMesh);
+    }
+
+    const seatPostTop = new THREE.Vector3(-0.48, 1.2, 0);
+    this.addTubeBetween(group, seatCluster, seatPostTop, 0.026, forkMaterial);
+    const saddle = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.09, 0.28), leatherMaterial);
+    saddle.position.set(-0.54, 1.24, 0);
+    saddle.rotation.z = -0.08;
+    saddle.castShadow = true;
+    group.add(saddle);
+
+    const handleStemTop = new THREE.Vector3(0.66, 1.2, 0);
+    this.addTubeBetween(group, headTube, handleStemTop, 0.028, forkMaterial);
+    const handlebar = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.05, 0.86), forkMaterial);
+    handlebar.position.set(0.72, 1.22, 0);
+    handlebar.rotation.z = 0.18;
+    handlebar.castShadow = true;
+    group.add(handlebar);
+    for (const z of [-0.48, 0.48]) {
+      const grip = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.065, 0.16), rubberMaterial);
+      grip.position.set(0.75, 1.23, z);
+      group.add(grip);
+    }
+
+    const rearReflector = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.13, 0.05), reflectorMaterial);
+    rearReflector.position.set(-0.94, 0.96, -0.04);
+    group.add(rearReflector);
+    const headLamp = new THREE.Mesh(new THREE.SphereGeometry(0.075, 10, 8), lightMaterial);
+    headLamp.position.set(0.88, 1.02, -0.04);
+    headLamp.scale.set(1, 0.72, 0.72);
+    group.add(headLamp);
+
+    const rearRack = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.035, 0.42), forkMaterial);
+    rearRack.position.set(-0.78, 0.9, 0);
+    rearRack.castShadow = true;
+    group.add(rearRack);
+
+    if (options.issue === "flat-tyres") {
+      for (const tyre of tyres) {
+        tyre.scale.y = 0.58;
+        tyre.position.y -= 0.1;
+        const flattenedRubber = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.05, 0.1), rubberMaterial);
+        flattenedRubber.position.set(tyre.position.x, 0.08, 0);
+        flattenedRubber.castShadow = true;
+        group.add(flattenedRubber);
+      }
+    } else if (options.issue === "broken-chain") {
+      chainBottom.position.y = 0.34;
+      chainBottom.rotation.z = -0.28;
+      const droppedChain = new THREE.Mesh(new THREE.TorusGeometry(0.24, 0.018, 8, 18), rubberMaterial);
+      droppedChain.position.set(-0.35, 0.12, -0.18);
+      droppedChain.rotation.set(Math.PI / 2, 0.2, -0.42);
+      group.add(droppedChain);
+      const looseLink = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.025, 0.04), rubberMaterial);
+      looseLink.position.set(-0.14, 0.2, -0.16);
+      looseLink.rotation.z = -0.7;
+      group.add(looseLink);
+    }
+
+    group.rotation.y = Math.PI / 2;
+    root.add(group);
+    root.userData.wheels = wheelMeshes;
+    this.applyAnimeMeshStyle(root, 1.035);
+    return root;
   }
 
   createZombieMesh(type: ZombieType): THREE.Group {
