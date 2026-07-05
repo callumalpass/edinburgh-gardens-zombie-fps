@@ -78,6 +78,7 @@ test("game loop advances and gameplay helpers mutate state", async ({ page }) =>
   });
   expect(afterKnife.weapon).toBe("knife");
   expect(afterKnife.ammo).toBe(0);
+  expect(afterKnife.meleeSwing).toBeGreaterThan(0.6);
   expect(await page.evaluate(() => window.__EGAME__!.testPickupWeapon("carbine"))).toBe(true);
   const beforeShot = await page.evaluate(() => window.__EGAME__!.snapshot());
   expect(beforeShot.weapon).toBe("carbine");

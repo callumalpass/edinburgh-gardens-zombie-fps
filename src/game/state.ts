@@ -80,6 +80,7 @@ export interface Snapshot {
   elevation: number;
   renderedTrees: number;
   lastHitZone: HitZone | null;
+  meleeSwing: number;
   shotBloom: number;
   reloadProgress: number;
   scope: number;

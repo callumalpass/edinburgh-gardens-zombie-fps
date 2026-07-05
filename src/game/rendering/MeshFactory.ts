@@ -210,6 +210,61 @@ export class MeshFactory {
     head.name = "head";
     group.add(head);
 
+    const face = new THREE.Group();
+    const socketMaterial = new THREE.MeshBasicMaterial({ color: 0x0f0b09 });
+    const faceBrowMaterial = new THREE.MeshStandardMaterial({ color: 0x272217, roughness: 0.96 });
+    const faceBloodMaterial = new THREE.MeshBasicMaterial({ color: 0x7a2119, transparent: true, opacity: 0.92, side: THREE.DoubleSide });
+    const faceMouthMaterial = new THREE.MeshBasicMaterial({ color: 0x160706 });
+    const faceToothMaterial = new THREE.MeshStandardMaterial({ color: 0xe1d8b4, roughness: 0.72 });
+    const faceEyeMaterial = new THREE.MeshBasicMaterial({
+      color: type === "bloater" ? 0xffb04f : type === "screamer" ? 0xffe477 : 0xf36a4f
+    });
+
+    const localFaceZ = -0.51 * bodyScale;
+    const browPlate = new THREE.Mesh(new THREE.BoxGeometry(0.58 * bodyScale, 0.085 * bodyScale, 0.08 * bodyScale), faceBrowMaterial);
+    browPlate.position.set(0, 0.16 * bodyScale, localFaceZ + 0.02 * bodyScale);
+    browPlate.rotation.z = type === "sprinter" ? -0.08 : type === "screamer" ? 0.12 : 0.03;
+    face.add(browPlate);
+
+    for (const x of [-0.19, 0.19]) {
+      const socket = new THREE.Mesh(new THREE.SphereGeometry(0.13 * bodyScale, 10, 7), socketMaterial);
+      socket.scale.set(1.2, 0.72, 0.26);
+      socket.position.set(x * bodyScale, 0.06 * bodyScale, localFaceZ - 0.005 * bodyScale);
+      socket.rotation.z = x < 0 ? 0.16 : -0.12;
+      face.add(socket);
+
+      const eye = new THREE.Mesh(new THREE.SphereGeometry((type === "screamer" ? 0.075 : 0.062) * bodyScale, 10, 8), faceEyeMaterial);
+      eye.position.set(x * bodyScale, 0.055 * bodyScale, localFaceZ - 0.065 * bodyScale);
+      face.add(eye);
+    }
+
+    const faceNose = new THREE.Mesh(new THREE.ConeGeometry(0.075 * bodyScale, 0.24 * bodyScale, 5), skinMaterial);
+    faceNose.position.set(0.02 * bodyScale, -0.08 * bodyScale, localFaceZ - 0.06 * bodyScale);
+    faceNose.rotation.x = Math.PI / 2 + 0.12;
+    faceNose.rotation.z = -0.08;
+    faceNose.castShadow = true;
+    face.add(faceNose);
+
+    const faceMouth = new THREE.Mesh(
+      new THREE.BoxGeometry((type === "screamer" ? 0.38 : 0.31) * bodyScale, (type === "screamer" ? 0.14 : 0.095) * bodyScale, 0.04 * bodyScale),
+      faceMouthMaterial
+    );
+    faceMouth.position.set(0.03 * bodyScale, -0.28 * bodyScale, localFaceZ - 0.055 * bodyScale);
+    face.add(faceMouth);
+
+    for (const x of [-0.13, -0.045, 0.045, 0.13]) {
+      const tooth = new THREE.Mesh(new THREE.BoxGeometry(0.032 * bodyScale, 0.082 * bodyScale, 0.022 * bodyScale), faceToothMaterial);
+      tooth.position.set(x * bodyScale, -0.23 * bodyScale, localFaceZ - 0.085 * bodyScale);
+      tooth.rotation.z = x * 1.2;
+      face.add(tooth);
+    }
+
+    const faceWound = new THREE.Mesh(new THREE.CircleGeometry(0.085 * bodyScale, 10), faceBloodMaterial);
+    faceWound.position.set(-0.29 * bodyScale, -0.08 * bodyScale, localFaceZ - 0.075 * bodyScale);
+    faceWound.rotation.z = -0.28;
+    face.add(faceWound);
+    head.add(face);
+
     const jaw = new THREE.Mesh(new THREE.BoxGeometry(0.34 * bodyScale, 0.12 * bodyScale, 0.24 * bodyScale), skinMaterial);
     jaw.position.set(0.04 * bodyScale, 2.72 * bodyScale - (lowPosture ? 0.18 : 0), -0.28 * bodyScale - (lowPosture ? 0.3 : 0));
     jaw.rotation.x = type === "screamer" ? -0.34 : 0;

@@ -138,6 +138,8 @@ export class GameApp {
   private muzzleLight: THREE.PointLight | null = null;
   private recoil = 0;
   private recoilYaw = 0;
+  private meleeSwing = 0;
+  private meleeSwingSide = 1;
   private shotBloom = 0;
   private aimHeld = false;
   private scopeAmount = 0;
@@ -363,6 +365,8 @@ export class GameApp {
     this.smokePuffs = [];
     this.recoil = 0;
     this.recoilYaw = 0;
+    this.meleeSwing = 0;
+    this.meleeSwingSide = 1;
     this.shotBloom = 0;
     this.aimHeld = false;
     this.scopeAmount = 0;
@@ -866,6 +870,8 @@ export class GameApp {
   private swingMelee(now: number, stats: ReturnType<typeof getWeaponStats>): void {
     this.lastShotAt = now;
     this.aimHeld = false;
+    this.meleeSwing = 1;
+    this.meleeSwingSide *= -1;
     this.recoil = Math.min(1.25, this.recoil + stats.recoilKick);
     this.recoilYaw += this.rng.range(-stats.recoilDrift, stats.recoilDrift);
     this.noise.emit("melee", { x: this.player.position.x, z: this.player.position.z }, stats.noiseMultiplier * (this.player.crouching ? 0.7 : 1));
@@ -1431,6 +1437,7 @@ export class GameApp {
       elevation: Number(this.player.height.toFixed(2)),
       renderedTrees: this.renderedTreeCount,
       lastHitZone: this.lastHitZone,
+      meleeSwing: Number(this.meleeSwing.toFixed(3)),
       shotBloom: Number(this.shotBloom.toFixed(4)),
       reloadProgress: Number(this.reloadProgress(performance.now() / 1000).toFixed(2)),
       scope: Number(this.scopeAmount.toFixed(2)),
@@ -1539,8 +1546,9 @@ export class GameApp {
     const stats = getWeaponStats(this.loadout);
     const weapon = this.meshFactory.createWeaponMesh(this.loadout.weaponId, true);
     if (stats.kind === "melee") {
-      weapon.position.set(0.46, -0.5, -0.54);
-      weapon.rotation.set(-0.34, -0.28, 0.34);
+      weapon.position.set(0.44, -0.47, -0.42);
+      weapon.rotation.set(-0.46, -0.34, 0.42);
+      weapon.scale.setScalar(this.loadout.weaponId === "machete" ? 1.08 : 1.28);
     } else {
       weapon.position.set(0.42, -0.42, -0.78);
       weapon.rotation.set(0.03, -0.08, 0.02);
@@ -1587,6 +1595,7 @@ export class GameApp {
     const stats = getWeaponStats(this.loadout);
     this.recoil = Math.max(0, this.recoil - dt * (3.4 / Math.max(0.35, stats.recoilKick)));
     this.recoilYaw *= Math.pow(0.02, dt);
+    this.meleeSwing = Math.max(0, this.meleeSwing - dt * (this.loadout.weaponId === "machete" ? 3.2 : 4.8));
     this.shotBloom = Math.max(0, this.shotBloom - dt * (this.loadout.weaponId === "smg" ? 0.018 : 0.028));
     this.muzzleTimer = Math.max(0, this.muzzleTimer - dt);
     if (this.muzzleFlash) {
@@ -1601,19 +1610,38 @@ export class GameApp {
     const stanceSway = this.player.crouching ? 0.48 : 1;
     const bob = Math.min(1, this.player.velocity.length() / 18) * stats.sway * stanceSway;
     const t = this.frame * 0.08;
+    if (stats.kind === "melee") {
+      const movement = Math.min(1, this.player.velocity.length() / 18) * stanceSway;
+      const step = Math.sin(this.frame * 0.17);
+      const attack = THREE.MathUtils.clamp(this.meleeSwing, 0, 1);
+      const slash = Math.sin(attack * Math.PI);
+      const recovery = attack * attack;
+      const side = this.meleeSwingSide;
+      this.weaponModel.position.set(
+        Math.sin(t * 0.82) * 0.018 + step * 0.03 * movement + slash * 0.22 * side,
+        Math.abs(Math.cos(t * 0.7)) * -0.02 - Math.abs(step) * 0.045 * movement - slash * 0.12 - this.player.crouchAmount * 0.035,
+        recovery * 0.1 - slash * 0.3
+      );
+      this.weaponModel.rotation.set(
+        -slash * 1.0 + recovery * 0.24 + Math.sin(t * 0.7) * 0.04 * movement,
+        side * (slash * 0.76 + recovery * 0.22) - this.recoilYaw * 0.01,
+        side * (slash * 1.18 + recovery * 0.18) + Math.sin(t * 0.5) * 0.04 + step * 0.07 * movement
+      );
+      this.weaponModel.scale.setScalar(1);
+      return;
+    }
     const reloadProgress = this.reloadProgress(performance.now() / 1000);
     const reloadPose = reloadProgress > 0 ? 0.62 + Math.sin(reloadProgress * Math.PI) * 0.38 : 0;
     const scopeTuck = THREE.MathUtils.smoothstep(this.scopeAmount, 0, 1);
-    const meleeSwing = stats.kind === "melee" ? Math.min(1, this.recoil) : 0;
     this.weaponModel.position.set(
-      Math.sin(t) * 0.018 * bob + scopeTuck * 0.26 + meleeSwing * 0.16,
-      Math.abs(Math.cos(t)) * -0.018 * bob - reloadPose * 0.16 - scopeTuck * 0.5 - this.player.crouchAmount * 0.04 - meleeSwing * 0.08,
-      this.recoil * 0.07 + reloadPose * 0.06 + scopeTuck * 0.14 - meleeSwing * 0.18
+      Math.sin(t) * 0.018 * bob + scopeTuck * 0.26,
+      Math.abs(Math.cos(t)) * -0.018 * bob - reloadPose * 0.16 - scopeTuck * 0.5 - this.player.crouchAmount * 0.04,
+      this.recoil * 0.07 + reloadPose * 0.06 + scopeTuck * 0.14
     );
     this.weaponModel.rotation.set(
-      this.recoil * 0.05 + reloadPose * 0.22 - scopeTuck * 0.08 - meleeSwing * 0.7,
-      -this.recoilYaw * 0.01 - reloadPose * 0.12 - scopeTuck * 0.24 - meleeSwing * 0.22,
-      Math.sin(t * 0.5) * 0.015 * bob + reloadPose * 0.16 - scopeTuck * 0.12 + meleeSwing * 0.55
+      this.recoil * 0.05 + reloadPose * 0.22 - scopeTuck * 0.08,
+      -this.recoilYaw * 0.01 - reloadPose * 0.12 - scopeTuck * 0.24,
+      Math.sin(t * 0.5) * 0.015 * bob + reloadPose * 0.16 - scopeTuck * 0.12
     );
     this.weaponModel.scale.setScalar(THREE.MathUtils.lerp(1, 0.56, scopeTuck));
   }
