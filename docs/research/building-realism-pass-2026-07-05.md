@@ -74,6 +74,9 @@ Purpose: track the building-by-building realism pass for every structure current
   - Corrected the stand frontage so seating, front posts and stairs face W. T. Peterson Oval instead of inheriting a fixed side from the OSM polygon point order.
   - Corrected the climb/access fixture to use that same oval-facing side, and added collision tests so the stair prompt stays outside the stand blocker and blocker bypass IDs resolve to actual obstacles.
   - Source basis: OSM grandstand footprint and W. T. Peterson Oval geometry; Yarra Brunswick Street Oval works context for the stand's external stairs and oval-facing sports use.
+- `rotunda` / Edinburgh Gardens Rotunda:
+  - Rendered the climbable raised platform with lower storey vents, Tuscan-style columns, copper dome, lantern, finial, stairs, handrails, plaques and a capped service plate rather than powered lighting.
+  - Source basis: OSM way `543505640` for center/footprint alignment; CMP rotunda feature description; Yarra venue page for bookable, not-wheelchair-accessible and no-power operation.
 - `osm-building-1475006767` / Bowling club outbuilding:
   - Added guttering, a roller-door slat, metal service crate and hose reel to read as a small greenkeeper/plant outbuilding attached to the bowling club service edge.
   - Source basis: OSM way `1475006767` for footprint; bowling precinct context from CMP and the current mapped cluster of club support sheds.

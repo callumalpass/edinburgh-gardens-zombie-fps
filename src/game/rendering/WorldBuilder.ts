@@ -2912,6 +2912,10 @@ export class WorldBuilder {
     landingStrip.position.set(0, 1.94, -4.35);
     landingStrip.castShadow = true;
     group.add(landingStrip);
+    const cappedServicePlate = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.035, 12), plaque);
+    cappedServicePlate.position.set(1.86, 1.98, -4.42);
+    cappedServicePlate.castShadow = true;
+    group.add(cappedServicePlate);
     for (const side of [-1, 1]) {
       const pier = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.92, 0.5), renderStone);
       pier.position.set(side * 1.62, 0.78, -5.88);
