@@ -76,6 +76,12 @@ export function resolveObstacle(point: Vec2, radius: number, obstacle: Collision
   }
   const dx = point.x - obstacle.center.x;
   const dz = point.z - obstacle.center.z;
+  if (dist < 0.0001) {
+    return {
+      x: obstacle.center.x + minDistance,
+      z: obstacle.center.z
+    };
+  }
   const length = Math.hypot(dx, dz) || 1;
   return {
     x: obstacle.center.x + (dx / length) * minDistance,

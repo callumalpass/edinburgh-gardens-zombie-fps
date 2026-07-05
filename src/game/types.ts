@@ -47,6 +47,7 @@ export interface CircularObstacle {
   shape?: "circle";
   center: Vec2;
   radius: number;
+  blocksSight?: boolean;
 }
 
 export interface BoxObstacle {
@@ -57,6 +58,7 @@ export interface BoxObstacle {
   halfX: number;
   halfZ: number;
   angle: number;
+  blocksSight?: boolean;
 }
 
 export interface PolygonObstacle {
@@ -65,6 +67,7 @@ export interface PolygonObstacle {
   shape: "polygon";
   center: Vec2;
   polygon: Vec2[];
+  blocksSight?: boolean;
 }
 
 export type CollisionObstacle = CircularObstacle | BoxObstacle | PolygonObstacle;
@@ -77,6 +80,14 @@ export interface SignificantTreePoint {
   height: number;
   dbh: number;
   position: Vec2;
+}
+
+export interface TreeCollider {
+  id: string;
+  label: string;
+  position: Vec2;
+  radius: number;
+  source?: string;
 }
 
 export interface ElevationSample {
@@ -114,6 +125,18 @@ export interface HardscapeLine {
   label: string;
   kind: "basalt-edging" | "bluestone-wall" | "bluestone-drain";
   points: Vec2[];
+  width: number;
+  height: number;
+  source?: string;
+}
+
+export interface SportsFixture {
+  id: string;
+  label: string;
+  kind: "football-goal" | "basketball-hoop";
+  position: Vec2;
+  angle: number;
+  radius: number;
   width: number;
   height: number;
   source?: string;
@@ -162,12 +185,14 @@ export interface LevelData {
   treeLines: Vec2[][];
   treePoints: Vec2[];
   significantTrees: SignificantTreePoint[];
+  treeColliders: TreeCollider[];
   elevationSamples: ElevationSample[];
   elevationMin: number;
   elevationMax: number;
   mappedBuildings: MappedBuilding[];
   mappedFences: MappedFence[];
   hardscapeLines: HardscapeLine[];
+  sportsFixtures: SportsFixture[];
   obstacles: CollisionObstacle[];
   spawnPoints: Vec2[];
   pickupPoints: Vec2[];

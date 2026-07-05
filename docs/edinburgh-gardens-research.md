@@ -57,10 +57,11 @@ These notes record the real-world sources and implementation decisions used to s
 - Hardscape and terrain-edge research is stored in `docs/research/hardscape-terrain-edges-2026-07-05.md`.
 - Built-feature research is stored in `docs/research/built-features-2026-07-05.md`.
 - Building-interaction research is stored in `docs/research/building-interactions-2026-07-05.md`.
+- Object-placement and collision research is stored in `docs/research/object-placement-collision-2026-07-05.md`.
 
 ## Data Notes
 
 - The large combined Overpass query for every mapped feature in the park was unreliable and frequently timed out on 2026-07-05.
 - The bounded OSM path/service Overpass inventory succeeded once, but repeated calls later returned busy-server HTML. Smaller OSM API fetches for specific way IDs were reliable and are the basis for the new mapped path, building and fence footprints.
-- Raw API responses are not checked in. The durable project artifact is this source note plus compact derived constants in `src/game/levelData.ts`.
+- Raw API responses are kept locally under ignored `docs/research/raw/` when useful. The durable checked-in artifacts are source notes plus compact derived constants in `src/game/levelData.ts`.
 - The Vicmap elevation samples are sparse. They are appropriate for broad park slope and local rise/fall, not for fine kerbs, gutters, steps or detailed drainage modelling.

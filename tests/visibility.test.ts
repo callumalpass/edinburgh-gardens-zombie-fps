@@ -43,5 +43,15 @@ describe("visibility system", () => {
       )
     ).toBe(false);
   });
-});
 
+  it("allows movement-only circular obstacles to stay out of sight occlusion", () => {
+    expect(
+      isLineOfSightBlocked(
+        { x: 0, z: 0 },
+        { x: 0, z: -20 },
+        context([{ id: "tree", label: "Tree trunk", center: { x: 0, z: -10 }, radius: 2.5, blocksSight: false }]),
+        0
+      )
+    ).toBe(false);
+  });
+});

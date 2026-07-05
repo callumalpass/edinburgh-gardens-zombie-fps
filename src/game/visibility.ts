@@ -42,6 +42,7 @@ export function isLineOfSightBlocked(a: Vec2, b: Vec2, context: VisibilityContex
   }
 
   return context.obstacles.some((obstacle) => {
+    if (obstacle.blocksSight === false) return false;
     if (context.isObstacleBypassed?.(obstacle.id, a)) return false;
     if (obstacle.shape === "box") {
       return lineIntersectsBox(a, b, obstacle.center, obstacle.halfX + padding, obstacle.halfZ + padding, obstacle.angle);
@@ -60,4 +61,3 @@ function clamp(value: number, min: number, max: number): number {
 function degToRad(value: number): number {
   return (value * Math.PI) / 180;
 }
-

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { resolveObstacle, shouldBypassObstacle } from "../src/game/collision";
+import { distance } from "../src/game/geo";
 import { createLevelData } from "../src/game/levelData";
 import type { BoxObstacle } from "../src/game/types";
 
@@ -37,5 +38,17 @@ describe("collision system", () => {
       })
     ).toBe(false);
   });
-});
 
+  it("pushes the player out of solid tree trunk obstacles", () => {
+    const level = createLevelData();
+    const tree = level.treeColliders[0];
+    const obstacle = level.obstacles.find((candidate) => candidate.id === tree.id);
+    if (!obstacle || obstacle.shape === "box" || obstacle.shape === "polygon") {
+      throw new Error("Expected a circular tree obstacle");
+    }
+
+    const playerRadius = 0.48;
+    const resolved = resolveObstacle(tree.position, playerRadius, obstacle);
+    expect(distance(resolved, tree.position)).toBeGreaterThanOrEqual(tree.radius + playerRadius - 0.001);
+  });
+});

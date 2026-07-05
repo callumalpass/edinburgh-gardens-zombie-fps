@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { distance, geoToWorld, makeCircle, pointInPolygon, polygonCentroid } from "../geo";
-import type { HardscapeLine, LevelData, LevelPath, Landmark, MappedBuilding, RandomSource, SignificantTreePoint, Vec2 } from "../types";
+import { AUSTRALIAN_RULES_BEHIND_POST_HEIGHT_METRES, footballPostLocalOffsets } from "../sportsFixtures";
+import type { HardscapeLine, LevelData, LevelPath, Landmark, MappedBuilding, RandomSource, SignificantTreePoint, SportsFixture, Vec2 } from "../types";
 
 const COLLISION_Y = 0.04;
 const TERRAIN_GRID_STEP = 7.5;
@@ -69,6 +70,7 @@ export class WorldBuilder {
     this.addDampGroundDetails();
     this.addRailTrailRemnants();
     this.addLandmarks();
+    this.addSportsFixtures();
     this.addMappedBuildings();
     this.addMappedFences();
     this.addAmenities();
@@ -1099,8 +1101,6 @@ export class WorldBuilder {
   }
 
   private addOvalSportsDetails(polygon: Vec2[], center: Vec2): void {
-    const minZ = Math.min(...polygon.map((point) => point.z));
-    const maxZ = Math.max(...polygon.map((point) => point.z));
     const pitch = this.createTerrainRect(center, 0.12, 4.6, 20, 0.14, 0.06, new THREE.MeshStandardMaterial({ color: 0xb8a36e, roughness: 0.93 }));
     pitch.receiveShadow = true;
     this.scene.add(pitch);
@@ -1123,15 +1123,6 @@ export class WorldBuilder {
     );
     this.scene.add(centreCircle);
 
-    for (const z of [minZ + 8, maxZ - 8]) {
-      for (const x of [-2.9, 2.9, -6.4, 6.4]) {
-        const post = new THREE.Mesh(new THREE.CylinderGeometry(x === -2.9 || x === 2.9 ? 0.08 : 0.06, 0.08, x === -2.9 || x === 2.9 ? 5.2 : 3.6, 8), this.materials.line);
-        const point = { x: center.x + x, z };
-        post.position.set(point.x, this.groundY(point) + (x === -2.9 || x === 2.9 ? 5.2 : 3.6) / 2, point.z);
-        post.castShadow = true;
-        this.scene.add(post);
-      }
-    }
   }
 
   private addPathRing(points: Vec2[], color: number): void {
@@ -1330,22 +1321,74 @@ export class WorldBuilder {
       { x1: 0.18, z1: 0.5, x2: 0.18, z2: 0.25 }
     ]);
     this.addCourtCircle(center, 2.2, 0xe8e0b6);
-    for (const side of [-1, 1]) {
-      const polePoint = { x: center.x + side * 7.2, z: center.z };
-      const boardPoint = { x: center.x + side * 7.2, z: center.z + side * 1.4 };
-      const hoopPoint = { x: center.x + side * 7.2, z: center.z + side * 2.1 };
-      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 4.6, 10), this.materials.metal);
-      pole.position.set(polePoint.x, this.groundY(polePoint) + 2.3, polePoint.z);
-      pole.castShadow = true;
-      this.scene.add(pole);
-      const board = new THREE.Mesh(new THREE.BoxGeometry(2.8, 1.6, 0.18), new THREE.MeshStandardMaterial({ color: 0xe6d9b8, roughness: 0.5 }));
-      board.position.set(boardPoint.x, this.groundY(boardPoint) + 4.2, boardPoint.z);
-      this.scene.add(board);
-      const hoop = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.045, 8, 20), new THREE.MeshStandardMaterial({ color: 0xb94e39, metalness: 0.25, roughness: 0.4 }));
-      hoop.position.set(hoopPoint.x, this.groundY(hoopPoint) + 3.6, hoopPoint.z);
-      hoop.rotation.x = Math.PI / 2;
-      this.scene.add(hoop);
+  }
+
+  private addSportsFixtures(): void {
+    for (const fixture of this.level.sportsFixtures) {
+      if (fixture.kind === "football-goal") {
+        this.addFootballGoal(fixture);
+      } else {
+        this.addBasketballHoop(fixture);
+      }
     }
+  }
+
+  private addFootballGoal(fixture: SportsFixture): void {
+    const [westBehind, westGoal, eastGoal, eastBehind] = footballPostLocalOffsets(fixture.width);
+    const placements = [
+      { x: westBehind, height: AUSTRALIAN_RULES_BEHIND_POST_HEIGHT_METRES, radius: 0.075 },
+      { x: westGoal, height: fixture.height, radius: 0.09 },
+      { x: eastGoal, height: fixture.height, radius: 0.09 },
+      { x: eastBehind, height: AUSTRALIAN_RULES_BEHIND_POST_HEIGHT_METRES, radius: 0.075 }
+    ];
+    const paddingMaterial = new THREE.MeshStandardMaterial({ color: 0x31596d, roughness: 0.64 });
+    for (const placement of placements) {
+      const point = this.localPoint(fixture.position, fixture.angle, placement.x, 0);
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(placement.radius * 0.78, placement.radius, placement.height, 10), this.materials.line);
+      post.position.set(point.x, this.groundY(point) + placement.height / 2, point.z);
+      post.castShadow = true;
+      this.scene.add(post);
+
+      const paddingHeight = Math.min(2.5, placement.height * 0.78);
+      const padding = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.23, paddingHeight, 10), paddingMaterial);
+      padding.position.set(point.x, this.groundY(point) + paddingHeight / 2, point.z);
+      padding.castShadow = true;
+      this.scene.add(padding);
+    }
+
+    const goalLine = this.createTerrainRect(fixture.position, fixture.angle, fixture.width, 0.12, 0.14, 0.018, this.materials.line);
+    this.scene.add(goalLine);
+  }
+
+  private addBasketballHoop(fixture: SportsFixture): void {
+    const groundY = this.groundY(fixture.position);
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.14, fixture.height + 0.55, 12), this.materials.metal);
+    pole.position.set(fixture.position.x, groundY + (fixture.height + 0.55) / 2, fixture.position.z);
+    pole.castShadow = true;
+    this.scene.add(pole);
+
+    const boardPoint = this.localPoint(fixture.position, fixture.angle, 0, 1.05);
+    const board = new THREE.Mesh(new THREE.BoxGeometry(fixture.width, 1.1, 0.14), new THREE.MeshStandardMaterial({ color: 0xe6d9b8, roughness: 0.5 }));
+    board.position.set(boardPoint.x, groundY + fixture.height + 0.35, boardPoint.z);
+    board.rotation.y = fixture.angle;
+    board.castShadow = true;
+    this.scene.add(board);
+
+    const inner = new THREE.Mesh(new THREE.BoxGeometry(0.61, 0.46, 0.03), new THREE.MeshBasicMaterial({ color: 0x2f3a36 }));
+    const innerPoint = this.localPoint(fixture.position, fixture.angle, 0, 1.13);
+    inner.position.set(innerPoint.x, groundY + fixture.height + 0.18, innerPoint.z);
+    inner.rotation.y = fixture.angle;
+    this.scene.add(inner);
+
+    const hoopPoint = this.localPoint(fixture.position, fixture.angle, 0, 1.55);
+    const hoop = new THREE.Mesh(new THREE.TorusGeometry(0.23, 0.028, 8, 24), new THREE.MeshStandardMaterial({ color: 0xb94e39, metalness: 0.25, roughness: 0.4 }));
+    hoop.position.set(hoopPoint.x, groundY + fixture.height, hoopPoint.z);
+    hoop.rotation.set(Math.PI / 2, 0, fixture.angle);
+    hoop.castShadow = true;
+    this.scene.add(hoop);
+
+    const support = this.addLocalBox(fixture.position, fixture.angle, 0, 0.68, 0.08, 0.08, 1.4, this.materials.metal, fixture.height + 0.1);
+    support.rotation.x = 0.16;
   }
 
   private addCourtCircle(center: Vec2, radius: number, color: number): void {

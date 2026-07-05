@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { clampToPolygon, distance, geoToWorld, pointInPolygon, polygonArea, polygonCentroid, WORLD_SCALE } from "../src/game/geo";
 import { createLevelData, PARK_BOUNDARY_GEO } from "../src/game/levelData";
+import {
+  AUSTRALIAN_RULES_FULL_GOAL_WIDTH_METRES,
+  BASKETBALL_BACKBOARD_WIDTH_METRES,
+  BASKETBALL_RIM_HEIGHT_METRES,
+  footballPostLocalOffsets
+} from "../src/game/sportsFixtures";
 import type { MappedBuilding } from "../src/game/types";
 
 describe("map geometry", () => {
@@ -28,6 +34,61 @@ describe("map geometry", () => {
     expect(level.significantTrees.length).toBeGreaterThanOrEqual(19);
     expect(level.treePoints.filter((tree) => pointInPolygon(tree, level.boundary)).length).toBe(level.treePoints.length);
     expect(level.significantTrees.filter((tree) => pointInPolygon(tree.position, level.boundary)).length).toBe(level.significantTrees.length);
+  });
+
+  it("derives solid trunk colliders from mapped and researched trees", () => {
+    const level = createLevelData();
+    const obstacleIds = new Set(level.obstacles.map((obstacle) => obstacle.id));
+    expect(level.treeColliders.length).toBeGreaterThanOrEqual(145);
+    expect(level.treeColliders.every((tree) => pointInPolygon(tree.position, level.boundary))).toBe(true);
+    expect(level.treeColliders.every((tree) => tree.radius >= 0.34 && tree.radius <= 1.05)).toBe(true);
+    expect(level.treeColliders.some((tree) => tree.source?.includes("Yarra significant trees"))).toBe(true);
+    expect(level.treeColliders.some((tree) => tree.source?.includes("OpenStreetMap"))).toBe(true);
+    expect(level.treeColliders.some((tree) => tree.source?.includes("tree avenue"))).toBe(true);
+
+    const sampleTree = level.treeColliders[0];
+    const sampleObstacle = level.obstacles.find((obstacle) => obstacle.id === sampleTree.id);
+    expect(obstacleIds.has(sampleTree.id)).toBe(true);
+    if (!sampleObstacle || sampleObstacle.shape === "box" || sampleObstacle.shape === "polygon") {
+      throw new Error("Expected tree collider to create a circular obstacle");
+    }
+    expect(sampleObstacle.radius).toBeCloseTo(sampleTree.radius);
+    expect(sampleObstacle.blocksSight).toBe(false);
+  });
+
+  it("places researched sports fixtures and collision posts from the same data", () => {
+    const level = createLevelData();
+    const footballGoals = level.sportsFixtures.filter((fixture) => fixture.kind === "football-goal");
+    const basketballHoops = level.sportsFixtures.filter((fixture) => fixture.kind === "basketball-hoop");
+    const obstacleIds = new Set(level.obstacles.map((obstacle) => obstacle.id));
+
+    expect(footballGoals.length).toBe(2);
+    expect(basketballHoops.length).toBe(2);
+    expect(footballGoals.every((fixture) => fixture.source?.includes("Australian-rules"))).toBe(true);
+    expect(footballGoals.every((fixture) => pointInPolygon(fixture.position, level.boundary))).toBe(true);
+    expect(footballGoals.every((fixture) => fixture.width === AUSTRALIAN_RULES_FULL_GOAL_WIDTH_METRES * WORLD_SCALE)).toBe(true);
+    expect(footballGoals.every((fixture) => fixture.height === 6)).toBe(true);
+
+    const firstGoal = footballGoals[0];
+    const postOffsets = footballPostLocalOffsets(firstGoal.width);
+    const goalPosts = postOffsets.map((_, index) => level.obstacles.find((obstacle) => obstacle.id === `${firstGoal.id}-post-${index + 1}`));
+    expect(goalPosts.every(Boolean)).toBe(true);
+    expect(distance((goalPosts[1] as NonNullable<(typeof goalPosts)[number]>).center, (goalPosts[2] as NonNullable<(typeof goalPosts)[number]>).center)).toBeCloseTo(
+      6.4 * WORLD_SCALE
+    );
+    for (const fixture of footballGoals) {
+      footballPostLocalOffsets(fixture.width).forEach((_, index) => {
+        expect(obstacleIds.has(`${fixture.id}-post-${index + 1}`)).toBe(true);
+        expect(level.obstacles.find((obstacle) => obstacle.id === `${fixture.id}-post-${index + 1}`)?.blocksSight).toBe(false);
+      });
+    }
+
+    expect(basketballHoops.every((fixture) => fixture.source?.includes("standard 3.05m"))).toBe(true);
+    expect(basketballHoops.every((fixture) => pointInPolygon(fixture.position, level.boundary))).toBe(true);
+    expect(basketballHoops.every((fixture) => fixture.width === BASKETBALL_BACKBOARD_WIDTH_METRES)).toBe(true);
+    expect(basketballHoops.every((fixture) => fixture.height === BASKETBALL_RIM_HEIGHT_METRES)).toBe(true);
+    expect(basketballHoops.every((fixture) => obstacleIds.has(`${fixture.id}-post`))).toBe(true);
+    expect(basketballHoops.every((fixture) => level.obstacles.find((obstacle) => obstacle.id === `${fixture.id}-post`)?.blocksSight === false)).toBe(true);
   });
 
   it("keeps the real-map scale expanded but close to measured metres", () => {

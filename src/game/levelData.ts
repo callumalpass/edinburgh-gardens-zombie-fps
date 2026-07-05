@@ -1,11 +1,20 @@
 import {
+  AUSTRALIAN_RULES_FULL_GOAL_WIDTH_METRES,
+  AUSTRALIAN_RULES_GOAL_POST_HEIGHT_METRES,
+  BASKETBALL_BACKBOARD_WIDTH_METRES,
+  BASKETBALL_RIM_HEIGHT_METRES,
+  footballPostLocalOffsets
+} from "./sportsFixtures";
+import {
   boundingRadius,
+  distance,
   geoToWorld,
   makeCircle,
   pointInPolygon,
   polygonCentroid,
   polygonFromGeo,
-  samplePolyline
+  samplePolyline,
+  WORLD_SCALE
 } from "./geo";
 import type {
   AmenityPoint,
@@ -20,6 +29,8 @@ import type {
   MappedFence,
   PolygonObstacle,
   SignificantTreePoint,
+  SportsFixture,
+  TreeCollider,
   Vec2
 } from "./types";
 
@@ -33,6 +44,26 @@ const offsetPoint = (center: Vec2, angle: number, localX: number, localZ: number
   };
 };
 
+const footprintFromPolygon = (polygon: readonly Vec2[]): { center: Vec2; halfX: number; halfZ: number; angle: number } => {
+  const center = polygonCentroid(polygon);
+  const first = polygon[0];
+  const second = polygon[1] ?? first;
+  const angle = Math.atan2(second.z - first.z, second.x - first.x);
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  let halfX = 0;
+  let halfZ = 0;
+
+  for (const point of polygon) {
+    const dx = point.x - center.x;
+    const dz = point.z - center.z;
+    halfX = Math.max(halfX, Math.abs(dx * cos + dz * sin));
+    halfZ = Math.max(halfZ, Math.abs(-dx * sin + dz * cos));
+  }
+
+  return { center, halfX, halfZ, angle };
+};
+
 export const RESEARCH_NOTES = [
   "Yarra City Council describes Edinburgh Gardens as a 24 hectare park with open lawns, specimen trees, shaded areas and an extensive path network.",
   "Council-listed facilities include barbecue areas, basketball, dog areas, drinking fountains, pavilion, picnic areas, playgrounds, toilets, skate park and sports oval.",
@@ -43,6 +74,7 @@ export const RESEARCH_NOTES = [
   "Vicmap Elevation open metro contour/ground-point services show sampled park elevations from roughly 27m to 32m AHD inside the mapped boundary; those samples drive the terrain interpolation.",
   "A 2026-07-05 bounded OSM path/service inventory added missing asphalt connectors around the northern paths, Queen Victoria plinth, central rail-trail link, southern entries and bowling-club service path.",
   "The Edinburgh Gardens CMP records asphalt paths with remnant basalt/bluestone edging, a bluestone-pitcher open drain on the oval's eastern perimeter and a bluestone retaining wall along Alfred Crescent; these are represented as hardscape lines.",
+  "Football posts, basketball hoops and solid tree trunks now share researched placement data with collision obstacles so the visuals and playable blockers stay aligned.",
   "See docs/edinburgh-gardens-research.md for source URLs, query notes, data licensing notes and implementation decisions."
 ];
 
@@ -1701,6 +1733,39 @@ function polygonObstacleFromPolygon(id: string, label: string, polygon: Vec2[]):
   };
 }
 
+function treeColliderRadius(tree: SignificantTreePoint): number {
+  return Math.max(0.34, Math.min(1.05, (tree.dbh / 200) * WORLD_SCALE));
+}
+
+function appendTreeCollider(colliders: TreeCollider[], collider: TreeCollider, minSpacing: number): void {
+  if (colliders.some((existing) => distance(existing.position, collider.position) < minSpacing)) {
+    return;
+  }
+  colliders.push(collider);
+}
+
+function sportsFixtureObstacles(fixture: SportsFixture): CircularObstacle[] {
+  if (fixture.kind === "basketball-hoop") {
+    return [
+      {
+        id: `${fixture.id}-post`,
+        label: fixture.label,
+        center: fixture.position,
+        radius: fixture.radius,
+        blocksSight: false
+      }
+    ];
+  }
+
+  return footballPostLocalOffsets(fixture.width).map((localX, index) => ({
+    id: `${fixture.id}-post-${index + 1}`,
+    label: fixture.label,
+    center: offsetPoint(fixture.position, fixture.angle, localX, 0),
+    radius: fixture.radius,
+    blocksSight: false
+  }));
+}
+
 function pathFromGeo(
   id: string,
   label: string,
@@ -1755,6 +1820,58 @@ export function createLevelData(): LevelData {
   const southBbq = geoToWorld(g(-37.7890776, 144.9835871));
   const northBbq = geoToWorld(g(-37.7859107, 144.9831484));
   const northTableTennis = geoToWorld(g(-37.786470, 144.983075));
+  const basketballFootprint = footprintFromPolygon(basketball);
+  const basketballRotation = -basketballFootprint.angle;
+  const basketballHoopOffset = Math.max(basketballFootprint.halfX, basketballFootprint.halfZ) * 0.74;
+  const ovalCenter = polygonCentroid(oval);
+  const ovalMinZ = Math.min(...oval.map((point) => point.z));
+  const ovalMaxZ = Math.max(...oval.map((point) => point.z));
+  const sportsFixtures: SportsFixture[] = [
+    {
+      id: "oval-north-football-goal",
+      label: "W.T. Peterson Oval north football posts",
+      kind: "football-goal",
+      position: { x: ovalCenter.x, z: ovalMinZ + 8 * WORLD_SCALE },
+      angle: 0,
+      radius: 0.2,
+      width: AUSTRALIAN_RULES_FULL_GOAL_WIDTH_METRES * WORLD_SCALE,
+      height: AUSTRALIAN_RULES_GOAL_POST_HEIGHT_METRES,
+      source: "Australian-rules goal/behind-post dimensions; W.T. Peterson Oval OSM/CMP geometry"
+    },
+    {
+      id: "oval-south-football-goal",
+      label: "W.T. Peterson Oval south football posts",
+      kind: "football-goal",
+      position: { x: ovalCenter.x, z: ovalMaxZ - 8 * WORLD_SCALE },
+      angle: 0,
+      radius: 0.2,
+      width: AUSTRALIAN_RULES_FULL_GOAL_WIDTH_METRES * WORLD_SCALE,
+      height: AUSTRALIAN_RULES_GOAL_POST_HEIGHT_METRES,
+      source: "Australian-rules goal/behind-post dimensions; W.T. Peterson Oval OSM/CMP geometry"
+    },
+    {
+      id: "basketball-west-hoop",
+      label: "Basketball half-court west hoop",
+      kind: "basketball-hoop",
+      position: offsetPoint(basketballCenter, basketballRotation, -basketballHoopOffset, 0),
+      angle: basketballRotation,
+      radius: 0.42,
+      width: BASKETBALL_BACKBOARD_WIDTH_METRES,
+      height: BASKETBALL_RIM_HEIGHT_METRES,
+      source: "OSM basketball court footprint; standard 3.05m basketball rim height"
+    },
+    {
+      id: "basketball-east-hoop",
+      label: "Basketball half-court east hoop",
+      kind: "basketball-hoop",
+      position: offsetPoint(basketballCenter, basketballRotation, basketballHoopOffset, 0),
+      angle: basketballRotation + Math.PI,
+      radius: 0.42,
+      width: BASKETBALL_BACKBOARD_WIDTH_METRES,
+      height: BASKETBALL_RIM_HEIGHT_METRES,
+      source: "OSM basketball court footprint; standard 3.05m basketball rim height"
+    }
+  ];
   const railTrail = pathFromGeo("inner-circle-rail-trail", "Inner Circle Rail Trail", "rail", RAIL_TRAIL_GEO, 4.5);
 
   const formalNorthSouth = pathFromGeo(
@@ -1805,6 +1922,7 @@ export function createLevelData(): LevelData {
     dbh: tree.dbh,
     position: geoToWorld(tree.point)
   }));
+  const treePoints = polygonFromGeo(OSM_TREE_GEO).filter((point) => pointInPolygon(point, boundary));
   const elevationSamples = VICMAP_ELEVATION_GEO.map((sample) => ({
     position: geoToWorld(sample.point),
     altitude: sample.altitude,
@@ -1926,21 +2044,65 @@ export function createLevelData(): LevelData {
     samplePolyline(crescentPath.points, 15),
     samplePolyline(polygonFromGeo([g(-37.78605, 144.98115), g(-37.78685, 144.98172), g(-37.78754, 144.98218)]), 12),
     samplePolyline(polygonFromGeo([g(-37.78875, 144.98230), g(-37.78837, 144.98312), g(-37.78815, 144.98382)]), 12)
-  ];
+  ]
+    .map((line) => line.filter((point) => pointInPolygon(point, boundary)))
+    .filter((line) => line.length > 0);
+  const treeColliders: TreeCollider[] = [];
+  significantTrees.forEach((tree) => {
+    appendTreeCollider(
+      treeColliders,
+      {
+        id: `tree-collider-${tree.id}`,
+        label: `${tree.commonName} trunk`,
+        position: tree.position,
+        radius: treeColliderRadius(tree),
+        source: "Yarra significant trees dataset"
+      },
+      1.8
+    );
+  });
+  treePoints.forEach((position, index) => {
+    appendTreeCollider(
+      treeColliders,
+      {
+        id: `tree-collider-osm-${index + 1}`,
+        label: "Mapped tree trunk",
+        position,
+        radius: 0.42,
+        source: "OpenStreetMap natural=tree point"
+      },
+      2.25
+    );
+  });
+  treeLines.flat().forEach((position, index) => {
+    appendTreeCollider(
+      treeColliders,
+      {
+        id: `tree-collider-row-${index + 1}`,
+        label: "Avenue tree trunk",
+        position,
+        radius: 0.44,
+        source: "CMP/OSM-derived tree avenue sample"
+      },
+      2.6
+    );
+  });
 
   return {
     boundary,
     paths: [railTrail, formalNorthSouth, crescentPath, ovalPath, rotundaLoop, ...osmPaths],
     landmarks,
     treeLines,
-    treePoints: polygonFromGeo(OSM_TREE_GEO).filter((point) => pointInPolygon(point, boundary)),
+    treePoints,
     significantTrees,
+    treeColliders,
     elevationSamples,
     elevationMin,
     elevationMax,
     mappedBuildings,
     mappedFences,
     hardscapeLines,
+    sportsFixtures,
     obstacles: [
       boxObstacleFromPolygon("grandstand", "Kevin Murray Stand", grandstand, 1.0, 0.45),
       polygonObstacleFromPolygon("tennis", "Fitzroy Tennis Club", tennis),
@@ -1950,7 +2112,15 @@ export function createLevelData(): LevelData {
       { id: "rotunda-core", label: "Fitzroy Memorial Rotunda centre", center: rotundaCenter, radius: 1.6 },
       ...mappedBuildings
         .filter((building) => building.collision)
-        .map((building) => polygonObstacleFromPolygon(building.id, building.label, building.polygon))
+        .map((building) => polygonObstacleFromPolygon(building.id, building.label, building.polygon)),
+      ...sportsFixtures.flatMap(sportsFixtureObstacles),
+      ...treeColliders.map((tree) => ({
+        id: tree.id,
+        label: tree.label,
+        center: tree.position,
+        radius: tree.radius,
+        blocksSight: false
+      }))
     ],
     spawnPoints: [
       geoToWorld(g(-37.78948, 144.98045)),
