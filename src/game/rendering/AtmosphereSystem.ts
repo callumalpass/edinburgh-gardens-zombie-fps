@@ -128,6 +128,7 @@ export class AtmosphereSystem {
 
   private addSkyDome(): void {
     const geometry = new THREE.SphereGeometry(SKY_RADIUS, 48, 24);
+    const brushTexture = this.createSkyBrushTexture();
     const material = new THREE.ShaderMaterial({
       side: THREE.BackSide,
       depthWrite: false,
@@ -136,28 +137,40 @@ export class AtmosphereSystem {
         topColor: { value: new THREE.Color(0x274563) },
         midColor: { value: new THREE.Color(0x132936) },
         horizonColor: { value: new THREE.Color(0x614936) },
-        bottomColor: { value: new THREE.Color(0x081116) }
+        bottomColor: { value: new THREE.Color(0x081116) },
+        brushMap: { value: brushTexture }
       },
       vertexShader: `
         varying vec3 vDirection;
+        varying vec2 vUv;
 
         void main() {
           vDirection = normalize(position);
+          vUv = uv;
           gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
         }
       `,
       fragmentShader: `
         varying vec3 vDirection;
+        varying vec2 vUv;
         uniform vec3 topColor;
         uniform vec3 midColor;
         uniform vec3 horizonColor;
         uniform vec3 bottomColor;
+        uniform sampler2D brushMap;
 
         void main() {
           float y = clamp(vDirection.y * 0.5 + 0.5, 0.0, 1.0);
           vec3 lower = mix(bottomColor, horizonColor, smoothstep(0.1, 0.42, y));
           vec3 upper = mix(midColor, topColor, smoothstep(0.46, 1.0, y));
           vec3 color = mix(lower, upper, smoothstep(0.32, 0.72, y));
+          vec2 brushUv = vec2(fract(vUv.x * 1.65 + vDirection.y * 0.08), clamp(vUv.y * 1.08, 0.0, 1.0));
+          vec4 brush = texture2D(brushMap, brushUv);
+          float painterMask = smoothstep(0.12, 0.34, y) * (1.0 - smoothstep(0.86, 1.0, y));
+          float horizonWarmth = smoothstep(0.22, 0.38, y) * (1.0 - smoothstep(0.52, 0.72, y));
+          color = mix(color, brush.rgb, brush.a * painterMask * 0.28);
+          color += vec3(0.072, 0.038, 0.014) * horizonWarmth * (0.4 + brush.a * 0.5);
+          color = floor(color * 30.0) / 30.0 + 0.012;
           gl_FragColor = vec4(color, 1.0);
         }
       `
@@ -400,6 +413,61 @@ export class AtmosphereSystem {
       drift: this.rng.range(8, 15),
       length: this.rng.range(1.25, 2.15)
     };
+  }
+
+  private createSkyBrushTexture(): THREE.CanvasTexture {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1024;
+    canvas.height = 512;
+    const ctx = canvas.getContext("2d")!;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+
+    const palette = [
+      "rgba(42, 78, 101, 0.32)",
+      "rgba(72, 104, 110, 0.26)",
+      "rgba(120, 88, 62, 0.24)",
+      "rgba(177, 118, 70, 0.18)",
+      "rgba(22, 43, 52, 0.34)"
+    ];
+
+    for (let i = 0; i < 96; i += 1) {
+      const y = this.rng.range(92, 420);
+      const x = this.rng.range(-180, 1024);
+      const length = this.rng.range(150, 460);
+      const lift = this.rng.range(-20, 20);
+      ctx.strokeStyle = this.rng.pick(palette);
+      ctx.lineWidth = this.rng.range(4, 18);
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.bezierCurveTo(
+        x + length * 0.28,
+        y + this.rng.range(-18, 18),
+        x + length * 0.68,
+        y + lift,
+        x + length,
+        y + this.rng.range(-14, 14)
+      );
+      ctx.stroke();
+    }
+
+    for (let band = 0; band < 6; band += 1) {
+      const y = 290 + band * 21 + this.rng.range(-6, 6);
+      const gradient = ctx.createLinearGradient(0, y - 18, 0, y + 18);
+      gradient.addColorStop(0, "rgba(185, 119, 62, 0)");
+      gradient.addColorStop(0.5, "rgba(185, 119, 62, 0.11)");
+      gradient.addColorStop(1, "rgba(185, 119, 62, 0)");
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, y - 18, canvas.width, 36);
+    }
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.ClampToEdgeWrapping;
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.needsUpdate = true;
+    return texture;
   }
 
   private createMoonTexture(): THREE.CanvasTexture {
