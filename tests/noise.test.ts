@@ -11,6 +11,14 @@ describe("noise system", () => {
     expect(movementNoiseMultiplier(false, "grass", 0.88)).toBeLessThan(movementNoiseMultiplier(false, "grass"));
   });
 
+  it("keeps stealth movement dramatically quieter than sprinting", () => {
+    const crouchedGrass = movementNoiseMultiplier(true, "grass");
+    const sprintGravel = movementNoiseMultiplier(false, "gravel");
+
+    expect(crouchedGrass).toBeLessThan(0.15);
+    expect(sprintGravel / crouchedGrass).toBeGreaterThan(9);
+  });
+
   it("returns the strongest audible event for nearby zombies and expires old events", () => {
     const noise = new NoiseSystem();
     noise.emit("footstep", { x: 0, z: 0 });
@@ -34,7 +42,7 @@ describe("noise system", () => {
   it("keeps melee much quieter than gunshots", () => {
     const noise = new NoiseSystem();
     noise.emit("melee", { x: 0, z: 0 });
-    expect(noise.strongestAt({ x: 8, z: 0 })?.kind).toBe("melee");
+    expect(noise.strongestAt({ x: 7, z: 0 })?.kind).toBe("melee");
     expect(noise.strongestAt({ x: 20, z: 0 })).toBeNull();
   });
 

@@ -23,6 +23,11 @@
       "url": "https://api.openstreetmap.org/api/0.6/map?bbox=144.9798,-37.7903,144.9860,-37.7853"
     },
     {
+      "id": "osm-playground-fence-map-api",
+      "label": "OpenStreetMap map API playground and oval fence/access extracts",
+      "urlTemplate": "https://api.openstreetmap.org/api/0.6/map?bbox={bbox}"
+    },
+    {
       "id": "osm-way-api",
       "label": "OpenStreetMap way full API template",
       "urlTemplate": "https://www.openstreetmap.org/api/0.6/way/{way_id}/full.json"
@@ -81,6 +86,66 @@
       "id": "yarra-northern-precinct",
       "label": "Yarra Edinburgh Gardens northern precinct consultation",
       "url": "https://yoursayyarra.com.au/eg-north"
+    },
+    {
+      "id": "melbourne-playgrounds-south-playground",
+      "label": "Melbourne Playgrounds Edinburgh Gardens South Playground",
+      "url": "https://www.melbourneplaygrounds.com.au/edinburgh-gardens-south-playground-alfred-crescent-fitzroy-north"
+    },
+    {
+      "id": "to-hot-or-not-edinburgh-gardens",
+      "label": "To Hot or Not Edinburgh Gardens",
+      "url": "https://tothotornot.com/edinburgh-gardens/"
+    },
+    {
+      "id": "busy-city-guide-edinburgh-gardens",
+      "label": "Busy City Guide Edinburgh Gardens Fitzroy North",
+      "url": "https://busycitykids.com.au/our-blog/2015/9/17/edinburghgardens-fitzroynorth"
+    },
+    {
+      "id": "proludic-edinburgh-gardens-playground",
+      "label": "Proludic VIC Edinburgh Gardens Playground",
+      "url": "https://www.proludic.com.au/reference/vic-edinburgh-gardens-playground/"
+    },
+    {
+      "id": "melbourne-playgrounds-north-playground",
+      "label": "Melbourne Playgrounds Edinburgh Gardens North Playground",
+      "url": "https://www.melbourneplaygrounds.com.au/edinburgh-gardens-north-playground-alfred-crescent-fitzroy-north"
+    },
+    {
+      "id": "mamma-knows-north-edinburgh-gardens",
+      "label": "Mamma Knows North Edinburgh Gardens and Playground",
+      "url": "https://mammaknowsnorth.com.au/parks-and-playgrounds/edinburgh-gardens-and-playground-north-fitzroy"
+    },
+    {
+      "id": "yarra-fitzy-bowl-skatepark",
+      "label": "Yarra Your Say Fitzy Skate Bowl",
+      "url": "https://yoursayyarra.com.au/skatepark"
+    },
+    {
+      "id": "goskate-fitzroy-skatepark",
+      "label": "GOSKATE Fitzroy Skatepark",
+      "url": "https://goskate.com/sp/listing/fitzroy-skatepark/"
+    },
+    {
+      "id": "timeout-fitzroy-skatepark",
+      "label": "Time Out Melbourne Fitzroy Skatepark",
+      "url": "https://www.timeout.com/melbourne/sport-and-fitness/fitzroy-skatepark"
+    },
+    {
+      "id": "skatermaps-edinburgh-gardens-skatepark",
+      "label": "Skater Maps Edinburgh Gardens Skatepark",
+      "url": "https://skatermaps.com/edinburgh-gardens-skatepark/"
+    },
+    {
+      "id": "northfitzroyrotunda-fitzy-bowl-revamp",
+      "label": "North Fitzroy Rotunda Fitzy Bowl Set for Revamp",
+      "url": "https://www.northfitzroyrotunda.com/post/fitzy-bowl-set-for-revamp"
+    },
+    {
+      "id": "broadsheet-fitzy-bowl-expansion",
+      "label": "Broadsheet Fitzroy Bowl Skate Park Expansion",
+      "url": "https://www.broadsheet.com.au/melbourne/city-file/article/fitzroy-bowl-skate-park-expansion"
     },
     {
       "id": "landezine-edinburgh-gardens-raingarden",
@@ -195,9 +260,23 @@
         "vicmap-elevation-feature-server",
         "vicmap-elevation-1m-dem",
         "edinburgh-gardens-3068-archive",
+        "edinburgh-gardens-cmp",
         "edinburgh-gardens-cmp-2021-3068",
         "captain-cook-society-edinburgh-gardens",
         "yarra-northern-precinct",
+        "osm-playground-fence-map-api",
+        "melbourne-playgrounds-south-playground",
+        "to-hot-or-not-edinburgh-gardens",
+        "busy-city-guide-edinburgh-gardens",
+        "proludic-edinburgh-gardens-playground",
+        "melbourne-playgrounds-north-playground",
+        "mamma-knows-north-edinburgh-gardens",
+        "yarra-fitzy-bowl-skatepark",
+        "goskate-fitzroy-skatepark",
+        "timeout-fitzroy-skatepark",
+        "skatermaps-edinburgh-gardens-skatepark",
+        "northfitzroyrotunda-fitzy-bowl-revamp",
+        "broadsheet-fitzy-bowl-expansion",
         "landezine-edinburgh-gardens-raingarden",
         "atlan-stormtech-edinburgh-gardens-raingarden",
         "yarra-wsud-guidelines",
@@ -205,6 +284,7 @@
         "yarra-brunswick-street-oval",
         "yarra-emely-baker-centre",
         "yarra-fitzroy-bowls-mural",
+        "fitzroy-bowls-official",
         "brunswick-tree-protection-plan"
       ]
     },
@@ -212,6 +292,7 @@
       "id": "raw-assets",
       "path": "docs/research/raw-assets.md",
       "sourceIds": [
+        "osm-playground-fence-map-api",
         "osm-way-api",
         "overpass-api",
         "vicmap-elevation-feature-server",
@@ -424,6 +505,63 @@
       ]
     },
     {
+      "id": "playground-fence-layout",
+      "path": "docs/research/playground-and-fence-layout-2026-07-06.md",
+      "requiredHeadings": ["## Sources", "## Findings", "## Implementation Translation", "## Uncertainty"],
+      "sourceIds": [
+        "osm-playground-fence-map-api",
+        "osm-map-bbox",
+        "osm-way-api",
+        "yarra-edinburgh-gardens",
+        "edinburgh-gardens-cmp",
+        "yarra-northern-precinct",
+        "melbourne-playgrounds-south-playground",
+        "melbourne-playgrounds-north-playground",
+        "mamma-knows-north-edinburgh-gardens",
+        "to-hot-or-not-edinburgh-gardens",
+        "busy-city-guide-edinburgh-gardens",
+        "proludic-edinburgh-gardens-playground"
+      ]
+    },
+    {
+      "id": "skatepark-bowls-north-playground-correction",
+      "path": "docs/research/skatepark-bowls-and-north-playground-correction-2026-07-06.md",
+      "requiredHeadings": ["## Sources", "## Findings", "## Implementation Translation", "## Uncertainty"],
+      "sourceIds": [
+        "melbourne-playgrounds-north-playground",
+        "mamma-knows-north-edinburgh-gardens",
+        "yarra-fitzy-bowl-skatepark",
+        "goskate-fitzroy-skatepark",
+        "timeout-fitzroy-skatepark",
+        "skatermaps-edinburgh-gardens-skatepark",
+        "northfitzroyrotunda-fitzy-bowl-revamp",
+        "broadsheet-fitzy-bowl-expansion"
+      ]
+    },
+    {
+      "id": "building-access-interactions",
+      "path": "docs/research/building-access-interactions-2026-07-06.md",
+      "requiredHeadings": ["## Sources", "## Findings", "## Implementation Translation", "## Uncertainty", "## Validation"],
+      "sourceIds": [
+        "yarra-edinburgh-gardens",
+        "osm-way-api",
+        "edinburgh-gardens-cmp",
+        "yarra-brunswick-street-oval",
+        "yarra-emely-baker-centre",
+        "fitzroy-bowls-official"
+      ]
+    },
+    {
+      "id": "public-use-weather-realism",
+      "path": "docs/research/public-use-weather-realism-2026-07-06.md",
+      "requiredHeadings": ["## Sources", "## Findings", "## Implementation Translation", "## Uncertainty", "## Validation"],
+      "sourceIds": [
+        "yarra-edinburgh-gardens",
+        "yarra-edinburgh-gardens-rotunda",
+        "yarra-emely-baker-centre"
+      ]
+    },
+    {
       "id": "data-pipeline-automation",
       "path": "docs/research/data-pipeline-automation-2026-07-05.md",
       "sourceIds": [
@@ -462,6 +600,13 @@
       "pathPattern": "docs/research/raw/osm/2026-07-05/further-realism/edinburgh-gardens-park-features-overpass.json",
       "format": "osm-elements",
       "sourceId": "overpass-api",
+      "optional": true
+    },
+    {
+      "id": "osm-playground-fence-map-xml",
+      "pathPattern": "docs/research/raw/2026-07-06/osm-*-map.xml",
+      "format": "osm-xml",
+      "sourceId": "osm-playground-fence-map-api",
       "optional": true
     },
     {

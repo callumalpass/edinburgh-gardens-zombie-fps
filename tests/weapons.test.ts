@@ -6,14 +6,17 @@ import {
   consumeRound,
   createInitialLoadout,
   damageAtDistance,
+  effectiveFirearmSpread,
   finishReloadIfReady,
   getWeaponStats,
   hasWeapon,
   startReload,
   switchWeapon,
   WEAPON_DEFINITIONS,
+  weatherWeaponInstability,
   upgradeCost
 } from "../src/game/weapons";
+import { zombieProfile } from "../src/game/zombieProfiles";
 
 describe("weapon upgrades", () => {
   it("improves stats without mutating the previous loadout", () => {
@@ -102,5 +105,69 @@ describe("weapon upgrades", () => {
     expect(rifle.noiseMultiplier).toBeGreaterThan(shotgun.noiseMultiplier);
     expect(smg.movingSpread).toBeGreaterThan(rifle.movingSpread);
     expect(WEAPON_DEFINITIONS.rifle.pickupAmmo).toBeLessThan(WEAPON_DEFINITIONS.carbine.pickupAmmo);
+  });
+
+  it("keeps emergency melee responsive enough for early pressure", () => {
+    const knife = getWeaponStats(createInitialLoadout());
+    const shambler = zombieProfile("shambler");
+    const twoBodyHits = damageAtDistance(knife, 2.4, "body") * 2;
+
+    expect(knife.fireDelay).toBeLessThan(0.4);
+    expect(knife.range).toBeGreaterThan(4.4);
+    expect(twoBodyHits).toBeGreaterThanOrEqual(shambler.health);
+  });
+
+  it("makes firearms stronger through feel rather than raw noise", () => {
+    let loadout = addWeapon(createInitialLoadout(), "carbine");
+    const carbine = getWeaponStats(loadout);
+    loadout = addWeapon(loadout, "shotgun");
+    const shotgun = getWeaponStats(loadout);
+    loadout = addWeapon(loadout, "smg");
+    const smg = getWeaponStats(loadout);
+
+    expect(carbine.magazineSize).toBeGreaterThanOrEqual(14);
+    expect(carbine.recoilKick).toBeLessThan(shotgun.recoilKick);
+    expect(shotgun.reloadTime).toBeLessThan(1.5);
+    expect(shotgun.staggerPower).toBeGreaterThan(0.9);
+    expect(smg.maxBloom).toBeLessThan(0.055);
+  });
+
+  it("adds a modest weather handling penalty without overwhelming stance and aiming", () => {
+    const loadout = addWeapon(createInitialLoadout(), "rifle");
+    const stats = getWeaponStats(loadout);
+    const clear = { precipitation: 0, wind: 0.2, wetness: 0.18 };
+    const storm = { precipitation: 1, wind: 0.9, wetness: 1 };
+    const standingStorm = effectiveFirearmSpread(stats, {
+      movementSpeed: 0,
+      shotBloom: 0,
+      crouching: false,
+      aimAmount: 0,
+      aimHeld: false,
+      stamina: 100,
+      weather: storm
+    });
+    const standingClear = effectiveFirearmSpread(stats, {
+      movementSpeed: 0,
+      shotBloom: 0,
+      crouching: false,
+      aimAmount: 0,
+      aimHeld: false,
+      stamina: 100,
+      weather: clear
+    });
+    const crouchedAimedStorm = effectiveFirearmSpread(stats, {
+      movementSpeed: 0,
+      shotBloom: 0,
+      crouching: true,
+      aimAmount: 1,
+      aimHeld: true,
+      stamina: 100,
+      weather: storm
+    });
+
+    expect(weatherWeaponInstability(storm)).toBeGreaterThan(weatherWeaponInstability(clear));
+    expect(standingStorm).toBeGreaterThan(standingClear);
+    expect(standingStorm / standingClear).toBeLessThan(1.12);
+    expect(crouchedAimedStorm).toBeLessThan(standingClear);
   });
 });

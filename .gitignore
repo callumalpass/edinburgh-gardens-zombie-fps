@@ -10,3 +10,4 @@ docs/research/renders/
 
 *.log
 .DS_Store
+/.ops/improve-loop

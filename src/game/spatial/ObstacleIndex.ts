@@ -1,4 +1,3 @@
-import { distance } from "../geo";
 import type { CollisionObstacle, Vec2 } from "../types";
 
 export interface ObstacleIndexOptions {
@@ -10,7 +9,7 @@ const DEFAULT_GRID_SIZE = 24;
 export class ObstacleIndex {
   private readonly gridSize: number;
   private readonly coverRadii = new Map<string, number>();
-  private readonly grid = new Map<string, CollisionObstacle[]>();
+  private readonly grid = new Map<number, Map<number, CollisionObstacle[]>>();
   private readonly querySeen = new Set<string>();
 
   constructor(private readonly obstacles: readonly CollisionObstacle[], options: ObstacleIndexOptions = {}) {
@@ -33,7 +32,7 @@ export class ObstacleIndex {
     this.querySeen.clear();
     for (let x = minX; x <= maxX; x += 1) {
       for (let z = minZ; z <= maxZ; z += 1) {
-        const bucket = this.grid.get(this.cellKey(x, z));
+        const bucket = this.bucketAt(x, z);
         if (!bucket) continue;
         for (const obstacle of bucket) {
           if (this.querySeen.has(obstacle.id)) continue;
@@ -74,24 +73,35 @@ export class ObstacleIndex {
       const maxZ = this.cellIndex(obstacle.center.z + radius);
       for (let x = minX; x <= maxX; x += 1) {
         for (let z = minZ; z <= maxZ; z += 1) {
-          const key = this.cellKey(x, z);
-          const bucket = this.grid.get(key);
-          if (bucket) {
-            bucket.push(obstacle);
-          } else {
-            this.grid.set(key, [obstacle]);
-          }
+          this.ensureBucket(x, z).push(obstacle);
         }
       }
     }
   }
 
-  private cellIndex(value: number): number {
-    return Math.floor(value / this.gridSize);
+  private ensureBucket(x: number, z: number): CollisionObstacle[] {
+    let column = this.grid.get(x);
+    if (!column) {
+      column = new Map();
+      this.grid.set(x, column);
+    }
+
+    const bucket = column.get(z);
+    if (bucket) {
+      return bucket;
+    }
+
+    const nextBucket: CollisionObstacle[] = [];
+    column.set(z, nextBucket);
+    return nextBucket;
   }
 
-  private cellKey(x: number, z: number): string {
-    return `${x}:${z}`;
+  private bucketAt(x: number, z: number): CollisionObstacle[] | undefined {
+    return this.grid.get(x)?.get(z);
+  }
+
+  private cellIndex(value: number): number {
+    return Math.floor(value / this.gridSize);
   }
 }
 
@@ -100,7 +110,13 @@ export function computeObstacleCoverRadius(obstacle: CollisionObstacle): number 
     return Math.hypot(obstacle.halfX, obstacle.halfZ);
   }
   if (obstacle.shape === "polygon") {
-    return obstacle.polygon.length > 0 ? Math.max(...obstacle.polygon.map((point) => distance(obstacle.center, point))) : 0;
+    let radius = 0;
+    for (const point of obstacle.polygon) {
+      const dx = point.x - obstacle.center.x;
+      const dz = point.z - obstacle.center.z;
+      radius = Math.max(radius, Math.hypot(dx, dz));
+    }
+    return radius;
   }
   return obstacle.radius;
 }

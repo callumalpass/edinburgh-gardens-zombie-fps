@@ -13,6 +13,7 @@ import type {
   ParkLifeDetail,
   PathSurfacePatch,
   RandomSource,
+  SkateBowlFeature,
   SportsFixture,
   StreetEdge,
   TreeProfile,
@@ -29,6 +30,14 @@ import {
 } from "./terrainOverlay";
 import type { TimeOfDayState } from "./timeOfDay";
 import type { WeatherState } from "./weather";
+import {
+  TerrainSupport,
+  cleanPolygon as cleanWorldPolygon,
+  localPoint as localWorldPoint,
+  pointInRotatedRect as pointInWorldRotatedRect,
+  stableNoise as stableWorldNoise,
+  worldToLocal as worldPointToLocal
+} from "./worldGeometry";
 
 const COLLISION_Y = 0.04;
 const PATH_SHOULDER_SURFACE_Y = COLLISION_Y;
@@ -137,6 +146,7 @@ export class WorldBuilder {
   private readonly wallLightMaterials: THREE.MeshStandardMaterial[] = [];
   private readonly facadeWindowMaterials: THREE.MeshBasicMaterial[] = [];
   private readonly scratchColor = new THREE.Color();
+  private readonly terrainSupport: TerrainSupport;
 
   constructor(
     private readonly scene: THREE.Scene,
@@ -145,7 +155,9 @@ export class WorldBuilder {
     private readonly materials: GameMaterials,
     private readonly groundYAt: (point: Vec2) => number,
     private readonly averageGroundYAt: (points: readonly Vec2[]) => number
-  ) {}
+  ) {
+    this.terrainSupport = new TerrainSupport(this.groundYAt);
+  }
 
   createWorld(): void {
     this.ambientLight = new THREE.HemisphereLight(0xb9d4e8, 0x28222a, 1.38);
@@ -321,9 +333,7 @@ export class WorldBuilder {
   private addMappedFencePreview(fence: MappedFence): void {
     const postMaterial = new THREE.MeshStandardMaterial({ color: 0x6b7a71, metalness: 0.22, roughness: 0.58 });
     const railMaterial = new THREE.MeshStandardMaterial({ color: 0x4f5e56, metalness: 0.32, roughness: 0.48 });
-    for (let i = 0; i < fence.points.length - 1; i += 1) {
-      this.addFenceSegment(fence.points[i], fence.points[i + 1], 0, 1, 1.65, postMaterial, railMaterial);
-    }
+    this.addMappedFenceSegments(fence, postMaterial, railMaterial);
   }
 
   private addHardscapeLinePreview(line: HardscapeLine): void {
@@ -411,6 +421,9 @@ export class WorldBuilder {
     } else if (amenity.kind === "toilets") {
       this.addToiletSign(amenity.position, angle);
       this.addAmenityHalo(amenity.position, 0x61a8d3, 0.52);
+    } else if (this.isStructureAmenity(amenity)) {
+      this.addStructureAccessCue(amenity, angle);
+      this.addAmenityHalo(amenity.position, 0xe3a84a, 0.58);
     }
   }
 
@@ -429,6 +442,8 @@ export class WorldBuilder {
       this.addWorksMaterials(detail);
     } else if (detail.kind === "removed-tree-stump") {
       this.addRemovedTreeStump(detail);
+    } else if (detail.kind === "park-rule-sign") {
+      this.addParkRuleSign(detail);
     } else if (detail.kind === "training-cones") {
       this.addTrainingCones(detail);
     } else if (detail.kind === "dog-water-bowl") {
@@ -584,35 +599,19 @@ export class WorldBuilder {
   }
 
   private cleanPolygon(polygon: readonly Vec2[]): Vec2[] {
-    return distance(polygon[0], polygon[polygon.length - 1]) < 0.01 ? polygon.slice(0, -1) : [...polygon];
+    return cleanWorldPolygon(polygon);
   }
 
   private supportY(points: readonly Vec2[], pad = 0): number {
-    return Math.max(...points.map((point) => this.groundY(point))) + pad;
+    return this.terrainSupport.supportY(points, pad);
   }
 
   private boxSupportY(center: Vec2, rotation: number, halfX: number, halfZ: number, pad = 0): number {
-    return this.supportY(
-      [
-        this.localPoint(center, rotation, -halfX, -halfZ),
-        this.localPoint(center, rotation, halfX, -halfZ),
-        this.localPoint(center, rotation, halfX, halfZ),
-        this.localPoint(center, rotation, -halfX, halfZ)
-      ],
-      pad
-    );
+    return this.terrainSupport.boxSupportY(center, rotation, halfX, halfZ, pad);
   }
 
   private radialSupportY(center: Vec2, radius: number, pad = 0): number {
-    const points = Array.from({ length: 8 }, (_, index) => {
-      const angle = (index / 8) * Math.PI * 2;
-      return {
-        x: center.x + Math.cos(angle) * radius,
-        z: center.z + Math.sin(angle) * radius
-      };
-    });
-    points.push(center);
-    return this.supportY(points, pad);
+    return this.terrainSupport.radialSupportY(center, radius, pad);
   }
 
   private addGround(): void {
@@ -1920,9 +1919,41 @@ export class WorldBuilder {
     const postMaterial = new THREE.MeshStandardMaterial({ color: 0x6b7a71, metalness: 0.22, roughness: 0.58 });
     const railMaterial = new THREE.MeshStandardMaterial({ color: 0x4f5e56, metalness: 0.32, roughness: 0.48 });
     for (const fence of this.level.mappedFences) {
-      for (let i = 0; i < fence.points.length - 1; i += 1) {
-        this.addFenceSegment(fence.points[i], fence.points[i + 1], 0, 1, 1.65, postMaterial, railMaterial);
+      this.addMappedFenceSegments(fence, postMaterial, railMaterial);
+    }
+  }
+
+  private addMappedFenceSegments(fence: MappedFence, postMaterial: THREE.Material, railMaterial: THREE.Material): void {
+    const gaps = (fence.gates ?? []).map((gate) => ({
+      position: gate.position,
+      radius: gate.radius
+    }));
+    const height = fence.height ?? 1.65;
+    for (let i = 0; i < fence.points.length - 1; i += 1) {
+      const a = fence.points[i];
+      const b = fence.points[i + 1];
+      const intervals = this.fenceVisibleIntervals(a, b, gaps);
+      for (const interval of intervals) {
+        this.addFenceSegment(a, b, interval.start, interval.end, height, postMaterial, railMaterial);
       }
+    }
+    for (const gate of fence.gates ?? []) {
+      this.addFenceGateThreshold(gate.position, height);
+    }
+  }
+
+  private addFenceGateThreshold(position: Vec2, height: number): void {
+    const gateMaterial = new THREE.MeshBasicMaterial({ color: 0xd7cfad, transparent: true, opacity: 0.56 });
+    const threshold = this.createTerrainOverlayRect(position, 0.35, 1.7, 0.18, PATH_MARKING_SURFACE_Y, gateMaterial);
+    threshold.receiveShadow = false;
+    this.scene.add(threshold);
+    const postMaterial = this.materials.metal;
+    for (const side of [-1, 1]) {
+      const point = { x: position.x + side * 0.95, z: position.z };
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.08, Math.min(1.25, height), 8), postMaterial);
+      post.position.set(point.x, this.groundY(point) + Math.min(1.25, height) * 0.5, point.z);
+      post.castShadow = true;
+      this.scene.add(post);
     }
   }
 
@@ -2182,23 +2213,11 @@ export class WorldBuilder {
   }
 
   private localPoint(center: Vec2, rotation: number, localX: number, localZ: number): Vec2 {
-    const cos = Math.cos(rotation);
-    const sin = Math.sin(rotation);
-    return {
-      x: center.x + localX * cos - localZ * sin,
-      z: center.z + localX * sin + localZ * cos
-    };
+    return localWorldPoint(center, rotation, localX, localZ);
   }
 
   private worldToLocal(center: Vec2, rotation: number, point: Vec2): Vec2 {
-    const dx = point.x - center.x;
-    const dz = point.z - center.z;
-    const cos = Math.cos(rotation);
-    const sin = Math.sin(rotation);
-    return {
-      x: dx * cos + dz * sin,
-      z: -dx * sin + dz * cos
-    };
+    return worldPointToLocal(center, rotation, point);
   }
 
   private localPointOnPolygonEdge(center: Vec2, rotation: number, polygon: Vec2[], localX: number, localZ: number): Vec2 {
@@ -2303,18 +2322,11 @@ export class WorldBuilder {
   }
 
   private pointInRotatedRect(point: Vec2, center: Vec2, angle: number, halfX: number, halfZ: number): boolean {
-    const dx = point.x - center.x;
-    const dz = point.z - center.z;
-    const cos = Math.cos(angle);
-    const sin = Math.sin(angle);
-    const localX = dx * cos + dz * sin;
-    const localZ = -dx * sin + dz * cos;
-    return Math.abs(localX) <= halfX && Math.abs(localZ) <= halfZ;
+    return pointInWorldRotatedRect(point, center, angle, halfX, halfZ);
   }
 
   private stableNoise(x: number, z: number, salt: number): number {
-    const value = Math.sin(x * 12.9898 + z * 78.233 + salt * 37.719) * 43758.5453;
-    return value - Math.floor(value);
+    return stableWorldNoise(x, z, salt);
   }
 
   private addLocalBox(
@@ -2650,6 +2662,12 @@ export class WorldBuilder {
     const frontScreenMaterial = this.standardDetailMaterial("grandstand-front-transparent-screen", 0x0b1718, 0.5, 0.06, true, 0.24);
     frontScreenMaterial.depthWrite = false;
     this.addLocalBox(center, rotation, 0, frontZ, footprint.halfX * 1.36, 1.18, 0.045, frontScreenMaterial, 1.72, false);
+    for (const x of [-0.58, 0, 0.58]) {
+      this.addLocalBox(center, rotation, x * footprint.halfX * 1.05, frontOut(0.055), footprint.halfX * 0.28, 1.28, 0.07, this.materials.darkOpening, 0.84, false);
+      this.addLocalBox(center, rotation, x * footprint.halfX * 1.05 + footprint.halfX * 0.09, frontOut(0.095), 0.08, 0.12, 0.055, this.materials.metal, 0.96, false);
+    }
+    this.addBuildingTextSign(center, rotation, -footprint.halfX * 0.54, frontOut(0.08), footprint.halfX * 0.36, 0.3, 2.72, "CHANGE", "#5b4632", "#f2e6a8", 0.06);
+    this.addBuildingTextSign(center, rotation, footprint.halfX * 0.54, frontOut(0.08), footprint.halfX * 0.32, 0.3, 2.72, "UMPIRE", "#5b4632", "#f2e6a8", 0.06);
     for (const y of [1.16, 2.34]) {
       this.addLocalBox(center, rotation, 0, frontOut(0.02), footprint.halfX * 1.42, 0.08, 0.08, this.materials.metal, y, false);
     }
@@ -2658,6 +2676,9 @@ export class WorldBuilder {
     }
     for (let i = -4; i <= 4; i += 1) {
       this.addLocalBox(center, rotation, (i / 4) * footprint.halfX * 0.9, 0, 0.08, 0.09, footprint.halfZ * 2 + 2.3, this.materials.metal, 6.12);
+    }
+    for (let row = 0; row < 5; row += 1) {
+      this.addLocalBox(center, rotation, 0, frontIn(0.84 + row * 0.48), footprint.halfX * 1.32, 0.12, 0.24, this.materials.timber, 2.08 + row * 0.34);
     }
     for (let step = 0; step < 5; step += 1) {
       this.addLocalBox(
@@ -2823,12 +2844,24 @@ export class WorldBuilder {
     for (const x of [-0.55, 0, 0.55]) {
       this.addLocalBox(center, rotation, -footprint.halfX * 0.28 + x * footprint.halfX * 0.42, footprint.halfZ * 0.01, 1.9, 0.18, 0.38, this.materials.timber, 0.48);
     }
+    const gateZ = footprint.halfZ + 0.72;
+    const brickPierMaterial = this.standardDetailMaterial("bowls-memorial-gate-piers", 0x8a4a38, 0.74, 0.02);
+    const gateMaterial = this.standardDetailMaterial("bowls-memorial-wrought-gate", 0x2c302c, 0.48, 0.42);
+    for (const x of [-0.72, 0.72]) {
+      this.addLocalBox(center, rotation, x * footprint.halfX * 0.5, gateZ, 0.42, 1.18, 0.42, brickPierMaterial, 0.64);
+      this.addLocalCylinder(center, rotation, x * footprint.halfX * 0.5, gateZ, 0.18, 0.22, 0.16, this.materials.basalt, 1.25);
+    }
+    for (const y of [0.52, 0.92]) {
+      this.addLocalBox(center, rotation, 0, gateZ, footprint.halfX * 0.86, 0.07, 0.08, gateMaterial, y);
+    }
+    for (const x of [-0.28, -0.14, 0, 0.14, 0.28]) {
+      this.addLocalBox(center, rotation, x * footprint.halfX, gateZ, 0.045, 0.78, 0.055, gateMaterial, 0.64);
+    }
   }
 
   private addOval(landmark: Landmark): void {
     if (!landmark.polygon) return;
     this.addFlatPolygon(landmark.polygon, new THREE.MeshStandardMaterial({ color: 0x5d874d, roughness: 0.9 }), 0.075);
-    this.addFenceAround(landmark.polygon, 1.25, 0x8f7b61);
     const center = polygonCentroid(landmark.polygon);
     this.addOvalMowingBands(landmark.polygon, center);
     const ring = makeCircle(center, 34, 64);
@@ -3006,29 +3039,228 @@ export class WorldBuilder {
 
   private addPlayground(landmark: Landmark): void {
     if (!landmark.polygon) return;
+    const footprint = this.fitBoxFromPolygon(landmark.polygon, 0, 0);
+    const center = footprint.center;
+    const rotation = -footprint.angle;
     this.addFlatPolygon(landmark.polygon, this.materials.mulch, 0.1);
-    const center = polygonCentroid(landmark.polygon);
-    const frame = new THREE.Group();
-    const colors = [0xd6b85d, 0xb74838, 0x609f8a];
-    for (let i = 0; i < 4; i += 1) {
-      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.25, 4.2, 8), new THREE.MeshStandardMaterial({ color: colors[i % colors.length] }));
-      pole.position.set((i % 2 === 0 ? -2 : 2), 2.1, i < 2 ? -2 : 2);
-      pole.castShadow = true;
-      frame.add(pole);
+    if (landmark.id === "south-playground") {
+      this.addSouthPlaygroundDetails(center, rotation, footprint.halfX, footprint.halfZ);
+    } else {
+      this.addNorthPlaygroundDetails(center, rotation, footprint.halfX, footprint.halfZ);
     }
-    const platform = new THREE.Mesh(new THREE.BoxGeometry(5.2, 0.35, 4.6), this.materials.timber);
-    platform.position.y = 2.35;
-    platform.castShadow = true;
-    frame.add(platform);
-    const slide = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.22, 6.8), new THREE.MeshStandardMaterial({ color: 0xb74838, roughness: 0.42 }));
-    slide.position.set(0, 1.4, 5);
-    slide.rotation.x = -0.38;
+  }
+
+  private addSouthPlaygroundDetails(center: Vec2, rotation: number, halfX: number, halfZ: number): void {
+    this.addPlaygroundPath(center, rotation, [
+      [-halfX * 0.82, -halfZ * 0.42],
+      [-halfX * 0.22, -halfZ * 0.12],
+      [halfX * 0.06, halfZ * 0.16],
+      [halfX * 0.82, halfZ * 0.36]
+    ], 1.1);
+    this.addPlaygroundPath(center, rotation, [
+      [-halfX * 0.1, -halfZ * 0.72],
+      [-halfX * 0.05, -halfZ * 0.1],
+      [halfX * 0.04, halfZ * 0.62]
+    ], 0.92);
+    this.addPlaygroundTower(center, rotation, -halfX * 0.18, -halfZ * 0.12, 5.7, 4.8, 2.35, "south-main", 0xb74838);
+    this.addPlaygroundRopeWeb(center, rotation, halfX * 0.24, -halfZ * 0.18, 4.8, 3.1);
+    this.addSandpit(center, rotation, halfX * 0.42, halfZ * 0.35, 5.4, 3.6);
+    this.addSandpit(center, rotation, -halfX * 0.5, halfZ * 0.32, 3.8, 2.7);
+    this.addSwingSet(this.localPoint(center, rotation, -halfX * 0.58, -halfZ * 0.5), rotation + 0.08);
+    this.addSwingSet(this.localPoint(center, rotation, halfX * 0.62, -halfZ * 0.54), rotation - 0.12);
+    this.addPlaygroundShelter(center, rotation, 0, halfZ * 0.02);
+    this.addToddlerSlide(center, rotation, -halfX * 0.48, halfZ * 0.02, 0x609f8a);
+    this.addChalkWall(center, rotation, -halfX * 0.73, halfZ * 0.02, 1.35);
+    this.addSeesaw(center, rotation, halfX * 0.02, halfZ * 0.55);
+    this.addSpinner(center, rotation, halfX * 0.63, halfZ * 0.08);
+  }
+
+  private addNorthPlaygroundDetails(center: Vec2, rotation: number, halfX: number, halfZ: number): void {
+    this.addPlaygroundPath(center, rotation, [
+      [-halfX * 0.75, 0],
+      [-halfX * 0.22, -halfZ * 0.12],
+      [halfX * 0.72, -halfZ * 0.08]
+    ], 0.9);
+    this.addPlaygroundTower(center, rotation, -halfX * 0.16, -halfZ * 0.08, 3.8, 3.2, 1.46, "north-toddler", 0x4f9c82);
+    this.addToddlerSlide(center, rotation, halfX * 0.18, halfZ * 0.28, 0xd6b85d);
+    this.addSwingSet(this.localPoint(center, rotation, -halfX * 0.54, halfZ * 0.28), rotation + 0.05);
+    this.addBalanceLogs(this.localPoint(center, rotation, halfX * 0.46, -halfZ * 0.36), rotation - 0.25);
+    this.addTunnel(center, rotation, halfX * 0.42, halfZ * 0.18);
+    this.addSpringRider(center, rotation, -halfX * 0.54, -halfZ * 0.32, 0xc86d3b);
+    this.addSpringRider(center, rotation, halfX * 0.62, -halfZ * 0.04, 0x5f86a6);
+  }
+
+  private addPlaygroundPath(center: Vec2, rotation: number, localPoints: Array<[number, number]>, width: number): void {
+    const material = this.standardDetailMaterial("playground-access-path", 0xd4c8a9, 0.82, 0.01);
+    const points = localPoints.map(([x, z]) => this.localPoint(center, rotation, x, z));
+    for (let i = 0; i < points.length - 1; i += 1) {
+      this.addPathSegment(points[i], points[i + 1], width, material, PATH_SURFACE_Y + 0.024);
+    }
+    for (const point of points) {
+      this.addPathCap(point, width * 0.48, material, PATH_CAP_SURFACE_Y + 0.024);
+    }
+  }
+
+  private addPlaygroundTower(
+    center: Vec2,
+    rotation: number,
+    localX: number,
+    localZ: number,
+    width: number,
+    depth: number,
+    platformY: number,
+    key: string,
+    accentColor: number
+  ): void {
+    const base = this.localPoint(center, rotation, localX, localZ);
+    const group = new THREE.Group();
+    const accent = this.standardDetailMaterial(`playground-${key}-accent`, accentColor, 0.54, 0.02);
+    const roof = this.standardDetailMaterial(`playground-${key}-roof`, 0x8a5d3f, 0.72, 0.01);
+
+    for (const x of [-width * 0.42, width * 0.42]) {
+      for (const z of [-depth * 0.38, depth * 0.38]) {
+        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.18, platformY + 1.7, 8), this.materials.timber);
+        pole.position.set(x, (platformY + 1.7) * 0.5, z);
+        pole.castShadow = true;
+        group.add(pole);
+      }
+    }
+    const deck = new THREE.Mesh(new THREE.BoxGeometry(width, 0.22, depth), this.materials.timber);
+    deck.position.y = platformY;
+    deck.castShadow = true;
+    group.add(deck);
+
+    for (const z of [-depth * 0.34, depth * 0.34]) {
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(width * 0.9, 0.14, 0.12), accent);
+      rail.position.set(0, platformY + 0.82, z);
+      rail.castShadow = true;
+      group.add(rail);
+    }
+    const roofMesh = new THREE.Mesh(new THREE.ConeGeometry(width * 0.58, 0.9, 4), roof);
+    roofMesh.position.y = platformY + 2.1;
+    roofMesh.rotation.y = Math.PI * 0.25;
+    roofMesh.castShadow = true;
+    group.add(roofMesh);
+
+    const slide = new THREE.Mesh(new THREE.BoxGeometry(width * 0.26, 0.16, depth * 1.26), accent);
+    slide.position.set(width * 0.08, platformY * 0.53, depth * 0.84);
+    slide.rotation.x = -0.34;
     slide.castShadow = true;
-    frame.add(slide);
-    frame.position.set(center.x, this.boxSupportY(center, 0, 2.6, 2.35), center.z);
-    this.scene.add(frame);
-    this.addSwingSet({ x: center.x - 5.6, z: center.z - 3.2 }, 0.25);
-    this.addBalanceLogs({ x: center.x + 4.5, z: center.z + 3.8 }, -0.45);
+    group.add(slide);
+
+    for (let rung = 0; rung < 4; rung += 1) {
+      const step = new THREE.Mesh(new THREE.BoxGeometry(width * 0.48, 0.09, 0.13), this.materials.metal);
+      step.position.set(-width * 0.18, 0.48 + rung * 0.34, -depth * 0.55);
+      step.castShadow = true;
+      group.add(step);
+    }
+
+    group.position.set(base.x, this.boxSupportY(base, rotation, width * 0.55, depth * 0.62), base.z);
+    group.rotation.y = rotation;
+    this.scene.add(group);
+  }
+
+  private addPlaygroundRopeWeb(center: Vec2, rotation: number, localX: number, localZ: number, width: number, height: number): void {
+    const base = this.localPoint(center, rotation, localX, localZ);
+    const group = new THREE.Group();
+    const lineMaterial = new THREE.LineBasicMaterial({ color: 0xf0e1bf, transparent: true, opacity: 0.86 });
+    const frameMaterial = this.materials.metal;
+    for (const x of [-width * 0.5, width * 0.5]) {
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, height, 8), frameMaterial);
+      post.position.set(x, height * 0.5, 0);
+      post.castShadow = true;
+      group.add(post);
+    }
+    const points: THREE.Vector3[] = [];
+    for (let step = 0; step <= 4; step += 1) {
+      const x = -width * 0.5 + (width * step) / 4;
+      points.push(new THREE.Vector3(x, 0.28, 0), new THREE.Vector3(0, height, 0));
+    }
+    for (let step = 1; step <= 3; step += 1) {
+      const y = 0.38 + (height - 0.52) * (step / 4);
+      points.push(new THREE.Vector3(-width * 0.5, y, 0), new THREE.Vector3(width * 0.5, y, 0));
+    }
+    points.push(new THREE.Vector3(-width * 0.5, 0.28, 0), new THREE.Vector3(width * 0.5, height * 0.84, 0));
+    points.push(new THREE.Vector3(width * 0.5, 0.28, 0), new THREE.Vector3(-width * 0.5, height * 0.84, 0));
+    group.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(points), lineMaterial));
+    group.position.set(base.x, this.groundY(base) + 0.04, base.z);
+    group.rotation.y = rotation + 0.22;
+    this.scene.add(group);
+  }
+
+  private addSandpit(center: Vec2, rotation: number, localX: number, localZ: number, width: number, depth: number): void {
+    const point = this.localPoint(center, rotation, localX, localZ);
+    const sand = this.createTerrainOverlayRect(point, rotation, width, depth, PATH_SURFACE_Y + 0.018, this.materials.dirt);
+    sand.receiveShadow = true;
+    this.scene.add(sand);
+    this.addLocalBox(center, rotation, localX, localZ - depth * 0.5, width + 0.25, 0.18, 0.18, this.materials.timber, 0.16);
+    this.addLocalBox(center, rotation, localX, localZ + depth * 0.5, width + 0.25, 0.18, 0.18, this.materials.timber, 0.16);
+    this.addLocalBox(center, rotation, localX - width * 0.5, localZ, 0.18, 0.18, depth + 0.25, this.materials.timber, 0.16);
+    this.addLocalBox(center, rotation, localX + width * 0.5, localZ, 0.18, 0.18, depth + 0.25, this.materials.timber, 0.16);
+  }
+
+  private addPlaygroundShelter(center: Vec2, rotation: number, localX: number, localZ: number): void {
+    const position = this.localPoint(center, rotation, localX, localZ);
+    const groundY = this.radialSupportY(position, 2.4);
+    const roof = new THREE.Mesh(new THREE.CylinderGeometry(2.0, 2.45, 0.28, 4), this.materials.timber);
+    roof.position.set(position.x, groundY + 2.55, position.z);
+    roof.rotation.y = rotation + Math.PI / 4;
+    roof.castShadow = true;
+    this.scene.add(roof);
+    for (const x of [-1.35, 1.35]) {
+      for (const z of [-1.0, 1.0]) {
+        this.addLocalCylinder(position, rotation, x, z, 0.055, 0.075, 2.25, this.materials.metal);
+      }
+    }
+  }
+
+  private addToddlerSlide(center: Vec2, rotation: number, localX: number, localZ: number, color: number): void {
+    const accent = this.standardDetailMaterial(`toddler-slide-${color.toString(16)}`, color, 0.52, 0.02);
+    this.addLocalBox(center, rotation, localX, localZ, 2.3, 0.18, 1.9, this.materials.timber, 0.92);
+    const slide = this.addLocalBox(center, rotation, localX + 1.65, localZ + 0.22, 0.95, 0.14, 2.9, accent, 0.62);
+    slide.rotation.x = -0.28;
+    for (const z of [-0.58, 0.58]) {
+      this.addLocalBox(center, rotation, localX - 1.25, localZ + z, 0.1, 0.95, 0.1, this.materials.metal, 0.52);
+    }
+  }
+
+  private addChalkWall(center: Vec2, rotation: number, localX: number, localZ: number, width: number): void {
+    this.addLocalBox(center, rotation, localX, localZ, width, 1.05, 0.08, this.materials.darkOpening, 0.68, false);
+    for (const x of [-width * 0.42, width * 0.42]) {
+      this.addLocalCylinder(center, rotation, localX + x, localZ, 0.04, 0.05, 1.3, this.materials.timber);
+    }
+  }
+
+  private addSeesaw(center: Vec2, rotation: number, localX: number, localZ: number): void {
+    const beam = this.addLocalBox(center, rotation + 0.18, localX, localZ, 4.5, 0.16, 0.28, this.materials.timber, 0.62);
+    beam.rotation.z = 0.12;
+    this.addLocalCylinder(center, rotation, localX, localZ, 0.22, 0.28, 0.42, this.materials.metal, 0.12);
+  }
+
+  private addSpinner(center: Vec2, rotation: number, localX: number, localZ: number): void {
+    const position = this.localPoint(center, rotation, localX, localZ);
+    const disc = new THREE.Mesh(new THREE.CylinderGeometry(1.05, 1.12, 0.16, 20), this.materials.rubber);
+    disc.position.set(position.x, this.groundY(position) + 0.18, position.z);
+    disc.castShadow = true;
+    this.scene.add(disc);
+    this.addLocalCylinder(center, rotation, localX, localZ, 0.045, 0.06, 0.95, this.materials.metal, 0.18);
+  }
+
+  private addTunnel(center: Vec2, rotation: number, localX: number, localZ: number): void {
+    const position = this.localPoint(center, rotation, localX, localZ);
+    const tunnel = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 2.1, 14, 1, true), this.materials.rubber);
+    tunnel.position.set(position.x, this.groundY(position) + 0.72, position.z);
+    tunnel.rotation.z = Math.PI / 2;
+    tunnel.rotation.y = rotation + Math.PI / 2;
+    tunnel.castShadow = true;
+    this.scene.add(tunnel);
+  }
+
+  private addSpringRider(center: Vec2, rotation: number, localX: number, localZ: number, color: number): void {
+    const accent = this.standardDetailMaterial(`spring-rider-${color.toString(16)}`, color, 0.58, 0.02);
+    this.addLocalCylinder(center, rotation, localX, localZ, 0.05, 0.07, 0.62, this.materials.metal, 0.08);
+    this.addLocalBox(center, rotation, localX, localZ, 1.05, 0.42, 0.42, accent, 0.72);
+    this.addLocalBox(center, rotation, localX + 0.58, localZ, 0.34, 0.2, 0.24, accent, 0.9);
   }
 
   private addSwingSet(position: Vec2, rotation: number): void {
@@ -3082,19 +3314,123 @@ export class WorldBuilder {
   private addSkatePark(landmark: Landmark): void {
     if (!landmark.polygon) return;
     this.addFlatPolygon(landmark.polygon, this.materials.concrete, 0.1);
-    const center = polygonCentroid(landmark.polygon);
-    for (const offset of [-6, 6]) {
-      const ramp = new THREE.Mesh(new THREE.BoxGeometry(9, 1.2, 4), new THREE.MeshStandardMaterial({ color: 0x6d706c, roughness: 0.76 }));
-      const point = { x: center.x + offset, z: center.z };
-      ramp.position.set(point.x, this.boxSupportY(point, 0, 4.5, 2) + 0.65, point.z);
-      ramp.rotation.z = offset < 0 ? 0.22 : -0.22;
-      ramp.castShadow = true;
-      ramp.receiveShadow = true;
-      this.scene.add(ramp);
+    const footprint = this.fitBoxFromPolygon(landmark.polygon, 0, 0);
+    const center = footprint.center;
+    const rotation = -footprint.angle;
+
+    for (const bowl of this.level.skateBowls) {
+      this.addSkateBowlFeature(bowl);
     }
-    this.addSkateRail({ x: center.x, z: center.z - 2.3 }, 0.08, 8.5);
-    this.addLocalBox(center, 0, 0, 4.2, 6.2, 0.46, 0.72, this.materials.concrete, 0.34);
-    this.addLocalBox(center, 0, -4.2, -4.1, 4.6, 0.38, 0.64, this.materials.concrete, 0.28);
+
+    this.addSkateStreetSection(center, rotation, footprint.halfX, footprint.halfZ);
+  }
+
+  private addSkateBowlFeature(bowl: SkateBowlFeature): void {
+    const floorMaterial = this.standardDetailMaterial(
+      `fitzy-bowl-floor-${bowl.difficulty}`,
+      bowl.difficulty === "deep" ? 0x7f8582 : 0x90978f,
+      0.82,
+      0.03
+    );
+    const shadowMaterial = this.standardDetailMaterial(`fitzy-bowl-low-point-${bowl.id}`, 0x5f6868, 0.9, 0.02, true, 0.64);
+    const rimMaterial = this.standardDetailMaterial(`fitzy-bowl-rim-${bowl.difficulty}`, 0xb0b4ad, 0.74, 0.04);
+
+    const floor = this.createTerrainOverlayEllipse(bowl.center, bowl.angle, bowl.radiusX, bowl.radiusZ, PATH_SURFACE_Y + 0.024, floorMaterial);
+    floor.receiveShadow = true;
+    this.scene.add(floor);
+
+    const lowPoint = this.createTerrainOverlayEllipse(
+      bowl.center,
+      bowl.angle,
+      bowl.radiusX * 0.52,
+      bowl.radiusZ * 0.52,
+      PATH_SURFACE_Y + 0.03,
+      shadowMaterial
+    );
+    lowPoint.receiveShadow = true;
+    this.scene.add(lowPoint);
+
+    this.addSkateBowlContour(bowl, 0.72, 0xaeb5b1);
+    this.addSkateBowlContour(bowl, 0.43, 0x6d7778);
+    this.addSkateBowlRim(bowl, rimMaterial);
+    this.addSkateBowlExitRamp(bowl, rimMaterial);
+  }
+
+  private addSkateBowlRim(bowl: SkateBowlFeature, rimMaterial: THREE.Material): void {
+    const segments = bowl.difficulty === "deep" ? 24 : 18;
+    for (let index = 0; index < segments; index += 1) {
+      const startAngle = (index / segments) * Math.PI * 2;
+      const endAngle = ((index + 0.82) / segments) * Math.PI * 2;
+      const midAngle = (startAngle + endAngle) * 0.5;
+      if (this.isSkateBowlExitAngle(bowl, midAngle, bowl.exitWidth * 1.15)) {
+        continue;
+      }
+
+      const start = this.skateBowlPoint(bowl, startAngle, 1.02);
+      const end = this.skateBowlPoint(bowl, endAngle, 1.02);
+      const center = { x: (start.x + end.x) * 0.5, z: (start.z + end.z) * 0.5 };
+      const angle = Math.atan2(end.z - start.z, end.x - start.x);
+      const length = distance(start, end);
+      const rim = this.createTerrainRect(center, angle, length, 0.5, PATH_SURFACE_Y + 0.2, 0.22, rimMaterial);
+      rim.receiveShadow = true;
+      this.scene.add(rim);
+
+      const coping = this.createTerrainRect(center, angle, length * 0.92, 0.095, PATH_SURFACE_Y + 0.35, 0.075, this.materials.metal);
+      coping.receiveShadow = true;
+      this.scene.add(coping);
+    }
+  }
+
+  private addSkateBowlExitRamp(bowl: SkateBowlFeature, material: THREE.Material): void {
+    const inner = this.skateBowlPoint(bowl, bowl.exitAngle, 0.75);
+    const outer = this.skateBowlPoint(bowl, bowl.exitAngle, 1.2);
+    const center = { x: (inner.x + outer.x) * 0.5, z: (inner.z + outer.z) * 0.5 };
+    const angle = Math.atan2(outer.z - inner.z, outer.x - inner.x);
+    const rollOut = this.createTerrainRect(center, angle, distance(inner, outer), bowl.difficulty === "deep" ? 1.35 : 1.9, PATH_SURFACE_Y + 0.045, 0.055, material);
+    rollOut.receiveShadow = true;
+    this.scene.add(rollOut);
+  }
+
+  private addSkateBowlContour(bowl: SkateBowlFeature, scale: number, color: number): void {
+    const material = new THREE.LineBasicMaterial({ color, transparent: true, opacity: scale < 0.5 ? 0.5 : 0.68 });
+    const points: THREE.Vector3[] = [];
+    for (let step = 0; step <= 48; step += 1) {
+      const angle = (step / 48) * Math.PI * 2;
+      const point = this.skateBowlPoint(bowl, angle, scale);
+      points.push(new THREE.Vector3(point.x, this.groundY(point) + PATH_MARKING_SURFACE_Y + 0.008, point.z));
+    }
+    this.scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), material));
+  }
+
+  private addSkateStreetSection(center: Vec2, rotation: number, halfX: number, halfZ: number): void {
+    const ledgeMaterial = this.standardDetailMaterial("fitzy-bowl-street-ledges", 0x8a908a, 0.78, 0.04);
+    const bankMaterial = this.standardDetailMaterial("fitzy-bowl-bank-faces", 0x969c96, 0.78, 0.03);
+
+    this.addSkateRail(this.localPoint(center, rotation, halfX * 0.18, -halfZ * 0.03), rotation + 0.05, Math.min(8.6, halfX * 0.7));
+    this.addLocalBox(center, rotation, halfX * 0.36, halfZ * 0.36, Math.min(6.8, halfX * 0.55), 0.42, 0.82, ledgeMaterial, 0.25);
+    this.addLocalBox(center, rotation, -halfX * 0.18, halfZ * 0.43, Math.min(5.2, halfX * 0.45), 0.36, 1.1, ledgeMaterial, 0.22);
+    this.addLocalBox(center, rotation, halfX * 0.56, -halfZ * 0.34, Math.min(4.8, halfX * 0.38), 0.5, 1.15, ledgeMaterial, 0.28);
+
+    const leftBank = this.addLocalBox(center, rotation, -halfX * 0.55, -halfZ * 0.1, Math.min(5.8, halfX * 0.46), 0.72, 2.8, bankMaterial, 0.36);
+    leftBank.rotation.z = 0.18;
+    const rightBank = this.addLocalBox(center, rotation, halfX * 0.54, halfZ * 0.02, Math.min(5.8, halfX * 0.46), 0.72, 2.8, bankMaterial, 0.36);
+    rightBank.rotation.z = -0.18;
+
+    const quarterPipe = this.addLocalBox(center, rotation, 0, -halfZ * 0.62, Math.min(9.5, halfX * 0.8), 0.92, 1.35, bankMaterial, 0.46);
+    quarterPipe.rotation.x = -0.2;
+
+    const seatMaterial = this.standardDetailMaterial("fitzy-bowl-concrete-seating", 0xa8aba3, 0.78, 0.03);
+    this.addLocalBox(center, rotation, -halfX * 0.58, halfZ * 0.68, Math.min(4.8, halfX * 0.42), 0.38, 0.8, seatMaterial, 0.24);
+    this.addLocalBox(center, rotation, -halfX * 0.12, halfZ * 0.72, Math.min(5.4, halfX * 0.46), 0.38, 0.8, seatMaterial, 0.24);
+  }
+
+  private skateBowlPoint(bowl: SkateBowlFeature, angle: number, scale: number): Vec2 {
+    return this.localPoint(bowl.center, bowl.angle, Math.cos(angle) * bowl.radiusX * scale, Math.sin(angle) * bowl.radiusZ * scale);
+  }
+
+  private isSkateBowlExitAngle(bowl: SkateBowlFeature, angle: number, width: number): boolean {
+    const delta = Math.atan2(Math.sin(angle - bowl.exitAngle), Math.cos(angle - bowl.exitAngle));
+    return Math.abs(delta) <= width;
   }
 
   private addSkateRail(position: Vec2, rotation: number, length: number): void {
@@ -3289,6 +3625,9 @@ export class WorldBuilder {
       } else if (amenity.kind === "toilets") {
         this.addToiletSign(amenity.position, angle);
         this.addAmenityHalo(amenity.position, 0x61a8d3, 0.52);
+      } else if (this.isStructureAmenity(amenity)) {
+        this.addStructureAccessCue(amenity, angle);
+        this.addAmenityHalo(amenity.position, 0xe3a84a, 0.58);
       }
     }
   }
@@ -3309,6 +3648,8 @@ export class WorldBuilder {
         this.addWorksMaterials(detail);
       } else if (detail.kind === "removed-tree-stump") {
         this.addRemovedTreeStump(detail);
+      } else if (detail.kind === "park-rule-sign") {
+        this.addParkRuleSign(detail);
       } else if (detail.kind === "training-cones") {
         this.addTrainingCones(detail);
       } else if (detail.kind === "dog-water-bowl") {
@@ -3338,6 +3679,89 @@ export class WorldBuilder {
     const mark = new THREE.Mesh(new THREE.CircleGeometry(0.12, 14), new THREE.MeshBasicMaterial({ color: 0xe7e2cb }));
     mark.position.set(-0.18, 1.32, -0.034);
     group.add(mark);
+    group.position.set(detail.position.x, this.groundY(detail.position), detail.position.z);
+    group.rotation.y = detail.angle;
+    this.scene.add(group);
+  }
+
+  private addParkRuleSign(detail: ParkLifeDetail): void {
+    const group = new THREE.Group();
+    const rule = detail.rule ?? "dogs-on-leash";
+    const signConfig =
+      rule === "alcohol-hours"
+        ? { text: "9-9", background: "#5c4630", foreground: "#f4dfa6", width: 1.28 }
+        : rule === "rotunda-stairs-no-power"
+          ? { text: "STAIRS", background: "#5a4630", foreground: "#f4dfa6", width: 1.55 }
+          : rule === "access-friendly"
+            ? { text: "ACCESS", background: "#246ca8", foreground: "#f4dfa6", width: 1.5 }
+            : { text: "LEASH", background: "#315c45", foreground: "#f4dfa6", width: 1.42 };
+    const postMaterial = this.standardDetailMaterial("park-rule-sign-post", 0x4d5954, 0.58, 0.24);
+    const panelMaterial = this.canvasSignMaterial(`park-rule-${rule}`, signConfig.text, signConfig.background, signConfig.foreground);
+    const paleMaterial = this.basicDetailMaterial("park-rule-pale-symbol", 0xf2e6bf);
+    const darkMaterial = this.basicDetailMaterial("park-rule-dark-symbol", 0x1d2522);
+    const accentMaterial = this.basicDetailMaterial("park-rule-red-symbol", 0xb84c3c);
+
+    const pad = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.42, 0.06, 14), this.materials.concrete);
+    pad.position.y = 0.03;
+    pad.receiveShadow = true;
+    group.add(pad);
+
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.06, 1.42, 8), postMaterial);
+    post.position.y = 0.72;
+    post.castShadow = true;
+    group.add(post);
+
+    const panel = new THREE.Mesh(new THREE.BoxGeometry(signConfig.width, 0.58, 0.075), panelMaterial);
+    panel.position.y = 1.36;
+    panel.castShadow = true;
+    group.add(panel);
+
+    if (rule === "dogs-on-leash") {
+      const lead = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.035, 0.035), paleMaterial);
+      lead.position.set(-0.18, 1.04, -0.055);
+      lead.rotation.z = -0.32;
+      group.add(lead);
+      const collar = new THREE.Mesh(new THREE.TorusGeometry(0.13, 0.014, 6, 16), paleMaterial);
+      collar.position.set(0.26, 1.04, -0.058);
+      collar.rotation.x = Math.PI / 2;
+      group.add(collar);
+    } else if (rule === "alcohol-hours") {
+      const bottle = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.42, 0.06), paleMaterial);
+      bottle.position.set(-0.34, 0.98, -0.055);
+      group.add(bottle);
+      const neck = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.16, 0.055), paleMaterial);
+      neck.position.set(-0.34, 1.27, -0.058);
+      group.add(neck);
+      const slash = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.045, 0.055), accentMaterial);
+      slash.position.set(0.25, 1.08, -0.06);
+      slash.rotation.z = -0.58;
+      group.add(slash);
+    } else if (rule === "rotunda-stairs-no-power") {
+      for (let step = 0; step < 3; step += 1) {
+        const stair = new THREE.Mesh(new THREE.BoxGeometry(0.22 + step * 0.16, 0.055, 0.055), paleMaterial);
+        stair.position.set(-0.34 + step * 0.16, 0.94 + step * 0.12, -0.055);
+        group.add(stair);
+      }
+      const plug = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.16, 0.055), darkMaterial);
+      plug.position.set(0.34, 1.04, -0.058);
+      group.add(plug);
+      const slash = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.04, 0.058), accentMaterial);
+      slash.position.set(0.34, 1.04, -0.064);
+      slash.rotation.z = -0.62;
+      group.add(slash);
+    } else if (rule === "access-friendly") {
+      const disc = new THREE.Mesh(new THREE.CircleGeometry(0.13, 16), paleMaterial);
+      disc.position.set(-0.34, 1.08, -0.058);
+      group.add(disc);
+      const seat = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.055, 0.055), paleMaterial);
+      seat.position.set(-0.18, 0.92, -0.058);
+      group.add(seat);
+      const wheel = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.018, 8, 18), paleMaterial);
+      wheel.position.set(0.14, 0.88, -0.058);
+      wheel.rotation.x = Math.PI / 2;
+      group.add(wheel);
+    }
+
     group.position.set(detail.position.x, this.groundY(detail.position), detail.position.z);
     group.rotation.y = detail.angle;
     this.scene.add(group);
@@ -3915,6 +4339,85 @@ export class WorldBuilder {
     crate.castShadow = true;
     crate.receiveShadow = true;
     this.scene.add(crate);
+  }
+
+  private isStructureAmenity(amenity: AmenityPoint): boolean {
+    return (
+      amenity.kind === "clubroom" ||
+      amenity.kind === "changeroom" ||
+      amenity.kind === "gatehouse" ||
+      amenity.kind === "maintenance_room" ||
+      amenity.kind === "community_room"
+    );
+  }
+
+  private addStructureAccessCue(amenity: AmenityPoint, angle: number): void {
+    const panelColor =
+      amenity.kind === "changeroom"
+        ? 0x5f725f
+        : amenity.kind === "gatehouse"
+          ? 0x6a4c32
+          : amenity.kind === "maintenance_room"
+            ? 0x5b6665
+            : amenity.kind === "community_room"
+              ? 0x315d67
+              : 0x314f44;
+    const panelMaterial = this.standardDetailMaterial(`structure-access-${amenity.kind}`, panelColor, 0.72, 0.08);
+    const latchMaterial = this.standardDetailMaterial("structure-access-latch", 0xd0a343, 0.48, 0.28);
+    const signText =
+      amenity.kind === "changeroom"
+        ? "CHANGE"
+        : amenity.kind === "gatehouse"
+          ? "GATE"
+          : amenity.kind === "maintenance_room"
+            ? "STORE"
+            : amenity.kind === "community_room"
+              ? "ROOM"
+              : "CLUB";
+    const signMaterial = this.canvasSignMaterial(`structure-access-${amenity.kind}`, signText, "#2b332c", "#f0d996");
+
+    this.addLocalBox(amenity.position, angle, 0, 0, 1.8, 0.065, 1.1, this.materials.concrete, 0.095, false);
+    this.addLocalBox(amenity.position, angle, 0, -0.28, 1.08, 0.9, 0.16, panelMaterial, 0.58);
+    this.addLocalBox(amenity.position, angle, 0.41, -0.39, 0.12, 0.16, 0.08, latchMaterial, 0.72, false);
+    this.addLocalBox(amenity.position, angle, 0, -0.48, 0.78, 0.3, 0.055, signMaterial, 1.24, false);
+
+    if (amenity.kind === "changeroom") {
+      const firstAid = this.basicDetailMaterial("structure-first-aid", 0xd8e6dc);
+      const cross = this.basicDetailMaterial("structure-first-aid-cross", 0x396c55);
+      this.addLocalBox(amenity.position, angle, -0.5, -0.52, 0.34, 0.34, 0.06, firstAid, 0.92, false);
+      this.addLocalBox(amenity.position, angle, -0.5, -0.56, 0.24, 0.055, 0.065, cross, 0.92, false);
+      this.addLocalBox(amenity.position, angle, -0.5, -0.565, 0.055, 0.24, 0.065, cross, 0.92, false);
+      this.addLocalBox(amenity.position, angle, 0.18, 0.28, 1.15, 0.16, 0.32, this.materials.timber, 0.2);
+      return;
+    }
+
+    if (amenity.kind === "gatehouse") {
+      this.addLocalBox(amenity.position, angle, -0.1, -0.56, 0.62, 0.2, 0.06, this.materials.darkOpening, 0.84, false);
+      for (const x of [-0.72, 0.72]) {
+        this.addLocalCylinder(amenity.position, angle, x, 0.34, 0.08, 0.1, 0.72, this.materials.metal);
+      }
+      return;
+    }
+
+    if (amenity.kind === "maintenance_room") {
+      this.addLocalBox(amenity.position, angle, -0.46, 0.28, 0.55, 0.52, 0.42, this.materials.metal, 0.34);
+      this.addLocalCylinder(amenity.position, angle, 0.5, 0.3, 0.18, 0.18, 0.08, this.materials.metal, 0.28);
+      this.addLocalBox(amenity.position, angle, 0.5, 0.45, 0.12, 0.24, 0.08, latchMaterial, 0.32, false);
+      return;
+    }
+
+    if (amenity.kind === "community_room") {
+      const firstAid = this.basicDetailMaterial("community-first-aid", 0xe7e3d0);
+      const cross = this.basicDetailMaterial("community-first-aid-cross", 0x2d7a6d);
+      this.addLocalBox(amenity.position, angle, -0.48, -0.52, 0.32, 0.32, 0.06, firstAid, 0.92, false);
+      this.addLocalBox(amenity.position, angle, -0.48, -0.56, 0.22, 0.052, 0.065, cross, 0.92, false);
+      this.addLocalBox(amenity.position, angle, -0.48, -0.565, 0.052, 0.22, 0.065, cross, 0.92, false);
+      this.addLocalBox(amenity.position, angle, 0.48, 0.26, 0.48, 0.52, 0.28, this.materials.timber, 0.34);
+      return;
+    }
+
+    this.addLocalBox(amenity.position, angle, -0.48, 0.24, 0.48, 0.58, 0.34, this.materials.metal, 0.38);
+    this.addLocalBox(amenity.position, angle, 0.48, 0.24, 0.44, 0.44, 0.32, this.materials.timber, 0.32);
   }
 
   private addToiletSign(position: Vec2, angle: number): void {

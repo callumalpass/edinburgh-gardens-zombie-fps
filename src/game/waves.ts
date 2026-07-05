@@ -30,21 +30,21 @@ export function getWaveConfig(wave: number): WaveConfig {
   const clampedWave = Math.max(1, Math.floor(wave));
   return {
     wave: clampedWave,
-    total: 7 + clampedWave * 4 + Math.floor(Math.pow(clampedWave, 1.18)),
-    spawnInterval: Math.max(0.45, 1.35 - clampedWave * 0.07),
-    packMin: clampedWave < 4 ? 2 : 3,
-    packMax: Math.min(6, 3 + Math.floor(clampedWave / 2)),
-    packInterval: Math.max(3.2, 6.4 - clampedWave * 0.34),
-    stragglerCount: Math.min(5, 1 + Math.floor(clampedWave / 2)),
-    stragglerInterval: Math.max(2.8, 5.8 - clampedWave * 0.22),
-    healthMultiplier: 1 + (clampedWave - 1) * 0.15,
-    speedMultiplier: 1 + Math.min(0.55, (clampedWave - 1) * 0.035),
+    total: 5 + clampedWave * 3 + Math.floor(Math.pow(clampedWave, 1.14)),
+    spawnInterval: Math.max(0.52, 1.5 - clampedWave * 0.07),
+    packMin: clampedWave < 3 ? 1 : clampedWave < 6 ? 2 : 3,
+    packMax: Math.min(6, 2 + Math.floor((clampedWave + 1) / 2)),
+    packInterval: Math.max(3.6, 7.1 - clampedWave * 0.32),
+    stragglerCount: Math.min(6, 1 + Math.floor((clampedWave + 1) / 2)),
+    stragglerInterval: Math.max(3.1, 6.2 - clampedWave * 0.2),
+    healthMultiplier: 1 + (clampedWave - 1) * 0.13,
+    speedMultiplier: 1 + Math.min(0.48, (clampedWave - 1) * 0.03),
     typeWeights: {
-      shambler: Math.max(0.35, 1 - clampedWave * 0.055),
-      sprinter: Math.min(0.45, clampedWave * 0.045),
-      bloater: Math.min(0.32, Math.max(0, (clampedWave - 2) * 0.035)),
-      crawler: Math.min(0.24, Math.max(0, (clampedWave - 1) * 0.035)),
-      screamer: Math.min(0.18, Math.max(0, (clampedWave - 3) * 0.028))
+      shambler: Math.max(0.42, 1 - clampedWave * 0.05),
+      sprinter: Math.min(0.34, Math.max(0, (clampedWave - 1) * 0.04)),
+      bloater: Math.min(0.28, Math.max(0, (clampedWave - 2) * 0.032)),
+      crawler: Math.min(0.22, Math.max(0, (clampedWave - 1) * 0.032)),
+      screamer: Math.min(0.16, Math.max(0, (clampedWave - 3) * 0.024))
     }
   };
 }
@@ -66,7 +66,7 @@ export function createZombieSpawn(config: WaveConfig, spawnPoints: readonly Vec2
   const type = chooseZombieType(config, rng);
   const base = ZOMBIE_PROFILES[type];
   const spawnAnchor = anchor ?? rng.pick(spawnPoints);
-  const spread = anchor ? 8 : 5;
+  const spread = anchor ? 10 : 6;
   return {
     type,
     position: {

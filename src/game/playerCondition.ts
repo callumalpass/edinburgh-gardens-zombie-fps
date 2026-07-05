@@ -33,19 +33,19 @@ export function createInitialPlayerCondition(): PlayerCondition {
 export function nextStamina(stamina: number, dt: number, frame: StaminaFrame): number {
   let next = stamina;
   if (frame.sprinting) {
-    next -= 19 * dt;
+    next -= 17 * dt;
   }
   if (frame.scoped) {
-    next -= 7 * dt;
+    next -= 5.5 * dt;
   }
 
   if (!frame.sprinting && !frame.scoped) {
     const recovery =
-      frame.resting ? 22 :
-      frame.searching ? 7 :
-      frame.crouching ? 16 :
-      12;
-    next += recovery * (frame.bleeding ? 0.72 : 1) * dt;
+      frame.resting ? 28 :
+      frame.searching ? 8 :
+      frame.crouching ? 18 :
+      14;
+    next += recovery * (frame.bleeding ? 0.78 : 1) * dt;
   }
 
   return clampStamina(next);
@@ -59,13 +59,13 @@ export function spendStamina(stamina: number, cost: number): { stamina: number; 
 }
 
 export function speedMultiplierForCondition(condition: Pick<PlayerCondition, "stamina" | "limpTimer">): number {
-  const staminaScale = condition.stamina <= 0 ? 0.72 : condition.stamina < 20 ? 0.86 : 1;
-  const limpScale = condition.limpTimer > 0 ? 0.68 : 1;
+  const staminaScale = condition.stamina <= 0 ? 0.78 : condition.stamina < 20 ? 0.9 : 1;
+  const limpScale = condition.limpTimer > 0 ? 0.74 : 1;
   return staminaScale * limpScale;
 }
 
 export function bleedDamagePerSecond(bleedTimer: number): number {
-  return bleedTimer > 0 ? 0.9 : 0;
+  return bleedTimer > 0 ? 0.72 : 0;
 }
 
 export function injuryStatus(condition: Pick<PlayerCondition, "bleedTimer" | "limpTimer" | "blurTimer">): string | null {

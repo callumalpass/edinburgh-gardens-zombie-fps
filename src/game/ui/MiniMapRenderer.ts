@@ -125,7 +125,13 @@ export class MiniMapRenderer {
           ? "rgba(103, 184, 198, 0.78)"
           : amenity.kind === "bench"
             ? "rgba(112, 180, 139, 0.68)"
-            : "rgba(213, 142, 67, 0.74)";
+            : amenity.kind === "clubroom" ||
+                amenity.kind === "changeroom" ||
+                amenity.kind === "gatehouse" ||
+                amenity.kind === "maintenance_room" ||
+                amenity.kind === "community_room"
+              ? "rgba(227, 168, 74, 0.82)"
+              : "rgba(213, 142, 67, 0.74)";
       ctx.beginPath();
       ctx.arc(mapped.x, mapped.y, 1.4, 0, Math.PI * 2);
       ctx.fill();

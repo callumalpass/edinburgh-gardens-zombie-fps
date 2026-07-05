@@ -4,6 +4,18 @@ import { createLevelData } from "../src/game/levelData";
 import { createZombieSpawn, getWaveConfig } from "../src/game/waves";
 
 describe("wave spawning", () => {
+  it("keeps the opening wave readable before introducing fast roles", () => {
+    const first = getWaveConfig(1);
+
+    expect(first.total).toBeLessThanOrEqual(9);
+    expect(first.packMin).toBe(1);
+    expect(first.packMax).toBeGreaterThanOrEqual(2);
+    expect(first.packInterval).toBeGreaterThan(6);
+    expect(first.typeWeights.sprinter).toBe(0);
+    expect(first.typeWeights.bloater).toBe(0);
+    expect(first.typeWeights.screamer).toBe(0);
+  });
+
   it("ramps total enemies and difficulty over time", () => {
     const first = getWaveConfig(1);
     const fifth = getWaveConfig(5);

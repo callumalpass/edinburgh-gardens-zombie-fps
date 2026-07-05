@@ -171,6 +171,7 @@ export const RESEARCH_NOTES = [
   "A later 2026-07-06 facade and tennis-works pass added explicit source-backed frontage points for the major mapped buildings and renovation-surface cues on all six existing tennis courts, based on Yarra's 2026-2027 Brunswick Street Oval works page.",
   "A 2026-07-06 playground and fence pass refreshed current OSM playground footprints, modeled both playgrounds as fenced with inferred safety-gate gaps, added low jumpable oval fence blockers at mapped oval connectors, and added a short player jump.",
   "A 2026-07-06 Fitzy Bowl pass removed the old invisible full-skatepark blocker, added source-backed depressed skate bowls, and made bowl exits constrained to roll-out gaps so dropping in is easy and climbing out is deliberately awkward.",
+  "A 2026-07-06 public-use pass added source-backed rule signs for dog-leash edges, alcohol hours, access-friendly venue cues and the rotunda stair/no-power constraint so the park reads like the current public Edinburgh Gardens rather than a generic arena.",
   "See docs/edinburgh-gardens-research.md for source URLs, query notes, data licensing notes and implementation decisions."
 ];
 
@@ -3435,6 +3436,42 @@ export function createLevelData(): LevelData {
       source: "Yarra Edinburgh Gardens facilities list: dog areas; OSM Alfred Crescent lawn geometry"
     },
     {
+      id: "north-playground-dog-leash-rule",
+      label: "North playground dog leash rule sign",
+      kind: "park-rule-sign",
+      rule: "dogs-on-leash",
+      position: geoToWorld(g(-37.786155, 144.983065)),
+      angle: 0.24,
+      source: "Yarra Edinburgh Gardens venue conditions: dogs must be on leash within 10 metres of playground areas and sporting grounds"
+    },
+    {
+      id: "south-playground-dog-leash-rule",
+      label: "South playground dog leash rule sign",
+      kind: "park-rule-sign",
+      rule: "dogs-on-leash",
+      position: geoToWorld(g(-37.788750, 144.983240)),
+      angle: -0.12,
+      source: "Yarra Edinburgh Gardens venue conditions: dogs must be on leash within 10 metres of playground areas and sporting grounds"
+    },
+    {
+      id: "oval-dog-leash-rule",
+      label: "W.T. Peterson Oval dog rule sign",
+      kind: "park-rule-sign",
+      rule: "dogs-on-leash",
+      position: geoToWorld(g(-37.789210, 144.982020)),
+      angle: -0.34,
+      source: "Yarra Edinburgh Gardens venue conditions: dogs are not allowed on W.T. Peterson Oval and must be on leash near sporting grounds in use"
+    },
+    {
+      id: "rotunda-stairs-no-power-rule",
+      label: "Rotunda stairs and no-power sign",
+      kind: "park-rule-sign",
+      rule: "rotunda-stairs-no-power",
+      position: offsetPoint(rotundaCenter, -0.34, 2.8, -8.35),
+      angle: -0.34,
+      source: "Yarra Edinburgh Gardens Rotunda venue page: rotunda is not wheelchair accessible and has no power currently available"
+    },
+    {
       id: "south-picnic-blanket-1",
       label: "South picnic lawn blanket",
       kind: "picnic-blanket",
@@ -3451,12 +3488,30 @@ export function createLevelData(): LevelData {
       source: "Yarra Edinburgh Gardens facilities list: picnic areas; mapped south picnic lawn"
     },
     {
+      id: "south-picnic-alcohol-hours-rule",
+      label: "South picnic lawn alcohol-hours sign",
+      kind: "park-rule-sign",
+      rule: "alcohol-hours",
+      position: geoToWorld(g(-37.789115, 144.983920)),
+      angle: 0.18,
+      source: "Yarra Edinburgh Gardens venue conditions: alcohol may be consumed in the park between 9am and 9pm without a permit"
+    },
+    {
       id: "north-picnic-blanket",
       label: "North open lawn picnic blanket",
       kind: "picnic-blanket",
       position: geoToWorld(g(-37.786155, 144.983785)),
       angle: 0.18,
       source: "Yarra northern precinct consultation: picnic and BBQ activity context"
+    },
+    {
+      id: "emely-baker-access-friendly-rule",
+      label: "Emely Baker access-friendly venue sign",
+      kind: "park-rule-sign",
+      rule: "access-friendly",
+      position: geoToWorld(g(-37.785665, 144.982625)),
+      angle: 0.36,
+      source: "Yarra Emely Baker Centre page: access friendly venue with gated outdoor area and shade sail"
     },
     {
       id: "oval-cricket-nets",

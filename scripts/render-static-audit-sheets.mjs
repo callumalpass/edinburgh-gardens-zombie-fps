@@ -24,6 +24,10 @@ const sheets = [
   {
     name: "weather-night-audit",
     svg: weatherSheet()
+  },
+  {
+    name: "public-use-rule-sign-audit",
+    svg: publicUseSheet()
   }
 ];
 
@@ -239,6 +243,50 @@ function weatherSheet() {
   return svgShell("Weather and Night Dynamics Audit", content);
 }
 
+function publicUseSheet() {
+  const content = `
+  <g transform="translate(70 118)">
+    <rect class="panel" x="0" y="0" width="460" height="356" rx="8"/>
+    <text x="24" y="44" class="label">Dog-Leash Edge Signs</text>
+    ${ruleSign(76, 58, "LEASH", "#315c45", "#f4dfa6", "leash")}
+    ${ruleSign(256, 58, "LEASH", "#315c45", "#f4dfa6", "leash")}
+    ${noteText(24, 298, 398, "Placed at the north playground, south playground and W.T. Peterson Oval edges, translating Yarra dog conditions into visible park cues.", "small", 18)}
+  </g>
+
+  <g transform="translate(570 118)">
+    <rect class="panel" x="0" y="0" width="460" height="356" rx="8"/>
+    <text x="24" y="44" class="label">Picnic Alcohol Hours</text>
+    ${ruleSign(164, 58, "9-9", "#5c4630", "#f4dfa6", "alcohol")}
+    ${noteText(24, 298, 398, "South picnic lawn sign keeps the 9am to 9pm alcohol condition visible without blocking movement or adding UI text.", "small", 18)}
+  </g>
+
+  <g transform="translate(1070 118)">
+    <rect class="panel" x="0" y="0" width="460" height="356" rx="8"/>
+    <text x="24" y="44" class="label">Rotunda Stair and No-Power Cue</text>
+    ${ruleSign(164, 58, "STAIRS", "#5a4630", "#f4dfa6", "rotunda")}
+    ${noteText(24, 298, 398, "The sign sits on the stair side, reinforcing the rendered stair access and the Yarra venue page's no-power constraint.", "small", 18)}
+  </g>
+
+  <g transform="translate(320 548)">
+    <rect class="panel" x="0" y="0" width="460" height="322" rx="8"/>
+    <text x="24" y="44" class="label">Emely Baker Access-Friendly Cue</text>
+    ${ruleSign(164, 48, "ACCESS", "#246ca8", "#f4dfa6", "access")}
+    ${noteText(24, 264, 398, "The sign is placed near the community-room edge, matching the existing access ramp and gated outdoor-area details.", "small", 18)}
+  </g>
+
+  <g transform="translate(820 548)">
+    <rect class="panel" x="0" y="0" width="460" height="322" rx="8"/>
+    <text x="24" y="44" class="label">Weather Handling Check</text>
+    ${rect(66, 142, 118, 20, "#a48f68")}
+    ${line(78, 104, 170, 66, "#61a8d3", 6)}
+    ${line(132, 104, 224, 66, "#61a8d3", 6)}
+    ${line(186, 104, 278, 66, "#61a8d3", 6)}
+    ${simpleRifle(200, 128)}
+    ${noteText(24, 264, 398, "Rain, wind and wetness add a small firearm-spread penalty, while crouch and scoped aim remain the dominant stability controls.", "small", 18)}
+  </g>`;
+  return svgShell("Public-Use Rule Sign and Weather Handling Audit", content);
+}
+
 function buildingPanel(x, y, title, wall, roof, elements, note) {
   return `<g transform="translate(${x} ${y})">
     <rect class="panel" x="0" y="0" width="452" height="382" rx="8"/>
@@ -261,6 +309,40 @@ function weaponSilhouette(name, x, y, length) {
         ? `${rect(48, 18, displayLength, name === "Machete" ? 22 : 14, "#d0ccc0")}${rect(20, 14, 32, 32, "#30251d")}${rect(44, 8, 10, 42, "#221f1c")}`
         : `${rect(16, 8, displayLength, 24, "#363d3b")}${rect(16 + displayLength * 0.62, 36, 22, 58, "#202629")}${rect(16 + displayLength, 14, barrelLength, 10, "#202629")}${rect(36, -4, displayLength * 0.36, 12, "#b08a4a")}`
     }
+  </g>`;
+}
+
+function ruleSign(x, y, label, background, foreground, mode) {
+  const signWidth = label.length > 4 ? 132 : 112;
+  const symbols =
+    mode === "leash"
+      ? `${line(68, 160, 116, 134, foreground, 5)}${circle(132, 130, 12, "none", 1, foreground, 5)}`
+      : mode === "alcohol"
+        ? `${rect(82, 122, 18, 44, foreground)}${rect(86, 108, 10, 18, foreground)}${line(132, 116, 192, 168, "#b84c3c", 7)}`
+        : mode === "rotunda"
+          ? `${[0, 1, 2].map((step) => rect(74 + step * 18, 166 - step * 15, 24 + step * 16, 7, foreground)).join("")}${rect(162, 126, 28, 22, "#1d2522")}${line(154, 116, 202, 158, "#b84c3c", 7)}`
+          : `${circle(92, 126, 14, foreground)}${rect(92, 144, 48, 7, foreground)}${circle(162, 154, 18, "none", 1, foreground, 5)}`;
+
+  return `<g transform="translate(${x} ${y})">
+    ${circle(86, 198, 36, "#9ca19a", 0.42)}
+    ${rect(80, 70, 12, 132, "#4d5954")}
+    <g>
+      ${rect(86 - signWidth / 2, 38, signWidth, 58, background)}
+      <text x="86" y="77" text-anchor="middle" font-family="system-ui, sans-serif" font-size="${label.length > 4 ? 22 : 28}" font-weight="800" fill="${foreground}">${escapeXml(label)}</text>
+    </g>
+    ${symbols}
+  </g>`;
+}
+
+function simpleRifle(x, y) {
+  return `<g transform="translate(${x} ${y})">
+    ${rect(0, 0, 160, 24, "#363d3b")}
+    ${rect(96, 28, 24, 58, "#202629")}
+    ${rect(158, 9, 68, 9, "#202629")}
+    ${rect(36, -12, 74, 12, "#b08a4a")}
+    ${rect(64, -28, 54, 16, "#202629")}
+    ${rect(212, 4, 22, 18, "#202629")}
+    <text x="68" y="112" class="tiny">weather spread is small</text>
   </g>`;
 }
 

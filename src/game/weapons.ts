@@ -1,5 +1,17 @@
+import type { WeatherState } from "./rendering/weather";
+
 export type UpgradeId = "damage" | "fireRate" | "magazine" | "reload" | "spread";
 export type WeaponId = "knife" | "machete" | "carbine" | "shotgun" | "smg" | "rifle";
+
+export interface FirearmSpreadContext {
+  movementSpeed: number;
+  shotBloom: number;
+  crouching: boolean;
+  aimAmount: number;
+  aimHeld: boolean;
+  stamina: number;
+  weather?: Pick<WeatherState, "precipitation" | "wind" | "wetness">;
+}
 
 export interface WeaponStats {
   id?: WeaponId;
@@ -54,24 +66,24 @@ export const WEAPON_DEFINITIONS: Record<WeaponId, WeaponStats & { id: WeaponId; 
     id: "knife",
     kind: "melee",
     name: "Emergency knife",
-    damage: 34,
-    fireDelay: 0.42,
+    damage: 38,
+    fireDelay: 0.36,
     magazineSize: 0,
     reloadTime: 0,
     spread: 0,
     pellets: 1,
-    range: 4.25,
-    falloffStart: 3.2,
-    recoilKick: 0.22,
-    recoilDrift: 0.18,
+    range: 4.55,
+    falloffStart: 3.35,
+    recoilKick: 0.2,
+    recoilDrift: 0.14,
     movingSpread: 0,
     bloomPerShot: 0,
     maxBloom: 0,
     headshotMultiplier: 1.65,
-    staggerPower: 0.38,
+    staggerPower: 0.45,
     penetration: 1,
-    noiseMultiplier: 0.16,
-    sway: 0.35,
+    noiseMultiplier: 0.13,
+    sway: 0.32,
     scopeZoom: 1,
     aimSpreadMultiplier: 1,
     aimRecoilMultiplier: 1,
@@ -82,24 +94,24 @@ export const WEAPON_DEFINITIONS: Record<WeaponId, WeaponStats & { id: WeaponId; 
     id: "machete",
     kind: "melee",
     name: "Garden machete",
-    damage: 54,
-    fireDelay: 0.78,
+    damage: 58,
+    fireDelay: 0.72,
     magazineSize: 0,
     reloadTime: 0,
     spread: 0,
     pellets: 1,
-    range: 5.8,
-    falloffStart: 4,
-    recoilKick: 0.34,
-    recoilDrift: 0.22,
+    range: 6.1,
+    falloffStart: 4.35,
+    recoilKick: 0.3,
+    recoilDrift: 0.2,
     movingSpread: 0,
     bloomPerShot: 0,
     maxBloom: 0,
     headshotMultiplier: 1.7,
-    staggerPower: 0.62,
+    staggerPower: 0.72,
     penetration: 2,
-    noiseMultiplier: 0.28,
-    sway: 0.42,
+    noiseMultiplier: 0.24,
+    sway: 0.38,
     scopeZoom: 1,
     aimSpreadMultiplier: 1,
     aimRecoilMultiplier: 1,
@@ -110,19 +122,19 @@ export const WEAPON_DEFINITIONS: Record<WeaponId, WeaponStats & { id: WeaponId; 
     id: "carbine",
     kind: "firearm",
     name: "Emergency carbine",
-    damage: 33,
-    fireDelay: 0.29,
-    magazineSize: 12,
-    reloadTime: 1.55,
-    spread: 0.012,
+    damage: 35,
+    fireDelay: 0.27,
+    magazineSize: 14,
+    reloadTime: 1.45,
+    spread: 0.011,
     pellets: 1,
     range: 115,
     falloffStart: 62,
-    recoilKick: 0.46,
-    recoilDrift: 0.55,
-    movingSpread: 0.014,
-    bloomPerShot: 0.004,
-    maxBloom: 0.028,
+    recoilKick: 0.42,
+    recoilDrift: 0.5,
+    movingSpread: 0.012,
+    bloomPerShot: 0.0035,
+    maxBloom: 0.024,
     headshotMultiplier: 1.85,
     staggerPower: 0.18,
     penetration: 1,
@@ -132,91 +144,91 @@ export const WEAPON_DEFINITIONS: Record<WeaponId, WeaponStats & { id: WeaponId; 
     aimSpreadMultiplier: 0.62,
     aimRecoilMultiplier: 0.72,
     reloadStyle: "magazine",
-    pickupAmmo: 42
+    pickupAmmo: 50
   },
   shotgun: {
     id: "shotgun",
     kind: "firearm",
     name: "Grandstand shotgun",
-    damage: 18,
-    fireDelay: 0.88,
+    damage: 20,
+    fireDelay: 0.82,
     magazineSize: 6,
-    reloadTime: 1.9,
-    spread: 0.048,
+    reloadTime: 1.42,
+    spread: 0.046,
     pellets: 8,
-    range: 58,
-    falloffStart: 18,
-    recoilKick: 1.18,
-    recoilDrift: 0.9,
-    movingSpread: 0.025,
-    bloomPerShot: 0.014,
-    maxBloom: 0.058,
+    range: 56,
+    falloffStart: 17,
+    recoilKick: 1.08,
+    recoilDrift: 0.82,
+    movingSpread: 0.023,
+    bloomPerShot: 0.012,
+    maxBloom: 0.052,
     headshotMultiplier: 1.35,
-    staggerPower: 0.82,
+    staggerPower: 0.92,
     penetration: 1,
-    noiseMultiplier: 1.58,
-    sway: 0.72,
+    noiseMultiplier: 1.52,
+    sway: 0.66,
     scopeZoom: 1,
     aimSpreadMultiplier: 0.9,
     aimRecoilMultiplier: 0.9,
     reloadStyle: "single",
-    pickupAmmo: 22
+    pickupAmmo: 26
   },
   smg: {
     id: "smg",
     kind: "firearm",
     name: "Tennis club SMG",
-    damage: 17,
-    fireDelay: 0.088,
-    magazineSize: 28,
-    reloadTime: 1.35,
-    spread: 0.026,
+    damage: 16,
+    fireDelay: 0.086,
+    magazineSize: 30,
+    reloadTime: 1.25,
+    spread: 0.023,
     pellets: 1,
     range: 82,
     falloffStart: 34,
-    recoilKick: 0.3,
-    recoilDrift: 1.05,
-    movingSpread: 0.034,
-    bloomPerShot: 0.008,
-    maxBloom: 0.062,
+    recoilKick: 0.26,
+    recoilDrift: 0.9,
+    movingSpread: 0.03,
+    bloomPerShot: 0.0065,
+    maxBloom: 0.052,
     headshotMultiplier: 1.65,
-    staggerPower: 0.1,
+    staggerPower: 0.12,
     penetration: 1,
     noiseMultiplier: 0.78,
-    sway: 0.88,
+    sway: 0.76,
     scopeZoom: 1,
     aimSpreadMultiplier: 0.86,
     aimRecoilMultiplier: 0.82,
     reloadStyle: "magazine",
-    pickupAmmo: 72
+    pickupAmmo: 84
   },
   rifle: {
     id: "rifle",
     kind: "firearm",
     name: "Rail trail rifle",
-    damage: 76,
+    damage: 82,
     fireDelay: 0.76,
     magazineSize: 5,
-    reloadTime: 1.75,
+    reloadTime: 1.65,
     spread: 0.004,
     pellets: 1,
-    range: 180,
+    range: 190,
     falloffStart: 96,
-    recoilKick: 0.94,
-    recoilDrift: 0.35,
-    movingSpread: 0.011,
+    recoilKick: 0.88,
+    recoilDrift: 0.32,
+    movingSpread: 0.01,
     bloomPerShot: 0.003,
     maxBloom: 0.016,
     headshotMultiplier: 2.25,
     staggerPower: 0.48,
     penetration: 2,
-    noiseMultiplier: 1.72,
-    sway: 0.42,
+    noiseMultiplier: 1.68,
+    sway: 0.36,
     scopeZoom: 2.8,
     aimSpreadMultiplier: 0.38,
     aimRecoilMultiplier: 0.56,
     reloadStyle: "magazine",
-    pickupAmmo: 18
+    pickupAmmo: 20
   }
 };
 
@@ -319,9 +331,24 @@ export function getWeaponStats(loadout: Loadout): WeaponStats {
 export function damageAtDistance(stats: WeaponStats, distance: number, zone: "head" | "body" | "legs" = "body"): number {
   const falloffSpan = Math.max(1, stats.range - stats.falloffStart);
   const falloffT = Math.max(0, Math.min(1, (distance - stats.falloffStart) / falloffSpan));
-  const falloff = 1 - falloffT * 0.55;
-  const zoneMultiplier = zone === "head" ? stats.headshotMultiplier : zone === "legs" ? 0.72 : 1;
+  const falloff = 1 - falloffT * 0.5;
+  const zoneMultiplier = zone === "head" ? stats.headshotMultiplier : zone === "legs" ? 0.76 : 1;
   return Math.max(1, Math.round(stats.damage * falloff * zoneMultiplier));
+}
+
+export function weatherWeaponInstability(weather?: Pick<WeatherState, "precipitation" | "wind" | "wetness">): number {
+  if (!weather) return 0;
+  return Math.min(0.18, weather.precipitation * 0.06 + weather.wind * 0.07 + weather.wetness * 0.05);
+}
+
+export function effectiveFirearmSpread(stats: WeaponStats, context: FirearmSpreadContext): number {
+  if (stats.kind !== "firearm") return 0;
+  const movementSpread = Math.min(1, Math.max(0, context.movementSpeed) / 22) * stats.movingSpread;
+  const crouchSpread = context.crouching ? 0.64 : 1;
+  const breathControl = context.aimAmount > 0.55 && context.aimHeld ? (context.stamina > 12 ? 0.86 : 1.18) : 1;
+  const aimSpread = 1 + (stats.aimSpreadMultiplier - 1) * Math.max(0, Math.min(1, context.aimAmount));
+  const weatherJitter = (stats.spread * 0.22 + stats.movingSpread * 0.08) * weatherWeaponInstability(context.weather);
+  return (stats.spread + movementSpread + context.shotBloom + weatherJitter) * aimSpread * crouchSpread * breathControl;
 }
 
 export function upgradeCost(upgradeId: UpgradeId, currentLevel: number): number {

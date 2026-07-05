@@ -103,6 +103,10 @@ Purpose: track the building-by-building realism pass for every structure current
 - `osm-building-1475006773` / Bowling green shed:
   - Added long front/rear guttering, paired shed doors, rear timber storage rack and metal rack uprights to match the longer green-side footprint.
   - Source basis: OSM way `1475006773` for the long skewed footprint; Fitzroy Bowls official site for active greens/BBQ operation; bowling-club precinct context from CMP.
+- Follow-up 2026-07-06 building access pass:
+  - Added source-linked searchable access points at the grandstand changerooms, tennis clubroom, park-side bowling club gate, Freeman Street gatehouse, Emely Baker Centre and south amenities service room.
+  - Added visible access hardware plus grandstand changeroom/umpire doors, timber seat rows and a bowling memorial-gate cue.
+  - Detailed research is stored in `docs/research/building-access-interactions-2026-07-06.md`.
 
 ## Implementation Notes
 

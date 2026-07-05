@@ -705,11 +705,16 @@ describe("map geometry", () => {
   it("keeps park-life details sourceable and non-colliding", () => {
     const level = createLevelData();
     const detailKinds = new Set(level.parkLifeDetails.map((detail) => detail.kind));
-    for (const kind of ["dog-sign", "picnic-blanket", "notice-board", "broken-bike", "training-cones", "dog-water-bowl", "picnic-cooler", "sports-bag", "chalk-mark", "cricket-nets"] as const) {
+    for (const kind of ["dog-sign", "park-rule-sign", "picnic-blanket", "notice-board", "broken-bike", "training-cones", "dog-water-bowl", "picnic-cooler", "sports-bag", "chalk-mark", "cricket-nets"] as const) {
       expect(detailKinds.has(kind)).toBe(true);
     }
-    expect(level.parkLifeDetails.length).toBeGreaterThanOrEqual(18);
+    expect(level.parkLifeDetails.length).toBeGreaterThanOrEqual(24);
     expect(level.parkLifeDetails.every((detail) => detail.source && pointInPolygon(detail.position, level.boundary))).toBe(true);
+    const ruleSigns = level.parkLifeDetails.filter((detail) => detail.kind === "park-rule-sign");
+    expect(ruleSigns.length).toBeGreaterThanOrEqual(6);
+    expect(new Set(ruleSigns.map((detail) => detail.rule))).toEqual(
+      new Set(["dogs-on-leash", "alcohol-hours", "rotunda-stairs-no-power", "access-friendly"])
+    );
     const brokenBikes = level.parkLifeDetails.filter((detail) => detail.kind === "broken-bike");
     expect(brokenBikes.length).toBeGreaterThanOrEqual(1);
     expect(brokenBikes.every((detail) => detail.bikeIssue === "flat-tyres" || detail.bikeIssue === "broken-chain")).toBe(true);

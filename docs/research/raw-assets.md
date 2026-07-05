@@ -2,9 +2,9 @@
 
 Raw API responses used during research should be kept locally under `docs/research/raw/`.
 
-This folder is intentionally ignored by git so JSON pulls can be retained in the codebase workspace without being committed by default.
+This folder is intentionally ignored by git so raw API pulls can be retained in the codebase workspace without being committed by default.
 
-Committed research notes and raw-asset patterns are registered in `docs/research/research-manifest.json`. Run `npm run research:check` after adding or refreshing a source note. The check is offline and validates local raw JSON only when the ignored files are present.
+Committed research notes and raw-asset patterns are registered in `docs/research/research-manifest.json`. Run `npm run research:check` after adding or refreshing a source note. The check is offline and validates local raw JSON/XML only when the ignored files are present.
 
 Current local assets:
 
@@ -24,6 +24,14 @@ Current local assets:
   - Source: Overpass API bounded query for Edinburgh Gardens park features.
   - Purpose: local OSM snapshot for further-realism work on paths, trees, buildings, barriers, amenities and sports/play areas. Roads are intentionally excluded from the current goal.
   - Validation: checked with `jq -e '.elements | length'`.
+- `docs/research/raw/2026-07-06/osm-*-map.xml`
+  - Source: OpenStreetMap map API bounded extracts around the south playground, north playground and W. T. Peterson Oval access connectors.
+  - Purpose: raw current OSM XML backing the south-playground fence, current north-playground footprint review and gated oval-fence pass.
+  - Validation: checked with `rg` for ways `24489879`, `543616019`, `14946934`, `403753751`, `403753754` and `403753756`; also validated by `npm run research:check` when the local ignored XML files are present.
+- `docs/research/raw/2026-07-06/osm-playground-fence-gate-overpass.html`
+  - Source: attempted Overpass query for playground/fence/gate objects around Edinburgh Gardens.
+  - Purpose: record that the targeted query returned busy-server HTML and was not used for implementation geometry.
+  - Validation: searched with `rg`; no derived constants are based on this failed response.
 - `docs/research/raw/vicmap/2026-07-05/further-realism/edinburgh-gardens-ground-surface-points.json`
   - Source: Vicmap Elevation metro 1-5 m FeatureServer layer 0 query over the Edinburgh Gardens bounding box.
   - Purpose: raw ground-surface point response used to recheck broad elevation source context.

@@ -13,6 +13,18 @@ describe("location and zombie loot", () => {
     expect(rack.scrap).toBeGreaterThan(bin.scrap);
   });
 
+  it("gives source-backed structure access points distinct utility profiles", () => {
+    const changeroom = searchAmenityLoot("changeroom", new SeededRandom(31));
+    const gatehouse = searchAmenityLoot("gatehouse", new SeededRandom(31));
+    const maintenance = searchAmenityLoot("maintenance_room", new SeededRandom(31));
+    const communityRoom = searchAmenityLoot("community_room", new SeededRandom(31));
+
+    expect(changeroom.health + changeroom.medicine).toBeGreaterThan(gatehouse.health + gatehouse.medicine);
+    expect(maintenance.scrap).toBeGreaterThan(gatehouse.scrap - 3);
+    expect(communityRoom.health + communityRoom.medicine).toBeGreaterThan(maintenance.health);
+    expect(gatehouse.noiseMultiplier).toBeLessThan(maintenance.noiseMultiplier);
+  });
+
   it("raises loot quality, noise, and search time in exposed zombie-dense areas", () => {
     const sheltered = searchAmenityLoot("bbq", new SeededRandom(22), { exposed: false, nearbyZombies: 0, wave: 1 });
     const exposed = searchAmenityLoot("bbq", new SeededRandom(22), { exposed: true, nearbyZombies: 4, wave: 7 });
@@ -28,6 +40,15 @@ describe("location and zombie loot", () => {
     const crawlerDrops = Array.from({ length: 80 }, (_, index) => chooseZombiePickup("crawler", new SeededRandom(index + 1))).filter(Boolean);
 
     expect(bloaterDrops.length).toBeGreaterThan(crawlerDrops.length);
+  });
+
+  it("makes combat pickups worth taking without guaranteeing a drop", () => {
+    const drops = Array.from({ length: 120 }, (_, index) => chooseZombiePickup("shambler", new SeededRandom(index + 1))).filter(Boolean);
+    const ammoDrops = drops.filter((drop) => drop?.type === "ammo");
+
+    expect(drops.length).toBeGreaterThan(40);
+    expect(drops.length).toBeLessThan(80);
+    expect(ammoDrops.some((drop) => (drop?.amount ?? 0) >= 18)).toBe(true);
   });
 
   it("keeps weapon drops scarce while allowing stronger late-wave finds", () => {

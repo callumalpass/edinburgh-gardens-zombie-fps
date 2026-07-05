@@ -48,6 +48,7 @@ test("renders a nonblank, varied Three.js scene", async ({ page }, testInfo) => 
 });
 
 test("game loop advances and gameplay helpers mutate state", async ({ page }) => {
+  test.setTimeout(105_000);
   await page.goto("/?smoke=1");
   await page.waitForFunction(() => window.__EGAME__?.ready === true);
   const first = await page.evaluate(() => window.__EGAME__!.snapshot());
@@ -85,6 +86,14 @@ test("game loop advances and gameplay helpers mutate state", async ({ page }) =>
   await page.evaluate(() => window.__EGAME__!.testSetCrouching(false));
   const standing = await page.evaluate(() => window.__EGAME__!.snapshot());
   expect(standing.crouching).toBe(false);
+  await page.evaluate(() => {
+    document.dispatchEvent(new KeyboardEvent("keydown", { code: "Space", key: " ", bubbles: true, cancelable: true }));
+    document.dispatchEvent(new KeyboardEvent("keyup", { code: "Space", key: " ", bubbles: true, cancelable: true }));
+  });
+  await page.waitForFunction(() => window.__EGAME__!.snapshot().jumpHeight > 0.1);
+  const afterJump = await page.evaluate(() => window.__EGAME__!.snapshot());
+  expect(afterJump.elevation).toBeGreaterThan(standing.elevation);
+  expect(afterJump.stamina).toBeLessThan(standing.stamina);
   const visibility = await page.evaluate(() => window.__EGAME__!.testMiniMapVisibility());
   expect(visibility.front).toBe(true);
   expect(visibility.behind).toBe(false);

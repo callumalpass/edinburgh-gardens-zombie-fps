@@ -9,6 +9,8 @@ npm install
 npm run dev
 ```
 
+See [docs/architecture.md](docs/architecture.md) for the current runtime, gameplay, rendering and data boundaries.
+
 ## LAN Co-op
 
 Run the browser dev server on the local network and start the WebSocket relay:
@@ -40,7 +42,8 @@ The host browser is authoritative for zombies, waves, pickups, weapon drops, dam
 - `R`: reload
 - `E`: interact, buy nearby upgrades, pick up weapons, climb/drop from fixtures
 - `Shift`: sprint
-- `1-4`: switch discovered weapons
+- `G`: throw a timed bottle bomb
+- Number keys: switch discovered weapons
 
 ## Current Mechanics
 
@@ -56,6 +59,7 @@ The host browser is authoritative for zombies, waves, pickups, weapon drops, dam
 - Interactive fixtures: climb/drop from the rotunda, grandstand seating, playground towers, toilet block roofs and basketball hoop frame; skate ramps lift the player as traversable terrain.
 - Mapped park amenities: benches, drinking fountains, bins, bike racks, BBQ points and toilets are visible in the world and usable for healing, scrap, ammo or shelter.
 - Discoverable weapons: carbine, shotgun, SMG and rifle. Zombies can drop weapons after death.
+- Throwable bottle bombs: scarce scavenged tools pulse to draw zombies, then burst for area damage, shove and stagger against clustered packs.
 
 ## Research Basis
 

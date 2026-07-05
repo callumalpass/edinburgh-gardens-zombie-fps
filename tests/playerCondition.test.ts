@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  bleedDamagePerSecond,
   createInitialPlayerCondition,
   nextStamina,
   speedMultiplierForCondition,
@@ -39,5 +40,36 @@ describe("player condition", () => {
     expect(denied.spent).toBe(false);
     expect(speedMultiplierForCondition({ stamina: 12, limpTimer: 0 })).toBeLessThan(1);
     expect(speedMultiplierForCondition({ stamina: 100, limpTimer: 4 })).toBeLessThan(1);
+  });
+
+  it("makes rest recovery decisive while keeping injuries meaningful", () => {
+    const sprinted = nextStamina(40, 2, {
+      sprinting: true,
+      scoped: false,
+      resting: false,
+      searching: false,
+      crouching: false,
+      bleeding: false
+    });
+    const rested = nextStamina(sprinted, 2, {
+      sprinting: false,
+      scoped: false,
+      resting: true,
+      searching: false,
+      crouching: false,
+      bleeding: false
+    });
+    const bleedingRested = nextStamina(sprinted, 2, {
+      sprinting: false,
+      scoped: false,
+      resting: true,
+      searching: false,
+      crouching: false,
+      bleeding: true
+    });
+
+    expect(rested).toBeGreaterThan(40);
+    expect(bleedingRested).toBeLessThan(rested);
+    expect(bleedDamagePerSecond(5)).toBeLessThan(0.8);
   });
 });

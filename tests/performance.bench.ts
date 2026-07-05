@@ -1,12 +1,14 @@
 import { bench, describe } from "vitest";
 import { createLevelData } from "../src/game/levelData";
+import { ObstacleIndex } from "../src/game/spatial/ObstacleIndex";
 import { TerrainSampler } from "../src/game/terrain";
-import { isLineOfSightBlocked } from "../src/game/visibility";
+import { isLineOfSightBlocked, isPointVisibleToPlayer } from "../src/game/visibility";
 import { separateCircularAgents, type CircularAgent } from "../src/game/spatial/AgentSeparation";
 import type { Vec2 } from "../src/game/types";
 
 const level = createLevelData();
 const terrain = new TerrainSampler(level);
+const obstacleIndex = new ObstacleIndex(level.obstacles);
 const samplePoints = [
   ...level.boundary,
   ...level.paths.flatMap((path) => path.points),
@@ -15,6 +17,14 @@ const samplePoints = [
   ...level.weaponSpawns.map((spawn) => spawn.position)
 ];
 const playerPosition = { x: 0, z: 0 };
+const visibilityContext = {
+  playerPosition,
+  playerYaw: -2.35,
+  playerHeight: 0,
+  cameraFov: 74,
+  cameraAspect: 16 / 9,
+  obstacles: level.obstacles
+};
 const sightTargets = deterministicSample(
   [
     ...level.spawnPoints,
@@ -24,9 +34,19 @@ const sightTargets = deterministicSample(
   ],
   96
 );
+const obstacleQueryPoints = deterministicSample(
+  [
+    ...samplePoints,
+    ...level.pickupPoints,
+    ...level.trees.map((tree) => tree.position)
+  ],
+  160
+);
 const crowdBaseline = deterministicCrowd(128);
 let terrainSink = 0;
 let sightSink = 0;
+let visibilitySink = 0;
+let obstacleSink = 0;
 let crowdSink = 0;
 
 describe("level performance", () => {
@@ -55,6 +75,26 @@ describe("level performance", () => {
       }
     }
     sightSink = blocked;
+  });
+
+  bench("point visibility checks for HUD and AI", () => {
+    let visible = 0;
+    for (const target of sightTargets) {
+      if (isPointVisibleToPlayer(target, visibilityContext, 1)) {
+        visible += 1;
+      }
+    }
+    visibilitySink = visible;
+  });
+
+  bench("nearby obstacle index queries for movement", () => {
+    let nearby = 0;
+    for (const point of obstacleQueryPoints) {
+      obstacleIndex.forNearby(point, 2.2, () => {
+        nearby += 1;
+      });
+    }
+    obstacleSink = nearby;
   });
 
   bench("zombie separation over a dense crowd", () => {

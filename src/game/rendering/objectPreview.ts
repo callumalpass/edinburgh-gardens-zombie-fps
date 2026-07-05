@@ -295,6 +295,7 @@ function amenityRadius(kind: LevelData["amenities"][number]["kind"]): number {
   if (kind === "table_tennis") return 2.3;
   if (kind === "bicycle_parking") return 2.1;
   if (kind === "bbq") return 2.8;
+  if (kind === "clubroom" || kind === "changeroom" || kind === "gatehouse" || kind === "maintenance_room" || kind === "community_room") return 2.6;
   return 1.8;
 }
 
@@ -306,6 +307,7 @@ function parkLifeRadius(kind: LevelData["parkLifeDetails"][number]["kind"]): num
   if (kind === "construction-fence") return 5.2;
   if (kind === "works-materials") return 3.6;
   if (kind === "removed-tree-stump") return 2.2;
+  if (kind === "park-rule-sign") return 1.9;
   if (kind === "chalk-mark") return 1.9;
   return 2.2;
 }

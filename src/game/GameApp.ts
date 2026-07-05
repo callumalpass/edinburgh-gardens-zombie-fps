@@ -7,6 +7,7 @@ import {
   consumeRound,
   createInitialLoadout,
   damageAtDistance,
+  effectiveFirearmSpread,
   finishReloadIfReady,
   getWeaponStats,
   switchWeapon,
@@ -18,7 +19,7 @@ import {
   type WeaponId
 } from "./weapons";
 import { resolveObstacle, shouldBypassObstacle as shouldBypassCollisionObstacle } from "./collision";
-import { clampToPolygon, distance, distanceToSegment, polygonCentroid } from "./geo";
+import { clampToPolygon, distance } from "./geo";
 import { pointInInteractableRaisedFootprint } from "./interactables";
 import { createLevelData } from "./levelData";
 import {
@@ -39,8 +40,7 @@ import {
   injuryStatus,
   nextStamina,
   speedMultiplierForCondition,
-  spendStamina,
-  type PlayerCondition
+  spendStamina
 } from "./playerCondition";
 import { SeededRandom } from "./random";
 import { AtmosphereSystem } from "./rendering/AtmosphereSystem";
@@ -51,10 +51,13 @@ import { WorldBuilder, type GameMaterials } from "./rendering/WorldBuilder";
 import { createGameMaterials } from "./rendering/materials";
 import { weatherFromElapsed, type WeatherState } from "./rendering/weather";
 import { freezeStaticScene } from "./rendering/staticScene";
+import { collectWeatherAnchors } from "./rendering/weatherAnchors";
+import { disposeThreeResources } from "./rendering/disposeThreeResources";
 import type { GameStateName, GameTestApi, HitZone, Pickup, ShellCasing, SmokePuff, Snapshot, Tracer, WavePhase, WeaponDrop, Zombie } from "./state";
 import { installGameTestDriver, uninstallGameTestDriver } from "./testing/GameTestDriver";
 import { InputController } from "./input/InputController";
 import { TerrainSampler } from "./terrain";
+import { MovementSurfaceSampler } from "./movement";
 import {
   isLineOfSightBlocked as isLineOfSightBlockedByContext,
   isPointVisibleToPlayer as isPointVisibleToPlayerByContext
@@ -67,6 +70,12 @@ import { playerVisibilityMultiplier, weatherNoiseMaskForKind, zombieFacingThresh
 import { separateCircularAgents } from "./spatial/AgentSeparation";
 import { ObstacleIndex } from "./spatial/ObstacleIndex";
 import { WaveDirector } from "./systems/WaveDirector";
+import {
+  BOTTLE_BOMB_FUSE_SECONDS,
+  BOTTLE_BOMB_PULSE_MAX_SECONDS,
+  BOTTLE_BOMB_PULSE_MIN_SECONDS,
+  bottleBombEffectAtDistance
+} from "./throwables";
 import { LanMultiplayerClient, multiplayerConfigFromLocation } from "./multiplayer/LanMultiplayerClient";
 import type {
   NetworkAction,
@@ -77,6 +86,47 @@ import type {
   NetworkWeaponDropSnapshot,
   NetworkZombieSnapshot
 } from "./multiplayer/types";
+import {
+  BASE_CAMERA_FOV,
+  BIKE_ALLOWED_WEAPONS,
+  BIKE_CAMERA_HEIGHT_BONUS,
+  BIKE_FORWARD_SPEED,
+  BIKE_INTERACTION_RADIUS,
+  BIKE_REVERSE_SPEED,
+  BIKE_SPRINT_SPEED,
+  BIKE_STRAFE_SPEED,
+  CLIMB_STAMINA_COST,
+  CROUCH_SPEED,
+  DISTRACTION_STAMINA_COST,
+  INTERMISSION_SECONDS,
+  JUMP_GRAVITY,
+  JUMP_INITIAL_VELOCITY,
+  JUMP_STAMINA_COST,
+  MACHETE_STAMINA_COST,
+  MELEE_STAMINA_COST,
+  NETWORK_INPUT_HZ,
+  NETWORK_SNAPSHOT_HZ,
+  PLAYER_HEIGHT,
+  PLAYER_RADIUS,
+  REST_SECONDS,
+  SPRINT_SPEED,
+  START_POSITION,
+  WALK_SPEED,
+  ZOMBIE_SEPARATION_GAP,
+  ZOMBIE_SEPARATION_GRID_SIZE,
+  ZOMBIE_SEPARATION_ITERATIONS,
+  ZOMBIE_STATIC_COLLISION_PASSES
+} from "./gameConfig";
+import { createInitialPlayerState, resetPlayerState } from "./playerState";
+import type {
+  AmenityRest,
+  AmenitySearch,
+  CombatantRef,
+  NetworkRemotePlayer,
+  RideableBike,
+  ThrownDistraction
+} from "./runtimeTypes";
+import { FrameLoop } from "./runtime/FrameLoop";
 import type {
   AmenityPoint,
   InteractableFixture,
@@ -88,118 +138,12 @@ import type {
   WeaponSpawn
 } from "./types";
 
-const PLAYER_RADIUS = 2.2;
-const PLAYER_HEIGHT = 1.72;
-const BASE_CAMERA_FOV = 74;
-const START_POSITION = new THREE.Vector3(35, 0, 42);
-const WALK_SPEED = 7.6;
-const SPRINT_SPEED = 11.4;
-const CROUCH_SPEED = 3.9;
-const INTERMISSION_SECONDS = 24;
-const REST_SECONDS = 5;
-const DISTRACTION_STAMINA_COST = 8;
-const CLIMB_STAMINA_COST = 14;
-const JUMP_STAMINA_COST = 9;
-const JUMP_INITIAL_VELOCITY = 5.1;
-const JUMP_GRAVITY = 13.4;
-const MELEE_STAMINA_COST = 12;
-const MACHETE_STAMINA_COST = 18;
-const ZOMBIE_SEPARATION_GAP = 0.16;
-const ZOMBIE_SEPARATION_GRID_SIZE = 8;
-const ZOMBIE_SEPARATION_ITERATIONS = 3;
-const ZOMBIE_STATIC_COLLISION_PASSES = 2;
-const BIKE_FORWARD_SPEED = 18.2;
-const BIKE_SPRINT_SPEED = 24.6;
-const BIKE_REVERSE_SPEED = 5.2;
-const BIKE_STRAFE_SPEED = 4.4;
-const BIKE_INTERACTION_RADIUS = 5.6;
-const BIKE_CAMERA_HEIGHT_BONUS = 0.34;
-const BIKE_ALLOWED_WEAPONS = new Set<WeaponId>(["knife", "machete", "carbine", "smg"]);
-const NETWORK_INPUT_HZ = 30;
-const NETWORK_SNAPSHOT_HZ = 18;
-
-interface AmenitySearch {
-  amenity: AmenityPoint;
-  remaining: number;
-  duration: number;
-  noiseTimer: number;
-  noiseMultiplier: number;
-}
-
-interface AmenityRest {
-  amenity: AmenityPoint;
-  remaining: number;
-  duration: number;
-  healthGain: number;
-}
-
-interface ThrownDistraction {
-  mesh: THREE.Mesh;
-  position: Vec2;
-  ttl: number;
-  pulseTimer: number;
-}
-
-interface RideableBike {
-  id: string;
-  label: string;
-  mesh: THREE.Group;
-  position: THREE.Vector3;
-  angle: number;
-  mounted: boolean;
-}
-
-interface NetworkRemotePlayer {
-  id: string;
-  name: string;
-  mesh: THREE.Group;
-  weaponIdRendered: WeaponId;
-  position: THREE.Vector3;
-  velocity: THREE.Vector3;
-  yaw: number;
-  pitch: number;
-  health: number;
-  scrap: number;
-  loadout: Loadout;
-  condition: PlayerCondition;
-  input: NetworkInputState;
-  lastInputAt: number;
-  lastShotAt: number;
-  shotBloom: number;
-  movementNoiseTimer: number;
-  isSprinting: boolean;
-  crouching: boolean;
-  crouchAmount: number;
-  height: number;
-  heightTarget: number;
-  jumpHeight: number;
-  jumpVelocity: number;
-  activeFixtureId: string | null;
-}
-
-interface CombatantRef {
-  id: string;
-  isLocal: boolean;
-  remote?: NetworkRemotePlayer;
-  position: THREE.Vector3;
-  velocity: THREE.Vector3;
-  yaw: number;
-  pitch: number;
-  health: number;
-  crouching: boolean;
-  crouchAmount: number;
-  height: number;
-  jumpHeight: number;
-  activeFixtureId: string | null;
-  condition: PlayerCondition;
-  loadout: Loadout;
-}
-
 export class GameApp {
   private readonly root: HTMLElement;
   private readonly level: LevelData;
   private readonly obstacleIndex: ObstacleIndex;
   private readonly terrain: TerrainSampler;
+  private readonly movementSurfaces: MovementSurfaceSampler;
   private readonly noise = new NoiseSystem();
   private readonly rng = new SeededRandom(0xed1b97);
   private readonly waveDirector: WaveDirector;
@@ -221,26 +165,10 @@ export class GameApp {
   private state: GameStateName = "ready";
   private testApi: GameTestApi | null = null;
   private readonly events = new AbortController();
-  private animationFrameId: number | null = null;
+  private readonly frameLoop = new FrameLoop((tick) => this.tick(tick.dt, tick.elapsedSeconds));
   private disposed = false;
   private frame = 0;
-  private lastFrameTime = performance.now();
-  private player = {
-    position: START_POSITION.clone(),
-    velocity: new THREE.Vector3(),
-    yaw: -2.45,
-    pitch: -0.08,
-    health: 100,
-    scrap: 70,
-    kills: 0,
-    height: 0,
-    heightTarget: 0,
-    jumpHeight: 0,
-    jumpVelocity: 0,
-    crouching: false,
-    crouchAmount: 0,
-    activeFixtureId: null as string | null
-  };
+  private player = createInitialPlayerState();
   private loadout: Loadout = createInitialLoadout();
   private lastShotAt = 0;
   private intermissionThreatTimer = 0;
@@ -346,6 +274,7 @@ export class GameApp {
     this.level = createLevelData();
     this.obstacleIndex = new ObstacleIndex(this.level.obstacles);
     this.terrain = new TerrainSampler(this.level);
+    this.movementSurfaces = new MovementSurfaceSampler(this.level);
     this.waveDirector = new WaveDirector(this.level.spawnPoints, this.rng, {
       intermissionSeconds: INTERMISSION_SECONDS,
       initialSpawnDelay: 0.4
@@ -420,7 +349,7 @@ export class GameApp {
     };
     installGameTestDriver(this.testApi);
 
-    this.animationFrameId = requestAnimationFrame((time) => this.tick(time));
+    this.frameLoop.start();
   }
 
   dispose(): void {
@@ -429,10 +358,7 @@ export class GameApp {
     }
     this.disposed = true;
     this.events.abort();
-    if (this.animationFrameId !== null) {
-      cancelAnimationFrame(this.animationFrameId);
-      this.animationFrameId = null;
-    }
+    this.frameLoop.stop();
     if (this.testApi) {
       uninstallGameTestDriver(this.testApi);
       this.testApi = null;
@@ -447,31 +373,7 @@ export class GameApp {
     this.networkPlayers.clear();
     this.audio.dispose();
 
-    const geometries = new Set<THREE.BufferGeometry>();
-    const materials = new Set<THREE.Material>();
-    const textures = new Set<THREE.Texture>();
-    this.scene.traverse((object) => {
-      const mesh = object as THREE.Mesh;
-      if (mesh.geometry) {
-        geometries.add(mesh.geometry);
-      }
-      const material = mesh.material;
-      if (Array.isArray(material)) {
-        material.forEach((entry) => materials.add(entry));
-      } else if (material) {
-        materials.add(material);
-      }
-    });
-    for (const material of materials) {
-      for (const value of Object.values(material)) {
-        if (value instanceof THREE.Texture) {
-          textures.add(value);
-        }
-      }
-      material.dispose();
-    }
-    geometries.forEach((geometry) => geometry.dispose());
-    textures.forEach((texture) => texture.dispose());
+    disposeThreeResources(this.scene);
     this.postProcessing.dispose();
     this.renderer.dispose();
     this.root.innerHTML = "";
@@ -650,19 +552,7 @@ export class GameApp {
       this.hud.setStatus("Waiting for host restart");
       return;
     }
-    this.player.position.set(START_POSITION.x, this.groundY({ x: START_POSITION.x, z: START_POSITION.z }), START_POSITION.z);
-    this.player.health = 100;
-    this.player.scrap = 70;
-    this.player.kills = 0;
-    this.player.height = 0;
-    this.player.heightTarget = 0;
-    this.player.jumpHeight = 0;
-    this.player.jumpVelocity = 0;
-    this.player.crouching = false;
-    this.player.crouchAmount = 0;
-    this.player.activeFixtureId = null;
-    this.player.yaw = -2.45;
-    this.player.pitch = -0.08;
+    resetPlayerState(this.player, this.groundY({ x: START_POSITION.x, z: START_POSITION.z }));
     this.loadout = createInitialLoadout();
     this.rebuildViewWeapon();
     this.resetWaves();
@@ -720,22 +610,20 @@ export class GameApp {
     }
   }
 
-  private tick(time: number): void {
+  private tick(dt: number, now: number): void {
     if (this.disposed) {
       return;
     }
-    const dt = Math.min(0.05, (time - this.lastFrameTime) / 1000);
-    this.lastFrameTime = time;
     this.frame += 1;
 
     if (this.state === "playing") {
-      this.update(dt, time / 1000);
+      this.update(dt, now);
     } else if (this.smokeMode) {
       this.camera.position.set(42, 42, 82);
       this.camera.lookAt(0, 0, 0);
     }
 
-    const atmosphere = this.atmosphere.update(dt, this.camera.position, time / 1000);
+    const atmosphere = this.atmosphere.update(dt, this.camera.position, now);
     const { timeOfDay, weather } = atmosphere;
     this.currentWeather = weather;
     this.world.updateTimeOfDay(timeOfDay, weather);
@@ -743,7 +631,6 @@ export class GameApp {
     this.postProcessing.setWeather(weather);
     this.renderer.toneMappingExposure = timeOfDay.exposure * weather.exposureMultiplier;
     this.postProcessing.render(dt, this.renderer, this.scene, this.camera);
-    this.animationFrameId = requestAnimationFrame((next) => this.tick(next));
   }
 
   private update(dt: number, now: number): void {
@@ -1340,10 +1227,15 @@ export class GameApp {
     });
 
     const origin = this.networkPlayerCameraPosition(player);
-    const movementSpread = Math.min(1, player.velocity.length() / 22) * stats.movingSpread;
-    const crouchSpread = player.crouching ? 0.64 : 1;
-    const breathControl = player.input.aim ? (player.condition.stamina > 12 ? 0.86 : 1.18) : 1;
-    const totalSpread = (stats.spread + movementSpread + player.shotBloom) * (player.input.aim ? stats.aimSpreadMultiplier : 1) * crouchSpread * breathControl;
+    const totalSpread = effectiveFirearmSpread(stats, {
+      movementSpeed: player.velocity.length(),
+      shotBloom: player.shotBloom,
+      crouching: player.crouching,
+      aimAmount: player.input.aim ? 1 : 0,
+      aimHeld: player.input.aim,
+      stamina: player.condition.stamina,
+      weather: this.currentWeather
+    });
     for (let pellet = 0; pellet < stats.pellets; pellet += 1) {
       const direction = this.directionFromYawPitch(player.yaw, player.pitch);
       direction.x += this.rng.range(-totalSpread, totalSpread);
@@ -1461,14 +1353,7 @@ export class GameApp {
     for (const obstacle of this.level.obstacles) {
       target = resolveObstacle(target, 0.5, obstacle);
     }
-    const mesh = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.16, 0.18, 0.42, 10),
-      new THREE.MeshStandardMaterial({ color: 0x6f8f93, metalness: 0.18, roughness: 0.72 })
-    );
-    mesh.position.set(target.x, this.groundY(target) + 0.21, target.z);
-    mesh.userData.dynamic = true;
-    this.scene.add(mesh);
-    this.distractions.push({ mesh, position: { ...target }, ttl: 7.2, pulseTimer: 1.35 });
+    this.distractions.push(this.createThrownCharge(target, player));
     this.emitNoise("distraction", target, 1.05);
     return true;
   }
@@ -1981,12 +1866,7 @@ export class GameApp {
   }
 
   private bikeSurfaceSpeedMultiplier(surface: MovementSurface): number {
-    if (surface === "rail") return 1.2;
-    if (surface === "asphalt") return 1.18;
-    if (surface === "concrete") return 1.1;
-    if (surface === "gravel") return 0.88;
-    if (surface === "dirt") return 0.72;
-    return 0.82;
+    return this.movementSurfaces.bikeSpeedMultiplier(surface);
   }
 
   private updatePlayerCondition(dt: number): void {
@@ -2075,42 +1955,126 @@ export class GameApp {
       target = resolveObstacle(target, 0.5, obstacle);
     }
 
-    const mesh = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.16, 0.18, 0.42, 10),
-      new THREE.MeshStandardMaterial({ color: 0x6f8f93, metalness: 0.18, roughness: 0.72 })
-    );
-    mesh.position.set(target.x, this.groundY(target) + 0.21, target.z);
+    this.distractions.push(this.createThrownCharge(target));
+    this.emitNoise("distraction", target, 1.05);
+    this.flashStatus("Threw bottle bomb");
+    return true;
+  }
+
+  private createThrownCharge(position: Vec2, killer?: NetworkRemotePlayer): ThrownDistraction {
+    const material = new THREE.MeshStandardMaterial({
+      color: 0x6f8f93,
+      emissive: 0xff9d4a,
+      emissiveIntensity: 0.18,
+      metalness: 0.18,
+      roughness: 0.72
+    });
+    const mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.18, 0.42, 10), material);
+    mesh.position.set(position.x, this.groundY(position) + 0.21, position.z);
     mesh.rotation.set(this.rng.range(-0.4, 0.4), this.rng.range(0, Math.PI), this.rng.range(-0.8, 0.8));
     mesh.userData.dynamic = true;
     this.scene.add(mesh);
-    this.distractions.push({
+    return {
       mesh,
-      position: { ...target },
-      ttl: 7.2,
-      pulseTimer: 1.35
-    });
-    this.emitNoise("distraction", target, 1.05);
-    this.flashStatus("Threw distraction");
-    return true;
+      position: { ...position },
+      ttl: BOTTLE_BOMB_FUSE_SECONDS + 0.45,
+      fuseTimer: BOTTLE_BOMB_FUSE_SECONDS,
+      pulseTimer: BOTTLE_BOMB_PULSE_MIN_SECONDS,
+      killer
+    };
   }
 
   private updateDistractions(dt: number): void {
     for (const distraction of [...this.distractions]) {
       distraction.ttl -= dt;
+      distraction.fuseTimer -= dt;
       distraction.pulseTimer -= dt;
-      distraction.mesh.rotation.y += dt * 2.6;
+      const fuseProgress = THREE.MathUtils.clamp(1 - distraction.fuseTimer / BOTTLE_BOMB_FUSE_SECONDS, 0, 1);
+      distraction.mesh.rotation.y += dt * (2.6 + fuseProgress * 4.4);
       distraction.mesh.position.y = this.groundY(distraction.position) + 0.21 + Math.sin(this.frame * 0.16) * 0.035;
-      if (distraction.pulseTimer <= 0 && distraction.ttl > 0.8) {
-        this.emitNoise("distraction", distraction.position, 0.52, { volume: 0.45 });
-        distraction.pulseTimer = this.rng.range(1.2, 1.85);
+      distraction.mesh.scale.setScalar(1 + fuseProgress * 0.22);
+      const material = distraction.mesh.material as THREE.MeshStandardMaterial;
+      material.emissiveIntensity = 0.18 + fuseProgress * 0.96 + Math.max(0, Math.sin(this.frame * 0.38)) * 0.22;
+      if (distraction.pulseTimer <= 0 && distraction.fuseTimer > 0.22) {
+        this.emitNoise("distraction", distraction.position, 0.52 + fuseProgress * 0.34, { volume: 0.45 + fuseProgress * 0.22 });
+        distraction.pulseTimer = this.rng.range(BOTTLE_BOMB_PULSE_MIN_SECONDS, BOTTLE_BOMB_PULSE_MAX_SECONDS) * (1 - fuseProgress * 0.34);
       }
-      if (distraction.ttl <= 0) {
-        this.scene.remove(distraction.mesh);
-        const index = this.distractions.indexOf(distraction);
-        if (index >= 0) {
-          this.distractions.splice(index, 1);
-        }
+      if (distraction.fuseTimer <= 0) {
+        this.detonateBottleBomb(distraction);
+        this.removeDistraction(distraction);
+      } else if (distraction.ttl <= 0) {
+        this.removeDistraction(distraction);
       }
+    }
+  }
+
+  private detonateBottleBomb(distraction: ThrownDistraction): void {
+    this.emitNoise("distraction", distraction.position, 1.46, { volume: 1.08 });
+    this.createBottleBombBurst(distraction.position);
+
+    let hitCount = 0;
+    const now = performance.now() / 1000;
+    for (const zombie of [...this.zombies]) {
+      const zombiePoint = { x: zombie.position.x, z: zombie.position.z };
+      const effect = bottleBombEffectAtDistance(distance(distraction.position, zombiePoint), zombie.radius);
+      if (effect.damage <= 0) {
+        continue;
+      }
+
+      hitCount += 1;
+      zombie.health -= effect.damage;
+      const profile = zombieProfile(zombie.type);
+      zombie.staggerTimer = Math.max(zombie.staggerTimer, effect.staggerSeconds / profile.staggerResistance);
+      zombie.aiState = "search";
+      zombie.lastKnownPlayer = { ...distraction.position };
+      zombie.target = this.chooseWanderTarget(distraction.position, zombie.radius, 18);
+      zombie.memoryTimer = 0;
+      zombie.searchTimer = Math.max(zombie.searchTimer, this.rng.range(4.5, 7.2));
+
+      const shove = new THREE.Vector3(zombie.position.x - distraction.position.x, 0, zombie.position.z - distraction.position.z);
+      if (shove.lengthSq() < 0.001) {
+        shove.set(Math.cos(zombie.walkOffset), 0, Math.sin(zombie.walkOffset));
+      }
+      shove.normalize().multiplyScalar(effect.shoveDistance);
+      zombie.position.add(shove);
+      this.settleZombiePosition(zombie);
+      this.syncZombieMeshPosition(zombie, now);
+      this.createHitSpark(zombie.position.clone().add(new THREE.Vector3(0, 1.35, 0)));
+
+      if (zombie.health <= 0) {
+        this.killZombie(zombie, distraction.killer);
+      }
+    }
+
+    this.flashStatus(hitCount > 0 ? `Bottle bomb hit ${hitCount}` : "Bottle bomb burst");
+  }
+
+  private createBottleBombBurst(position: Vec2): void {
+    const center = new THREE.Vector3(position.x, this.groundY(position) + 0.42, position.z);
+    const light = new THREE.PointLight(0xffa85d, 5.8, 34);
+    light.position.copy(center);
+    this.scene.add(light);
+    window.setTimeout(() => this.scene.remove(light), 120);
+
+    const puff = new THREE.Mesh(
+      new THREE.SphereGeometry(0.58, 14, 9),
+      new THREE.MeshBasicMaterial({ color: 0xd99a58, transparent: true, opacity: 0.42, depthWrite: false })
+    );
+    puff.position.copy(center);
+    this.scene.add(puff);
+    this.smokePuffs.push({
+      mesh: puff,
+      velocity: new THREE.Vector3(0, 0.55, 0),
+      ttl: 0.5,
+      maxTtl: 0.5
+    });
+  }
+
+  private removeDistraction(distraction: ThrownDistraction): void {
+    this.scene.remove(distraction.mesh);
+    const index = this.distractions.indexOf(distraction);
+    if (index >= 0) {
+      this.distractions.splice(index, 1);
     }
   }
 
@@ -2173,35 +2137,11 @@ export class GameApp {
   }
 
   private movementSurfaceAt(point: Vec2): MovementSurface {
-    let nearestSurface: MovementSurface | null = null;
-    let nearestDistance = Number.POSITIVE_INFINITY;
-    for (const path of this.level.paths) {
-      for (let index = 0; index < path.points.length - 1; index += 1) {
-        const pathDistance = distanceToSegment(point, path.points[index], path.points[index + 1]);
-        if (pathDistance <= path.width * 0.78 && pathDistance < nearestDistance) {
-          nearestDistance = pathDistance;
-          nearestSurface = this.pathMovementSurface(path);
-        }
-      }
-    }
-    return nearestSurface ?? "grass";
-  }
-
-  private pathMovementSurface(path: LevelData["paths"][number]): MovementSurface {
-    if (path.kind === "rail") return "rail";
-    if (path.surface === "gravel" || path.kind === "perimeter") return "gravel";
-    if (path.surface === "asphalt" || path.kind === "cycleway" || path.kind === "service") return "asphalt";
-    if (path.surface === "concrete" || path.kind === "steps" || path.kind === "footway") return "concrete";
-    return "dirt";
+    return this.movementSurfaces.at(point);
   }
 
   private surfaceSpeedMultiplier(surface: MovementSurface): number {
-    if (surface === "rail") return 1.12;
-    if (surface === "asphalt") return 1.08;
-    if (surface === "concrete") return 1.03;
-    if (surface === "gravel") return 0.94;
-    if (surface === "dirt") return 0.84;
-    return 0.9;
+    return this.movementSurfaces.speedMultiplier(surface);
   }
 
   private groundY(point: Vec2): number {
@@ -2213,41 +2153,7 @@ export class GameApp {
   }
 
   private weatherAnchors(): Vec2[] {
-    const anchors: Vec2[] = [{ x: START_POSITION.x, z: START_POSITION.z }];
-    const addAnchor = (point: Vec2 | undefined) => {
-      if (point) {
-        anchors.push({ x: point.x, z: point.z });
-      }
-    };
-
-    this.level.upgradeStations.forEach((station) => addAnchor(station.position));
-    this.level.weaponSpawns.forEach((spawn) => addAnchor(spawn.position));
-    addAnchor(this.level.rideableBike.position);
-    this.level.landmarks.forEach((landmark) => addAnchor(landmark.position ?? (landmark.polygon ? polygonCentroid(landmark.polygon) : undefined)));
-    this.level.amenities.forEach((amenity, index) => {
-      if (index % 8 === 0) {
-        addAnchor(amenity.position);
-      }
-    });
-
-    this.level.paths.forEach((path) => {
-      if (path.points.length === 0) {
-        return;
-      }
-      addAnchor(path.points[0]);
-      addAnchor(path.points[Math.floor(path.points.length * 0.5)]);
-      addAnchor(path.points[path.points.length - 1]);
-    });
-
-    const uniqueAnchors = new Map<string, Vec2>();
-    anchors.forEach((anchor) => {
-      const key = `${Math.round(anchor.x / 8)}:${Math.round(anchor.z / 8)}`;
-      if (!uniqueAnchors.has(key)) {
-        uniqueAnchors.set(key, anchor);
-      }
-    });
-
-    return [...uniqueAnchors.values()].slice(0, 140);
+    return collectWeatherAnchors(this.level, START_POSITION);
   }
 
   private handleLook(movementX: number, movementY: number): void {
@@ -2802,10 +2708,15 @@ export class GameApp {
     this.spawnMuzzleSmoke();
     this.audio.playWorld("shell", { x: this.player.position.x, z: this.player.position.z }, { volume: this.loadout.weaponId === "shotgun" ? 0.55 : 0.75 });
 
-    const movementSpread = Math.min(1, this.player.velocity.length() / 22) * stats.movingSpread;
-    const crouchSpread = this.player.crouching ? 0.64 : 1;
-    const breathControl = this.scopeAmount > 0.55 && this.aimHeld ? (this.condition.stamina > 12 ? 0.86 : 1.18) : 1;
-    const totalSpread = (stats.spread + movementSpread + this.shotBloom) * THREE.MathUtils.lerp(1, stats.aimSpreadMultiplier, this.scopeAmount) * crouchSpread * breathControl;
+    const totalSpread = effectiveFirearmSpread(stats, {
+      movementSpeed: this.player.velocity.length(),
+      shotBloom: this.shotBloom,
+      crouching: this.player.crouching,
+      aimAmount: this.scopeAmount,
+      aimHeld: this.aimHeld,
+      stamina: this.condition.stamina,
+      weather: this.currentWeather
+    });
     let registeredHit = false;
     let playedImpact = false;
     for (let pellet = 0; pellet < stats.pellets; pellet += 1) {
@@ -4201,7 +4112,8 @@ export class GameApp {
       this.muzzleLight.visible = this.muzzleTimer > 0 && stats.kind === "firearm";
       this.muzzleLight.intensity = 2.2 + this.rng.next() * 2.8;
     }
-    const stanceSway = this.player.crouching ? 0.48 : 1;
+    const weatherGripSway = 1 + this.currentWeather.precipitation * 0.08 + this.currentWeather.wind * 0.05;
+    const stanceSway = (this.player.crouching ? 0.48 : 1) * weatherGripSway;
     const bob = Math.min(1, this.player.velocity.length() / 18) * stats.sway * stanceSway;
     const t = this.frame * 0.08;
     if (stats.kind === "melee") {

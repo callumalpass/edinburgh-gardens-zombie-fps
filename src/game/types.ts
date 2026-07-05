@@ -350,10 +350,12 @@ export interface ParkLifeDetail {
     | "cricket-nets"
     | "construction-fence"
     | "works-materials"
-    | "removed-tree-stump";
+    | "removed-tree-stump"
+    | "park-rule-sign";
   position: Vec2;
   angle: number;
   bikeIssue?: "flat-tyres" | "broken-chain";
+  rule?: "dogs-on-leash" | "alcohol-hours" | "rotunda-stairs-no-power" | "access-friendly";
   source?: string;
 }
 

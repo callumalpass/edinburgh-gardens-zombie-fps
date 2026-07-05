@@ -28,6 +28,9 @@ These notes record the real-world sources and implementation decisions used to s
   - `715802679` tennis-side storage tank
   - `715802680` mapped fence segment
   - Node `249041533` cricket nets
+- OpenStreetMap map API playground and oval access extracts:
+  - `24489879` south playground, `543616019` north playground, `14946934` W. T. Peterson Oval and connector ways `403753751`, `403753754`, `403753756`.
+  - Used on 2026-07-06 to refresh the fenced-playground and gated oval-fence pass after Overpass returned busy-server HTML.
 - Landezine, Edinburgh Gardens Raingarden by GHD: https://landezine.com/edinburgh-gardens-raingarden-by-ghd-pty-ltd/
   - Used for the raingarden's project map marker and four-terrace treatment-garden design, zig-zag low-flow steel channel, 700 sqm filter area, 200 KL underground storage and stormwater-harvesting role. The marker is not used as the visible garden footprint centroid after the Lovell Chen Figure 96 placement audit.
 - Atlan StormTech, StormTech Raingarden at Edinburgh Gardens: https://atlanstormwater.com/au/stormtech-raingarden-at-edinburgh-gardens-fitzroy-victoria/
@@ -53,6 +56,30 @@ These notes record the real-world sources and implementation decisions used to s
   - Used only to confirm the Rowe Street / Alfred Crescent entrance context for planter placement.
 - Yarra northern precinct consultation: https://yoursayyarra.com.au/eg-north
   - Used for the northern activity precinct: playground, BBQ/picnic tables, chess/game elements, table tennis, skate/BMX and basketball half-court context.
+- Melbourne Playgrounds, Edinburgh Gardens South Playground: https://www.melbourneplaygrounds.com.au/edinburgh-gardens-south-playground-alfred-crescent-fitzroy-north
+  - Used for the south playground's fenced/safety-gated condition, all-abilities paths, timber fort, wave slide, rope web, sandpits, chalk walls, swings, toddler area and shelter.
+- Melbourne Playgrounds, Edinburgh Gardens North Playground: https://www.melbourneplaygrounds.com.au/edinburgh-gardens-north-playground-alfred-crescent-fitzroy-north
+  - Used for the current/recent north playground equipment mix and for the follow-up conclusion that current public wording does not support a north playground fence around the relocated footprint.
+- Mamma Knows North, Edinburgh Gardens and Playground: https://mammaknowsnorth.com.au/parks-and-playgrounds/edinburgh-gardens-and-playground-north-fitzroy
+  - Used as a recent public-visit cross-check for the north playground's toddler/preschooler, ropes, swings and sandpit emphasis without a fence claim.
+- To Hot or Not, Edinburgh Gardens: https://tothotornot.com/edinburgh-gardens/
+  - Used as older/secondary public-visit evidence for playground equipment and earlier north-fence context; not used as current evidence for a fence around the relocated north playground footprint.
+- Busy City Guide, Edinburgh Gardens Fitzroy North: https://busycitykids.com.au/our-blog/2015/9/17/edinburghgardens-fitzroynorth
+  - Used as older/secondary public-visit evidence for the earlier north playground and for the south playground equipment mix.
+- Proludic, VIC Edinburgh Gardens playground: https://www.proludic.com.au/reference/vic-edinburgh-gardens-playground/
+  - Used for the 2018 toddler-unit evidence at the smaller northern playground.
+- Yarra Your Say, Fitzy Skate Bowl: https://yoursayyarra.com.au/skatepark
+  - Used for the 2022 Fitzy Bowl upgrade context, including retention of the original bowls, added beginner/accessibility features and expanded skate/BMX area.
+- GOSKATE, Fitzroy Skatepark: https://goskate.com/sp/listing/fitzroy-skatepark/
+  - Used for bowl depth and feature translation: two deeper bowls, a shallow beginner bowl, transition features and street-section obstacles.
+- Time Out Melbourne, Fitzroy Skatepark: https://www.timeout.com/melbourne/sport-and-fitness/fitzroy-skatepark
+  - Used as a public cross-check for multiple concrete bowls and a small beginner double bowl.
+- Skater Maps, Edinburgh Gardens Skatepark: https://skatermaps.com/edinburgh-gardens-skatepark/
+  - Used as a skating-source cross-check for the historical Fitzy Bowls identity, concrete bowls, beginner double bowl and later street-plaza upgrade.
+- North Fitzroy Rotunda, Fitzy Bowl Set for Revamp: https://www.northfitzroyrotunda.com/post/fitzy-bowl-set-for-revamp
+  - Used for upgrade context that the existing bowl remained while quarter pipes, rails, ledges and spectator seating were added.
+- Broadsheet, Fitzroy Bowl Skate Park Expansion: https://www.broadsheet.com.au/melbourne/city-file/article/fitzroy-bowl-skate-park-expansion
+  - Used as secondary upgrade context for original bowl retention, concrete transitions/obstacles, flat-ground options, seating, lighting and shade.
 - City of Yarra significant trees dataset metadata: https://data.gov.au/data/dataset/yarra-significant-trees
   - Used for notable tree species, diameter and height context already represented by `YARRA_SIGNIFICANT_TREE_GEO`.
 - Brunswick Street Oval Redevelopment updates: https://www.yarracity.vic.gov.au/planning-and-building/our-projects-and-initiatives/brunswick-street-oval
@@ -61,8 +88,12 @@ These notes record the real-world sources and implementation decisions used to s
   - Used to suppress mapped OSM tree nodes that intersect the published 2026 tennis works tree-removal footprint.
 - Yarra Emely Baker Centre: https://www.yarracity.vic.gov.au/things-to-do/find-a-venue/emely-baker-centre
   - Used for the community-room use, access-friendly entry, 11 x 7 m room scale, gated outdoor area and shade sail cues.
+- Yarra Edinburgh Gardens Rotunda: https://www.yarracity.vic.gov.au/things-to-do/find-a-venue/edinburgh-gardens-rotunda
+  - Used for bookable-venue context, the rotunda's not-wheelchair-accessible status and the no-current-power constraint.
 - Yarra Fitzroy Bowls 150 Years Memorial Wall: https://www.yarracity.vic.gov.au/things-to-do/arts/gallery/public-art/fitzroy-bowls-150-years-memorial-wall
   - Used for the bowling-club mural palette, flora/fauna theme and simplified club/lion facade cue.
+- Fitzroy Victoria Bowling & Sports Club official site: https://www.barefootbowling.com.au/
+  - Used for current club/social-use context behind the bowling-club access point and green-side service cues.
 
 ## Current Implementation
 
@@ -87,6 +118,10 @@ These notes record the real-world sources and implementation decisions used to s
 - The ornamental gardens review split the visible stormwater filtration garden south of the skate park and west of the rail trail from the east-side underground reservoir footprint, then added St Georges display beds, Rotunda Lawn shrub beds, the Queen Victoria circular display bed and the tennis Agapanthus strip.
 - The 2026-07-06 realism audit adds source-backed current-works details around the tennis/grandstand precinct, visible low stumps for OSM trees already suppressed by the redevelopment footprint, more legible mapped-building facades, and weather-aware wet material and night-light states.
 - The follow-up 2026-07-06 facade/court pass adds source-backed frontage points for the major mapped buildings so facade details face the documented use side, and tags the six OSM-mapped existing tennis courts with renovation-surface cues from Yarra's 2026-2027 Brunswick Street Oval works page. The two new courts are documented but not drawn as new footprints until public vertices are available.
+- The 2026-07-06 playground/fence pass models the south playground as fenced with gate gaps, leaves the relocated north playground unfenced after current-source review, adds the oval perimeter as a gated low rail blocker, makes only the low oval fence jumpable, and replaces the generic playground prop with separate south/north equipment layouts derived from public playground evidence.
+- The 2026-07-06 Fitzy Bowl correction removes the invisible full-footprint skatepark blocker and rebuilds the skatepark with lowered enterable bowls, visible coping gaps, ledges, rail, banks, quarter-pipe and seating.
+- The 2026-07-06 building access pass adds source-linked searchable structure access points at the grandstand changerooms, tennis clubroom, bowling club gate, Freeman Street gatehouse, Emely Baker Centre and south amenities service room, with distinct loot profiles and visible access hardware.
+- The 2026-07-06 public-use/weather pass adds source-backed non-colliding rule signs for dog-leash edges, picnic alcohol hours, Emely Baker access-friendly status and the rotunda stair/no-power constraint, plus a modest rain/wind/wetness firearm-spread modifier shared by local and LAN players.
 - Tree placement refresh research is stored in `docs/research/tree-placement-refresh-2026-07-05.md`.
 - Detailed OSM path/service research is stored in `docs/research/osm-path-service-inventory-2026-07-05.md`.
 - Hardscape and terrain-edge research is stored in `docs/research/hardscape-terrain-edges-2026-07-05.md`.
@@ -108,6 +143,10 @@ These notes record the real-world sources and implementation decisions used to s
 - Ornamental gardens and raingarden placement research is stored in `docs/research/ornamental-gardens-2026-07-05.md`.
 - Building realism pass research is stored in `docs/research/building-realism-pass-2026-07-05.md`.
 - Runtime artifact, facade-orientation and preview-output audit research is stored in `docs/research/realism-artifact-audit-2026-07-06.md`.
+- Playground and fence layout research is stored in `docs/research/playground-and-fence-layout-2026-07-06.md`.
+- Skatepark bowl and north-playground correction research is stored in `docs/research/skatepark-bowls-and-north-playground-correction-2026-07-06.md`.
+- Building access interaction research is stored in `docs/research/building-access-interactions-2026-07-06.md`.
+- Public-use and weather realism research is stored in `docs/research/public-use-weather-realism-2026-07-06.md`.
 - Local raw research asset guidance is stored in `docs/research/raw-assets.md`.
 - Research/data pipeline automation is stored in `docs/research/data-pipeline-automation-2026-07-05.md` and `docs/research/research-manifest.json`.
 
@@ -115,6 +154,9 @@ These notes record the real-world sources and implementation decisions used to s
 
 - The large combined Overpass query for every mapped feature in the park was unreliable and frequently timed out on 2026-07-05.
 - The bounded OSM path/service Overpass inventory succeeded once, but repeated calls later returned busy-server HTML. Smaller OSM API fetches for specific way IDs were reliable and are the basis for the new mapped path, building and fence footprints.
+- On 2026-07-06, the playground/fence pass used small OSM map API XML extracts for the two playgrounds and oval access connectors after a targeted Overpass playground/fence/gate request returned busy-server HTML.
+- The north playground fence decision changed on follow-up review: older visit/CMP sources can describe an earlier or pre-relocation north playground, while current/recent north-playground sources do not support a fence around the relocated OSM footprint.
+- No public measured Fitzy Bowl CAD geometry was found. Bowl depths and feature families are source-backed, while bowl ellipses, roll-out gaps and street-section object positions are approximate within the OSM skatepark polygon.
 - Raw API responses are kept locally under ignored `docs/research/raw/` when useful. The durable checked-in artifacts are source notes plus compact derived constants in `src/game/levelData.ts`.
 - The Vicmap elevation samples are sparse. They are appropriate for broad park slope and local rise/fall, not for fine kerbs, gutters, steps or detailed drainage modelling.
 - Fine ground details such as crowns, shoulders, root mounds, swales and oval banking are represented as deterministic local terrain modifiers layered over the broad Vicmap interpolation.
@@ -123,5 +165,5 @@ These notes record the real-world sources and implementation decisions used to s
 - Climbable fixtures now declare access kinds and landing positions so visual stairs/ladders and player placement align.
 - Mapped tree records now retain Vicmap object IDs or OSM node IDs and suppress current Brunswick Street Oval redevelopment tree removals.
 - Human-use traces add small non-colliding bowls, coolers, bags and chalk/scuff marks in documented activity zones.
-- `npm run research:check` validates the checked-in research manifest, expected notes, source URLs and any ignored local raw JSON cache that is present.
+- `npm run research:check` validates the checked-in research manifest, expected notes, source URLs and any ignored local raw JSON/XML cache that is present.
 - Object preview PNGs under ignored `docs/research/renders/object-previews/` are local QA artifacts; the 2026-07-06 audit records which rendered families were checked and why they are not committed.

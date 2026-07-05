@@ -28,7 +28,12 @@ export function separateCircularAgents<T extends CircularAgent>(agents: readonly
   const gridSize = options.gridSize ?? DEFAULT_GRID_SIZE;
   const iterations = Math.max(1, Math.floor(options.iterations ?? DEFAULT_ITERATIONS));
   const strength = options.strength ?? DEFAULT_STRENGTH;
-  const maxRadius = agents.reduce((largest, agent) => Math.max(largest, agent.radius), 0);
+  let maxRadius = 0;
+  for (const agent of agents) {
+    if (agent.radius > maxRadius) {
+      maxRadius = agent.radius;
+    }
+  }
   let largestOverlap = 0;
 
   for (let iteration = 0; iteration < iterations; iteration += 1) {
@@ -56,13 +61,23 @@ export function separateCircularAgents<T extends CircularAgent>(agents: readonly
         const overlap = minDistance - dist;
         iterationLargestOverlap = Math.max(iterationLargestOverlap, overlap);
         largestOverlap = Math.max(largestOverlap, overlap);
-        const normal = dist > 0.0001 ? { x: dx / dist, z: dz / dist } : deterministicPairNormal(agent.id, other.id);
+        let normalX: number;
+        let normalZ: number;
+        if (dist > 0.0001) {
+          const invDistance = 1 / dist;
+          normalX = dx * invDistance;
+          normalZ = dz * invDistance;
+        } else {
+          const angle = deterministicPairAngle(agent.id, other.id);
+          normalX = Math.cos(angle);
+          normalZ = Math.sin(angle);
+        }
         const push = overlap * 0.5 * strength;
 
-        agent.position.x += normal.x * push;
-        agent.position.z += normal.z * push;
-        other.position.x -= normal.x * push;
-        other.position.z -= normal.z * push;
+        agent.position.x += normalX * push;
+        agent.position.z += normalZ * push;
+        other.position.x -= normalX * push;
+        other.position.z -= normalZ * push;
         moved = true;
       });
     }
@@ -82,7 +97,7 @@ export function separateCircularAgents<T extends CircularAgent>(agents: readonly
 }
 
 class CircularAgentIndex<T extends CircularAgent> {
-  private readonly grid = new Map<string, number[]>();
+  private readonly grid = new Map<number, Map<number, number[]>>();
 
   constructor(
     private readonly agents: readonly T[],
@@ -90,14 +105,30 @@ class CircularAgentIndex<T extends CircularAgent> {
   ) {
     for (let index = 0; index < agents.length; index += 1) {
       const agent = agents[index];
-      const key = this.cellKey(this.cellIndex(agent.position.x), this.cellIndex(agent.position.z));
-      const bucket = this.grid.get(key);
-      if (bucket) {
-        bucket.push(index);
-      } else {
-        this.grid.set(key, [index]);
-      }
+      const bucket = this.ensureBucket(this.cellIndex(agent.position.x), this.cellIndex(agent.position.z));
+      bucket.push(index);
     }
+  }
+
+  private ensureBucket(x: number, z: number): number[] {
+    let column = this.grid.get(x);
+    if (!column) {
+      column = new Map();
+      this.grid.set(x, column);
+    }
+
+    const bucket = column.get(z);
+    if (bucket) {
+      return bucket;
+    }
+
+    const nextBucket: number[] = [];
+    column.set(z, nextBucket);
+    return nextBucket;
+  }
+
+  private bucketAt(x: number, z: number): number[] | undefined {
+    return this.grid.get(x)?.get(z);
   }
 
   forNearby(agent: T, radius: number, visit: (other: T, otherIndex: number) => void): void {
@@ -108,10 +139,12 @@ class CircularAgentIndex<T extends CircularAgent> {
 
     for (let x = minX; x <= maxX; x += 1) {
       for (let z = minZ; z <= maxZ; z += 1) {
-        const bucket = this.grid.get(this.cellKey(x, z));
-        if (!bucket) continue;
-        for (const otherIndex of bucket) {
-          visit(this.agents[otherIndex], otherIndex);
+        const bucket = this.bucketAt(x, z);
+        if (bucket) {
+          for (let index = 0; index < bucket.length; index += 1) {
+            const otherIndex = bucket[index];
+            visit(this.agents[otherIndex], otherIndex);
+          }
         }
       }
     }
@@ -120,22 +153,14 @@ class CircularAgentIndex<T extends CircularAgent> {
   private cellIndex(value: number): number {
     return Math.floor(value / this.gridSize);
   }
-
-  private cellKey(x: number, z: number): string {
-    return `${x}:${z}`;
-  }
 }
 
-function deterministicPairNormal(a: CircularAgent["id"], b: CircularAgent["id"]): Vec2 {
+function deterministicPairAngle(a: CircularAgent["id"], b: CircularAgent["id"]): number {
   const key = `${a}:${b}`;
   let hash = 2166136261;
   for (let index = 0; index < key.length; index += 1) {
     hash ^= key.charCodeAt(index);
     hash = Math.imul(hash, 16777619);
   }
-  const angle = ((hash >>> 0) / 0xffffffff) * Math.PI * 2;
-  return {
-    x: Math.cos(angle),
-    z: Math.sin(angle)
-  };
+  return ((hash >>> 0) / 0xffffffff) * Math.PI * 2;
 }

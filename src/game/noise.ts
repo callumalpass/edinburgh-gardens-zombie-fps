@@ -30,16 +30,16 @@ export interface NoiseProfile {
 }
 
 export const NOISE_PROFILES: Record<NoiseKind, NoiseProfile> = {
-  footstep: { radius: 13, intensity: 0.34, ttl: 1.2 },
-  sprint: { radius: 31, intensity: 0.72, ttl: 1.65 },
-  gunshot: { radius: 280, intensity: 1.36, ttl: 6.8 },
-  melee: { radius: 9, intensity: 0.2, ttl: 0.9 },
-  reload: { radius: 18, intensity: 0.3, ttl: 1.5 },
+  footstep: { radius: 12, intensity: 0.31, ttl: 1.1 },
+  sprint: { radius: 29, intensity: 0.68, ttl: 1.55 },
+  gunshot: { radius: 260, intensity: 1.32, ttl: 6.4 },
+  melee: { radius: 8, intensity: 0.18, ttl: 0.82 },
+  reload: { radius: 16, intensity: 0.27, ttl: 1.35 },
   climb: { radius: 44, intensity: 0.68, ttl: 2.2 },
   scream: { radius: 98, intensity: 0.95, ttl: 3.4 },
-  distraction: { radius: 74, intensity: 0.9, ttl: 5.4 },
-  scavenge: { radius: 29, intensity: 0.42, ttl: 2.2 },
-  flashlight: { radius: 36, intensity: 0.34, ttl: 1.6 }
+  distraction: { radius: 76, intensity: 0.9, ttl: 5.6 },
+  scavenge: { radius: 26, intensity: 0.38, ttl: 2 },
+  flashlight: { radius: 34, intensity: 0.32, ttl: 1.5 }
 };
 
 export class NoiseSystem {
@@ -104,12 +104,12 @@ export function movementNoiseKind(speed: number, crouching: boolean, sprinting: 
 }
 
 export function movementNoiseMultiplier(crouching: boolean, surface: MovementSurface, weatherMask = 1): number {
-  const stance = crouching ? 0.28 : 1;
+  const stance = crouching ? 0.22 : 1;
   const surfaceMultiplier: Record<MovementSurface, number> = {
-    grass: 0.68,
-    dirt: 0.84,
+    grass: 0.62,
+    dirt: 0.78,
     gravel: 1.36,
-    asphalt: 1.18,
+    asphalt: 1.14,
     concrete: 1.08,
     rail: 1.28
   };

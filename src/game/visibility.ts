@@ -3,6 +3,10 @@ import { lineIntersectsBox, lineIntersectsPolygon } from "./collision";
 import type { CollisionObstacle, Vec2 } from "./types";
 
 const SIGHT_GRID_SIZE = 36;
+const FOV_PADDING_RADIANS = 0.08;
+let cachedFov = Number.NaN;
+let cachedAspect = Number.NaN;
+let cachedVisibleDotThreshold = 0;
 
 export interface VisibilityContext {
   playerPosition: Vec2;
@@ -34,13 +38,10 @@ export function isPointVisibleToPlayer(point: Vec2, context: VisibilityContext, 
   const range = Math.hypot(dx, dz);
   if (range < 0.001) return true;
 
-  const forward = playerForward2D(context.playerYaw);
-  const dot = (dx / range) * forward.x + (dz / range) * forward.z;
+  const dot = (dx / range) * -Math.sin(context.playerYaw) + (dz / range) * -Math.cos(context.playerYaw);
   if (dot <= 0) return false;
 
-  const horizontalFov = 2 * Math.atan(Math.tan(degToRad(context.cameraFov) / 2) * context.cameraAspect);
-  const angle = Math.acos(clamp(dot, -1, 1));
-  if (angle > horizontalFov / 2 + 0.08) return false;
+  if (dot < visibleDotThreshold(context.cameraFov, context.cameraAspect)) return false;
 
   return !isLineOfSightBlocked(context.playerPosition, point, context, padding);
 }
@@ -69,12 +70,23 @@ export function isLineOfSightBlocked(a: Vec2, b: Vec2, context: VisibilityContex
   return blocked;
 }
 
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
-}
-
 function degToRad(value: number): number {
   return (value * Math.PI) / 180;
+}
+
+function visibleDotThreshold(cameraFov: number, cameraAspect: number): number {
+  if (cameraFov === cachedFov && cameraAspect === cachedAspect) {
+    return cachedVisibleDotThreshold;
+  }
+
+  const halfHorizontalTan = Math.tan(degToRad(cameraFov) * 0.5) * cameraAspect;
+  const threshold =
+    (Math.cos(FOV_PADDING_RADIANS) - halfHorizontalTan * Math.sin(FOV_PADDING_RADIANS)) /
+    Math.sqrt(1 + halfHorizontalTan * halfHorizontalTan);
+  cachedFov = cameraFov;
+  cachedAspect = cameraAspect;
+  cachedVisibleDotThreshold = threshold;
+  return threshold;
 }
 
 function buildAndCacheSightIndex(obstacles: readonly CollisionObstacle[]): SightObstacleIndex {
