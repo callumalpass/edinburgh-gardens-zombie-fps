@@ -63,6 +63,9 @@ Purpose: track the building-by-building realism pass for every structure current
 - `osm-building-543505639` / Fitzroy Victoria Bowling Club rooms:
   - Added front/rear gutters, a club sign, blue/maroon/gold mural panels on the side wall, roof vents and rink-side equipment storage.
   - Source basis: OSM way `543505639` for the main clubrooms footprint; CMP bowling-club context; Yarra Fitzroy Bowls 150 Years Memorial Wall source for the Makatron mural and club-colour cues; Yarra News roof-upgrade note for zincalume/gutter emphasis.
+- `osm-building-543505640` / Round pavilion building:
+  - Added a threshold apron, front notice panel, eight perimeter posts, internal bench planks and a roof vent to make the round footprint read as an open timber pavilion.
+  - Source basis: OSM way `543505640` for the circular footprint; CMP built-feature inventory context for small park pavilion structures.
 
 ## Implementation Notes
 

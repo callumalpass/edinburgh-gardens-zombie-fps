@@ -1073,11 +1073,22 @@ export class WorldBuilder {
     }
 
     if (building.detailProfile === "rotunda-pavilion") {
+      const pavilionRadius = Math.min(footprint.halfX, footprint.halfZ) * 0.84;
       const dome = new THREE.Mesh(new THREE.ConeGeometry(footprint.halfX * 1.45, 0.9, 18), this.materials.timber);
       dome.position.set(center.x, this.radialSupportY(center, footprint.halfX) + building.height + 0.48, center.z);
       dome.castShadow = true;
       this.scene.add(dome);
+      this.addBuildingApron(center, rotation, 0, frontZ + 0.38, footprint.halfX * 0.92, 0.86, 0.08);
       this.addBuildingDoor(center, rotation, 0, frontZ + 0.18, footprint.halfX * 0.8, 1.2, 0.86);
+      this.addBuildingSign(center, rotation, -footprint.halfX * 0.42, frontZ + 0.2, footprint.halfX * 0.28, 0.32, 1.65, 0x5a4630);
+      for (let index = 0; index < 8; index += 1) {
+        const angle = (index / 8) * Math.PI * 2;
+        this.addLocalCylinder(center, rotation, Math.cos(angle) * pavilionRadius, Math.sin(angle) * pavilionRadius, 0.055, 0.07, 2.15, this.materials.timber);
+      }
+      for (const z of [-0.28, 0.28]) {
+        this.addLocalBox(center, rotation, 0, z * footprint.halfZ, footprint.halfX * 0.82, 0.16, 0.22, this.materials.timber, 0.48);
+      }
+      this.addBuildingRoofVent(center, rotation, 0, 0, building.height, 0.42, 0.42);
       return;
     }
 
