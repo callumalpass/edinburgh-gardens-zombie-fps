@@ -1,10 +1,27 @@
 :root {
   color-scheme: dark;
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  background: oklch(11% 0.024 228);
-  color: oklch(90% 0.027 82);
+  font-family: "Avenir Next", "Segoe UI", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  background: oklch(12% 0.031 218);
+  color: oklch(90% 0.036 88);
   font-synthesis: none;
   text-rendering: geometricPrecision;
+
+  --night: oklch(12% 0.031 218);
+  --night-deep: oklch(8% 0.025 224);
+  --ink: oklch(16% 0.036 210);
+  --ink-soft: oklch(22% 0.041 206);
+  --paper: oklch(88% 0.038 87);
+  --muted: oklch(72% 0.042 186);
+  --bluegum: oklch(65% 0.083 151);
+  --bluegum-dark: oklch(37% 0.071 156);
+  --bluestone: oklch(48% 0.045 224);
+  --rain: oklch(74% 0.061 211);
+  --tram: oklch(82% 0.13 78);
+  --brick: oklch(61% 0.145 33);
+  --blood: oklch(49% 0.17 28);
+  --panel: oklch(15% 0.035 214 / 0.86);
+  --panel-strong: oklch(18% 0.04 208 / 0.92);
+  --line: oklch(72% 0.057 181 / 0.34);
 }
 
 * {
@@ -22,16 +39,26 @@ body,
 }
 
 body {
-  background: oklch(11% 0.024 228);
+  background:
+    linear-gradient(180deg, oklch(15% 0.035 215), var(--night-deep)),
+    var(--night);
 }
 
 button {
   font: inherit;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .shell {
   position: relative;
   min-width: 320px;
+  background: var(--night);
+}
+
+.shell:has(.start-overlay:not(.hidden)) .hud,
+.shell:has(.start-overlay:not(.hidden)) .mini-map,
+.shell:has(.start-overlay:not(.hidden)) .interaction-prompt {
+  opacity: 0.2;
 }
 
 .game-canvas {
@@ -40,6 +67,7 @@ button {
   height: 100%;
   outline: none;
   cursor: crosshair;
+  background: var(--night);
 }
 
 .vignette {
@@ -47,8 +75,8 @@ button {
   inset: 0;
   pointer-events: none;
   background:
-    radial-gradient(circle at 50% 48%, transparent 36%, rgba(8, 20, 28, 0.38) 74%, rgba(4, 9, 14, 0.78) 100%),
-    linear-gradient(180deg, rgba(77, 116, 136, 0.12), transparent 34%, rgba(173, 53, 46, 0.13));
+    radial-gradient(circle at 50% 49%, transparent 0 34%, oklch(13% 0.03 215 / 0.28) 72%, oklch(7% 0.024 224 / 0.82) 100%),
+    linear-gradient(180deg, oklch(62% 0.055 198 / 0.15), transparent 35%, oklch(54% 0.15 32 / 0.16));
 }
 
 .shell::after {
@@ -57,22 +85,22 @@ button {
   inset: 0;
   pointer-events: none;
   background:
-    repeating-linear-gradient(180deg, rgba(228, 220, 184, 0.025) 0 1px, transparent 1px 5px),
-    linear-gradient(90deg, rgba(25, 82, 90, 0.08), transparent 24%, transparent 76%, rgba(214, 72, 55, 0.07));
+    radial-gradient(circle at 50% 55%, transparent 0 42%, oklch(8% 0.025 224 / 0.28) 100%),
+    linear-gradient(90deg, oklch(35% 0.092 160 / 0.08), transparent 24%, transparent 76%, oklch(63% 0.145 35 / 0.06));
   mix-blend-mode: screen;
-  opacity: 0.48;
+  opacity: 0.34;
 }
 
 body.hit .vignette {
   background:
-    radial-gradient(circle at 50% 48%, transparent 24%, rgba(173, 50, 44, 0.42) 78%, rgba(34, 7, 9, 0.84) 100%),
-    linear-gradient(180deg, rgba(188, 60, 51, 0.22), transparent 52%, rgba(188, 60, 51, 0.28));
+    radial-gradient(circle at 50% 49%, transparent 0 24%, oklch(48% 0.16 29 / 0.44) 78%, oklch(14% 0.059 26 / 0.88) 100%),
+    linear-gradient(180deg, oklch(61% 0.16 31 / 0.22), transparent 50%, oklch(61% 0.16 31 / 0.28));
 }
 
 .is-bleeding .vignette {
   background:
-    radial-gradient(circle at 50% 48%, transparent 32%, rgba(122, 25, 30, 0.36) 78%, rgba(24, 7, 10, 0.82) 100%),
-    linear-gradient(180deg, rgba(188, 60, 51, 0.16), transparent 44%, rgba(188, 60, 51, 0.24));
+    radial-gradient(circle at 50% 49%, transparent 0 32%, oklch(41% 0.14 28 / 0.38) 78%, oklch(13% 0.055 25 / 0.86) 100%),
+    linear-gradient(180deg, oklch(58% 0.15 30 / 0.18), transparent 44%, oklch(56% 0.15 30 / 0.25));
 }
 
 .is-blurred .game-canvas {
@@ -83,18 +111,32 @@ body.hit .vignette {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   transform: translate(-50%, -50%);
   pointer-events: none;
+  transition: opacity 120ms ease-out, transform 120ms ease-out;
+}
+
+.crosshair::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  border: 1px solid oklch(88% 0.11 78 / 0.78);
+  border-radius: 50%;
+  box-shadow: 0 0 12px oklch(81% 0.13 76 / 0.45);
+  transform: translate(-50%, -50%);
 }
 
 .crosshair span {
   position: absolute;
   left: 50%;
   top: 50%;
-  background: oklch(86% 0.104 78);
-  box-shadow: 0 0 14px rgba(245, 184, 88, 0.52);
+  background: oklch(87% 0.116 78);
+  box-shadow: 0 0 14px oklch(82% 0.13 76 / 0.56);
 }
 
 .crosshair span:first-child {
@@ -116,8 +158,8 @@ body.hit .vignette {
   pointer-events: none;
   transition: opacity 90ms ease-out;
   background:
-    radial-gradient(circle at 50% 50%, transparent 0 30vmin, rgba(10, 20, 28, 0.42) 30.2vmin 31vmin, rgba(2, 6, 10, 0.86) 31.4vmin 100%),
-    radial-gradient(circle at 50% 50%, rgba(245, 207, 132, 0.08), transparent 21vmin);
+    radial-gradient(circle at 50% 50%, transparent 0 30vmin, oklch(15% 0.035 215 / 0.48) 30.2vmin 31vmin, oklch(7% 0.022 224 / 0.9) 31.4vmin 100%),
+    radial-gradient(circle at 50% 50%, oklch(84% 0.1 78 / 0.1), transparent 21vmin);
 }
 
 .scope-overlay::before {
@@ -127,11 +169,11 @@ body.hit .vignette {
   top: 50%;
   width: min(60vmin, 560px);
   aspect-ratio: 1;
-  border: 2px solid rgba(238, 218, 162, 0.78);
+  border: 2px solid oklch(88% 0.066 84 / 0.8);
   border-radius: 50%;
   box-shadow:
-    inset 0 0 26px rgba(0, 0, 0, 0.45),
-    0 0 24px rgba(245, 184, 88, 0.2);
+    inset 0 0 26px oklch(8% 0.025 224 / 0.56),
+    0 0 24px oklch(81% 0.13 76 / 0.22);
   transform: translate(-50%, -50%);
 }
 
@@ -139,8 +181,8 @@ body.hit .vignette {
   position: absolute;
   left: 50%;
   top: 50%;
-  background: rgba(238, 218, 162, 0.76);
-  box-shadow: 0 0 10px rgba(245, 184, 88, 0.28);
+  background: oklch(88% 0.066 84 / 0.78);
+  box-shadow: 0 0 10px oklch(81% 0.13 76 / 0.3);
 }
 
 .scope-overlay span:first-child {
@@ -161,7 +203,7 @@ body.hit .vignette {
   top: 50%;
   width: 8px;
   height: 8px;
-  border: 1px solid rgba(238, 218, 162, 0.82);
+  border: 1px solid oklch(88% 0.066 84 / 0.84);
   border-radius: 50%;
   transform: translate(-50%, -50%);
 }
@@ -189,32 +231,49 @@ body.hit .vignette {
 
 .hud {
   position: absolute;
-  color: oklch(90% 0.027 82);
+  color: var(--paper);
   pointer-events: none;
+  text-shadow: 0 1px 0 oklch(7% 0.025 224 / 0.65);
 }
 
 .top-hud {
-  top: 16px;
-  left: 16px;
-  right: 16px;
+  top: 14px;
+  left: 14px;
+  right: 14px;
   display: flex;
-  gap: 8px;
+  gap: 7px;
   align-items: stretch;
 }
 
 .meter {
-  min-width: 104px;
+  position: relative;
+  min-width: 106px;
+  overflow: hidden;
   padding: 8px 10px 9px;
-  border: 1px solid rgba(144, 188, 190, 0.3);
-  border-radius: 3px;
-  background: linear-gradient(180deg, rgba(13, 30, 41, 0.86), rgba(7, 15, 23, 0.8));
-  box-shadow: 0 8px 0 rgba(0, 0, 0, 0.12), 0 12px 30px rgba(0, 0, 0, 0.26);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background:
+    linear-gradient(135deg, oklch(24% 0.048 207 / 0.9), var(--panel) 62%, oklch(11% 0.029 220 / 0.9)),
+    linear-gradient(180deg, var(--panel-strong), var(--panel));
+  box-shadow:
+    inset 0 1px 0 oklch(88% 0.03 88 / 0.08),
+    0 9px 0 oklch(6% 0.018 224 / 0.18),
+    0 14px 34px oklch(6% 0.018 224 / 0.32);
+}
+
+.meter::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, oklch(80% 0.086 154 / 0.35), oklch(84% 0.12 78 / 0.28), transparent);
 }
 
 .meter span {
   display: block;
-  color: oklch(73% 0.04 196);
+  color: var(--muted);
   font-size: 0.68rem;
+  font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0;
 }
@@ -224,25 +283,26 @@ body.hit .vignette {
   margin-top: 2px;
   font-size: 1.22rem;
   line-height: 1;
-  text-shadow: 0 0 14px rgba(237, 219, 165, 0.18);
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 14px oklch(88% 0.04 86 / 0.2);
 }
 
 .health-meter strong {
-  color: oklch(68% 0.17 29);
+  color: var(--brick);
 }
 
 .stamina-meter strong {
-  color: oklch(78% 0.12 150);
+  color: var(--bluegum);
 }
 
 .tools-meter strong {
-  color: oklch(79% 0.087 201);
+  color: var(--rain);
 }
 
 .weapon-hud {
   left: 16px;
   bottom: 18px;
-  width: min(560px, calc(100% - 32px));
+  width: min(590px, calc(100% - 32px));
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 8px 12px;
@@ -250,37 +310,55 @@ body.hit .vignette {
 }
 
 .ammo {
+  position: relative;
   grid-row: span 2;
-  min-width: 136px;
+  min-width: 142px;
+  overflow: hidden;
   padding: 10px 12px;
-  border: 1px solid rgba(245, 184, 88, 0.38);
-  border-radius: 3px;
-  background: linear-gradient(180deg, rgba(16, 32, 43, 0.88), rgba(7, 15, 23, 0.84));
+  border: 1px solid oklch(82% 0.13 78 / 0.46);
+  border-radius: 4px;
+  background:
+    linear-gradient(135deg, oklch(24% 0.052 207 / 0.94), oklch(13% 0.032 218 / 0.9)),
+    var(--panel-strong);
+  box-shadow:
+    inset 0 1px 0 oklch(92% 0.032 86 / 0.1),
+    0 12px 34px oklch(6% 0.018 224 / 0.32);
   font-variant-numeric: tabular-nums;
+}
+
+.ammo::after {
+  content: "";
+  position: absolute;
+  inset: auto 8px 7px;
+  height: 2px;
+  background: linear-gradient(90deg, var(--tram), transparent);
+  opacity: 0.58;
 }
 
 .ammo strong {
   font-size: 2.25rem;
   line-height: 1;
-  color: oklch(86% 0.11 78);
+  color: var(--tram);
 }
 
 .ammo span {
   margin-left: 5px;
-  color: oklch(75% 0.044 196);
+  color: var(--muted);
 }
 
 .status-line {
-  min-height: 31px;
+  min-height: 32px;
   padding: 7px 10px;
-  border: 1px solid rgba(144, 188, 190, 0.24);
-  border-radius: 3px;
-  background: rgba(8, 18, 27, 0.74);
+  border: 1px solid oklch(72% 0.057 181 / 0.28);
+  border-radius: 4px;
+  background: oklch(13% 0.033 216 / 0.78);
+  color: oklch(85% 0.04 92);
 }
 
 .status-line.flash {
-  color: oklch(88% 0.13 75);
-  border-color: rgba(245, 184, 88, 0.68);
+  color: var(--tram);
+  border-color: oklch(82% 0.13 78 / 0.72);
+  background: oklch(23% 0.062 64 / 0.78);
 }
 
 .upgrade-strip {
@@ -294,11 +372,13 @@ body.hit .vignette {
   min-height: 24px;
   align-items: center;
   padding: 3px 7px;
-  border: 1px solid rgba(111, 173, 155, 0.34);
-  border-radius: 3px;
-  background: rgba(14, 39, 38, 0.72);
-  color: oklch(80% 0.052 167);
+  border: 1px solid oklch(70% 0.082 156 / 0.36);
+  border-radius: 4px;
+  background:
+    linear-gradient(180deg, oklch(24% 0.064 159 / 0.72), oklch(14% 0.039 176 / 0.72));
+  color: oklch(81% 0.064 151);
   font-size: 0.72rem;
+  font-weight: 700;
 }
 
 .mini-map {
@@ -307,24 +387,29 @@ body.hit .vignette {
   bottom: 16px;
   width: 184px;
   height: 184px;
-  border: 1px solid rgba(144, 188, 190, 0.34);
-  border-radius: 3px;
-  background: rgba(7, 17, 25, 0.78);
-  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.26);
+  border: 1px solid oklch(75% 0.058 183 / 0.42);
+  border-radius: 4px;
+  background:
+    linear-gradient(180deg, oklch(15% 0.037 214 / 0.84), oklch(9% 0.025 224 / 0.84));
+  box-shadow:
+    inset 0 0 0 1px oklch(92% 0.032 86 / 0.04),
+    0 12px 34px oklch(6% 0.018 224 / 0.34);
 }
 
 .interaction-prompt {
   position: absolute;
   left: 50%;
   bottom: 136px;
-  min-height: 35px;
+  min-height: 36px;
+  max-width: calc(100% - 40px);
   transform: translateX(-50%);
-  padding: 8px 12px;
-  border: 1px solid rgba(245, 184, 88, 0.5);
-  border-radius: 3px;
-  background: rgba(8, 18, 27, 0.84);
-  color: oklch(86% 0.104 78);
+  padding: 8px 13px;
+  border: 1px solid oklch(82% 0.13 78 / 0.62);
+  border-radius: 4px;
+  background: oklch(12% 0.032 216 / 0.88);
+  color: var(--tram);
   pointer-events: none;
+  box-shadow: 0 12px 32px oklch(6% 0.018 224 / 0.28);
 }
 
 .interaction-prompt:empty {
@@ -337,12 +422,27 @@ body.hit .vignette {
   display: grid;
   align-items: center;
   justify-items: start;
-  padding: min(8vw, 80px);
+  overflow: hidden;
+  padding: min(8vw, 78px);
   background:
-    repeating-linear-gradient(105deg, rgba(232, 221, 180, 0.035) 0 1px, transparent 1px 16px),
-    linear-gradient(90deg, rgba(4, 12, 19, 0.98), rgba(7, 22, 31, 0.82) 48%, rgba(8, 20, 27, 0.18)),
-    linear-gradient(180deg, rgba(11, 32, 42, 0.58), transparent 42%, rgba(83, 29, 26, 0.2));
+    linear-gradient(90deg, oklch(9% 0.026 224 / 0.99), oklch(14% 0.04 212 / 0.9) 46%, oklch(19% 0.048 198 / 0.3) 72%, oklch(21% 0.058 168 / 0.08)),
+    linear-gradient(180deg, oklch(36% 0.055 198 / 0.38), transparent 40%, oklch(50% 0.13 32 / 0.2)),
+    repeating-linear-gradient(105deg, oklch(90% 0.035 84 / 0.04) 0 1px, transparent 1px 15px);
   transition: opacity 180ms ease-out, visibility 180ms ease-out;
+}
+
+.start-overlay::before {
+  content: "";
+  position: absolute;
+  inset: -8% -4% -8% 34%;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 65% 44%, transparent 0 26%, oklch(77% 0.052 181 / 0.13) 26.4% 26.9%, transparent 27.4%),
+    radial-gradient(ellipse at 58% 55%, transparent 0 18%, oklch(82% 0.12 78 / 0.1) 18.3% 18.8%, transparent 19.2%),
+    linear-gradient(72deg, transparent 0 43%, oklch(70% 0.066 190 / 0.18) 43.2% 43.7%, transparent 44%),
+    linear-gradient(121deg, transparent 0 54%, oklch(65% 0.08 151 / 0.14) 54.2% 54.7%, transparent 55%);
+  opacity: 0.95;
+  transform: rotate(-4deg);
 }
 
 .start-overlay.hidden {
@@ -351,31 +451,45 @@ body.hit .vignette {
 }
 
 .start-panel {
-  width: min(560px, 100%);
+  position: relative;
+  width: min(610px, 100%);
+  padding-block: 8px;
+}
+
+.start-panel::before {
+  content: "";
+  display: block;
+  width: min(210px, 55vw);
+  height: 3px;
+  margin-bottom: 18px;
+  background: linear-gradient(90deg, var(--tram), var(--bluegum), transparent);
 }
 
 .kicker {
   margin: 0 0 12px;
-  color: oklch(79% 0.11 77);
+  color: var(--tram);
   font-size: 0.78rem;
-  font-weight: 700;
+  font-weight: 900;
   letter-spacing: 0;
   text-transform: uppercase;
 }
 
 h1 {
-  margin: 0;
-  color: oklch(92% 0.034 82);
-  font-size: 3rem;
-  line-height: 0.96;
   max-width: 11ch;
-  text-shadow: 0 3px 0 rgba(9, 18, 26, 0.82), 0 0 30px rgba(245, 184, 88, 0.16);
+  margin: 0;
+  color: oklch(92% 0.042 87);
+  font-size: 3.05rem;
+  font-weight: 900;
+  line-height: 0.96;
+  text-shadow:
+    0 3px 0 oklch(8% 0.026 224 / 0.82),
+    0 0 30px oklch(82% 0.13 78 / 0.18);
 }
 
 .brief {
   max-width: 58ch;
   margin: 18px 0 0;
-  color: oklch(79% 0.032 192);
+  color: oklch(78% 0.04 188);
   font-size: 1rem;
   line-height: 1.55;
 }
@@ -384,28 +498,55 @@ h1 {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 7px;
+  max-width: 540px;
   margin: 22px 0;
-  max-width: 500px;
 }
 
 .controls-grid span {
-  padding: 8px 9px;
-  border: 1px solid rgba(144, 188, 190, 0.25);
-  border-radius: 3px;
-  background: rgba(10, 26, 36, 0.76);
-  color: oklch(78% 0.034 188);
+  display: grid;
+  grid-template-columns: minmax(48px, auto) 1fr;
+  min-height: 34px;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 8px;
+  border: 1px solid oklch(72% 0.057 181 / 0.28);
+  border-radius: 4px;
+  background: oklch(13% 0.034 216 / 0.72);
+  color: oklch(78% 0.04 188);
   font-size: 0.78rem;
+}
+
+.controls-grid kbd {
+  min-width: 32px;
+  padding: 2px 5px;
+  border: 1px solid oklch(84% 0.12 78 / 0.46);
+  border-radius: 3px;
+  background: oklch(27% 0.06 202 / 0.9);
+  color: oklch(91% 0.045 84);
+  font: inherit;
+  font-weight: 900;
+  text-align: center;
+  box-shadow: inset 0 -2px 0 oklch(7% 0.025 224 / 0.38);
+}
+
+.controls-grid b {
+  font-weight: 700;
 }
 
 .primary-action,
 .restart-button {
   min-height: 42px;
-  border: 1px solid rgba(245, 184, 88, 0.6);
-  border-radius: 3px;
-  background: oklch(72% 0.132 76);
-  color: oklch(16% 0.026 224);
+  border: 1px solid oklch(90% 0.1 78 / 0.72);
+  border-radius: 4px;
+  background:
+    linear-gradient(180deg, oklch(84% 0.13 78), oklch(72% 0.13 70));
+  color: oklch(16% 0.032 218);
   cursor: pointer;
-  font-weight: 800;
+  font-weight: 900;
+  box-shadow:
+    inset 0 1px 0 oklch(94% 0.058 84 / 0.5),
+    0 5px 0 oklch(42% 0.091 57),
+    0 16px 34px oklch(6% 0.018 224 / 0.34);
 }
 
 .primary-action {
@@ -414,12 +555,22 @@ h1 {
 
 .primary-action:hover,
 .restart-button:hover {
-  background: oklch(77% 0.136 76);
+  background:
+    linear-gradient(180deg, oklch(88% 0.126 78), oklch(76% 0.13 70));
+}
+
+.primary-action:active,
+.restart-button:active {
+  transform: translateY(2px);
+  box-shadow:
+    inset 0 1px 0 oklch(94% 0.058 84 / 0.45),
+    0 3px 0 oklch(42% 0.091 57),
+    0 12px 26px oklch(6% 0.018 224 / 0.3);
 }
 
 .primary-action:focus-visible,
 .restart-button:focus-visible {
-  outline: 2px solid oklch(82% 0.11 77);
+  outline: 2px solid var(--tram);
   outline-offset: 3px;
 }
 
@@ -431,16 +582,23 @@ h1 {
   padding: 0 20px;
 }
 
+.restart-button:active {
+  transform: translate(-50%, calc(-50% + 2px));
+}
+
 @media (max-width: 760px) {
   .top-hud {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 5px;
+    top: 10px;
+    left: 10px;
+    right: 10px;
   }
 
   .meter {
     min-width: 0;
-    padding: 7px 7px;
+    padding: 7px;
   }
 
   .meter span {
@@ -453,11 +611,14 @@ h1 {
 
   .weapon-hud {
     bottom: 12px;
+    left: 10px;
+    width: calc(100% - 20px);
     grid-template-columns: 1fr;
   }
 
   .ammo {
-    width: 124px;
+    width: 128px;
+    min-width: 128px;
     grid-row: auto;
   }
 
@@ -480,15 +641,53 @@ h1 {
   }
 
   .start-overlay {
-    padding: 26px;
     align-items: end;
+    padding: 26px;
+  }
+
+  .start-overlay::before {
+    inset: 8% -35% 30% 10%;
+    opacity: 0.52;
   }
 
   h1 {
-    font-size: 2.2rem;
+    font-size: 2.25rem;
+  }
+
+  .brief {
+    font-size: 0.94rem;
   }
 
   .controls-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    margin: 18px 0;
+  }
+
+  .controls-grid span {
+    min-height: 31px;
+    grid-template-columns: minmax(42px, auto) 1fr;
+    gap: 6px;
+    padding: 4px 6px;
+    font-size: 0.72rem;
+  }
+
+  .controls-grid kbd {
+    min-width: 30px;
+    padding: 2px 4px;
+  }
+}
+
+@media (max-width: 440px) {
+  .controls-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scope-overlay,
+  .crosshair,
+  .start-overlay {
+    transition: none;
   }
 }

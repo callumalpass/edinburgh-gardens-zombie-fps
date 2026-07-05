@@ -29,7 +29,7 @@ These notes record the real-world sources and implementation decisions used to s
   - `715802680` mapped fence segment
   - Node `249041533` cricket nets
 - Landezine, Edinburgh Gardens Raingarden by GHD: https://landezine.com/edinburgh-gardens-raingarden-by-ghd-pty-ltd/
-  - Used for the raingarden's four-terrace treatment-garden design, zig-zag low-flow steel channel, 700 sqm filter area, 200 KL underground storage and stormwater-harvesting role.
+  - Used for the raingarden's project map marker and four-terrace treatment-garden design, zig-zag low-flow steel channel, 700 sqm filter area, 200 KL underground storage and stormwater-harvesting role. The marker is not used as the visible garden footprint centroid after the Lovell Chen Figure 96 placement audit.
 - Atlan StormTech, StormTech Raingarden at Edinburgh Gardens: https://atlanstormwater.com/au/stormtech-raingarden-at-edinburgh-gardens-fitzroy-victoria/
   - Used to cross-check the GHD/StormTech stormwater harvesting context and installation timeframe.
 - City of Yarra WSUD Guidelines: https://www.yarracity.vic.gov.au/sites/default/files/2024-04/73_water_sensitive_urban_design_guidelines_city_of_yarra_as_amended_from_time_to_time.pdf
@@ -45,6 +45,12 @@ These notes record the real-world sources and implementation decisions used to s
 - 3068 Group Edinburgh Gardens heritage review archive: https://the3068group.org/edinburgh-gardens-studies/
   - Used for heritage emphasis: elm avenues and rows, Peterson Oval, English Oak Avenue, Holm Oak specimen, Dutch Elm circles, former railway/shared path and rotunda.
   - Also used to locate the CMP source for asphalt paths with remnant basalt/bluestone edging, the bluestone-pitcher open drain and the Alfred Crescent retaining wall.
+- Lovell Chen 2021 Edinburgh Gardens Conservation Management Plan copy archived by the 3068 Group: https://the3068group.org/wp-content/uploads/2025/11/2021-conservation-management-plan-_merged.pdf
+  - Used to confirm the bluestone circular planter north of Rowe Street, the periodically refreshed Rowe Street entrance planters, renewed St Georges Road display beds, Queen Victoria display garden and stormwater filtration garden/storage-tank split. Figure 96 controls the visible stormwater garden placement west of the former railway/current rail trail, with the underground tank to the east.
+- Yarra Edinburgh Gardens Plinth Program: https://www.yarracity.vic.gov.au/things-to-do/arts/arts-programs/public-art/edinburgh-gardens-plinth-program
+  - Used to confirm the Queen Victoria plinth remains in the middle of a circular garden bed.
+- Captain Cook Society, Plaque to Cook at Edinburgh Gardens: https://www.captaincooksociety.com/remembering-cook/memorials/types-of-cook-memorials/plaque-to-cook-at-edinburgh-gardens-melbourne-victoria-australia
+  - Used only to confirm the Rowe Street / Alfred Crescent entrance context for planter placement.
 - Yarra northern precinct consultation: https://yoursayyarra.com.au/eg-north
   - Used for the northern activity precinct: playground, BBQ/picnic tables, chess/game elements, table tennis, skate/BMX and basketball half-court context.
 - City of Yarra significant trees dataset metadata: https://data.gov.au/data/dataset/yarra-significant-trees
@@ -73,6 +79,8 @@ These notes record the real-world sources and implementation decisions used to s
 - Existing OSM-derived paths, amenities, sports facilities, memorials and park landmarks remain in `src/game/levelData.ts`; broad non-significant tree placement now comes primarily from Vicmap Vegetation Tree Urban.
 - The full-object placement audit added the OSM raingarden reservoir, tennis-side storage tank and cricket-nets cue, then aligned playground, skate and basketball climb/blocker metadata with visible objects.
 - The path and raingarden audit added remaining OSM-mapped stand steps, short path connectors and oval links, then remodeled the skate-precinct stormwater feature as a terraced raingarden rather than an open water patch.
+- The north-east shrub planter review added the 10 m bluestone circular planter north of Rowe Street and the two 5 m Rowe Street entrance planters as dense crouch-cover garden landmarks.
+- The ornamental gardens review split the visible stormwater filtration garden south of the skate park and west of the rail trail from the east-side underground reservoir footprint, then added St Georges display beds, Rotunda Lawn shrub beds, the Queen Victoria circular display bed and the tennis Agapanthus strip.
 - Tree placement refresh research is stored in `docs/research/tree-placement-refresh-2026-07-05.md`.
 - Detailed OSM path/service research is stored in `docs/research/osm-path-service-inventory-2026-07-05.md`.
 - Hardscape and terrain-edge research is stored in `docs/research/hardscape-terrain-edges-2026-07-05.md`.
@@ -90,7 +98,10 @@ These notes record the real-world sources and implementation decisions used to s
 - Human-use traces research is stored in `docs/research/human-use-traces-2026-07-05.md`.
 - Full object placement audit research is stored in `docs/research/full-object-placement-audit-2026-07-05.md`.
 - Path and raingarden audit research is stored in `docs/research/path-and-raingarden-audit-2026-07-05.md`.
+- North-east shrub planter research is stored in `docs/research/north-east-shrub-planters-2026-07-05.md`.
+- Ornamental gardens and raingarden placement research is stored in `docs/research/ornamental-gardens-2026-07-05.md`.
 - Building realism pass research is stored in `docs/research/building-realism-pass-2026-07-05.md`.
+- Runtime artifact, facade-orientation and preview-output audit research is stored in `docs/research/realism-artifact-audit-2026-07-06.md`.
 - Local raw research asset guidance is stored in `docs/research/raw-assets.md`.
 - Research/data pipeline automation is stored in `docs/research/data-pipeline-automation-2026-07-05.md` and `docs/research/research-manifest.json`.
 
@@ -107,3 +118,4 @@ These notes record the real-world sources and implementation decisions used to s
 - Mapped tree records now retain Vicmap object IDs or OSM node IDs and suppress current Brunswick Street Oval redevelopment tree removals.
 - Human-use traces add small non-colliding bowls, coolers, bags and chalk/scuff marks in documented activity zones.
 - `npm run research:check` validates the checked-in research manifest, expected notes, source URLs and any ignored local raw JSON cache that is present.
+- Object preview PNGs under ignored `docs/research/renders/object-previews/` are local QA artifacts; the 2026-07-06 audit records which rendered families were checked and why they are not committed.

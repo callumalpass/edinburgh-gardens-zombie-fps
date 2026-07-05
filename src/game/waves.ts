@@ -2,6 +2,7 @@ import type { RandomSource, Vec2 } from "./types";
 import { ZOMBIE_PROFILES, type ZombieType } from "./zombieProfiles";
 
 export type { ZombieType } from "./zombieProfiles";
+export type WavePhase = "active" | "intermission";
 
 export interface WaveConfig {
   wave: number;

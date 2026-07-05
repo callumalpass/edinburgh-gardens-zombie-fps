@@ -64,6 +64,9 @@ interface SoundBus {
 }
 
 const SILENCE = 0.0001;
+const MIN_SPATIAL_GAIN = 0.003;
+const MAX_ACTIVE_SOUND_BUSES = 48;
+const NOISE_BUFFER_BUCKET_SECONDS = 0.02;
 
 export const NOISE_SOUND_PROFILES: Record<NoiseKind, NoiseSoundProfile> = {
   footstep: { audibleScale: 1.35, baseGain: 0.22, duration: 0.11 },
@@ -168,6 +171,8 @@ export class GameAudio {
   private ambientRainGain: GainNode | null = null;
   private ambientWindGain: GainNode | null = null;
   private ambientSources: AudioBufferSourceNode[] = [];
+  private readonly noiseBuffers = new Map<number, AudioBuffer>();
+  private activeSoundBuses = 0;
   private listener: AudioListenerState = { position: { x: 0, z: 0 }, yaw: 0, height: 0 };
   private disposed = false;
 
@@ -201,6 +206,8 @@ export class GameAudio {
     if (this.context && this.context.state !== "closed") {
       void this.context.close();
     }
+    this.noiseBuffers.clear();
+    this.activeSoundBuses = 0;
     this.context = null;
     this.master = null;
     this.ambientGain = null;
@@ -438,11 +445,17 @@ export class GameAudio {
   }
 
   private createSpatialBus(position: Vec2, radius: number, gainValue: number, maxDuration: number, local = false): SoundBus | null {
-    if (!this.context || !this.master || gainValue <= SILENCE) {
+    const minimumGain = local ? SILENCE : MIN_SPATIAL_GAIN;
+    if (!this.context || !this.master || gainValue <= minimumGain) {
+      return null;
+    }
+    if (!local && this.activeSoundBuses >= MAX_ACTIVE_SOUND_BUSES) {
       return null;
     }
     const input = this.context.createGain();
     input.gain.value = Math.min(1.4, gainValue);
+    this.activeSoundBuses += 1;
+    this.releaseBusLater(maxDuration + 0.25);
     if (local) {
       input.connect(this.master);
       this.disconnectLater(input, maxDuration + 0.2);
@@ -635,12 +648,18 @@ export class GameAudio {
 
   private createNoiseBuffer(duration: number): AudioBuffer {
     const context = this.context!;
-    const length = Math.max(1, Math.floor(context.sampleRate * duration));
+    const bucket = Math.max(1, Math.ceil(duration / NOISE_BUFFER_BUCKET_SECONDS));
+    const cached = this.noiseBuffers.get(bucket);
+    if (cached) {
+      return cached;
+    }
+    const length = Math.max(1, Math.floor(context.sampleRate * bucket * NOISE_BUFFER_BUCKET_SECONDS));
     const buffer = context.createBuffer(1, length, context.sampleRate);
     const data = buffer.getChannelData(0);
     for (let index = 0; index < length; index += 1) {
       data[index] = Math.random() * 2 - 1;
     }
+    this.noiseBuffers.set(bucket, buffer);
     return buffer;
   }
 
@@ -660,6 +679,12 @@ export class GameAudio {
       } catch {
         // Nodes may already be disconnected when a context is closed.
       }
+    }, Math.ceil(delay * 1000));
+  }
+
+  private releaseBusLater(delay: number): void {
+    window.setTimeout(() => {
+      this.activeSoundBuses = Math.max(0, this.activeSoundBuses - 1);
     }, Math.ceil(delay * 1000));
   }
 }

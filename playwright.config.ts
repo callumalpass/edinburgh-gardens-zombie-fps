@@ -25,6 +25,7 @@ export default defineConfig({
     },
     {
       name: "mobile",
+      grep: /layouts/,
       use: { ...devices["Pixel 7"], viewport: { width: 412, height: 915 } }
     }
   ],

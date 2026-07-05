@@ -2,6 +2,8 @@ import { distanceToSegment } from "./geo";
 import { lineIntersectsBox, lineIntersectsPolygon } from "./collision";
 import type { CollisionObstacle, Vec2 } from "./types";
 
+const SIGHT_GRID_SIZE = 36;
+
 export interface VisibilityContext {
   playerPosition: Vec2;
   playerYaw: number;
@@ -11,6 +13,13 @@ export interface VisibilityContext {
   obstacles: readonly CollisionObstacle[];
   isObstacleBypassed?: (obstacleId: string, point: Vec2) => boolean;
 }
+
+interface IndexedSightObstacle {
+  obstacle: CollisionObstacle;
+  coverRadius: number;
+}
+
+const sightIndexes = new WeakMap<readonly CollisionObstacle[], SightObstacleIndex>();
 
 export function playerForward2D(yaw: number): Vec2 {
   return {
@@ -41,17 +50,23 @@ export function isLineOfSightBlocked(a: Vec2, b: Vec2, context: VisibilityContex
     return false;
   }
 
-  return context.obstacles.some((obstacle) => {
+  const sightIndex = sightIndexes.get(context.obstacles) ?? buildAndCacheSightIndex(context.obstacles);
+  let blocked = false;
+  sightIndex.forSegment(a, b, padding, (obstacle) => {
     if (obstacle.blocksSight === false) return false;
     if (context.isObstacleBypassed?.(obstacle.id, a)) return false;
     if (obstacle.shape === "box") {
-      return lineIntersectsBox(a, b, obstacle.center, obstacle.halfX + padding, obstacle.halfZ + padding, obstacle.angle);
+      blocked = lineIntersectsBox(a, b, obstacle.center, obstacle.halfX + padding, obstacle.halfZ + padding, obstacle.angle);
+      return blocked;
     }
     if (obstacle.shape === "polygon") {
-      return lineIntersectsPolygon(a, b, obstacle.polygon, padding);
+      blocked = lineIntersectsPolygon(a, b, obstacle.polygon, padding);
+      return blocked;
     }
-    return distanceToSegment(obstacle.center, a, b) <= obstacle.radius + padding;
+    blocked = distanceToSegment(obstacle.center, a, b) <= obstacle.radius + padding;
+    return blocked;
   });
+  return blocked;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -60,4 +75,87 @@ function clamp(value: number, min: number, max: number): number {
 
 function degToRad(value: number): number {
   return (value * Math.PI) / 180;
+}
+
+function buildAndCacheSightIndex(obstacles: readonly CollisionObstacle[]): SightObstacleIndex {
+  const index = new SightObstacleIndex(obstacles);
+  sightIndexes.set(obstacles, index);
+  return index;
+}
+
+class SightObstacleIndex {
+  private readonly grid = new Map<string, IndexedSightObstacle[]>();
+  private readonly querySeen = new Set<string>();
+
+  constructor(obstacles: readonly CollisionObstacle[]) {
+    for (const obstacle of obstacles) {
+      if (obstacle.blocksSight === false) continue;
+      this.addObstacle(obstacle);
+    }
+  }
+
+  forSegment(a: Vec2, b: Vec2, padding: number, visit: (obstacle: CollisionObstacle) => boolean | void): void {
+    const minX = this.cellIndex(Math.min(a.x, b.x) - padding);
+    const maxX = this.cellIndex(Math.max(a.x, b.x) + padding);
+    const minZ = this.cellIndex(Math.min(a.z, b.z) - padding);
+    const maxZ = this.cellIndex(Math.max(a.z, b.z) + padding);
+
+    this.querySeen.clear();
+    for (let x = minX; x <= maxX; x += 1) {
+      for (let z = minZ; z <= maxZ; z += 1) {
+        const bucket = this.grid.get(this.cellKey(x, z));
+        if (!bucket) continue;
+        for (const entry of bucket) {
+          const { obstacle } = entry;
+          if (this.querySeen.has(obstacle.id)) continue;
+          this.querySeen.add(obstacle.id);
+          if (distanceToSegment(obstacle.center, a, b) > entry.coverRadius + padding) continue;
+          if (visit(obstacle)) {
+            return;
+          }
+        }
+      }
+    }
+  }
+
+  private addObstacle(obstacle: CollisionObstacle): void {
+    const entry = { obstacle, coverRadius: computeObstacleCoverRadius(obstacle) };
+    const minX = this.cellIndex(obstacle.center.x - entry.coverRadius);
+    const maxX = this.cellIndex(obstacle.center.x + entry.coverRadius);
+    const minZ = this.cellIndex(obstacle.center.z - entry.coverRadius);
+    const maxZ = this.cellIndex(obstacle.center.z + entry.coverRadius);
+    for (let x = minX; x <= maxX; x += 1) {
+      for (let z = minZ; z <= maxZ; z += 1) {
+        const key = this.cellKey(x, z);
+        const bucket = this.grid.get(key);
+        if (bucket) {
+          bucket.push(entry);
+        } else {
+          this.grid.set(key, [entry]);
+        }
+      }
+    }
+  }
+
+  private cellIndex(value: number): number {
+    return Math.floor(value / SIGHT_GRID_SIZE);
+  }
+
+  private cellKey(x: number, z: number): string {
+    return `${x}:${z}`;
+  }
+}
+
+function computeObstacleCoverRadius(obstacle: CollisionObstacle): number {
+  if (obstacle.shape === "box") {
+    return Math.hypot(obstacle.halfX, obstacle.halfZ);
+  }
+  if (obstacle.shape === "polygon") {
+    let radius = 0;
+    for (const point of obstacle.polygon) {
+      radius = Math.max(radius, Math.hypot(point.x - obstacle.center.x, point.z - obstacle.center.z));
+    }
+    return radius;
+  }
+  return obstacle.radius;
 }

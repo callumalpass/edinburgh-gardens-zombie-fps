@@ -8,6 +8,11 @@
       "url": "https://www.yarracity.vic.gov.au/things-to-do/parks-reserves-and-playgrounds/edinburgh-gardens"
     },
     {
+      "id": "yarra-edinburgh-gardens-plinth-program",
+      "label": "Yarra Edinburgh Gardens Plinth Program",
+      "url": "https://www.yarracity.vic.gov.au/things-to-do/arts/arts-programs/public-art/edinburgh-gardens-plinth-program"
+    },
+    {
       "id": "osm-park-boundary",
       "label": "OpenStreetMap Edinburgh Gardens boundary way 13815924",
       "url": "https://www.openstreetmap.org/way/13815924"
@@ -61,6 +66,16 @@
       "id": "edinburgh-gardens-cmp",
       "label": "Edinburgh Gardens Conservation Management Plan PDF",
       "url": "https://www.yarracity.vic.gov.au/sites/default/files/2024-05/www.yarracity.vic.gov.au/-/media/files/ycc/the-area/heritage/edinburgh-gardens-conservation-management-plan-2004.pdf"
+    },
+    {
+      "id": "edinburgh-gardens-cmp-2021-3068",
+      "label": "Lovell Chen 2021 Edinburgh Gardens CMP copy archived by the 3068 Group",
+      "url": "https://the3068group.org/wp-content/uploads/2025/11/2021-conservation-management-plan-_merged.pdf"
+    },
+    {
+      "id": "captain-cook-society-edinburgh-gardens",
+      "label": "Captain Cook Society Plaque to Cook at Edinburgh Gardens",
+      "url": "https://www.captaincooksociety.com/remembering-cook/memorials/types-of-cook-memorials/plaque-to-cook-at-edinburgh-gardens-melbourne-victoria-australia"
     },
     {
       "id": "yarra-northern-precinct",
@@ -171,6 +186,7 @@
       "requiredHeadings": ["## Primary Sources", "## Current Implementation", "## Data Notes"],
       "sourceIds": [
         "yarra-edinburgh-gardens",
+        "yarra-edinburgh-gardens-plinth-program",
         "osm-park-boundary",
         "osm-map-bbox",
         "osm-way-api",
@@ -179,6 +195,8 @@
         "vicmap-elevation-feature-server",
         "vicmap-elevation-1m-dem",
         "edinburgh-gardens-3068-archive",
+        "edinburgh-gardens-cmp-2021-3068",
+        "captain-cook-society-edinburgh-gardens",
         "yarra-northern-precinct",
         "landezine-edinburgh-gardens-raingarden",
         "atlan-stormtech-edinburgh-gardens-raingarden",
@@ -191,7 +209,16 @@
     {
       "id": "raw-assets",
       "path": "docs/research/raw-assets.md",
-      "sourceIds": ["osm-way-api", "overpass-api", "vicmap-elevation-feature-server"]
+      "sourceIds": [
+        "osm-way-api",
+        "overpass-api",
+        "vicmap-elevation-feature-server",
+        "edinburgh-gardens-cmp",
+        "edinburgh-gardens-cmp-2021-3068",
+        "landezine-edinburgh-gardens-raingarden",
+        "atlan-stormtech-edinburgh-gardens-raingarden",
+        "yarra-edinburgh-gardens-plinth-program"
+      ]
     },
     {
       "id": "osm-path-service-inventory",
@@ -342,6 +369,27 @@
       ]
     },
     {
+      "id": "north-east-shrub-planters",
+      "path": "docs/research/north-east-shrub-planters-2026-07-05.md",
+      "sourceIds": [
+        "edinburgh-gardens-cmp",
+        "edinburgh-gardens-cmp-2021-3068",
+        "captain-cook-society-edinburgh-gardens"
+      ]
+    },
+    {
+      "id": "ornamental-gardens",
+      "path": "docs/research/ornamental-gardens-2026-07-05.md",
+      "sourceIds": [
+        "edinburgh-gardens-cmp",
+        "edinburgh-gardens-cmp-2021-3068",
+        "landezine-edinburgh-gardens-raingarden",
+        "atlan-stormtech-edinburgh-gardens-raingarden",
+        "yarra-edinburgh-gardens-plinth-program",
+        "overpass-api"
+      ]
+    },
+    {
       "id": "building-realism-pass",
       "path": "docs/research/building-realism-pass-2026-07-05.md",
       "sourceIds": [
@@ -355,6 +403,20 @@
         "fitzroy-bowls-official",
         "yarra-news-bowling-roof",
         "brisbane-lions-brunswick-oval-upgrade"
+      ]
+    },
+    {
+      "id": "realism-artifact-audit",
+      "path": "docs/research/realism-artifact-audit-2026-07-06.md",
+      "sourceIds": [
+        "yarra-edinburgh-gardens",
+        "osm-park-boundary",
+        "osm-way-api",
+        "edinburgh-gardens-cmp",
+        "yarra-brunswick-street-oval",
+        "yarra-emely-baker-centre",
+        "yarra-significant-trees-data",
+        "vicmap-vegetation-tree-urban"
       ]
     },
     {

@@ -179,21 +179,21 @@ function createMarkup(): string {
       <div class="interaction-prompt" data-hud="prompt"></div>
       <section class="start-overlay" data-hud="overlay">
         <div class="start-panel">
-          <p class="kicker">Fitzroy North, blue-hour cordon</p>
+          <p class="kicker">Fitzroy North, tram-lit rain</p>
           <h1>Edinburgh Gardens: Last Light</h1>
-          <p class="brief">Hold the oval under rainlight, cut through the rail trail, and use the park fixtures before the next wave finds you.</p>
+          <p class="brief">Hold W.T. Peterson Oval, move through bluestone paths and gum shadows, and use the park fixtures before the next wave finds you.</p>
           <div class="controls-grid" aria-label="Controls">
-            <span>WASD move</span>
-            <span>Mouse look</span>
-            <span>Click fire</span>
-            <span>Right click scope</span>
-            <span>R reload</span>
-            <span>E interact</span>
-            <span>Shift sprint</span>
-            <span>C crouch</span>
-            <span>F light</span>
-            <span>G throw</span>
-            <span>1-5 weapons</span>
+            <span><kbd>WASD</kbd><b>Move</b></span>
+            <span><kbd>Mouse</kbd><b>Look</b></span>
+            <span><kbd>Click</kbd><b>Fire</b></span>
+            <span><kbd>Right</kbd><b>Scope</b></span>
+            <span><kbd>R</kbd><b>Reload</b></span>
+            <span><kbd>E</kbd><b>Interact</b></span>
+            <span><kbd>Shift</kbd><b>Sprint</b></span>
+            <span><kbd>C</kbd><b>Crouch</b></span>
+            <span><kbd>F</kbd><b>Light</b></span>
+            <span><kbd>G</kbd><b>Throw</b></span>
+            <span><kbd>1-5</kbd><b>Weapons</b></span>
           </div>
           <button class="primary-action" data-action="start">Enter the gardens</button>
         </div>

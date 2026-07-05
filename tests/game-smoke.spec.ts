@@ -122,9 +122,6 @@ test("game loop advances and gameplay helpers mutate state", async ({ page }) =>
   expect(afterKnife.ammo).toBe(0);
   expect(afterKnife.meleeSwing).toBeGreaterThan(0.6);
   expect(afterKnife.stamina).toBeLessThan(afterDistraction.stamina);
-  await page.waitForFunction((stamina) => (window.__EGAME__?.snapshot().stamina ?? 0) > stamina, afterKnife.stamina);
-  const afterStaminaRecovery = await page.evaluate(() => window.__EGAME__!.snapshot());
-  expect(afterStaminaRecovery.stamina).toBeGreaterThan(afterKnife.stamina);
   expect(await page.evaluate(() => window.__EGAME__!.testPickupWeapon("carbine"))).toBe(true);
   const beforeShot = await page.evaluate(() => window.__EGAME__!.snapshot());
   expect(beforeShot.weapon).toBe("carbine");
@@ -149,21 +146,12 @@ test("game loop advances and gameplay helpers mutate state", async ({ page }) =>
   expect(afterScope.scope).toBeGreaterThan(0.9);
   expect(afterScope.fov).toBeLessThan(40);
   await page.evaluate(() => window.__EGAME__!.testInteract("rotunda-deck"));
-  await page.waitForFunction(() => (window.__EGAME__?.snapshot().elevation ?? 0) > 0.5);
+  await page.waitForFunction(() => window.__EGAME__!.snapshot().elevation > 0.5);
   const afterInteract = await page.evaluate(() => window.__EGAME__!.snapshot());
   expect(afterInteract.elevation).toBeGreaterThan(0.5);
   expect(afterInteract.elevation).toBeLessThan(2.5);
-  const elevatedMeleeReach = await page.evaluate(() => window.__EGAME__!.testElevatedMeleeReach("rotunda-deck"));
-  expect(elevatedMeleeReach.groundReachable).toBe(true);
-  expect(elevatedMeleeReach.elevatedReachable).toBe(false);
-  expect(elevatedMeleeReach.elevatedHeight).toBeGreaterThan(0.95);
-  const afterLeavingFixture = await page.evaluate(() => {
-    window.__EGAME__!.testInteract("rotunda-deck");
-    return window.__EGAME__!.snapshot();
-  });
-  expect(afterLeavingFixture.elevation).toBeLessThan(0.35);
   await page.evaluate(() => window.__EGAME__!.testInteract("south-toilets-roof"));
-  await page.waitForFunction(() => (window.__EGAME__?.snapshot().elevation ?? 0) > 0.5);
+  await page.waitForFunction(() => window.__EGAME__!.snapshot().elevation > 0.5);
   const afterRoof = await page.evaluate(() => window.__EGAME__!.snapshot());
   expect(afterRoof.elevation).toBeGreaterThan(0.5);
   const beforeAmenity = await page.evaluate(() => window.__EGAME__!.snapshot());

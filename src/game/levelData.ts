@@ -68,6 +68,21 @@ const localPointFromWorld = (center: Vec2, angle: number, point: Vec2): Vec2 => 
   };
 };
 
+const capsulePolygon = (center: Vec2, angle: number, halfLength: number, halfWidth: number, steps = 8): Vec2[] => {
+  const radius = halfWidth;
+  const straight = Math.max(0.01, halfLength - radius);
+  const points: Vec2[] = [];
+  for (let index = 0; index <= steps; index += 1) {
+    const theta = -Math.PI / 2 + (index / steps) * Math.PI;
+    points.push(offsetPoint(center, angle, straight + Math.cos(theta) * radius, Math.sin(theta) * radius));
+  }
+  for (let index = 0; index <= steps; index += 1) {
+    const theta = Math.PI / 2 + (index / steps) * Math.PI;
+    points.push(offsetPoint(center, angle, -straight + Math.cos(theta) * radius, Math.sin(theta) * radius));
+  }
+  return points;
+};
+
 const footprintFromPolygon = (polygon: readonly Vec2[]): { center: Vec2; halfX: number; halfZ: number; angle: number } => {
   const center = polygonCentroid(polygon);
   const first = polygon[0];
@@ -147,8 +162,11 @@ export const RESEARCH_NOTES = [
   "Small park-life details are stored as sourceable level data so picnic, dog-area, cycling and sports-use cues remain separate from collision and amenity loot data.",
   "A 2026-07-05 full-object placement audit checked the current OSM bounded extract against all visible, blocking and climbable object families; missing raingarden, storage-tank and cricket-net cues were added and climb blockers now have matching visible structures.",
   "A 2026-07-05 path and raingarden review added the remaining OSM-mapped grandstand steps, oval connectors and north-side path links, and remodeled the skate-precinct stormwater garden as a terraced treatment garden.",
+  "A 2026-07-05 north-east planter review added the bluestone circular shrub planter north of Rowe Street and the two smaller Rowe Street entrance planters as dense crouch-cover landmarks.",
+  "A 2026-07-05 ornamental gardens review split the visible GHD stormwater filtration garden from the east-side underground reservoir footprint, then added St Georges display beds, Rotunda Lawn shrub beds, the Queen Victoria circular display bed and tennis/Bowling agapanthus strips.",
   "Micro-terrain modifiers now layer path crowns, worn shoulders, root mounds, oval banking and drainage swales over the broad Vicmap elevation interpolation.",
   "Path surface transition patches now derive feathered edges and compacted junctions from mapped paths, with a small set of researched desire paths through high-use lawns.",
+  "A 2026-07-06 realism artifact audit aligned Three.js object-preview building orientation with the restored Three.js runtime, added source-backed runtime facade details, and tightened zombie/weapon silhouettes while preserving low-poly anime minimalism.",
   "See docs/edinburgh-gardens-research.md for source URLs, query notes, data licensing notes and implementation decisions."
 ];
 
@@ -417,6 +435,23 @@ const RAINGARDEN_RESERVOIR_GEO = [
   g(-37.7874484, 144.9832341),
   g(-37.7874654, 144.9833932)
 ];
+
+const STORMWATER_FILTRATION_GARDEN_GEO = [
+  g(-37.7871700, 144.9826600),
+  g(-37.7875900, 144.9826100),
+  g(-37.7875300, 144.9828100),
+  g(-37.7872400, 144.9828500)
+];
+
+const GARDEN_BED_SOURCE =
+  "Edinburgh Gardens CMP 2004 sections 3.4.13 and 4.2.16-4.2.20; Lovell Chen 2021 CMP sections 3.8.1-3.8.3 and Queen Victoria/stormwater filtration garden descriptions; hand-placed where no public GIS vertices were available";
+const RAINGARDEN_SOURCE =
+  "Lovell Chen 2021 CMP Figure 96 and stormwater filtration garden description; Landezine/GHD and Atlan design notes; OSM way 655160878 used only for east-side underground storage footprint";
+const ST_GEORGES_DISPLAY_BED_ANGLE = 1.84;
+const SHRUB_PLANTER_SOURCE =
+  "Edinburgh Gardens CMP 2004 sections 4.2.18-4.2.19; Lovell Chen 2021 CMP sections 3.8.2-3.8.3; hand-placed from Rowe Street and north-east Elm Circle context";
+const BLUESTONE_PLANTER_RADIUS = 5 * WORLD_SCALE;
+const ROWE_ENTRANCE_PLANTER_RADIUS = 2.5 * WORLD_SCALE;
 
 const NORTH_TOILETS_GEO = [
   g(-37.7859240, 144.9821748),
@@ -2884,6 +2919,16 @@ export function createLevelData(): LevelData {
   const queenVictoriaPlinth = geoToWorld(g(-37.7872762, 144.9837025));
   const cookMemorial = geoToWorld(g(-37.7873520, 144.9855420));
   const sportsmansMemorial = geoToWorld(g(-37.78754, 144.98066));
+  const northEastBluestonePlanter = geoToWorld(g(-37.78718, 144.98533));
+  const roweStreetNorthPlanter = geoToWorld(g(-37.78730, 144.98541));
+  const roweStreetSouthPlanter = geoToWorld(g(-37.78742, 144.98537));
+  const stGeorgesDisplayBedNorth = geoToWorld(g(-37.78688, 144.98105));
+  const stGeorgesDisplayBedCentral = geoToWorld(g(-37.78725, 144.98082));
+  const stGeorgesDisplayBedSouth = geoToWorld(g(-37.78772, 144.98064));
+  const rotundaShrubBedCentral = geoToWorld(g(-37.78757, 144.98082));
+  const rotundaShrubBedNorth = geoToWorld(g(-37.78738, 144.98091));
+  const rotundaShrubBedSouth = geoToWorld(g(-37.78776, 144.98076));
+  const tennisAgapanthusStrip = geoToWorld(g(-37.78778, 144.98209));
   const southToilets = southAmenitiesFootprint.center;
   const southToiletsRoofFootprint = raisedBox(southToilets, southAmenitiesFootprint.halfX + 0.18, southAmenitiesFootprint.halfZ + 0.18, southAmenitiesFootprint.angle);
   const northToiletsRenderHalfX = Math.max(2.7, northToiletsFootprint.halfX + 0.12) + 0.35;
@@ -3345,10 +3390,108 @@ export function createLevelData(): LevelData {
     { id: "skate", label: "Fitzroy Skatepark", kind: "skate", polygon: skate },
     { id: "basketball", label: "Basketball court", kind: "basketball", polygon: basketball },
     {
-      id: "raingarden-reservoir",
-      label: "Edinburgh Gardens Raingarden Reservoir",
+      id: "stormwater-filtration-garden",
+      label: "Stormwater filtration garden",
       kind: "garden",
-      polygon: polygonFromGeo(RAINGARDEN_RESERVOIR_GEO)
+      polygon: polygonFromGeo(STORMWATER_FILTRATION_GARDEN_GEO),
+      gardenStyle: "stormwater-filtration",
+      source: RAINGARDEN_SOURCE
+    },
+    {
+      id: "raingarden-reservoir",
+      label: "Raingarden underground storage tank",
+      kind: "garden",
+      polygon: polygonFromGeo(RAINGARDEN_RESERVOIR_GEO),
+      gardenStyle: "stormwater-storage",
+      source: RAINGARDEN_SOURCE
+    },
+    {
+      id: "st-georges-display-bed-north",
+      label: "St Georges Road northern display bed",
+      kind: "garden",
+      polygon: capsulePolygon(stGeorgesDisplayBedNorth, ST_GEORGES_DISPLAY_BED_ANGLE, 17.5, 2.4, 6),
+      gardenStyle: "ornamental-floral",
+      source: GARDEN_BED_SOURCE
+    },
+    {
+      id: "st-georges-display-bed-central",
+      label: "St Georges Road central display bed",
+      kind: "garden",
+      polygon: capsulePolygon(stGeorgesDisplayBedCentral, ST_GEORGES_DISPLAY_BED_ANGLE, 18.5, 2.6, 6),
+      gardenStyle: "ornamental-floral",
+      source: GARDEN_BED_SOURCE
+    },
+    {
+      id: "st-georges-display-bed-south",
+      label: "St Georges Road southern display bed",
+      kind: "garden",
+      polygon: capsulePolygon(stGeorgesDisplayBedSouth, ST_GEORGES_DISPLAY_BED_ANGLE, 18.5, 2.6, 6),
+      gardenStyle: "ornamental-floral",
+      source: GARDEN_BED_SOURCE
+    },
+    {
+      id: "rotunda-lawn-shrub-bed-central",
+      label: "Rotunda Lawn central shrub bed",
+      kind: "garden",
+      polygon: capsulePolygon(rotundaShrubBedCentral, ST_GEORGES_DISPLAY_BED_ANGLE, 10.5, 2.5, 6),
+      gardenStyle: "ornamental-shrub",
+      source: GARDEN_BED_SOURCE
+    },
+    {
+      id: "rotunda-lawn-shrub-bed-north",
+      label: "Rotunda Lawn northern shrub bed",
+      kind: "garden",
+      polygon: capsulePolygon(rotundaShrubBedNorth, ST_GEORGES_DISPLAY_BED_ANGLE + Math.PI / 2, 7.4, 2.2, 6),
+      gardenStyle: "ornamental-shrub",
+      source: GARDEN_BED_SOURCE
+    },
+    {
+      id: "rotunda-lawn-shrub-bed-south",
+      label: "Rotunda Lawn southern shrub bed",
+      kind: "garden",
+      polygon: capsulePolygon(rotundaShrubBedSouth, ST_GEORGES_DISPLAY_BED_ANGLE + Math.PI / 2, 7.4, 2.2, 6),
+      gardenStyle: "ornamental-shrub",
+      source: GARDEN_BED_SOURCE
+    },
+    {
+      id: "queen-victoria-circular-display-bed",
+      label: "Queen Victoria circular display bed",
+      kind: "garden",
+      polygon: makeCircle(queenVictoriaPlinth, 6.2, 36),
+      gardenStyle: "ornamental-floral",
+      source: GARDEN_BED_SOURCE
+    },
+    {
+      id: "tennis-agapanthus-strip",
+      label: "Tennis Club agapanthus strip",
+      kind: "garden",
+      polygon: capsulePolygon(tennisAgapanthusStrip, -0.18, 31, 2.25, 6),
+      gardenStyle: "agapanthus",
+      source: GARDEN_BED_SOURCE
+    },
+    {
+      id: "north-east-bluestone-shrub-planter",
+      label: "North-east bluestone shrub planter",
+      kind: "garden",
+      polygon: makeCircle(northEastBluestonePlanter, BLUESTONE_PLANTER_RADIUS, 36),
+      cover: "dense-shrub",
+      source: SHRUB_PLANTER_SOURCE
+    },
+    {
+      id: "rowe-street-north-entrance-planter",
+      label: "Rowe Street north entrance planter",
+      kind: "garden",
+      polygon: makeCircle(roweStreetNorthPlanter, ROWE_ENTRANCE_PLANTER_RADIUS, 28),
+      cover: "dense-shrub",
+      source: SHRUB_PLANTER_SOURCE
+    },
+    {
+      id: "rowe-street-south-entrance-planter",
+      label: "Rowe Street south entrance planter",
+      kind: "garden",
+      polygon: makeCircle(roweStreetSouthPlanter, ROWE_ENTRANCE_PLANTER_RADIUS, 28),
+      cover: "dense-shrub",
+      source: SHRUB_PLANTER_SOURCE
     },
     { id: "north-toilets", label: "North toilets", kind: "toilets", polygon: northToilets },
     { id: "south-bbq", label: "South BBQ", kind: "bbq", position: southBbq, radius: 3.5 },
@@ -3366,7 +3509,7 @@ export function createLevelData(): LevelData {
       padding: building.detailProfile === "rotunda-pavilion" ? 2.8 : building.collision ? 1.45 : 0.75
     })),
     ...landmarks.flatMap((landmark): TreeExclusionZone[] => {
-      if (!structuralTreeExclusionKinds.has(landmark.kind)) {
+      if (!structuralTreeExclusionKinds.has(landmark.kind) && landmark.cover !== "dense-shrub" && landmark.gardenStyle !== "stormwater-filtration") {
         return [];
       }
       if (landmark.polygon) {
@@ -3374,7 +3517,12 @@ export function createLevelData(): LevelData {
           {
             id: landmark.id,
             polygon: landmark.polygon,
-            padding: landmark.kind === "playground" || landmark.kind === "skate" ? 0.9 : 1.25
+            padding:
+              landmark.cover === "dense-shrub" || landmark.gardenStyle === "stormwater-filtration"
+                ? 0.35
+                : landmark.kind === "playground" || landmark.kind === "skate"
+                  ? 0.9
+                  : 1.25
           }
         ];
       }

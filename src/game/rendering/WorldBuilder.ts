@@ -1132,8 +1132,24 @@ export class WorldBuilder {
 
   private addGardenZone(landmark: Landmark): void {
     if (!landmark.polygon) return;
-    if (landmark.id === "raingarden-reservoir") {
+    if (landmark.gardenStyle === "stormwater-filtration") {
       this.addRaingarden(landmark.polygon);
+      return;
+    }
+    if (landmark.gardenStyle === "stormwater-storage") {
+      this.addRaingardenStorage(landmark.polygon);
+      return;
+    }
+    if (landmark.cover === "dense-shrub") {
+      this.addRaisedShrubPlanter(landmark);
+      return;
+    }
+    if (landmark.gardenStyle === "ornamental-floral") {
+      this.addOrnamentalDisplayBed(landmark);
+      return;
+    }
+    if (landmark.gardenStyle === "ornamental-shrub" || landmark.gardenStyle === "agapanthus") {
+      this.addOrnamentalShrubBed(landmark);
       return;
     }
     this.addFlatPolygon(landmark.polygon, this.materials.wornGrass, 0.064, landmark.id === "north-activity-precinct" ? 0.2 : 0.32);
@@ -1143,6 +1159,139 @@ export class WorldBuilder {
     }
     if (landmark.id === "north-activity-precinct") {
       this.addActivityPrecinctDetails(landmark.polygon);
+    }
+  }
+
+  private addRaingardenStorage(polygon: Vec2[]): void {
+    const footprint = this.fitBoxFromPolygon(polygon, 0.4, 0.4);
+    const center = footprint.center;
+    const rotation = -footprint.angle;
+    this.addFlatPolygon(polygon, this.materials.concrete, 0.078, 0.42);
+    this.addFeatureOutline(polygon, 0x9ea99f, 0.22);
+    this.addLocalBox(center, rotation, 0, 0, footprint.halfX * 1.1, 0.035, 0.4, this.materials.metal, 0.115, false);
+    for (const offset of [-footprint.halfX * 0.38, footprint.halfX * 0.38]) {
+      this.addLocalCylinder(center, rotation, offset, 0, 0.36, 0.36, 0.045, this.materials.metal, 0.08);
+    }
+  }
+
+  private addOrnamentalDisplayBed(landmark: Landmark): void {
+    if (!landmark.polygon) return;
+    const polygon = landmark.polygon;
+    const footprint = this.fitBoxFromPolygon(polygon, 0.2, 0.2);
+    const center = footprint.center;
+    const rotation = -footprint.angle;
+    this.addFlatPolygon(polygon, this.materials.mulch, 0.082, 0.72);
+    this.addFeatureOutline(polygon, landmark.id.includes("queen") ? 0x5f8b5d : 0xc8c0a8, 0.18);
+    const leafMaterial = this.materials.hedge;
+    const flowerMaterials = [
+      this.standardDetailMaterial("display-flower-carmine", 0xb63b54, 0.62),
+      this.standardDetailMaterial("display-flower-cream", 0xd8d2a1, 0.66),
+      this.standardDetailMaterial("display-flower-blue", 0x606fbd, 0.7)
+    ];
+    const columns = Math.max(5, Math.min(16, Math.round((footprint.halfX * 2) / 3.4)));
+    const rows = Math.max(2, Math.min(4, Math.round((footprint.halfZ * 2) / 2.4)));
+    for (let row = 0; row < rows; row += 1) {
+      for (let column = 0; column < columns; column += 1) {
+        const localX = -footprint.halfX * 0.7 + (column / Math.max(1, columns - 1)) * footprint.halfX * 1.4;
+        const localZ = -footprint.halfZ * 0.55 + (row / Math.max(1, rows - 1)) * footprint.halfZ * 1.1;
+        const point = this.localPoint(center, rotation, localX, localZ);
+        if (!pointInPolygon(point, polygon)) continue;
+        const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.34, 6, 4), leafMaterial);
+        leaf.scale.set(1.15, 0.35, 0.82);
+        leaf.position.set(point.x, this.groundY(point) + 0.16, point.z);
+        leaf.receiveShadow = true;
+        this.scene.add(leaf);
+        const flower = new THREE.Mesh(new THREE.SphereGeometry(0.11, 6, 4), flowerMaterials[(row + column) % flowerMaterials.length]);
+        flower.position.set(point.x, this.groundY(point) + 0.38, point.z);
+        this.scene.add(flower);
+      }
+    }
+  }
+
+  private addOrnamentalShrubBed(landmark: Landmark): void {
+    if (!landmark.polygon) return;
+    const polygon = landmark.polygon;
+    const footprint = this.fitBoxFromPolygon(polygon, 0.2, 0.2);
+    const center = footprint.center;
+    const rotation = -footprint.angle;
+    const agapanthus = landmark.gardenStyle === "agapanthus";
+    this.addFlatPolygon(polygon, this.materials.mulch, 0.082, 0.7);
+    this.addFeatureOutline(polygon, 0xb9b2a0, 0.18);
+    const count = Math.max(7, Math.min(22, Math.round((footprint.halfX * footprint.halfZ) / (agapanthus ? 5 : 6))));
+    const geometry = new THREE.SphereGeometry(1, 7, 5);
+    const flowerMaterial = this.standardDetailMaterial("agapanthus-flower-head", 0x6b62b8, 0.68);
+    for (let index = 0; index < count; index += 1) {
+      const localX = (this.stableNoise(center.x, center.z, index) - 0.5) * footprint.halfX * 1.45;
+      const localZ = (this.stableNoise(center.z, center.x, index + 17) - 0.5) * footprint.halfZ * 1.14;
+      const point = this.localPoint(center, rotation, localX, localZ);
+      if (!pointInPolygon(point, polygon)) continue;
+      const height = agapanthus ? 0.28 + this.stableNoise(point.x, point.z, 21) * 0.24 : 0.58 + this.stableNoise(point.x, point.z, 22) * 0.58;
+      const spread = agapanthus ? 0.42 + this.stableNoise(point.x, point.z, 23) * 0.28 : 0.58 + this.stableNoise(point.x, point.z, 24) * 0.42;
+      const shrub = new THREE.Mesh(geometry, this.materials.hedge);
+      shrub.scale.set(spread, height * 0.54, spread * 0.82);
+      shrub.position.set(point.x, this.groundY(point) + 0.1 + height * 0.42, point.z);
+      shrub.rotation.y = this.stableNoise(point.x, point.z, 25) * Math.PI * 2;
+      shrub.castShadow = true;
+      shrub.receiveShadow = true;
+      this.scene.add(shrub);
+      if (agapanthus && index % 3 === 0) {
+        const flower = new THREE.Mesh(new THREE.SphereGeometry(0.13, 6, 4), flowerMaterial);
+        flower.position.set(point.x, this.groundY(point) + 0.82, point.z);
+        this.scene.add(flower);
+      }
+    }
+  }
+
+  private addRaisedShrubPlanter(landmark: Landmark): void {
+    if (!landmark.polygon) return;
+    const polygon = landmark.polygon;
+    const center = polygonCentroid(polygon);
+    const radius = Math.max(...polygon.map((point) => distance(point, center)));
+    const bluestone = landmark.id === "north-east-bluestone-shrub-planter";
+    const edgeMaterial = bluestone ? this.materials.basalt : this.materials.concrete;
+    const edgeWidth = bluestone ? 0.46 : 0.3;
+    const edgeHeight = bluestone ? 0.44 : 0.26;
+
+    this.addFlatPolygon(polygon, this.materials.mulch, 0.086, 0.82);
+    for (let index = 0; index < polygon.length; index += 1) {
+      const a = polygon[index];
+      const b = polygon[(index + 1) % polygon.length];
+      const segmentLength = distance(a, b);
+      if (segmentLength < 0.25) continue;
+      const segmentCenter = { x: (a.x + b.x) * 0.5, z: (a.z + b.z) * 0.5 };
+      const edge = this.createTerrainRect(
+        segmentCenter,
+        Math.atan2(b.z - a.z, b.x - a.x),
+        segmentLength,
+        edgeWidth,
+        0.08 + edgeHeight * 0.5,
+        edgeHeight,
+        edgeMaterial
+      );
+      edge.castShadow = true;
+      edge.receiveShadow = true;
+      this.scene.add(edge);
+    }
+
+    const shrubCount = bluestone ? 26 : 9;
+    const shrubGeometry = new THREE.SphereGeometry(1, 8, 6);
+    for (let index = 0; index < shrubCount; index += 1) {
+      const theta = index * 2.399963 + (this.stableNoise(center.x, center.z, index) - 0.5) * 0.26;
+      const ring = Math.sqrt((index + 0.5) / shrubCount) * radius * (bluestone ? 0.78 : 0.7);
+      const point = {
+        x: center.x + Math.cos(theta) * ring,
+        z: center.z + Math.sin(theta) * ring
+      };
+      if (!pointInPolygon(point, polygon)) continue;
+      const height = bluestone ? 0.75 + this.stableNoise(point.x, point.z, 21) * 0.86 : 0.42 + this.stableNoise(point.x, point.z, 22) * 0.42;
+      const spread = bluestone ? 0.82 + this.stableNoise(point.x, point.z, 23) * 0.66 : 0.46 + this.stableNoise(point.x, point.z, 24) * 0.34;
+      const shrub = new THREE.Mesh(shrubGeometry, this.materials.hedge);
+      shrub.scale.set(spread * 1.16, height * 0.62, spread);
+      shrub.position.set(point.x, this.groundY(point) + 0.11 + height * 0.42, point.z);
+      shrub.rotation.y = theta;
+      shrub.castShadow = true;
+      shrub.receiveShadow = true;
+      this.scene.add(shrub);
     }
   }
 
@@ -1859,9 +2008,20 @@ export class WorldBuilder {
 
   private fitBoxFromPolygon(polygon: Vec2[], paddingX: number, paddingZ: number): { center: Vec2; halfX: number; halfZ: number; angle: number } {
     const center = polygonCentroid(polygon);
-    const first = polygon[0];
-    const second = polygon[1] ?? first;
-    const angle = Math.atan2(second.z - first.z, second.x - first.x);
+    let longestA = polygon[0];
+    let longestB = polygon[1] ?? polygon[0];
+    let longest = 0;
+    for (let index = 0; index < polygon.length; index += 1) {
+      const a = polygon[index];
+      const b = polygon[(index + 1) % polygon.length];
+      const segmentLength = distance(a, b);
+      if (segmentLength > longest) {
+        longest = segmentLength;
+        longestA = a;
+        longestB = b;
+      }
+    }
+    const angle = Math.atan2(longestB.z - longestA.z, longestB.x - longestA.x);
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
     let halfX = 0;

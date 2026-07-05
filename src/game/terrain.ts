@@ -2,16 +2,32 @@ import { distance, distanceToSegment } from "./geo";
 import type { LevelData, TerrainLineModifier, TerrainModifier, Vec2 } from "./types";
 
 const MODIFIER_GRID_SIZE = 32;
+const NEAREST_ELEVATION_SAMPLE_COUNT = 12;
+const MAX_GROUND_CACHE_ENTRIES = 8192;
 
 export class TerrainSampler {
+  private readonly groundCache = new Map<string, number>();
   private readonly modifierBuckets = new Map<string, TerrainModifier[]>();
+  private readonly nearestAltitudes = new Array<number>(NEAREST_ELEVATION_SAMPLE_COUNT);
+  private readonly nearestDistancesSquared = new Array<number>(NEAREST_ELEVATION_SAMPLE_COUNT);
 
   constructor(private readonly level: LevelData) {
     this.indexTerrainModifiers();
   }
 
   groundY(point: Vec2): number {
-    return Math.max(0, this.altitudeAt(point) - this.level.elevationMin + this.microReliefAt(point));
+    const cacheKey = `${point.x}:${point.z}`;
+    const cached = this.groundCache.get(cacheKey);
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    const ground = Math.max(0, this.altitudeAt(point) - this.level.elevationMin + this.microReliefAt(point));
+    if (this.groundCache.size >= MAX_GROUND_CACHE_ENTRIES) {
+      this.groundCache.clear();
+    }
+    this.groundCache.set(cacheKey, ground);
+    return ground;
   }
 
   averageGroundY(points: readonly Vec2[]): number {
@@ -24,7 +40,7 @@ export class TerrainSampler {
   altitudeAt(point: Vec2): number {
     let weightedAltitude = 0;
     let totalWeight = 0;
-    const nearest: Array<{ altitude: number; distanceSquared: number }> = [];
+    let nearestCount = 0;
 
     for (const sample of this.level.elevationSamples) {
       const dx = point.x - sample.position.x;
@@ -34,22 +50,29 @@ export class TerrainSampler {
         return sample.altitude;
       }
 
-      if (nearest.length < 12 || distanceSquared < nearest[nearest.length - 1].distanceSquared) {
-        nearest.push({ altitude: sample.altitude, distanceSquared });
-        for (let index = nearest.length - 1; index > 0 && nearest[index].distanceSquared < nearest[index - 1].distanceSquared; index -= 1) {
-          const previous = nearest[index - 1];
-          nearest[index - 1] = nearest[index];
-          nearest[index] = previous;
+      if (
+        nearestCount < NEAREST_ELEVATION_SAMPLE_COUNT ||
+        distanceSquared < this.nearestDistancesSquared[NEAREST_ELEVATION_SAMPLE_COUNT - 1]
+      ) {
+        let insertAt = nearestCount;
+        while (insertAt > 0 && distanceSquared < this.nearestDistancesSquared[insertAt - 1]) {
+          if (insertAt < NEAREST_ELEVATION_SAMPLE_COUNT) {
+            this.nearestDistancesSquared[insertAt] = this.nearestDistancesSquared[insertAt - 1];
+            this.nearestAltitudes[insertAt] = this.nearestAltitudes[insertAt - 1];
+          }
+          insertAt -= 1;
         }
-        if (nearest.length > 12) {
-          nearest.pop();
+        if (insertAt < NEAREST_ELEVATION_SAMPLE_COUNT) {
+          this.nearestDistancesSquared[insertAt] = distanceSquared;
+          this.nearestAltitudes[insertAt] = sample.altitude;
+          nearestCount = Math.min(NEAREST_ELEVATION_SAMPLE_COUNT, nearestCount + 1);
         }
       }
     }
 
-    for (const entry of nearest) {
-      const weight = 1 / Math.max(20, entry.distanceSquared);
-      weightedAltitude += entry.altitude * weight;
+    for (let index = 0; index < nearestCount; index += 1) {
+      const weight = 1 / Math.max(20, this.nearestDistancesSquared[index]);
+      weightedAltitude += this.nearestAltitudes[index] * weight;
       totalWeight += weight;
     }
 

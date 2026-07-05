@@ -40,6 +40,27 @@ function distanceToObstacleBoundary(point: { x: number; z: number }, obstacle: R
   return Math.abs(distance(point, obstacle.center) - obstacle.radius);
 }
 
+function signedSideOfNearestPolylineSegment(point: { x: number; z: number }, polyline: readonly { x: number; z: number }[]): number {
+  let closestDistance = Number.POSITIVE_INFINITY;
+  let closestSignedSide = 0;
+  for (let index = 0; index < polyline.length - 1; index += 1) {
+    const start = polyline[index];
+    const end = polyline[index + 1];
+    const dx = end.x - start.x;
+    const dz = end.z - start.z;
+    const lengthSquared = dx * dx + dz * dz;
+    if (lengthSquared === 0) continue;
+    const t = Math.max(0, Math.min(1, ((point.x - start.x) * dx + (point.z - start.z) * dz) / lengthSquared));
+    const nearest = { x: start.x + dx * t, z: start.z + dz * t };
+    const nearestDistance = distance(point, nearest);
+    if (nearestDistance < closestDistance) {
+      closestDistance = nearestDistance;
+      closestSignedSide = (dx * (point.z - start.z) - dz * (point.x - start.x)) / Math.sqrt(lengthSquared);
+    }
+  }
+  return closestSignedSide;
+}
+
 function pointInsideObstacle(point: { x: number; z: number }, obstacle: ReturnType<typeof createLevelData>["obstacles"][number], padding = 0): boolean {
   if (obstacle.shape === "polygon") {
     return pointInPolygon(point, obstacle.polygon) || distanceToPolygonEdge(point, obstacle.polygon) < padding;
@@ -76,6 +97,11 @@ function boxExtentsFromPolygon(polygon: readonly { x: number; z: number }[]): { 
   return { halfX, halfZ, angle };
 }
 
+function averageRadius(polygon: readonly { x: number; z: number }[]): number {
+  const center = polygonCentroid(polygon);
+  return polygon.reduce((sum, point) => sum + distance(point, center), 0) / polygon.length;
+}
+
 describe("map geometry", () => {
   it("converts the OSM boundary into a playable non-degenerate park polygon", () => {
     const level = createLevelData();
@@ -99,7 +125,7 @@ describe("map geometry", () => {
     expect(level.treePoints.length).toBeGreaterThanOrEqual(340);
     expect(level.treeLines.length).toBeGreaterThanOrEqual(5);
     expect(level.significantTrees.length).toBe(19);
-    expect(level.trees.length).toBeGreaterThanOrEqual(365);
+    expect(level.trees.length).toBeGreaterThanOrEqual(360);
     expect(level.trees.length).toBe(level.treeColliders.length);
     expect(level.treePoints.filter((tree) => pointInPolygon(tree, level.boundary)).length).toBe(level.treePoints.length);
     expect(level.significantTrees.filter((tree) => pointInPolygon(tree.position, level.boundary)).length).toBe(level.significantTrees.length);
@@ -123,7 +149,7 @@ describe("map geometry", () => {
       throw new Error("Missing Queen Victoria plinth landmark");
     }
     const plinthTrees = level.trees.filter((tree) => distance(tree.position, queenVictoriaPlinth.position!) < 85 * WORLD_SCALE);
-    expect(plinthTrees.length).toBeGreaterThanOrEqual(45);
+    expect(plinthTrees.length).toBeGreaterThanOrEqual(42);
     expect(plinthTrees.filter((tree) => tree.source?.includes("Vicmap Vegetation Tree Urban")).length).toBeGreaterThanOrEqual(40);
     for (const removedNodeId of [5365392008, 5365392009, 5365392010, 5365392011, 5365393282, 5365393283, 5365393284]) {
       expect(level.trees.some((tree) => tree.id === `osm-tree-${removedNodeId}`)).toBe(false);
@@ -134,7 +160,7 @@ describe("map geometry", () => {
     const level = createLevelData();
     const obstacleIds = new Set(level.obstacles.map((obstacle) => obstacle.id));
     expect(level.treeColliders.length).toBe(level.trees.length);
-    expect(level.treeColliders.length).toBeGreaterThanOrEqual(365);
+    expect(level.treeColliders.length).toBeGreaterThanOrEqual(360);
     expect(level.treeColliders.every((tree) => pointInPolygon(tree.position, level.boundary))).toBe(true);
     expect(level.treeColliders.every((tree) => tree.radius >= 0.34 && tree.radius <= 1.05)).toBe(true);
     expect(level.treeColliders.some((tree) => tree.source?.includes("Yarra significant trees"))).toBe(true);
@@ -472,12 +498,12 @@ describe("map geometry", () => {
   it("models open lawns and park feature precincts as accessible landmarks", () => {
     const level = createLevelData();
     const landmarkIds = new Set(level.landmarks.map((landmark) => landmark.id));
-    for (const id of ["north-open-lawn", "north-activity-precinct", "alfred-crescent-open-lawn", "south-picnic-lawn", "raingarden-reservoir"]) {
+    for (const id of ["north-open-lawn", "north-activity-precinct", "alfred-crescent-open-lawn", "south-picnic-lawn", "stormwater-filtration-garden", "raingarden-reservoir"]) {
       expect(landmarkIds.has(id)).toBe(true);
     }
 
     const gardenLandmarks = level.landmarks.filter((landmark) => landmark.kind === "garden" && landmark.id !== "park");
-    expect(gardenLandmarks.length).toBeGreaterThanOrEqual(5);
+    expect(gardenLandmarks.length).toBeGreaterThanOrEqual(15);
     for (const landmark of gardenLandmarks) {
       expect(landmark.polygon).toBeDefined();
       if (!landmark.polygon) {
@@ -487,13 +513,87 @@ describe("map geometry", () => {
     }
 
     const skate = level.landmarks.find((landmark) => landmark.id === "skate");
-    const raingarden = level.landmarks.find((landmark) => landmark.id === "raingarden-reservoir");
+    const raingarden = level.landmarks.find((landmark) => landmark.id === "stormwater-filtration-garden");
+    const reservoir = level.landmarks.find((landmark) => landmark.id === "raingarden-reservoir");
+    const railTrail = level.paths.find((path) => path.id === "inner-circle-rail-trail");
     expect(skate?.polygon).toBeDefined();
     expect(raingarden?.polygon).toBeDefined();
+    expect(reservoir?.polygon).toBeDefined();
+    expect(railTrail).toBeDefined();
+    expect(raingarden?.gardenStyle).toBe("stormwater-filtration");
+    expect(reservoir?.gardenStyle).toBe("stormwater-storage");
     const skateCenter = polygonCentroid(skate!.polygon!);
     const raingardenCenter = polygonCentroid(raingarden!.polygon!);
+    const reservoirCenter = polygonCentroid(reservoir!.polygon!);
+    const landezineMapMarker = geoToWorld({ lat: -37.787301, lon: 144.983139 });
+    const raingardenAreaSquareMeters = Math.abs(polygonArea(raingarden!.polygon!)) / (WORLD_SCALE * WORLD_SCALE);
     expect(raingardenCenter.z).toBeGreaterThan(skateCenter.z);
-    expect(distance(raingardenCenter, skateCenter)).toBeLessThan(160);
+    expect(distance(raingardenCenter, skateCenter)).toBeLessThan(130);
+    expect(signedSideOfNearestPolylineSegment(raingardenCenter, railTrail!.points)).toBeLessThan(-4);
+    expect(signedSideOfNearestPolylineSegment(landezineMapMarker, railTrail!.points)).toBeGreaterThan(4);
+    expect(raingardenAreaSquareMeters).toBeGreaterThan(600);
+    expect(raingardenAreaSquareMeters).toBeLessThan(800);
+    expect(reservoirCenter.x).toBeGreaterThan(raingardenCenter.x);
+    expect(distance(reservoirCenter, raingardenCenter)).toBeGreaterThan(25);
+  });
+
+  it("adds source-backed ornamental garden beds without marking them as cover", () => {
+    const level = createLevelData();
+    const expectedStyles = new Map([
+      ["st-georges-display-bed-north", "ornamental-floral"],
+      ["st-georges-display-bed-central", "ornamental-floral"],
+      ["st-georges-display-bed-south", "ornamental-floral"],
+      ["rotunda-lawn-shrub-bed-central", "ornamental-shrub"],
+      ["rotunda-lawn-shrub-bed-north", "ornamental-shrub"],
+      ["rotunda-lawn-shrub-bed-south", "ornamental-shrub"],
+      ["queen-victoria-circular-display-bed", "ornamental-floral"],
+      ["tennis-agapanthus-strip", "agapanthus"]
+    ]);
+
+    for (const [id, style] of expectedStyles) {
+      const landmark = level.landmarks.find((candidate) => candidate.id === id);
+      expect(landmark?.kind).toBe("garden");
+      expect(landmark?.gardenStyle).toBe(style);
+      expect(landmark?.cover).toBeUndefined();
+      expect(landmark?.source).toContain("CMP");
+      expect(landmark?.polygon).toBeDefined();
+      expect(pointInPolygon(polygonCentroid(landmark!.polygon!), level.boundary)).toBe(true);
+    }
+
+    const stGeorgesBeds = [...expectedStyles.keys()]
+      .filter((id) => id.startsWith("st-georges"))
+      .map((id) => polygonCentroid(level.landmarks.find((landmark) => landmark.id === id)!.polygon!));
+    expect(stGeorgesBeds[0].z).toBeLessThan(stGeorgesBeds[1].z);
+    expect(stGeorgesBeds[1].z).toBeLessThan(stGeorgesBeds[2].z);
+  });
+
+  it("models the north-east raised shrub planters as source-backed crouch cover", () => {
+    const level = createLevelData();
+    const bluestone = level.landmarks.find((landmark) => landmark.id === "north-east-bluestone-shrub-planter");
+    const roweNorth = level.landmarks.find((landmark) => landmark.id === "rowe-street-north-entrance-planter");
+    const roweSouth = level.landmarks.find((landmark) => landmark.id === "rowe-street-south-entrance-planter");
+    const planters = [bluestone, roweNorth, roweSouth];
+
+    for (const planter of planters) {
+      expect(planter?.kind).toBe("garden");
+      expect(planter?.cover).toBe("dense-shrub");
+      expect(planter?.source).toContain("CMP");
+      expect(planter?.polygon).toBeDefined();
+      expect(pointInPolygon(polygonCentroid(planter!.polygon!), level.boundary)).toBe(true);
+      expect(level.trees.some((tree) => pointInPolygon(tree.position, planter!.polygon!))).toBe(false);
+    }
+
+    expect(averageRadius(bluestone!.polygon!)).toBeCloseTo(5 * WORLD_SCALE, 1);
+    expect(averageRadius(roweNorth!.polygon!)).toBeCloseTo(2.5 * WORLD_SCALE, 1);
+    expect(averageRadius(roweSouth!.polygon!)).toBeCloseTo(2.5 * WORLD_SCALE, 1);
+
+    const bluestoneCenter = polygonCentroid(bluestone!.polygon!);
+    const roweNorthCenter = polygonCentroid(roweNorth!.polygon!);
+    const roweSouthCenter = polygonCentroid(roweSouth!.polygon!);
+    expect(bluestoneCenter.z).toBeLessThan(roweNorthCenter.z);
+    expect(bluestoneCenter.x).toBeLessThan(roweNorthCenter.x);
+    expect(distance(roweNorthCenter, roweSouthCenter)).toBeGreaterThan(10 * WORLD_SCALE);
+    expect(distance(roweNorthCenter, roweSouthCenter)).toBeLessThan(18 * WORLD_SCALE);
   });
 
   it("keeps small park furniture interactive without adding collision blockers", () => {

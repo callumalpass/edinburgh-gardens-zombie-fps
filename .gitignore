@@ -6,6 +6,7 @@ coverage/
 .vite/
 docs/research/raw/
 docs/research/renders/
+.codex-improve-logs/
 
 *.log
 .DS_Store

@@ -24,6 +24,7 @@ Implementation notes:
 - `LevelPath.kind` now includes `steps` so stair runs can render as concrete step surfaces with tread marks and avoid oversized path lighting.
 - Step paths use narrower shoulders and smaller terrain crown/shoulder modifiers than ordinary footways.
 - Path lights now skip `footway`, `steps` and `service` paths, so the small service/step additions do not create unrealistic lamp-post clutter.
+- A follow-up check compared the in-game Inner Circle Rail Trail against current OSM ways `22760903`, `1103672694` and `1006838304`; the rail-trail coordinates match OSM around the stormwater garden precinct.
 
 ## Raingarden Review
 
@@ -38,8 +39,9 @@ Source-backed design details used:
 
 Implementation notes:
 
-- `raingarden-reservoir` remains a non-blocking garden landmark anchored to the OSM reservoir footprint.
-- Rendering now adds low planted/filter-media terraces, basalt terrace dividers, a zig-zag low-flow channel, an inlet/surcharge pit cue, an overflow/tank hatch cue and instanced raingarden planting.
+- The follow-up ornamental gardens review split this into `stormwater-filtration-garden`, the visible terraced treatment beds south of the skate park and west of the rail trail, and `raingarden-reservoir`, the east-side underground storage footprint.
+- Lovell Chen 2021 CMP Figure 96 identifies the former Ladies Bowling Club/current stormwater garden site west of the former railway/current rail-trail line. The Landezine project map marker was retained as source context but not used as the final visible-garden centroid.
+- Rendering now adds low planted/filter-media terraces, basalt terrace dividers, a zig-zag low-flow channel, an inlet/surcharge pit cue and instanced raingarden planting to the visible filtration garden.
 - The underground tank is represented with low hatch/infrastructure cues only, keeping gameplay collision clean while making the stormwater system legible.
 
 ## Sources

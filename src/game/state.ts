@@ -1,4 +1,4 @@
-import type { LinesMesh, Mesh, TransformNode, Vector3 } from "@babylonjs/core";
+import type * as THREE from "three";
 import type { WeatherKind } from "./rendering/weather";
 import type { AmenityPoint } from "./types";
 import type { WeaponId } from "./weapons";
@@ -12,8 +12,8 @@ export type WavePhase = "active" | "intermission";
 export interface Zombie {
   id: number;
   type: ZombieType;
-  mesh: TransformNode;
-  position: Vector3;
+  mesh: THREE.Group;
+  position: THREE.Vector3;
   health: number;
   maxHealth: number;
   speed: number;
@@ -37,8 +37,8 @@ export interface Pickup {
   id: number;
   type: "scrap" | "health" | "ammo";
   amount: number;
-  mesh: TransformNode;
-  position: Vector3;
+  mesh: THREE.Object3D;
+  position: THREE.Vector3;
   ttl: number;
 }
 
@@ -46,26 +46,26 @@ export interface WeaponDrop {
   id: number;
   weaponId: WeaponId;
   label: string;
-  mesh: TransformNode;
-  position: Vector3;
+  mesh: THREE.Object3D;
+  position: THREE.Vector3;
   ttl: number;
   source: "cache" | "zombie";
 }
 
 export interface Tracer {
-  mesh: LinesMesh;
+  mesh: THREE.Line;
   ttl: number;
 }
 
 export interface ShellCasing {
-  mesh: Mesh;
-  velocity: Vector3;
+  mesh: THREE.Mesh;
+  velocity: THREE.Vector3;
   ttl: number;
 }
 
 export interface SmokePuff {
-  mesh: Mesh;
-  velocity: Vector3;
+  mesh: THREE.Mesh;
+  velocity: THREE.Vector3;
   ttl: number;
   maxTtl: number;
 }
@@ -135,7 +135,6 @@ export interface GameTestApi {
     maxZombieFootPenetration: number;
     zombiesMeasured: number;
   };
-  testElevatedMeleeReach: (fixtureId?: string) => { groundReachable: boolean; elevatedReachable: boolean; elevatedHeight: number };
   testZombieStates: () => Array<{ id: number; type: ZombieType; aiState: ZombieAiState; hasTarget: boolean; targetDistance: number | null; x: number; z: number }>;
   testZombieFacing: () => Array<{ id: number; faceAlignment: number; targetDistance: number }>;
   testSetCrouching: (crouching: boolean) => boolean;

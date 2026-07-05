@@ -39,6 +39,9 @@ export interface Landmark {
   polygon?: Vec2[];
   position?: Vec2;
   radius?: number;
+  gardenStyle?: "stormwater-filtration" | "stormwater-storage" | "ornamental-floral" | "ornamental-shrub" | "agapanthus";
+  cover?: "dense-shrub";
+  source?: string;
 }
 
 export type CollisionSourceKind = "landmark" | "mapped-building" | "sports-fixture" | "tree-collider";
