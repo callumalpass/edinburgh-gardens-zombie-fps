@@ -3,10 +3,13 @@ import * as THREE from "three";
 export const MELBOURNE_ANIME_PALETTE = {
   ink: 0x07131a,
   nightInk: 0x0b1a1e,
+  weatheredWhite: 0xd9d5bd,
   deepBluegum: 0x1f3b39,
   wetBluestone: 0x5d747b,
+  bluestoneShadow: 0x263d45,
   stormTeal: 0x21484d,
   eucalyptus: 0x76906c,
+  eucalyptShadow: 0x405f4f,
   silverGum: 0x9aa990,
   dryGrass: 0xb8a46f,
   couchGrass: 0x8d935d,
@@ -39,12 +42,12 @@ export function createAnimeToonRamp(): THREE.DataTexture {
 
 export function tuneAnimeStandardMaterial(material: THREE.MeshStandardMaterial): void {
   material.flatShading = true;
-  material.roughness = Math.max(material.roughness, 0.78);
+  material.roughness = Math.max(material.roughness, 0.84);
   material.metalness = Math.min(material.metalness, 0.5);
-  material.color.lerp(STANDARD_HIGHLIGHT_TINT, 0.018);
-  material.color.offsetHSL(-0.006, 0.024, 0.018);
-  material.emissive.lerp(STANDARD_SHADOW_TINT, 0.18).lerp(material.color, 0.06);
-  material.emissiveIntensity = Math.max(material.emissiveIntensity, 0.1);
+  material.color.lerp(STANDARD_HIGHLIGHT_TINT, 0.012);
+  material.color.offsetHSL(-0.004, 0.018, 0.012);
+  material.emissive.lerp(STANDARD_SHADOW_TINT, 0.16).lerp(material.color, 0.05);
+  material.emissiveIntensity = Math.max(material.emissiveIntensity, 0.12);
   material.needsUpdate = true;
 }
 

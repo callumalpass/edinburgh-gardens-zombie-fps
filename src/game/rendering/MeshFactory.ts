@@ -2,7 +2,7 @@ import * as THREE from "three";
 import type { GameMaterials } from "./WorldBuilder";
 import type { WeaponId } from "../weapons";
 import type { ZombieType } from "../waves";
-import { ANIME_OUTLINE_COLOR, tuneAnimeMaterial as tuneAnimeMaterialStyle } from "./animeStyle";
+import { ANIME_OUTLINE_COLOR, MELBOURNE_ANIME_PALETTE, tuneAnimeMaterial as tuneAnimeMaterialStyle } from "./animeStyle";
 
 export type PickupKind = "scrap" | "health" | "ammo";
 export type BikeIssue = "flat-tyres" | "broken-chain";
@@ -21,6 +21,15 @@ const ZOMBIE_GLOW_COLORS: Record<ZombieType, THREE.ColorRepresentation> = {
   bloater: 0xb84236,
   crawler: 0x78a45f,
   screamer: 0xfff0a2
+};
+
+const WEAPON_STENCIL: Record<WeaponId, string> = {
+  knife: "EG",
+  machete: "FITZ",
+  carbine: "CAR",
+  shotgun: "12G",
+  smg: "9MM",
+  rifle: "RFL"
 };
 
 interface ZombieMarkerMaterials {
@@ -48,16 +57,16 @@ export class MeshFactory {
     const group = new THREE.Group();
     if (weaponId === "knife" || weaponId === "machete") {
       const isMachete = weaponId === "machete";
-      const bladeMaterial = new THREE.MeshStandardMaterial({
-        color: isMachete ? 0xb8b4a4 : 0xd0ccc0,
-        emissive: isMachete ? 0x1f1d18 : 0x39362f,
-        emissiveIntensity: isMachete ? 0.08 : 0.18,
-        metalness: 0.62,
-        roughness: 0.32
+      const bladeMaterial = this.paintedStandardMaterial({
+        color: isMachete ? MELBOURNE_ANIME_PALETTE.weatheredWhite : 0xcac8b6,
+        emissive: isMachete ? 0x22251e : 0x35362f,
+        emissiveIntensity: isMachete ? 0.11 : 0.18,
+        metalness: 0.46,
+        roughness: 0.54
       });
-      const edgeMaterial = new THREE.MeshStandardMaterial({ color: 0xe1dccb, metalness: 0.72, roughness: 0.24 });
-      const gripMaterial = new THREE.MeshStandardMaterial({ color: 0x30251d, roughness: 0.78 });
-      const guardMaterial = new THREE.MeshStandardMaterial({ color: 0x221f1c, metalness: 0.36, roughness: 0.46 });
+      const edgeMaterial = this.paintedStandardMaterial({ color: 0xe1dccb, metalness: 0.54, roughness: 0.38 });
+      const gripMaterial = this.paintedStandardMaterial({ color: isMachete ? 0x4d3d28 : 0x273f3a, roughness: 0.9 });
+      const guardMaterial = this.paintedStandardMaterial({ color: MELBOURNE_ANIME_PALETTE.bluestoneShadow, metalness: 0.26, roughness: 0.62 });
       const length = isMachete ? 1.28 : 0.72;
       const width = isMachete ? 0.16 : 0.095;
 
@@ -112,6 +121,7 @@ export class MeshFactory {
         group.add(rivet);
       }
       this.addGripWraps(group, length * 0.26, width, guardMaterial);
+      this.addBladeWeathering(group, length, width, isMachete);
 
       if (firstPerson) {
         this.addFirstPersonArm(group, 1, { x: 0.12, y: -0.34, z: 0.28 }, { x: -0.62, y: 0.08, z: 0.22 }, { x: 0.05, y: -0.2, z: 0.1 });
@@ -124,10 +134,17 @@ export class MeshFactory {
     const isLong = weaponId === "rifle";
     const isShotgun = weaponId === "shotgun";
     const isSmg = weaponId === "smg";
-    const bodyColor = weaponId === "shotgun" ? 0x5f4630 : weaponId === "smg" ? 0x2e3536 : weaponId === "rifle" ? 0x4f4a37 : 0x363d3b;
-    const metalMaterial = new THREE.MeshStandardMaterial({ color: 0x202629, metalness: 0.45, roughness: 0.42 });
-    const bodyMaterial = new THREE.MeshStandardMaterial({ color: bodyColor, roughness: 0.58, metalness: isSmg ? 0.25 : 0.08 });
-    const accentMaterial = new THREE.MeshStandardMaterial({ color: 0xb08a4a, metalness: 0.25, roughness: 0.44 });
+    const bodyColor =
+      weaponId === "shotgun"
+        ? 0x5f4630
+        : weaponId === "smg"
+          ? MELBOURNE_ANIME_PALETTE.bluestoneShadow
+          : weaponId === "rifle"
+            ? 0x4f4a37
+            : 0x334a44;
+    const metalMaterial = this.paintedStandardMaterial({ color: 0x202629, metalness: 0.36, roughness: 0.56 });
+    const bodyMaterial = this.paintedStandardMaterial({ color: bodyColor, roughness: 0.74, metalness: isSmg ? 0.18 : 0.06 });
+    const accentMaterial = this.paintedStandardMaterial({ color: MELBOURNE_ANIME_PALETTE.tramOchre, metalness: 0.12, roughness: 0.68 });
     const length = isLong ? 1.55 : isShotgun ? 1.35 : isSmg ? 0.86 : 1.08;
     const body = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.18, length), bodyMaterial);
     body.position.z = -0.24;
@@ -222,6 +239,8 @@ export class MeshFactory {
       group.add(mount);
     }
 
+    this.addFirearmParkDetails(group, weaponId, length);
+
     if (firstPerson) {
       for (const side of [-1, 1]) {
         this.addFirstPersonArm(
@@ -245,10 +264,10 @@ export class MeshFactory {
     sleeveRotation: { x: number; y: number; z: number },
     handPosition: { x: number; y: number; z: number }
   ): void {
-    const handMaterial = new THREE.MeshStandardMaterial({ color: 0xc28f66, roughness: 0.82 });
-    const gloveMaterial = new THREE.MeshStandardMaterial({ color: 0x202b2d, roughness: 0.9 });
-    const sleeveMaterial = new THREE.MeshStandardMaterial({ color: 0x273f46, roughness: 0.92 });
-    const cuffMaterial = new THREE.MeshStandardMaterial({ color: 0xd39f54, roughness: 0.78, metalness: 0.08 });
+    const handMaterial = this.paintedStandardMaterial({ color: 0xc28f66, roughness: 0.9 });
+    const gloveMaterial = this.paintedStandardMaterial({ color: 0x202b2d, roughness: 0.94 });
+    const sleeveMaterial = this.paintedStandardMaterial({ color: 0x273f46, roughness: 0.94 });
+    const cuffMaterial = this.paintedStandardMaterial({ color: MELBOURNE_ANIME_PALETTE.tramOchre, roughness: 0.84, metalness: 0.04 });
 
     const sleeve = new THREE.Mesh(new THREE.CapsuleGeometry(0.085, 0.5, 4, 8), sleeveMaterial);
     sleeve.position.set(sleevePosition.x, sleevePosition.y, sleevePosition.z);
@@ -336,26 +355,38 @@ export class MeshFactory {
     const group = this.createWeaponMesh(weaponId, false);
     group.scale.setScalar(2.0);
     group.rotation.x = 0.16;
-    const halo = new THREE.Mesh(
-      new THREE.TorusGeometry(0.75, 0.025, 8, 28),
-      new THREE.MeshBasicMaterial({ color: 0x61a8d3, transparent: true, opacity: 0.7 })
+    const haloMaterials = [
+      new THREE.MeshBasicMaterial({ color: MELBOURNE_ANIME_PALETTE.tramOchre, transparent: true, opacity: 0.46, depthWrite: false }),
+      new THREE.MeshBasicMaterial({ color: MELBOURNE_ANIME_PALETTE.wetBluestone, transparent: true, opacity: 0.34, depthWrite: false })
+    ];
+    for (let ring = 0; ring < 2; ring += 1) {
+      const halo = new THREE.Mesh(new THREE.TorusGeometry(0.66 + ring * 0.12, 0.018, 7, 28), haloMaterials[ring]);
+      halo.rotation.x = Math.PI / 2;
+      halo.rotation.z = ring * 0.34;
+      halo.position.y = -0.28 - ring * 0.012;
+      halo.scale.set(1.18, 0.74 + ring * 0.08, 1);
+      group.add(halo);
+    }
+    const tag = new THREE.Mesh(
+      new THREE.BoxGeometry(0.58, 0.035, 0.22),
+      this.artifactLabelMaterial(WEAPON_STENCIL[weaponId], "#2d443d", "#efd18a", "#6e8e75")
     );
-    halo.rotation.x = Math.PI / 2;
-    halo.position.y = -0.28;
-    group.add(halo);
+    tag.position.set(0.48, -0.22, 0.38);
+    tag.rotation.set(0.02, 0.18, -0.08);
+    group.add(tag);
     return group;
   }
 
   createBikeMesh(options: { issue?: BikeIssue } = {}): THREE.Group {
     const root = new THREE.Group();
     const group = new THREE.Group();
-    const frameMaterial = new THREE.MeshStandardMaterial({ color: 0x244a42, metalness: 0.32, roughness: 0.38 });
-    const forkMaterial = new THREE.MeshStandardMaterial({ color: 0xb7c1b8, metalness: 0.45, roughness: 0.32 });
-    const tyreMaterial = new THREE.MeshStandardMaterial({ color: 0x171c1b, roughness: 0.62 });
-    const rimMaterial = new THREE.MeshStandardMaterial({ color: 0x9ca9a1, metalness: 0.5, roughness: 0.32 });
-    const spokeMaterial = new THREE.MeshStandardMaterial({ color: 0xc5cec6, metalness: 0.48, roughness: 0.28 });
-    const rubberMaterial = new THREE.MeshStandardMaterial({ color: 0x101312, roughness: 0.72 });
-    const leatherMaterial = new THREE.MeshStandardMaterial({ color: 0x2f211a, roughness: 0.84 });
+    const frameMaterial = this.paintedStandardMaterial({ color: 0x244a42, metalness: 0.22, roughness: 0.58 });
+    const forkMaterial = this.paintedStandardMaterial({ color: MELBOURNE_ANIME_PALETTE.weatheredWhite, metalness: 0.32, roughness: 0.5 });
+    const tyreMaterial = this.paintedStandardMaterial({ color: 0x171c1b, roughness: 0.78 });
+    const rimMaterial = this.paintedStandardMaterial({ color: 0x9ca9a1, metalness: 0.38, roughness: 0.48 });
+    const spokeMaterial = this.paintedStandardMaterial({ color: 0xc5cec6, metalness: 0.34, roughness: 0.44 });
+    const rubberMaterial = this.paintedStandardMaterial({ color: 0x101312, roughness: 0.84 });
+    const leatherMaterial = this.paintedStandardMaterial({ color: 0x2f211a, roughness: 0.9 });
     const reflectorMaterial = new THREE.MeshBasicMaterial({ color: 0xffbe5d });
     const lightMaterial = new THREE.MeshBasicMaterial({ color: 0xc7edf2, transparent: true, opacity: 0.82 });
 
@@ -453,6 +484,21 @@ export class MeshFactory {
       grip.position.set(0.75, 1.23, z);
       group.add(grip);
     }
+
+    const crateMaterial = this.paintedStandardMaterial({ color: MELBOURNE_ANIME_PALETTE.tramOchre, roughness: 0.88 });
+    const crate = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.26, 0.5), crateMaterial);
+    crate.position.set(1.02, 0.9, 0);
+    crate.castShadow = true;
+    group.add(crate);
+    for (const z of [-0.18, 0, 0.18]) {
+      const slat = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.035, 0.028), forkMaterial);
+      slat.position.set(1.025, 0.97, z);
+      group.add(slat);
+    }
+    const gumLeaf = new THREE.Mesh(new THREE.CapsuleGeometry(0.035, 0.22, 4, 8), new THREE.MeshBasicMaterial({ color: MELBOURNE_ANIME_PALETTE.eucalyptus }));
+    gumLeaf.position.set(1.25, 1.05, -0.12);
+    gumLeaf.rotation.set(0.18, 0, -0.72);
+    group.add(gumLeaf);
 
     const rearReflector = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.13, 0.05), reflectorMaterial);
     rearReflector.position.set(-0.94, 0.96, -0.04);
@@ -1257,17 +1303,39 @@ export class MeshFactory {
 
   createPickupMesh(type: PickupKind): THREE.Object3D {
     const group = new THREE.Group();
+    this.addPickupBrushMarker(group, type);
+
     if (type === "ammo") {
-      const boxMaterial = new THREE.MeshStandardMaterial({ color: 0xb98932, emissive: 0x2a1d08, emissiveIntensity: 0.18, roughness: 0.66 });
-      const metalMaterial = new THREE.MeshStandardMaterial({ color: 0x4f5147, metalness: 0.38, roughness: 0.42 });
-      const brassMaterial = new THREE.MeshStandardMaterial({ color: 0xd7a64b, metalness: 0.5, roughness: 0.36 });
+      const boxMaterial = this.paintedStandardMaterial({
+        color: MELBOURNE_ANIME_PALETTE.tramOchre,
+        emissive: 0x2a1d08,
+        emissiveIntensity: 0.16,
+        roughness: 0.78,
+        metalness: 0.04
+      });
+      const metalMaterial = this.paintedStandardMaterial({ color: MELBOURNE_ANIME_PALETTE.bluestoneShadow, metalness: 0.22, roughness: 0.62 });
+      const brassMaterial = this.paintedStandardMaterial({ color: 0xd7a64b, metalness: 0.36, roughness: 0.48 });
       const box = new THREE.Mesh(new THREE.BoxGeometry(1.18, 0.52, 1.46), boxMaterial);
       box.position.y = 0.28;
       box.castShadow = true;
       group.add(box);
+      for (const x of [-0.53, 0.53]) {
+        for (const z of [-0.67, 0.67]) {
+          const cap = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.58, 0.13), metalMaterial);
+          cap.position.set(x, 0.3, z);
+          cap.castShadow = true;
+          group.add(cap);
+        }
+      }
       const latch = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.08, 0.05), metalMaterial);
       latch.position.set(0, 0.43, -0.75);
       group.add(latch);
+      const label = new THREE.Mesh(
+        new THREE.BoxGeometry(0.74, 0.27, 0.036),
+        this.artifactLabelMaterial("AMMO", "#2d443d", "#efd18a", "#7aa08b")
+      );
+      label.position.set(0, 0.3, -0.755);
+      group.add(label);
       for (const x of [-0.32, 0, 0.32]) {
         const round = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.52, 10), brassMaterial);
         round.rotation.x = Math.PI / 2;
@@ -1275,28 +1343,57 @@ export class MeshFactory {
         round.castShadow = true;
         group.add(round);
       }
+      const strap = new THREE.Mesh(new THREE.BoxGeometry(1.24, 0.055, 0.12), metalMaterial);
+      strap.position.set(0, 0.58, -0.12);
+      strap.rotation.y = 0.05;
+      group.add(strap);
     } else if (type === "health") {
-      const caseMaterial = new THREE.MeshStandardMaterial({ color: 0xc84138, emissive: 0x35100c, emissiveIntensity: 0.2, roughness: 0.62 });
+      const caseMaterial = this.paintedStandardMaterial({
+        color: MELBOURNE_ANIME_PALETTE.terraceCream,
+        emissive: 0x32250f,
+        emissiveIntensity: 0.16,
+        roughness: 0.82
+      });
+      const brickMaterial = this.paintedStandardMaterial({ color: MELBOURNE_ANIME_PALETTE.brick, roughness: 0.82 });
       const crossMaterial = new THREE.MeshBasicMaterial({ color: 0xf2e8d4 });
       const kit = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.72, 0.82), caseMaterial);
       kit.position.y = 0.38;
       kit.castShadow = true;
       group.add(kit);
-      const barA = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.035, 0.5), crossMaterial);
+      for (const x of [-0.58, 0.58]) {
+        const sidePanel = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.66, 0.86), brickMaterial);
+        sidePanel.position.set(x, 0.4, 0);
+        sidePanel.castShadow = true;
+        group.add(sidePanel);
+      }
+      const frontBand = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.16, 0.04), brickMaterial);
+      frontBand.position.set(0, 0.66, -0.43);
+      group.add(frontBand);
+      const barA = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.04, 0.5), crossMaterial);
       barA.position.set(0, 0.76, -0.43);
       group.add(barA);
-      const barB = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.035, 0.16), crossMaterial);
+      const barB = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.04, 0.16), crossMaterial);
       barB.position.set(0, 0.76, -0.43);
       group.add(barB);
       const handle = new THREE.Mesh(new THREE.TorusGeometry(0.28, 0.025, 8, 18), this.materials.metal);
       handle.position.y = 0.82;
       handle.rotation.x = Math.PI / 2;
       group.add(handle);
+      const bandage = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.16, 0.16, 0.48, 14),
+        this.paintedStandardMaterial({ color: 0xf1e0bd, roughness: 0.9 })
+      );
+      bandage.rotation.z = Math.PI / 2;
+      bandage.position.set(0.34, 0.18, 0.52);
+      bandage.castShadow = true;
+      group.add(bandage);
     } else {
-      const scrapMaterial = new THREE.MeshStandardMaterial({ color: 0x8fa693, metalness: 0.3, roughness: 0.5 });
-      const darkMaterial = new THREE.MeshStandardMaterial({ color: 0x4f5c54, metalness: 0.35, roughness: 0.56 });
+      const scrapMaterial = this.paintedStandardMaterial({ color: 0x8fa693, metalness: 0.24, roughness: 0.62 });
+      const darkMaterial = this.paintedStandardMaterial({ color: MELBOURNE_ANIME_PALETTE.wetBluestone, metalness: 0.26, roughness: 0.66 });
+      const copperMaterial = this.paintedStandardMaterial({ color: 0xb46a42, metalness: 0.22, roughness: 0.58 });
       for (let index = 0; index < 5; index += 1) {
-        const shard = new THREE.Mesh(new THREE.BoxGeometry(0.78 - index * 0.05, 0.11, 0.3 + index * 0.04), index % 2 === 0 ? scrapMaterial : darkMaterial);
+        const material = index === 3 ? copperMaterial : index % 2 === 0 ? scrapMaterial : darkMaterial;
+        const shard = new THREE.Mesh(new THREE.BoxGeometry(0.78 - index * 0.05, 0.11, 0.3 + index * 0.04), material);
         shard.position.set((index - 2) * 0.25, 0.14 + index * 0.045, Math.sin(index) * 0.22);
         shard.rotation.set(0.18 * index, index * 0.44, -0.2 + index * 0.13);
         shard.castShadow = true;
@@ -1307,9 +1404,140 @@ export class MeshFactory {
       wire.rotation.set(0.8, 0.2, 0.35);
       wire.castShadow = true;
       group.add(wire);
+      const ticket = new THREE.Mesh(
+        new THREE.BoxGeometry(0.64, 0.034, 0.28),
+        this.artifactLabelMaterial("TRAM", "#efd18a", "#263d45", "#b35f4a")
+      );
+      ticket.position.set(-0.28, 0.34, 0.34);
+      ticket.rotation.set(0.12, -0.16, 0.18);
+      group.add(ticket);
     }
     this.applyAnimeMeshStyle(group, 1.08);
     return group;
+  }
+
+  private paintedStandardMaterial(options: {
+    color: THREE.ColorRepresentation;
+    emissive?: THREE.ColorRepresentation;
+    emissiveIntensity?: number;
+    roughness?: number;
+    metalness?: number;
+    transparent?: boolean;
+    opacity?: number;
+  }): THREE.MeshStandardMaterial {
+    return new THREE.MeshStandardMaterial({
+      color: options.color,
+      emissive: options.emissive ?? 0x000000,
+      emissiveIntensity: options.emissiveIntensity ?? 0,
+      roughness: options.roughness ?? 0.84,
+      metalness: options.metalness ?? 0.06,
+      transparent: options.transparent ?? false,
+      opacity: options.opacity ?? 1
+    });
+  }
+
+  private artifactLabelMaterial(text: string, background: string, foreground: string, accent: string): THREE.MeshBasicMaterial {
+    const canvas = document.createElement("canvas");
+    canvas.width = 256;
+    canvas.height = 128;
+    const ctx = canvas.getContext("2d")!;
+    ctx.fillStyle = background;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.globalAlpha = 0.18;
+    ctx.fillStyle = accent;
+    ctx.fillRect(0, 0, canvas.width, 18);
+    ctx.fillRect(0, canvas.height - 16, canvas.width, 16);
+    ctx.globalAlpha = 1;
+
+    ctx.lineCap = "round";
+    for (let i = 0; i < 9; i += 1) {
+      const y = 18 + i * 11 + Math.sin(i * 1.7) * 4;
+      ctx.strokeStyle = i % 2 === 0 ? `${foreground}24` : `${accent}28`;
+      ctx.lineWidth = 2 + (i % 3);
+      ctx.beginPath();
+      ctx.moveTo(-18, y);
+      ctx.bezierCurveTo(52, y - 7, 154, y + 9, 274, y - 5);
+      ctx.stroke();
+    }
+
+    ctx.strokeStyle = foreground;
+    ctx.lineWidth = 6;
+    ctx.strokeRect(10, 10, canvas.width - 20, canvas.height - 20);
+    ctx.fillStyle = foreground;
+    ctx.font = text.length > 3 ? "800 42px system-ui, sans-serif" : "900 52px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, canvas.width / 2, canvas.height / 2 + 4);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.anisotropy = 2;
+    return new THREE.MeshBasicMaterial({ map: texture });
+  }
+
+  private addBladeWeathering(group: THREE.Group, length: number, bladeWidth: number, machete: boolean): void {
+    const notchMaterial = new THREE.MeshBasicMaterial({ color: MELBOURNE_ANIME_PALETTE.bluestoneShadow });
+    const tapeMaterial = new THREE.MeshBasicMaterial({ color: machete ? MELBOURNE_ANIME_PALETTE.tramOchre : MELBOURNE_ANIME_PALETTE.eucalyptus });
+    for (let index = 0; index < (machete ? 5 : 3); index += 1) {
+      const nick = new THREE.Mesh(new THREE.BoxGeometry(bladeWidth * 0.22, 0.014, length * 0.045), notchMaterial);
+      nick.position.set(bladeWidth * 0.45, 0.128, -length * (0.18 + index * 0.13));
+      nick.rotation.set(-0.08, 0, 0.22 + index * 0.04);
+      group.add(nick);
+    }
+    const tape = new THREE.Mesh(new THREE.BoxGeometry(bladeWidth * 1.42, 0.018, length * 0.055), tapeMaterial);
+    tape.position.set(0, 0.13, length * 0.03);
+    tape.rotation.set(-0.08, 0, -0.05);
+    group.add(tape);
+  }
+
+  private addFirearmParkDetails(group: THREE.Group, weaponId: WeaponId, length: number): void {
+    const tapeMaterial = this.paintedStandardMaterial({ color: MELBOURNE_ANIME_PALETTE.tramOchre, roughness: 0.9, metalness: 0.02 });
+    const greenMaterial = this.paintedStandardMaterial({ color: MELBOURNE_ANIME_PALETTE.eucalyptShadow, roughness: 0.92 });
+    const blueMaterial = this.paintedStandardMaterial({ color: MELBOURNE_ANIME_PALETTE.wetBluestone, roughness: 0.78, metalness: 0.14 });
+    const wrapZ = weaponId === "shotgun" ? -length * 0.42 : weaponId === "smg" ? -length * 0.28 : -length * 0.34;
+    for (let index = 0; index < 3; index += 1) {
+      const wrap = new THREE.Mesh(new THREE.BoxGeometry(0.21, 0.035, 0.055), index === 1 ? greenMaterial : tapeMaterial);
+      wrap.position.set(0, 0.155 - index * 0.006, wrapZ + index * 0.1);
+      wrap.rotation.z = -0.06 + index * 0.05;
+      wrap.castShadow = true;
+      group.add(wrap);
+    }
+
+    const sling = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.032, length * 0.72), greenMaterial);
+    sling.position.set(0.135, -0.015, -length * 0.16);
+    sling.rotation.set(0.02, 0.04, 0.16);
+    group.add(sling);
+
+    const stencil = new THREE.Mesh(
+      new THREE.BoxGeometry(0.18, 0.032, 0.34),
+      this.artifactLabelMaterial(WEAPON_STENCIL[weaponId], "#263d45", "#efd18a", "#76906c")
+    );
+    stencil.position.set(-0.092, 0.08, -length * 0.18);
+    stencil.rotation.y = Math.PI / 2;
+    group.add(stencil);
+
+    if (weaponId === "shotgun" || weaponId === "rifle") {
+      const stockPatch = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.13, 0.2), blueMaterial);
+      stockPatch.position.set(0, 0.12, length * 0.48);
+      stockPatch.rotation.z = 0.04;
+      stockPatch.castShadow = true;
+      group.add(stockPatch);
+    }
+  }
+
+  private addPickupBrushMarker(group: THREE.Group, type: PickupKind): void {
+    const color =
+      type === "ammo" ? MELBOURNE_ANIME_PALETTE.tramOchre : type === "health" ? MELBOURNE_ANIME_PALETTE.brick : MELBOURNE_ANIME_PALETTE.wetBluestone;
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(0.68, 0.018, 7, 30),
+      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.4, depthWrite: false })
+    );
+    ring.rotation.x = Math.PI / 2;
+    ring.rotation.z = type === "scrap" ? 0.42 : -0.18;
+    ring.position.y = -0.34;
+    ring.scale.set(1.16, 0.72, 1);
+    group.add(ring);
   }
 
   private groundObject(group: THREE.Group): void {
