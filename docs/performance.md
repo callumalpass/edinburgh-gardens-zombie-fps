@@ -6,10 +6,19 @@ Use these checks when changing runtime systems, level geometry, visibility, terr
 
 - `npm run test:run` runs unit tests. Benchmark files are excluded from normal test collection in `vite.config.ts`.
 - `npm run perf:bench` runs Vitest benchmarks in `tests/performance.bench.ts`.
-- `npm run perf:check` runs the unit suite with a compact reporter, then runs the benchmark suite with verbose benchmark output.
+- `npm run perf:report` runs the benchmark suite and writes a normalized JSON summary to `test-results/performance/latest-summary.json`.
+- `npm run perf:check` runs the unit suite with a compact reporter, then runs `npm run perf:report`.
 - `npm run build` runs TypeScript and the Vite production build.
 
 The unit-test config keeps Vitest globals disabled because all tests import `describe`, `it`, `expect` and helpers explicitly. This avoids global API injection overhead during regular test runs.
+
+`test-results/` is gitignored, so benchmark summaries are safe to generate during local iteration. To compare two runs, keep a summary path and use:
+
+```sh
+node scripts/performance-report.mjs --compare test-results/performance/baseline-summary.json
+```
+
+For CI-style checks, add `--fail-on-regression 20` to fail when a benchmark's mean time is more than 20% slower than the supplied baseline.
 
 ## Benchmark Coverage
 

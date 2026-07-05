@@ -1,4 +1,4 @@
-import { distance, distanceToSegment, nearestPointOnSegment, pointInPolygon } from "./geo";
+import { distance, distanceToSegmentSquared, nearestPointOnSegment, pointInPolygon } from "./geo";
 import { pointInInteractableRaisedFootprint } from "./interactables";
 import type { CollisionObstacle, InteractableFixture, Vec2 } from "./types";
 
@@ -119,34 +119,40 @@ function fixtureCanBypass(fixture: InteractableFixture, obstacleId: string): boo
 }
 
 export function lineIntersectsBox(a: Vec2, b: Vec2, center: Vec2, halfX: number, halfZ: number, angle: number): boolean {
-  const toLocal = (point: Vec2) => {
-    const dx = point.x - center.x;
-    const dz = point.z - center.z;
-    const cos = Math.cos(angle);
-    const sin = Math.sin(angle);
-    return {
-      x: dx * cos + dz * sin,
-      z: -dx * sin + dz * cos
-    };
-  };
-  const start = toLocal(a);
-  const end = toLocal(b);
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  const startDx = a.x - center.x;
+  const startDz = a.z - center.z;
+  const endDx = b.x - center.x;
+  const endDz = b.z - center.z;
+  const startX = startDx * cos + startDz * sin;
+  const startZ = -startDx * sin + startDz * cos;
+  const endX = endDx * cos + endDz * sin;
+  const endZ = -endDx * sin + endDz * cos;
   let tMin = 0;
   let tMax = 1;
 
-  for (const axis of ["x", "z"] as const) {
-    const min = axis === "x" ? -halfX : -halfZ;
-    const max = axis === "x" ? halfX : halfZ;
-    const delta = end[axis] - start[axis];
-    if (Math.abs(delta) < 0.0001) {
-      if (start[axis] < min || start[axis] > max) return false;
-      continue;
-    }
-    let t1 = (min - start[axis]) / delta;
-    let t2 = (max - start[axis]) / delta;
-    if (t1 > t2) [t1, t2] = [t2, t1];
-    tMin = Math.max(tMin, t1);
-    tMax = Math.min(tMax, t2);
+  const deltaX = endX - startX;
+  if (Math.abs(deltaX) < 0.0001) {
+    if (startX < -halfX || startX > halfX) return false;
+  } else {
+    let tx1 = (-halfX - startX) / deltaX;
+    let tx2 = (halfX - startX) / deltaX;
+    if (tx1 > tx2) [tx1, tx2] = [tx2, tx1];
+    tMin = Math.max(tMin, tx1);
+    tMax = Math.min(tMax, tx2);
+    if (tMin > tMax) return false;
+  }
+
+  const deltaZ = endZ - startZ;
+  if (Math.abs(deltaZ) < 0.0001) {
+    if (startZ < -halfZ || startZ > halfZ) return false;
+  } else {
+    let tz1 = (-halfZ - startZ) / deltaZ;
+    let tz2 = (halfZ - startZ) / deltaZ;
+    if (tz1 > tz2) [tz1, tz2] = [tz2, tz1];
+    tMin = Math.max(tMin, tz1);
+    tMax = Math.min(tMax, tz2);
     if (tMin > tMax) return false;
   }
 
@@ -158,10 +164,15 @@ export function lineIntersectsPolygon(a: Vec2, b: Vec2, polygon: Vec2[], padding
     return true;
   }
 
+  const paddingSquared = padding * padding;
   for (let i = 0; i < polygon.length; i += 1) {
     const start = polygon[i];
     const end = polygon[(i + 1) % polygon.length];
-    if (segmentsIntersect(a, b, start, end) || distanceToSegment(start, a, b) <= padding || distanceToSegment(end, a, b) <= padding) {
+    if (
+      segmentsIntersect(a, b, start, end) ||
+      distanceToSegmentSquared(start, a, b) <= paddingSquared ||
+      distanceToSegmentSquared(end, a, b) <= paddingSquared
+    ) {
       return true;
     }
   }
@@ -169,22 +180,28 @@ export function lineIntersectsPolygon(a: Vec2, b: Vec2, polygon: Vec2[], padding
 }
 
 export function segmentsIntersect(a: Vec2, b: Vec2, c: Vec2, d: Vec2): boolean {
-  const orientation = (p: Vec2, q: Vec2, r: Vec2) => Math.sign((q.z - p.z) * (r.x - q.x) - (q.x - p.x) * (r.z - q.z));
-  const onSegment = (p: Vec2, q: Vec2, r: Vec2) =>
+  const o1 = segmentOrientation(a, b, c);
+  const o2 = segmentOrientation(a, b, d);
+  const o3 = segmentOrientation(c, d, a);
+  const o4 = segmentOrientation(c, d, b);
+
+  if (o1 !== o2 && o3 !== o4) return true;
+  if (o1 === 0 && pointOnSegment(a, c, b)) return true;
+  if (o2 === 0 && pointOnSegment(a, d, b)) return true;
+  if (o3 === 0 && pointOnSegment(c, a, d)) return true;
+  if (o4 === 0 && pointOnSegment(c, b, d)) return true;
+  return false;
+}
+
+function segmentOrientation(p: Vec2, q: Vec2, r: Vec2): number {
+  return Math.sign((q.z - p.z) * (r.x - q.x) - (q.x - p.x) * (r.z - q.z));
+}
+
+function pointOnSegment(p: Vec2, q: Vec2, r: Vec2): boolean {
+  return (
     q.x <= Math.max(p.x, r.x) + 0.0001 &&
     q.x + 0.0001 >= Math.min(p.x, r.x) &&
     q.z <= Math.max(p.z, r.z) + 0.0001 &&
-    q.z + 0.0001 >= Math.min(p.z, r.z);
-
-  const o1 = orientation(a, b, c);
-  const o2 = orientation(a, b, d);
-  const o3 = orientation(c, d, a);
-  const o4 = orientation(c, d, b);
-
-  if (o1 !== o2 && o3 !== o4) return true;
-  if (o1 === 0 && onSegment(a, c, b)) return true;
-  if (o2 === 0 && onSegment(a, d, b)) return true;
-  if (o3 === 0 && onSegment(c, a, d)) return true;
-  if (o4 === 0 && onSegment(c, b, d)) return true;
-  return false;
+    q.z + 0.0001 >= Math.min(p.z, r.z)
+  );
 }

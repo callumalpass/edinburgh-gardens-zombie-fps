@@ -20,10 +20,11 @@ function expectGeometryFollowsTerrain(geometry: THREE.BufferGeometry, groundYAt:
   return positions.count;
 }
 
+const level = createLevelData();
+const sampler = new TerrainSampler(level);
+
 describe("terrain overlay geometry", () => {
   it("samples all path surface vertices from the terrain instead of bridging long slopes", () => {
-    const level = createLevelData();
-    const sampler = new TerrainSampler(level);
     const yOffset = 0.073;
     let checkedVertices = 0;
     let densifiedSegments = 0;
@@ -59,8 +60,6 @@ describe("terrain overlay geometry", () => {
   });
 
   it("samples rounded path caps from local terrain across their radius", () => {
-    const level = createLevelData();
-    const sampler = new TerrainSampler(level);
     const yOffset = 0.078;
     let checkedVertices = 0;
 

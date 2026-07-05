@@ -102,16 +102,17 @@ function averageRadius(polygon: readonly { x: number; z: number }[]): number {
   return polygon.reduce((sum, point) => sum + distance(point, center), 0) / polygon.length;
 }
 
+const level = createLevelData();
+const terrainSampler = new TerrainSampler(level);
+
 describe("map geometry", () => {
   it("converts the OSM boundary into a playable non-degenerate park polygon", () => {
-    const level = createLevelData();
     expect(PARK_BOUNDARY_GEO.length).toBeGreaterThan(40);
     expect(Math.abs(polygonArea(level.boundary))).toBeGreaterThan(10_000);
     expect(pointInPolygon(polygonCentroid(level.boundary), level.boundary)).toBe(true);
   });
 
   it("places key features inside the Edinburgh Gardens boundary", () => {
-    const level = createLevelData();
     for (const station of level.upgradeStations) {
       expect(pointInPolygon(station.position, level.boundary)).toBe(true);
     }
@@ -121,7 +122,6 @@ describe("map geometry", () => {
   });
 
   it("uses mapped tree points inside the park for more accurate placement", () => {
-    const level = createLevelData();
     expect(level.treePoints.length).toBeGreaterThanOrEqual(340);
     expect(level.treeLines.length).toBeGreaterThanOrEqual(5);
     expect(level.significantTrees.length).toBe(19);
@@ -157,7 +157,6 @@ describe("map geometry", () => {
   });
 
   it("derives solid trunk colliders from mapped and researched trees", () => {
-    const level = createLevelData();
     const obstacleIds = new Set(level.obstacles.map((obstacle) => obstacle.id));
     expect(level.treeColliders.length).toBe(level.trees.length);
     expect(level.treeColliders.length).toBeGreaterThanOrEqual(360);
@@ -178,7 +177,6 @@ describe("map geometry", () => {
   });
 
   it("places researched sports fixtures and collision posts from the same data", () => {
-    const level = createLevelData();
     const footballGoals = level.sportsFixtures.filter((fixture) => fixture.kind === "football-goal");
     const basketballHoops = level.sportsFixtures.filter((fixture) => fixture.kind === "basketball-hoop");
     const obstacleIds = new Set(level.obstacles.map((obstacle) => obstacle.id));
@@ -218,7 +216,6 @@ describe("map geometry", () => {
   });
 
   it("includes Vicmap-derived elevation samples for broad terrain", () => {
-    const level = createLevelData();
     expect(level.elevationSamples.length).toBeGreaterThanOrEqual(90);
     expect(level.elevationMin).toBeGreaterThanOrEqual(26);
     expect(level.elevationMax).toBeLessThanOrEqual(33);
@@ -228,7 +225,6 @@ describe("map geometry", () => {
   });
 
   it("adds sourceable micro-terrain modifiers over broad elevation", () => {
-    const level = createLevelData();
     const modifierKinds = new Set(level.terrainModifiers.map((modifier) => modifier.kind));
     for (const kind of ["path-crown", "path-shoulder", "tree-root", "drainage-swale", "oval-banking", "skate-bowl"] as const) {
       expect(modifierKinds.has(kind)).toBe(true);
@@ -239,8 +235,7 @@ describe("map geometry", () => {
   });
 
   it("samples local micro-relief without replacing Vicmap broad slope", () => {
-    const level = createLevelData();
-    const sampler = new TerrainSampler(level);
+    const sampler = terrainSampler;
     const crown = level.terrainModifiers.find((modifier) => modifier.kind === "path-crown" && modifier.shape === "line");
     const treeRoot = level.terrainModifiers.find((modifier) => modifier.kind === "tree-root" && modifier.shape === "radial");
     const swale = level.terrainModifiers.find((modifier) => modifier.kind === "drainage-swale" && modifier.shape === "line");
@@ -259,8 +254,7 @@ describe("map geometry", () => {
   });
 
   it("models Fitzy Bowl as lowered enterable bowls instead of an invisible skate blocker", () => {
-    const level = createLevelData();
-    const sampler = new TerrainSampler(level);
+    const sampler = terrainSampler;
     const obstacleIds = new Set(level.obstacles.map((obstacle) => obstacle.id));
     const skateLandmark = level.landmarks.find((landmark) => landmark.id === "skate");
     const bowlModifiers = level.terrainModifiers.filter((modifier) => modifier.kind === "skate-bowl");
@@ -283,7 +277,6 @@ describe("map geometry", () => {
   });
 
   it("includes OSM-mapped building and fence footprints", () => {
-    const level = createLevelData();
     const buildingIds = new Set(level.mappedBuildings.map((building) => building.id));
     const profiles = new Set(level.mappedBuildings.map((building) => building.detailProfile).filter(Boolean));
     expect(level.mappedBuildings.length).toBeGreaterThanOrEqual(12);
@@ -307,7 +300,6 @@ describe("map geometry", () => {
   });
 
   it("models the south playground fence and gated oval access as mapped blockers", () => {
-    const level = createLevelData();
     const fences = new Map(level.mappedFences.map((fence) => [fence.id, fence]));
     const south = fences.get("south-playground-fence");
     const oval = fences.get("oval-fence");
@@ -338,7 +330,6 @@ describe("map geometry", () => {
   });
 
   it("keeps facade frontages source-backed for major mapped buildings", () => {
-    const level = createLevelData();
     const facadeBuildings = [
       "osm-building-242003562",
       "osm-building-403753784",
@@ -361,7 +352,6 @@ describe("map geometry", () => {
   });
 
   it("marks the six existing tennis courts as current renovation surfaces", () => {
-    const level = createLevelData();
     const tennisCourts = level.landmarks.filter((landmark) => landmark.id.startsWith("tennis-court-"));
     expect(tennisCourts.length).toBe(6);
     expect(tennisCourts.every((court) => court.courtStatus === "renovating-existing")).toBe(true);
@@ -370,7 +360,6 @@ describe("map geometry", () => {
   });
 
   it("adds source-backed deeper structure affordances", () => {
-    const level = createLevelData();
     const amenitiesById = new Map(level.amenities.map((amenity) => [amenity.id, amenity]));
 
     expect(amenitiesById.get("grandstand-umpire-room-access")?.kind).toBe("umpire_room");
@@ -384,7 +373,6 @@ describe("map geometry", () => {
   });
 
   it("includes researched hardscape edge and drain features", () => {
-    const level = createLevelData();
     const hardscapeIds = new Set(level.hardscapeLines.map((line) => line.id));
     expect(level.hardscapeLines.length).toBeGreaterThanOrEqual(3);
     expect(hardscapeIds.has("hardscape-elm-avenue-basalt-edging")).toBe(false);
@@ -395,7 +383,6 @@ describe("map geometry", () => {
   });
 
   it("adds sourceable path material transition patches without collision", () => {
-    const level = createLevelData();
     const patchKinds = new Set(level.pathSurfacePatches.map((patch) => patch.kind));
     for (const kind of ["path-edge-wear", "path-junction-wear", "desire-path", "gravel-feather", "muddy-threshold"] as const) {
       expect(patchKinds.has(kind)).toBe(true);
@@ -408,7 +395,6 @@ describe("map geometry", () => {
   });
 
   it("includes OSM-derived street-edge context around the park", () => {
-    const level = createLevelData();
     const streetIds = new Set(level.streetEdges.map((street) => street.id));
     for (const id of ["street-st-georges-road", "street-brunswick-street", "street-freeman-street", "street-alfred-crescent-north-east"]) {
       expect(streetIds.has(id)).toBe(true);
@@ -422,7 +408,6 @@ describe("map geometry", () => {
   });
 
   it("includes the major memorial and plinth landmarks", () => {
-    const level = createLevelData();
     const landmarkIds = new Set(level.landmarks.map((landmark) => landmark.id));
     expect(landmarkIds.has("queen-victoria-plinth")).toBe(true);
     expect(landmarkIds.has("sportsmans-war-memorial")).toBe(true);
@@ -430,7 +415,6 @@ describe("map geometry", () => {
   });
 
   it("uses realistic access points for climbable building fixtures", () => {
-    const level = createLevelData();
     const rotunda = level.interactables.find((fixture) => fixture.id === "rotunda-deck");
     const rotundaBuilding = level.mappedBuildings.find((building) => building.id === "osm-building-543505640");
     expect(rotunda?.accessPosition).toBeTruthy();
@@ -488,7 +472,6 @@ describe("map geometry", () => {
   });
 
   it("keeps climbable raised footprints matched to visible platforms", () => {
-    const level = createLevelData();
     const toggleFixtures = level.interactables.filter((fixture) => fixture.mode === "toggle");
     expect(toggleFixtures.length).toBeGreaterThanOrEqual(7);
     for (const fixture of toggleFixtures) {
@@ -547,7 +530,6 @@ describe("map geometry", () => {
   });
 
   it("uses a richer OSM-derived path and amenity network", () => {
-    const level = createLevelData();
     const pathIds = new Set(level.paths.map((path) => path.id));
     expect(level.paths.length).toBeGreaterThanOrEqual(45);
     expect(level.paths.filter((path) => path.kind === "rail").length).toBeGreaterThanOrEqual(2);
@@ -590,7 +572,6 @@ describe("map geometry", () => {
   });
 
   it("does not render an unsupported Emely Baker to south playground diagonal path", () => {
-    const level = createLevelData();
     const emelyBaker = geoToWorld({ lat: -37.785739, lon: 144.9825 });
     const southPlayground = geoToWorld({ lat: -37.788998, lon: 144.983849 });
     const crossGardenPaths = level.paths.filter(
@@ -603,7 +584,6 @@ describe("map geometry", () => {
   });
 
   it("models open lawns and park feature precincts as accessible landmarks", () => {
-    const level = createLevelData();
     const landmarkIds = new Set(level.landmarks.map((landmark) => landmark.id));
     for (const id of ["north-open-lawn", "north-activity-precinct", "alfred-crescent-open-lawn", "south-picnic-lawn", "stormwater-filtration-garden", "raingarden-reservoir"]) {
       expect(landmarkIds.has(id)).toBe(true);
@@ -645,7 +625,6 @@ describe("map geometry", () => {
   });
 
   it("adds source-backed ornamental garden beds without marking them as cover", () => {
-    const level = createLevelData();
     const expectedStyles = new Map([
       ["st-georges-display-bed-north", "ornamental-floral"],
       ["st-georges-display-bed-central", "ornamental-floral"],
@@ -675,7 +654,6 @@ describe("map geometry", () => {
   });
 
   it("models the north-east raised shrub planters as source-backed crouch cover", () => {
-    const level = createLevelData();
     const bluestone = level.landmarks.find((landmark) => landmark.id === "north-east-bluestone-shrub-planter");
     const roweNorth = level.landmarks.find((landmark) => landmark.id === "rowe-street-north-entrance-planter");
     const roweSouth = level.landmarks.find((landmark) => landmark.id === "rowe-street-south-entrance-planter");
@@ -704,7 +682,6 @@ describe("map geometry", () => {
   });
 
   it("keeps small park furniture interactive without adding collision blockers", () => {
-    const level = createLevelData();
     const amenityIds = new Set(level.amenities.map((amenity) => amenity.id));
     for (const id of ["north-table-tennis", "north-bbq-picnic-table-1", "south-picnic-table-1"]) {
       expect(amenityIds.has(id)).toBe(true);
@@ -717,7 +694,6 @@ describe("map geometry", () => {
   });
 
   it("keeps park-life details sourceable and non-colliding", () => {
-    const level = createLevelData();
     const detailKinds = new Set(level.parkLifeDetails.map((detail) => detail.kind));
     for (const kind of [
       "dog-sign",
@@ -771,7 +747,6 @@ describe("map geometry", () => {
   });
 
   it("uses a fitted grandstand obstacle so nearby open lawn remains accessible", () => {
-    const level = createLevelData();
     const grandstand = level.obstacles.find((obstacle) => obstacle.id === "grandstand");
     expect(grandstand?.shape).toBe("box");
     if (grandstand?.shape !== "box") {
@@ -782,7 +757,6 @@ describe("map geometry", () => {
   });
 
   it("keeps collision intent aligned with real access", () => {
-    const level = createLevelData();
     const obstacleIds = new Set(level.obstacles.map((obstacle) => obstacle.id));
     expect(obstacleIds.has("tennis")).toBe(true);
     expect(obstacleIds.has("bowling")).toBe(true);
@@ -807,7 +781,6 @@ describe("map geometry", () => {
   });
 
   it("keeps all placed object families spatially coherent", () => {
-    const level = createLevelData();
     const obstacleIds = new Map(level.obstacles.map((obstacle) => [obstacle.id, obstacle]));
 
     for (const landmark of level.landmarks) {
@@ -897,7 +870,6 @@ describe("map geometry", () => {
   });
 
   it("keeps point-placed objects out of unrelated blockers and structural footprints", () => {
-    const level = createLevelData();
     const structuralLandmarkKinds = new Set(["bowls", "grandstand", "rotunda", "tennis", "toilets"]);
     const structuralZones = [
       ...level.mappedBuildings.map((building) => ({ id: building.id, polygon: building.polygon })),
@@ -981,7 +953,6 @@ describe("map geometry", () => {
   });
 
   it("clamps external points back into the park", () => {
-    const level = createLevelData();
     const outside = geoToWorld({ lat: -37.7925, lon: 144.9869 });
     expect(pointInPolygon(outside, level.boundary)).toBe(false);
     const clamped = clampToPolygon(outside, level.boundary, 4);

@@ -1,14 +1,33 @@
-import { distance, distanceToSegment } from "./geo";
+import { distanceToSegmentSquared } from "./geo";
 import type { LevelData, TerrainLineModifier, TerrainModifier, Vec2 } from "./types";
 
 const MODIFIER_GRID_SIZE = 32;
 const NEAREST_ELEVATION_SAMPLE_COUNT = 12;
 const MAX_GROUND_CACHE_ENTRIES = 8192;
 
+interface IndexedTerrainModifier {
+  modifier: TerrainModifier;
+  radiusSquared?: number;
+  radiusXSquared?: number;
+  radiusZSquared?: number;
+  outerWidthSquared?: number;
+  cos?: number;
+  sin?: number;
+  segments?: readonly IndexedLineSegment[];
+}
+
+interface IndexedLineSegment {
+  start: Vec2;
+  end: Vec2;
+  dx: number;
+  dz: number;
+  lengthSquared: number;
+}
+
 export class TerrainSampler {
   private readonly groundCache = new Map<number, Map<number, number>>();
   private groundCacheEntries = 0;
-  private readonly modifierBuckets = new Map<number, Map<number, TerrainModifier[]>>();
+  private readonly modifierBuckets = new Map<number, Map<number, IndexedTerrainModifier[]>>();
   private readonly nearestAltitudes = new Array<number>(NEAREST_ELEVATION_SAMPLE_COUNT);
   private readonly nearestDistancesSquared = new Array<number>(NEAREST_ELEVATION_SAMPLE_COUNT);
 
@@ -90,6 +109,7 @@ export class TerrainSampler {
 
   private indexTerrainModifiers(): void {
     for (const modifier of this.level.terrainModifiers) {
+      const entry = indexTerrainModifier(modifier);
       const bounds = this.modifierBounds(modifier);
       const minX = this.cellIndex(bounds.minX);
       const maxX = this.cellIndex(bounds.maxX);
@@ -97,43 +117,51 @@ export class TerrainSampler {
       const maxZ = this.cellIndex(bounds.maxZ);
       for (let x = minX; x <= maxX; x += 1) {
         for (let z = minZ; z <= maxZ; z += 1) {
-          this.ensureModifierBucket(x, z).push(modifier);
+          this.ensureModifierBucket(x, z).push(entry);
         }
       }
     }
   }
 
-  private nearbyTerrainModifiers(point: Vec2): TerrainModifier[] {
+  private nearbyTerrainModifiers(point: Vec2): readonly IndexedTerrainModifier[] {
     return this.modifierBucketAt(this.cellIndex(point.x), this.cellIndex(point.z)) ?? [];
   }
 
-  private modifierReliefAt(point: Vec2, modifier: TerrainModifier): number {
+  private modifierReliefAt(point: Vec2, entry: IndexedTerrainModifier): number {
+    const { modifier } = entry;
     if (modifier.shape === "radial") {
-      const modifierDistance = distance(point, modifier.center);
-      if (modifierDistance >= modifier.radius) {
+      const dx = point.x - modifier.center.x;
+      const dz = point.z - modifier.center.z;
+      const distanceSquared = dx * dx + dz * dz;
+      if (distanceSquared >= (entry.radiusSquared ?? modifier.radius * modifier.radius)) {
         return 0;
       }
+      const modifierDistance = Math.sqrt(distanceSquared);
       return modifier.delta * smoothFalloff(1 - modifierDistance / modifier.radius);
     }
 
     if (modifier.shape === "ellipse") {
       const dx = point.x - modifier.center.x;
       const dz = point.z - modifier.center.z;
-      const cos = Math.cos(modifier.angle);
-      const sin = Math.sin(modifier.angle);
+      const cos = entry.cos ?? Math.cos(modifier.angle);
+      const sin = entry.sin ?? Math.sin(modifier.angle);
       const localX = dx * cos + dz * sin;
       const localZ = -dx * sin + dz * cos;
-      const normalized = Math.hypot(localX / modifier.radiusX, localZ / modifier.radiusZ);
-      if (normalized >= 1) {
+      const normalizedSquared =
+        (localX * localX) / (entry.radiusXSquared ?? modifier.radiusX * modifier.radiusX) +
+        (localZ * localZ) / (entry.radiusZSquared ?? modifier.radiusZ * modifier.radiusZ);
+      if (normalizedSquared >= 1) {
         return 0;
       }
+      const normalized = Math.sqrt(normalizedSquared);
       return modifier.delta * smoothFalloff(1 - normalized);
     }
 
-    const modifierDistance = distanceToPolyline(point, modifier.points);
-    if (modifierDistance > modifier.outerWidth) {
+    const modifierDistanceSquared = distanceToPolylineSquared(point, entry.segments ?? indexLineSegments(modifier.points));
+    if (modifierDistanceSquared > (entry.outerWidthSquared ?? modifier.outerWidth * modifier.outerWidth)) {
       return 0;
     }
+    const modifierDistance = Math.sqrt(modifierDistanceSquared);
 
     if (modifier.kind === "path-shoulder" || modifier.kind === "oval-banking") {
       if (modifierDistance < modifier.innerWidth) {
@@ -193,7 +221,7 @@ export class TerrainSampler {
     row.set(point.z, ground);
   }
 
-  private ensureModifierBucket(x: number, z: number): TerrainModifier[] {
+  private ensureModifierBucket(x: number, z: number): IndexedTerrainModifier[] {
     let column = this.modifierBuckets.get(x);
     if (!column) {
       column = new Map();
@@ -205,20 +233,75 @@ export class TerrainSampler {
       return bucket;
     }
 
-    const nextBucket: TerrainModifier[] = [];
+    const nextBucket: IndexedTerrainModifier[] = [];
     column.set(z, nextBucket);
     return nextBucket;
   }
 
-  private modifierBucketAt(x: number, z: number): TerrainModifier[] | undefined {
+  private modifierBucketAt(x: number, z: number): IndexedTerrainModifier[] | undefined {
     return this.modifierBuckets.get(x)?.get(z);
   }
 }
 
-function distanceToPolyline(point: Vec2, points: readonly Vec2[]): number {
-  let closest = Number.POSITIVE_INFINITY;
+function indexTerrainModifier(modifier: TerrainModifier): IndexedTerrainModifier {
+  if (modifier.shape === "radial") {
+    return {
+      modifier,
+      radiusSquared: modifier.radius * modifier.radius
+    };
+  }
+
+  if (modifier.shape === "ellipse") {
+    return {
+      modifier,
+      cos: Math.cos(modifier.angle),
+      sin: Math.sin(modifier.angle),
+      radiusXSquared: modifier.radiusX * modifier.radiusX,
+      radiusZSquared: modifier.radiusZ * modifier.radiusZ
+    };
+  }
+
+  return {
+    modifier,
+    outerWidthSquared: modifier.outerWidth * modifier.outerWidth,
+    segments: indexLineSegments(modifier.points)
+  };
+}
+
+function indexLineSegments(points: readonly Vec2[]): IndexedLineSegment[] {
+  const segments: IndexedLineSegment[] = [];
   for (let index = 0; index < points.length - 1; index += 1) {
-    closest = Math.min(closest, distanceToSegment(point, points[index], points[index + 1]));
+    const start = points[index];
+    const end = points[index + 1];
+    const dx = end.x - start.x;
+    const dz = end.z - start.z;
+    segments.push({
+      start,
+      end,
+      dx,
+      dz,
+      lengthSquared: dx * dx + dz * dz
+    });
+  }
+  return segments;
+}
+
+function distanceToPolylineSquared(point: Vec2, segments: readonly IndexedLineSegment[]): number {
+  let closest = Number.POSITIVE_INFINITY;
+  for (const segment of segments) {
+    if (segment.lengthSquared === 0) {
+      closest = Math.min(closest, distanceToSegmentSquared(point, segment.start, segment.end));
+      continue;
+    }
+    const t = Math.max(0, Math.min(1, ((point.x - segment.start.x) * segment.dx + (point.z - segment.start.z) * segment.dz) / segment.lengthSquared));
+    const nearestX = segment.start.x + segment.dx * t;
+    const nearestZ = segment.start.z + segment.dz * t;
+    const dx = point.x - nearestX;
+    const dz = point.z - nearestZ;
+    const distanceSquared = dx * dx + dz * dz;
+    if (distanceSquared < closest) {
+      closest = distanceSquared;
+    }
   }
   return closest;
 }

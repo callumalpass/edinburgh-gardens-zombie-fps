@@ -3,6 +3,8 @@ import { SeededRandom } from "../src/game/random";
 import { createLevelData } from "../src/game/levelData";
 import { createZombieSpawn, getWaveConfig } from "../src/game/waves";
 
+const level = createLevelData();
+
 describe("wave spawning", () => {
   it("keeps the opening wave readable before introducing fast roles", () => {
     const first = getWaveConfig(1);
@@ -30,7 +32,6 @@ describe("wave spawning", () => {
   });
 
   it("creates deterministic zombie spawn positions from the map spawn list", () => {
-    const level = createLevelData();
     const rngA = new SeededRandom(123);
     const rngB = new SeededRandom(123);
     const spawnA = createZombieSpawn(getWaveConfig(3), level.spawnPoints, rngA);
@@ -41,7 +42,6 @@ describe("wave spawning", () => {
   });
 
   it("can group a pack around the same spawn anchor", () => {
-    const level = createLevelData();
     const rng = new SeededRandom(321);
     const anchor = level.spawnPoints[0];
     const spawn = createZombieSpawn(getWaveConfig(4), level.spawnPoints, rng, anchor);

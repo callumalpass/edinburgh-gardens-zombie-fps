@@ -86,8 +86,29 @@ export function distance(a: Vec2, b: Vec2): number {
   return Math.hypot(a.x - b.x, a.z - b.z);
 }
 
+export function distanceSquared(a: Vec2, b: Vec2): number {
+  const dx = a.x - b.x;
+  const dz = a.z - b.z;
+  return dx * dx + dz * dz;
+}
+
 export function distanceToSegment(point: Vec2, a: Vec2, b: Vec2): number {
-  return distance(point, nearestPointOnSegment(point, a, b));
+  return Math.sqrt(distanceToSegmentSquared(point, a, b));
+}
+
+export function distanceToSegmentSquared(point: Vec2, a: Vec2, b: Vec2): number {
+  const dx = b.x - a.x;
+  const dz = b.z - a.z;
+  const lengthSquared = dx * dx + dz * dz;
+  if (lengthSquared === 0) {
+    return distanceSquared(point, a);
+  }
+  const t = Math.max(0, Math.min(1, ((point.x - a.x) * dx + (point.z - a.z) * dz) / lengthSquared));
+  const nearestX = a.x + dx * t;
+  const nearestZ = a.z + dz * t;
+  const nearestDx = point.x - nearestX;
+  const nearestDz = point.z - nearestZ;
+  return nearestDx * nearestDx + nearestDz * nearestDz;
 }
 
 export function nearestPointOnSegment(point: Vec2, a: Vec2, b: Vec2): Vec2 {

@@ -1,4 +1,4 @@
-import { distanceToSegment } from "./geo";
+import { distanceToSegmentSquared } from "./geo";
 import { lineIntersectsBox, lineIntersectsPolygon } from "./collision";
 import type { CollisionObstacle, Vec2 } from "./types";
 
@@ -21,6 +21,8 @@ export interface VisibilityContext {
 interface IndexedSightObstacle {
   obstacle: CollisionObstacle;
   coverRadius: number;
+  coverRadiusSquared: number;
+  queryStamp: number;
 }
 
 const sightIndexes = new WeakMap<readonly CollisionObstacle[], SightObstacleIndex>();
@@ -64,7 +66,8 @@ export function isLineOfSightBlocked(a: Vec2, b: Vec2, context: VisibilityContex
       blocked = lineIntersectsPolygon(a, b, obstacle.polygon, padding);
       return blocked;
     }
-    blocked = distanceToSegment(obstacle.center, a, b) <= obstacle.radius + padding;
+    const radius = obstacle.radius + padding;
+    blocked = distanceToSegmentSquared(obstacle.center, a, b) <= radius * radius;
     return blocked;
   });
   return blocked;
@@ -97,7 +100,6 @@ function buildAndCacheSightIndex(obstacles: readonly CollisionObstacle[]): Sight
 
 class SightObstacleIndex {
   private readonly grid = new Map<number, Map<number, IndexedSightObstacle[]>>();
-  private readonly querySeen = new Map<string, number>();
   private queryStamp = 0;
 
   constructor(obstacles: readonly CollisionObstacle[]) {
@@ -120,9 +122,11 @@ class SightObstacleIndex {
         if (!bucket) continue;
         for (const entry of bucket) {
           const { obstacle } = entry;
-          if (this.querySeen.get(obstacle.id) === queryStamp) continue;
-          this.querySeen.set(obstacle.id, queryStamp);
-          if (distanceToSegment(obstacle.center, a, b) > entry.coverRadius + padding) continue;
+          if (entry.queryStamp === queryStamp) continue;
+          entry.queryStamp = queryStamp;
+          const paddedRadius = entry.coverRadius + padding;
+          const paddedRadiusSquared = padding === 0 ? entry.coverRadiusSquared : paddedRadius * paddedRadius;
+          if (distanceToSegmentSquared(obstacle.center, a, b) > paddedRadiusSquared) continue;
           if (visit(obstacle)) {
             return;
           }
@@ -132,7 +136,8 @@ class SightObstacleIndex {
   }
 
   private addObstacle(obstacle: CollisionObstacle): void {
-    const entry = { obstacle, coverRadius: computeObstacleCoverRadius(obstacle) };
+    const coverRadius = computeObstacleCoverRadius(obstacle);
+    const entry = { obstacle, coverRadius, coverRadiusSquared: coverRadius * coverRadius, queryStamp: 0 };
     const minX = this.cellIndex(obstacle.center.x - entry.coverRadius);
     const maxX = this.cellIndex(obstacle.center.x + entry.coverRadius);
     const minZ = this.cellIndex(obstacle.center.z - entry.coverRadius);
@@ -171,7 +176,13 @@ class SightObstacleIndex {
 
   private nextQueryStamp(): number {
     if (this.queryStamp >= Number.MAX_SAFE_INTEGER) {
-      this.querySeen.clear();
+      for (const column of this.grid.values()) {
+        for (const bucket of column.values()) {
+          for (const entry of bucket) {
+            entry.queryStamp = 0;
+          }
+        }
+      }
       this.queryStamp = 0;
     }
     this.queryStamp += 1;

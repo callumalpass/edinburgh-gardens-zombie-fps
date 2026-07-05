@@ -1,5 +1,7 @@
 import { bench, describe } from "vitest";
 import { createLevelData } from "../src/game/levelData";
+import { distance } from "../src/game/geo";
+import { createTerrainOverlayRectGeometry } from "../src/game/rendering/terrainOverlay";
 import { ObstacleIndex } from "../src/game/spatial/ObstacleIndex";
 import { TerrainSampler } from "../src/game/terrain";
 import { isLineOfSightBlocked, isPointVisibleToPlayer } from "../src/game/visibility";
@@ -42,12 +44,23 @@ const obstacleQueryPoints = deterministicSample(
   ],
   160
 );
+const overlaySegments = deterministicSample(
+  level.paths.flatMap((path) =>
+    path.points.slice(0, -1).map((point, index) => ({
+      a: point,
+      b: path.points[index + 1],
+      width: path.width
+    }))
+  ),
+  48
+).filter((segment) => distance(segment.a, segment.b) >= 0.05);
 const crowdBaseline = deterministicCrowd(128);
 let terrainSink = 0;
 let sightSink = 0;
 let visibilitySink = 0;
 let obstacleSink = 0;
 let crowdSink = 0;
+let overlaySink = 0;
 
 describe("level performance", () => {
   bench("terrain groundY over representative level points", () => {
@@ -97,6 +110,24 @@ describe("level performance", () => {
     obstacleSink = nearby;
   });
 
+  bench("terrain overlay geometry over path segments", () => {
+    let vertices = 0;
+    for (const segment of overlaySegments) {
+      const segmentLength = distance(segment.a, segment.b);
+      const geometry = createTerrainOverlayRectGeometry({
+        center: { x: (segment.a.x + segment.b.x) * 0.5, z: (segment.a.z + segment.b.z) * 0.5 },
+        angle: Math.atan2(segment.b.z - segment.a.z, segment.b.x - segment.a.x),
+        length: segmentLength,
+        width: segment.width,
+        yOffset: 0.073,
+        groundYAt: (point) => terrain.groundY(point)
+      });
+      vertices += geometry.getAttribute("position").count;
+      geometry.dispose();
+    }
+    overlaySink = vertices;
+  });
+
   bench("zombie separation over a dense crowd", () => {
     const agents = crowdBaseline.map((agent) => ({
       id: agent.id,
@@ -112,9 +143,9 @@ describe("level performance", () => {
   });
 });
 
-function deterministicSample(points: readonly Vec2[], limit: number): Vec2[] {
+function deterministicSample<T>(points: readonly T[], limit: number): T[] {
   if (points.length <= limit) return [...points];
-  const sampled: Vec2[] = [];
+  const sampled: T[] = [];
   const step = points.length / limit;
   for (let index = 0; index < limit; index += 1) {
     sampled.push(points[Math.floor(index * step)]);

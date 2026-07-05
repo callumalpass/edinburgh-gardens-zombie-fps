@@ -4,6 +4,8 @@ import { distance, pointInPolygon, polygonCentroid } from "../src/game/geo";
 import { createLevelData } from "../src/game/levelData";
 import type { BoxObstacle } from "../src/game/types";
 
+const level = createLevelData();
+
 describe("collision system", () => {
   it("pushes points out of expanded box obstacles", () => {
     const obstacle: BoxObstacle = {
@@ -23,7 +25,6 @@ describe("collision system", () => {
   });
 
   it("uses fixture metadata to bypass active obstacles", () => {
-    const level = createLevelData();
     const fixture = level.interactables.find((candidate) => candidate.id === "rotunda-deck");
     expect(fixture?.bypassObstacleIds).toContain("osm-building-543505640");
 
@@ -42,7 +43,6 @@ describe("collision system", () => {
   });
 
   it("keeps fixture bypass ids tied to actual obstacles", () => {
-    const level = createLevelData();
     const obstacleIds = new Set(level.obstacles.map((obstacle) => obstacle.id));
     const missing = level.interactables.flatMap((fixture) =>
       (fixture.bypassObstacleIds ?? [])
@@ -54,7 +54,6 @@ describe("collision system", () => {
   });
 
   it("keeps collision obstacles tied to actual source objects", () => {
-    const level = createLevelData();
     const landmarks = new Set(level.landmarks.map((source) => source.id));
     const mappedBuildings = new Set(level.mappedBuildings.map((source) => source.id));
     const mappedFences = new Set(level.mappedFences.map((source) => source.id));
@@ -83,7 +82,6 @@ describe("collision system", () => {
   });
 
   it("keeps structure access interactions source-linked and inside the park", () => {
-    const level = createLevelData();
     const structureKinds = new Set([
       "clubroom",
       "changeroom",
@@ -120,7 +118,6 @@ describe("collision system", () => {
   });
 
   it("places grandstand stair access on the oval-facing side of the blocker", () => {
-    const level = createLevelData();
     const fixture = level.interactables.find((candidate) => candidate.id === "grandstand-seats");
     const blocker = level.obstacles.find((candidate) => candidate.id === "grandstand");
     const oval = level.landmarks.find((candidate) => candidate.id === "oval");
@@ -146,7 +143,6 @@ describe("collision system", () => {
   });
 
   it("pushes the player out of solid tree trunk obstacles", () => {
-    const level = createLevelData();
     const tree = level.treeColliders[0];
     const obstacle = level.obstacles.find((candidate) => candidate.id === tree.id);
     if (!obstacle || obstacle.shape === "box" || obstacle.shape === "polygon") {
