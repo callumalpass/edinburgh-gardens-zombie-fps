@@ -51,6 +51,7 @@ Purpose: track the building-by-building realism pass for every structure current
 - `osm-building-242003562` / South service and amenities building:
   - Implemented public-toilet door bank with high louvre vents, a blue accessible-facility sign, front/rear gutters, multiple roof vents, wall light, short bollards and a rear service ladder.
   - Follow-up visual correction: rendered the door bank as solid painted metal panels and made mapped building prism materials double-sided, because the irregular OSM footprint and black opening panels made the block read as partially see-through from some walking angles.
+  - This footprint is also the south-toilets building representation in the current level data.
   - Source basis: OSM way `242003562` for the irregular footprint; Yarra Edinburgh Gardens facility/accessibility listing for public toilets and accessible park context; CMP guidance that toilet blocks are functional facilities rather than heritage showpieces.
 - `osm-building-403753784` / Fitzroy Tennis Club rooms:
   - Added court-side guttering, wall light, social-room sign, accessible ramp with rails, secure-access/works mesh, roof vents and rear court-equipment lockers.
@@ -77,6 +78,9 @@ Purpose: track the building-by-building realism pass for every structure current
 - `rotunda` / Edinburgh Gardens Rotunda:
   - Rendered the climbable raised platform with lower storey vents, Tuscan-style columns, copper dome, lantern, finial, stairs, handrails, plaques and a capped service plate rather than powered lighting.
   - Source basis: OSM way `543505640` for center/footprint alignment; CMP rotunda feature description; Yarra venue page for bookable, not-wheelchair-accessible and no-power operation.
+- `north-toilets` / North public toilet block:
+  - Added a footprint-aligned toilet block with door bank, vents, public-toilet sign, gutters, accessible sign cue, wall light, roof vent, screened planting and service ladder.
+  - Source basis: OSM north-toilets footprint, Yarra Edinburgh Gardens facility/accessibility listing and CMP guidance that toilet blocks are functional facilities rather than heritage features.
 - `osm-building-1475006767` / Bowling club outbuilding:
   - Added guttering, a roller-door slat, metal service crate and hose reel to read as a small greenkeeper/plant outbuilding attached to the bowling club service edge.
   - Source basis: OSM way `1475006767` for footprint; bowling precinct context from CMP and the current mapped cluster of club support sheds.

@@ -2286,6 +2286,12 @@ export class WorldBuilder {
       this.addLocalBox(center, rotation, x, frontZ - 0.02, 0.75, 0.18, 0.1, this.materials.metal, 2.62, false);
     }
     this.addLocalBox(center, rotation, 0, frontZ - 0.02, 2.2, 0.7, 0.1, this.basicDetailMaterial("toilet-sign", 0x2e6c79), 2.7, false);
+    this.addBuildingGutter(center, rotation, 0, frontZ - 0.02, width * 0.84, 3.2);
+    this.addBuildingGutter(center, rotation, 0, depth * 0.5 + 0.04, width * 0.78, 3.2);
+    this.addLocalBox(center, rotation, -width * 0.34, frontZ - 0.035, 0.42, 0.36, 0.1, this.basicDetailMaterial("toilet-accessible-sign", 0x246ca8), 2.28, false);
+    this.addBuildingWallLight(center, rotation, width * 0.34, frontZ - 0.04, 2.38);
+    this.addBuildingRoofVent(center, rotation, width * 0.22, 0, 3.2, 0.42, 0.28);
+    this.addLocalBox(center, rotation, width * 0.54, 0, 0.1, 1.1, depth * 0.76, this.materials.hedge, 0.72);
     if (landmark.polygon) {
       const ladderLocal = this.localPointOnPolygonEdge(center, rotation, landmark.polygon, footprint.halfX * 0.78, footprint.halfZ + 0.1);
       this.addBuildingServiceLadder(center, rotation, ladderLocal.x, ladderLocal.z, 2.05, 1.2);
@@ -3362,7 +3368,11 @@ export class WorldBuilder {
     ctx.strokeStyle = "rgba(245, 184, 88, 0.82)";
     ctx.strokeRect(8, 30, 496, 64);
     ctx.fillStyle = "#ede0aa";
-    ctx.font = "600 34px system-ui, sans-serif";
+    let fontSize = 34;
+    do {
+      ctx.font = `600 ${fontSize}px system-ui, sans-serif`;
+      fontSize -= 2;
+    } while (ctx.measureText(text).width > 468 && fontSize >= 18);
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(text, 256, 64);
