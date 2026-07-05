@@ -1024,14 +1024,32 @@ export class WorldBuilder {
     }
 
     if (building.detailProfile === "bowling-club") {
+      const muralBlue = this.basicDetailMaterial("bowls-mural-blue", 0x234f88);
+      const muralMaroon = this.basicDetailMaterial("bowls-mural-maroon", 0x7b263b);
+      const muralGold = this.basicDetailMaterial("bowls-mural-gold", 0xd0a13a);
       this.addBuildingApron(center, rotation, -footprint.halfX * 0.18, frontZ + 0.82, footprint.halfX * 1.42, 1.7, 0.12);
       this.addBuildingAwning(center, rotation, -footprint.halfX * 0.18, frontZ + 0.58, footprint.halfX * 1.5, 1.35, building.height + 0.08, this.materials.timber, 0.22);
+      this.addBuildingGutter(center, rotation, -footprint.halfX * 0.18, frontZ + 0.03, footprint.halfX * 1.72, building.height);
+      this.addBuildingGutter(center, rotation, 0, rearZ - 0.03, footprint.halfX * 1.62, building.height);
       for (const x of [-0.58, -0.22, 0.14, 0.5]) {
         this.addBuildingWindow(center, rotation, x * footprint.halfX, frontZ - 0.02, 1.35, 0.86, 1.36, 0.09);
       }
+      this.addBuildingSign(center, rotation, -footprint.halfX * 0.12, frontZ + 0.04, footprint.halfX * 0.56, 0.36, 2.38, 0x223f64);
       for (const x of [-0.66, 0.66]) {
         this.addLocalBox(center, rotation, x * footprint.halfX, frontZ + 0.25, 0.12, 1.35, 0.12, this.materials.timber, 0.8);
       }
+      for (const placement of [
+        { z: -0.42, material: muralBlue },
+        { z: 0.03, material: muralMaroon },
+        { z: 0.48, material: muralBlue }
+      ]) {
+        this.addLocalBox(center, rotation, -footprint.halfX - 0.035, placement.z * footprint.halfZ, 0.07, 1.18, footprint.halfZ * 0.38, placement.material, 1.55, false);
+      }
+      this.addLocalBox(center, rotation, -footprint.halfX - 0.06, footprint.halfZ * 0.08, 0.08, 0.34, 0.32, muralGold, 2.18, false);
+      for (const x of [-0.42, 0.36]) {
+        this.addBuildingRoofVent(center, rotation, x * footprint.halfX, -footprint.halfZ * 0.22, building.height, 0.58, 0.34);
+      }
+      this.addLocalBox(center, rotation, footprint.halfX * 0.72, frontZ + 1.12, 0.8, 0.48, 0.32, this.materials.timber, 0.32);
       this.addLabel("Fitzroy Victoria Bowling Club", center, building.height + 1.45);
       return;
     }

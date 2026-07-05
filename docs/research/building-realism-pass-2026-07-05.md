@@ -60,6 +60,9 @@ Purpose: track the building-by-building realism pass for every structure current
 - `osm-building-543505638` / Freeman Street gatehouse:
   - Added a small threshold pad, front gate door, guttering, rear ticket-style window, interpretive plaque, paired sign panels, bollards and low rail so it reads as a narrow park/oval gatehouse rather than a plain block.
   - Source basis: OSM way `543505638` for the long narrow footprint; CMP hard-landscaping/buildings schedule for gatehouse significance and signage priority.
+- `osm-building-543505639` / Fitzroy Victoria Bowling Club rooms:
+  - Added front/rear gutters, a club sign, blue/maroon/gold mural panels on the side wall, roof vents and rink-side equipment storage.
+  - Source basis: OSM way `543505639` for the main clubrooms footprint; CMP bowling-club context; Yarra Fitzroy Bowls 150 Years Memorial Wall source for the Makatron mural and club-colour cues; Yarra News roof-upgrade note for zincalume/gutter emphasis.
 
 ## Implementation Notes
 
