@@ -60,6 +60,7 @@ These notes record the real-world sources and implementation decisions used to s
 - Object-placement and collision research is stored in `docs/research/object-placement-collision-2026-07-05.md`.
 - Vegetation realism research is stored in `docs/research/vegetation-realism-2026-07-05.md`.
 - Street-context research is stored in `docs/research/street-context-2026-07-05.md`.
+- Park-life and data-pipeline research is stored in `docs/research/park-life-data-pipeline-2026-07-05.md`.
 
 ## Data Notes
 

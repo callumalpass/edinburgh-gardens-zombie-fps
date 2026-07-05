@@ -8,6 +8,7 @@
     "build": "tsc --noEmit && vite build",
     "test": "vitest",
     "test:run": "vitest run",
+    "research:check": "node scripts/validate-research-assets.mjs",
     "preview:e2e": "vite preview --host 127.0.0.1 --port 5481 --strictPort",
     "test:e2e": "node scripts/run-e2e.mjs"
   },

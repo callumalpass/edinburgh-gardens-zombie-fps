@@ -239,6 +239,18 @@ describe("map geometry", () => {
     expect(obstacleIds.has("north-table-tennis")).toBe(false);
   });
 
+  it("keeps park-life details sourceable and non-colliding", () => {
+    const level = createLevelData();
+    const detailKinds = new Set(level.parkLifeDetails.map((detail) => detail.kind));
+    for (const kind of ["dog-sign", "picnic-blanket", "notice-board", "casual-bike", "training-cones"] as const) {
+      expect(detailKinds.has(kind)).toBe(true);
+    }
+    expect(level.parkLifeDetails.length).toBeGreaterThanOrEqual(9);
+    expect(level.parkLifeDetails.every((detail) => detail.source && pointInPolygon(detail.position, level.boundary))).toBe(true);
+    const obstacleIds = new Set(level.obstacles.map((obstacle) => obstacle.id));
+    expect(level.parkLifeDetails.some((detail) => obstacleIds.has(detail.id))).toBe(false);
+  });
+
   it("uses a fitted grandstand obstacle so nearby open lawn remains accessible", () => {
     const level = createLevelData();
     const grandstand = level.obstacles.find((obstacle) => obstacle.id === "grandstand");

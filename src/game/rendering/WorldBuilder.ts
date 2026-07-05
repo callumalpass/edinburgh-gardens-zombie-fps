@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { distance, geoToWorld, makeCircle, pointInPolygon, polygonCentroid } from "../geo";
 import { AUSTRALIAN_RULES_BEHIND_POST_HEIGHT_METRES, footballPostLocalOffsets } from "../sportsFixtures";
-import type { HardscapeLine, LevelData, LevelPath, Landmark, MappedBuilding, MappedTree, RandomSource, SportsFixture, TreeProfile, Vec2 } from "../types";
+import type { HardscapeLine, LevelData, LevelPath, Landmark, MappedBuilding, MappedTree, ParkLifeDetail, RandomSource, SportsFixture, TreeProfile, Vec2 } from "../types";
 
 const COLLISION_Y = 0.04;
 const TERRAIN_GRID_STEP = 7.5;
@@ -85,6 +85,7 @@ export class WorldBuilder {
     this.addMappedBuildings();
     this.addMappedFences();
     this.addAmenities();
+    this.addParkLifeDetails();
     this.addPathLights();
     this.addParkEntranceDetails();
     this.addBoundaryFence();
@@ -1491,6 +1492,123 @@ export class WorldBuilder {
         this.addToiletSign(amenity.position, angle);
         this.addAmenityHalo(amenity.position, 0x61a8d3, 0.52);
       }
+    }
+  }
+
+  private addParkLifeDetails(): void {
+    for (const detail of this.level.parkLifeDetails) {
+      if (detail.kind === "dog-sign") {
+        this.addDogAreaSign(detail);
+      } else if (detail.kind === "picnic-blanket") {
+        this.addPicnicBlanket(detail);
+      } else if (detail.kind === "notice-board") {
+        this.addNoticeBoard(detail);
+      } else if (detail.kind === "casual-bike") {
+        this.addCasualBike(detail);
+      } else {
+        this.addTrainingCones(detail);
+      }
+    }
+  }
+
+  private addDogAreaSign(detail: ParkLifeDetail): void {
+    const group = new THREE.Group();
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.055, 1.45, 8), this.materials.metal);
+    post.position.y = 0.72;
+    post.castShadow = true;
+    group.add(post);
+    const sign = new THREE.Mesh(new THREE.BoxGeometry(0.82, 0.5, 0.06), new THREE.MeshStandardMaterial({ color: 0x315c45, roughness: 0.62 }));
+    sign.position.y = 1.32;
+    sign.castShadow = true;
+    group.add(sign);
+    const mark = new THREE.Mesh(new THREE.CircleGeometry(0.12, 14), new THREE.MeshBasicMaterial({ color: 0xe7e2cb }));
+    mark.position.set(-0.18, 1.32, -0.034);
+    group.add(mark);
+    group.position.set(detail.position.x, this.groundY(detail.position), detail.position.z);
+    group.rotation.y = detail.angle;
+    this.scene.add(group);
+  }
+
+  private addPicnicBlanket(detail: ParkLifeDetail): void {
+    const blanketMaterial = new THREE.MeshStandardMaterial({ color: 0x9f5347, roughness: 0.88 });
+    const trimMaterial = new THREE.MeshBasicMaterial({ color: 0xe4d4a4, transparent: true, opacity: 0.82 });
+    const blanket = this.createTerrainRect(detail.position, detail.angle, 3.25, 2.15, 0.092, 0.018, blanketMaterial);
+    blanket.receiveShadow = true;
+    this.scene.add(blanket);
+    for (const offset of [-0.72, 0, 0.72]) {
+      const stripeCenter = this.localPoint(detail.position, detail.angle, offset, 0);
+      const stripe = this.createTerrainRect(stripeCenter, detail.angle + Math.PI / 2, 2.0, 0.07, 0.112, 0.012, trimMaterial);
+      this.scene.add(stripe);
+    }
+    this.addLocalBox(detail.position, detail.angle, 1.22, -0.58, 0.42, 0.32, 0.36, this.materials.timber, 0.22);
+    this.addLocalCylinder(detail.position, detail.angle, -1.12, 0.62, 0.16, 0.18, 0.12, this.materials.line);
+  }
+
+  private addNoticeBoard(detail: ParkLifeDetail): void {
+    const group = new THREE.Group();
+    const frame = new THREE.MeshStandardMaterial({ color: 0x4c3926, roughness: 0.72 });
+    const board = new THREE.MeshStandardMaterial({ color: 0x244734, roughness: 0.66 });
+    for (const x of [-0.62, 0.62]) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.75, 0.08), frame);
+      post.position.set(x, 0.88, 0);
+      post.castShadow = true;
+      group.add(post);
+    }
+    const panel = new THREE.Mesh(new THREE.BoxGeometry(1.55, 0.92, 0.08), board);
+    panel.position.y = 1.36;
+    panel.castShadow = true;
+    group.add(panel);
+    for (const y of [1.22, 1.42, 1.58]) {
+      const notice = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.07, 0.012), new THREE.MeshBasicMaterial({ color: 0xe6d7a8, transparent: true, opacity: 0.86 }));
+      notice.position.set(0, y, -0.048);
+      group.add(notice);
+    }
+    group.position.set(detail.position.x, this.groundY(detail.position), detail.position.z);
+    group.rotation.y = detail.angle;
+    this.scene.add(group);
+  }
+
+  private addCasualBike(detail: ParkLifeDetail): void {
+    const group = new THREE.Group();
+    const frameMaterial = new THREE.MeshStandardMaterial({ color: 0x263734, metalness: 0.35, roughness: 0.42 });
+    const wheelMaterial = new THREE.MeshStandardMaterial({ color: 0x1b211f, roughness: 0.56 });
+    for (const x of [-0.62, 0.62]) {
+      const wheel = new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.025, 8, 20), wheelMaterial);
+      wheel.position.set(x, 0.42, 0);
+      wheel.rotation.y = Math.PI / 2;
+      wheel.castShadow = true;
+      group.add(wheel);
+    }
+    const topTube = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.055, 0.055), frameMaterial);
+    topTube.position.y = 0.74;
+    topTube.castShadow = true;
+    group.add(topTube);
+    for (const x of [-0.28, 0.28]) {
+      const fork = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.58, 0.055), frameMaterial);
+      fork.position.set(x, 0.62, 0);
+      fork.rotation.z = x < 0 ? -0.34 : 0.34;
+      fork.castShadow = true;
+      group.add(fork);
+    }
+    const handlebar = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.05, 0.05), frameMaterial);
+    handlebar.position.set(0.72, 0.92, 0);
+    handlebar.rotation.z = 0.12;
+    group.add(handlebar);
+    group.position.set(detail.position.x, this.groundY(detail.position), detail.position.z);
+    group.rotation.y = detail.angle;
+    this.scene.add(group);
+  }
+
+  private addTrainingCones(detail: ParkLifeDetail): void {
+    const coneMaterial = new THREE.MeshStandardMaterial({ color: 0xd6632e, roughness: 0.58 });
+    for (let index = 0; index < 6; index += 1) {
+      const localX = (index - 2.5) * 0.82;
+      const localZ = Math.sin(index * 1.7) * 0.32;
+      const point = this.localPoint(detail.position, detail.angle, localX, localZ);
+      const cone = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.44, 8), coneMaterial);
+      cone.position.set(point.x, this.groundY(point) + 0.22, point.z);
+      cone.castShadow = true;
+      this.scene.add(cone);
     }
   }
 

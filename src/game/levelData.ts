@@ -29,6 +29,7 @@ import type {
   MappedBuilding,
   MappedFence,
   MappedTree,
+  ParkLifeDetail,
   PolygonObstacle,
   SignificantTreePoint,
   SportsFixture,
@@ -81,6 +82,7 @@ export const RESEARCH_NOTES = [
   "Football posts, basketball hoops and solid tree trunks now share researched placement data with collision obstacles so the visuals and playable blockers stay aligned.",
   "Tree rendering now uses a single mapped-tree data model with species/profile inference from Yarra significant trees, OSM tree points and CMP heritage avenue context.",
   "Street edges now use a bounded OSM road query for Alfred Crescent, Freeman Street, Brunswick Street and St Georges Road, including trunk-road tram cues.",
+  "Small park-life details are stored as sourceable level data so picnic, dog-area, cycling and sports-use cues remain separate from collision and amenity loot data.",
   "See docs/edinburgh-gardens-research.md for source URLs, query notes, data licensing notes and implementation decisions."
 ];
 
@@ -2094,6 +2096,88 @@ export function createLevelData(): LevelData {
     { id: "south-picnic-table-2", label: "South picnic table", kind: "picnic_table", position: geoToWorld(g(-37.789125, 144.983925)) }
   ];
   const amenities = [...mappedAmenities, ...featureAmenities].filter((amenity) => pointInPolygon(amenity.position, boundary));
+  const parkLifeDetails = ([
+    {
+      id: "north-lawn-dog-sign",
+      label: "North open lawn dog area sign",
+      kind: "dog-sign",
+      position: geoToWorld(g(-37.785900, 144.984235)),
+      angle: 0.62,
+      source: "Yarra Edinburgh Gardens facilities list: dog areas; OSM north open lawn geometry"
+    },
+    {
+      id: "alfred-lawn-dog-sign",
+      label: "Alfred Crescent lawn dog area sign",
+      kind: "dog-sign",
+      position: geoToWorld(g(-37.788010, 144.984745)),
+      angle: -0.42,
+      source: "Yarra Edinburgh Gardens facilities list: dog areas; OSM Alfred Crescent lawn geometry"
+    },
+    {
+      id: "south-picnic-blanket-1",
+      label: "South picnic lawn blanket",
+      kind: "picnic-blanket",
+      position: geoToWorld(g(-37.788870, 144.983935)),
+      angle: -0.22,
+      source: "Yarra Edinburgh Gardens facilities list: picnic areas; mapped south picnic lawn"
+    },
+    {
+      id: "south-picnic-blanket-2",
+      label: "South picnic lawn blanket",
+      kind: "picnic-blanket",
+      position: geoToWorld(g(-37.789035, 144.984085)),
+      angle: 0.36,
+      source: "Yarra Edinburgh Gardens facilities list: picnic areas; mapped south picnic lawn"
+    },
+    {
+      id: "north-picnic-blanket",
+      label: "North open lawn picnic blanket",
+      kind: "picnic-blanket",
+      position: geoToWorld(g(-37.786155, 144.983785)),
+      angle: 0.18,
+      source: "Yarra northern precinct consultation: picnic and BBQ activity context"
+    },
+    {
+      id: "rail-trail-casual-bike",
+      label: "Bike beside Inner Circle Rail Trail",
+      kind: "casual-bike",
+      position: geoToWorld(g(-37.787245, 144.983020)),
+      angle: -0.52,
+      source: "Yarra access context: Capital City Trail and foot/bike access"
+    },
+    {
+      id: "brunswick-tram-bike",
+      label: "Bike near Brunswick Street approach",
+      kind: "casual-bike",
+      position: geoToWorld(g(-37.787185, 144.980770)),
+      angle: 0.92,
+      source: "Yarra access context: Brunswick Street trams and cycling access"
+    },
+    {
+      id: "freeman-gate-notice-board",
+      label: "Freeman Street oval notice board",
+      kind: "notice-board",
+      position: geoToWorld(g(-37.789585, 144.980220)),
+      angle: -0.22,
+      source: "CMP/Fitzroy history context: Freeman Street gatehouse and Brunswick Street Oval entries"
+    },
+    {
+      id: "alfred-crescent-notice-board",
+      label: "Alfred Crescent park notice board",
+      kind: "notice-board",
+      position: geoToWorld(g(-37.787300, 144.985510)),
+      angle: 2.55,
+      source: "Yarra Edinburgh Gardens access context; Alfred Crescent entrance"
+    },
+    {
+      id: "oval-training-cones",
+      label: "Oval training cones",
+      kind: "training-cones",
+      position: geoToWorld(g(-37.789010, 144.981320)),
+      angle: 0.12,
+      source: "Yarra Edinburgh Gardens facilities list: sports oval; W.T. Peterson Oval map geometry"
+    }
+  ] satisfies ParkLifeDetail[]).filter((detail) => pointInPolygon(detail.position, boundary));
   const significantTrees: SignificantTreePoint[] = YARRA_SIGNIFICANT_TREE_GEO.map((tree) => ({
     id: tree.id,
     commonName: tree.commonName,
@@ -2456,6 +2540,7 @@ export function createLevelData(): LevelData {
       }
     ],
     amenities,
+    parkLifeDetails,
     weaponSpawns: [
       { id: "north-bbq-machete", label: "Machete near the north BBQ shelter", weaponId: "machete", position: northBbq },
       { id: "grandstand-shotgun", label: "Shotgun under the stand", weaponId: "shotgun", position: grandstandCenter },

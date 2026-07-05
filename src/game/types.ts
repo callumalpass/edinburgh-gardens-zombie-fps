@@ -194,6 +194,15 @@ export interface AmenityPoint {
   position: Vec2;
 }
 
+export interface ParkLifeDetail {
+  id: string;
+  label: string;
+  kind: "dog-sign" | "picnic-blanket" | "notice-board" | "casual-bike" | "training-cones";
+  position: Vec2;
+  angle: number;
+  source?: string;
+}
+
 export interface WeaponSpawn {
   id: string;
   label: string;
@@ -224,6 +233,7 @@ export interface LevelData {
   upgradeStations: UpgradeStation[];
   interactables: InteractableFixture[];
   amenities: AmenityPoint[];
+  parkLifeDetails: ParkLifeDetail[];
   weaponSpawns: WeaponSpawn[];
 }
 
