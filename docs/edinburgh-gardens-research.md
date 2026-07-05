@@ -17,7 +17,7 @@ These notes record the real-world sources and implementation decisions used to s
   - Used on 2026-07-05 as the primary non-significant tree source after the OSM tree layer proved sparse around the Queen Victoria plinth and eastern/northern lawns.
   - The source is aerial-photo/LiDAR-derived individual tree points with canopy radius and height fields.
 - OpenStreetMap feature ways fetched individually through the OSM API:
-  - `22673070`, `22768137`, `75488632`, `22760904`, `22760905`, `210387722`, `1340465893`, `1340465894`, `1361307046`, `1361307049` path/service connectors added after a bounded path inventory.
+  - `22673070`, `22768137`, `22760900`, `22760908`, `75488632`, `22760904`, `22760905`, `210387722`, `403753751`, `403753754`, `22760906`, `715802681` to `715802690`, `1340465893`, `1340465894`, `1361307046`, `1361307049` path/service/step connectors added after bounded path inventories.
   - `403753786` Kevin Murray Stand
   - `403753784` Fitzroy Tennis Club rooms
   - `543505702` Emely Baker Centre
@@ -28,6 +28,12 @@ These notes record the real-world sources and implementation decisions used to s
   - `715802679` tennis-side storage tank
   - `715802680` mapped fence segment
   - Node `249041533` cricket nets
+- Landezine, Edinburgh Gardens Raingarden by GHD: https://landezine.com/edinburgh-gardens-raingarden-by-ghd-pty-ltd/
+  - Used for the raingarden's four-terrace treatment-garden design, zig-zag low-flow steel channel, 700 sqm filter area, 200 KL underground storage and stormwater-harvesting role.
+- Atlan StormTech, StormTech Raingarden at Edinburgh Gardens: https://atlanstormwater.com/au/stormtech-raingarden-at-edinburgh-gardens-fitzroy-victoria/
+  - Used to cross-check the GHD/StormTech stormwater harvesting context and installation timeframe.
+- City of Yarra WSUD Guidelines: https://www.yarracity.vic.gov.au/sites/default/files/2024-04/73_water_sensitive_urban_design_guidelines_city_of_yarra_as_amended_from_time_to_time.pdf
+  - Used as municipal context for major open-space raingardens and the Edinburgh Gardens stormwater-harvesting example.
 - Vicmap Elevation REST API metadata: https://discover.data.vic.gov.au/dataset/vicmap-elevation-rest-api
   - Used to identify the open metro 1-5 m contour and ground-surface point FeatureServer.
 - Vicmap Elevation metro 1-5 m FeatureServer: https://services-ap1.arcgis.com/P744lA0wf4LlBZ84/ArcGIS/rest/services/Vicmap_Elevation_METRO_1_to_5_metre/FeatureServer
@@ -66,6 +72,7 @@ These notes record the real-world sources and implementation decisions used to s
 - Paths, amenities, mapped buildings, trees, fixtures, memorials, entrances and pickups are placed relative to interpolated terrain height.
 - Existing OSM-derived paths, amenities, sports facilities, memorials and park landmarks remain in `src/game/levelData.ts`; broad non-significant tree placement now comes primarily from Vicmap Vegetation Tree Urban.
 - The full-object placement audit added the OSM raingarden reservoir, tennis-side storage tank and cricket-nets cue, then aligned playground, skate and basketball climb/blocker metadata with visible objects.
+- The path and raingarden audit added remaining OSM-mapped stand steps, short path connectors and oval links, then remodeled the skate-precinct stormwater feature as a terraced raingarden rather than an open water patch.
 - Tree placement refresh research is stored in `docs/research/tree-placement-refresh-2026-07-05.md`.
 - Detailed OSM path/service research is stored in `docs/research/osm-path-service-inventory-2026-07-05.md`.
 - Hardscape and terrain-edge research is stored in `docs/research/hardscape-terrain-edges-2026-07-05.md`.
@@ -82,6 +89,7 @@ These notes record the real-world sources and implementation decisions used to s
 - Tree source refresh research is stored in `docs/research/tree-source-refresh-2026-07-05.md`.
 - Human-use traces research is stored in `docs/research/human-use-traces-2026-07-05.md`.
 - Full object placement audit research is stored in `docs/research/full-object-placement-audit-2026-07-05.md`.
+- Path and raingarden audit research is stored in `docs/research/path-and-raingarden-audit-2026-07-05.md`.
 - Building realism pass research is stored in `docs/research/building-realism-pass-2026-07-05.md`.
 - Local raw research asset guidance is stored in `docs/research/raw-assets.md`.
 - Research/data pipeline automation is stored in `docs/research/data-pipeline-automation-2026-07-05.md` and `docs/research/research-manifest.json`.

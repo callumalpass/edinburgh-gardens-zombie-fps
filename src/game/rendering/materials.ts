@@ -5,9 +5,9 @@ import type { GameMaterials } from "./WorldBuilder";
 export function createGameMaterials(rng: RandomSource): GameMaterials {
   const grass = new THREE.MeshStandardMaterial({
     map: createCanvasTexture("grass", rng),
-    color: 0x6f7656,
+    color: 0x666e50,
     emissive: 0x15170f,
-    emissiveIntensity: 0.07,
+    emissiveIntensity: 0.055,
     roughness: 0.94
   });
   const grassBlade = new THREE.MeshStandardMaterial({
@@ -21,7 +21,8 @@ export function createGameMaterials(rng: RandomSource): GameMaterials {
   const path = new THREE.MeshStandardMaterial({
     map: createCanvasTexture("path", rng),
     color: 0x8c8069,
-    roughness: 0.93
+    metalness: 0.02,
+    roughness: 0.78
   });
   const gravel = new THREE.MeshStandardMaterial({
     map: createCanvasTexture("gravel", rng),
@@ -30,13 +31,15 @@ export function createGameMaterials(rng: RandomSource): GameMaterials {
   });
   const asphalt = new THREE.MeshStandardMaterial({
     map: createCanvasTexture("asphalt", rng),
-    color: 0x30332f,
-    roughness: 0.84
+    color: 0x2c302d,
+    metalness: 0.04,
+    roughness: 0.56
   });
   const concrete = new THREE.MeshStandardMaterial({
     map: createCanvasTexture("concrete", rng),
-    color: 0x9e9b8d,
-    roughness: 0.91
+    color: 0x908e82,
+    metalness: 0.015,
+    roughness: 0.74
   });
   const court = new THREE.MeshStandardMaterial({ color: 0x396f55, roughness: 0.72 });
   const rubber = new THREE.MeshStandardMaterial({
@@ -49,15 +52,15 @@ export function createGameMaterials(rng: RandomSource): GameMaterials {
     color: 0x6a4c35,
     roughness: 0.96
   });
-  const dirt = new THREE.MeshStandardMaterial({ color: 0x655741, roughness: 0.98, transparent: true, opacity: 0.58 });
+  const dirt = new THREE.MeshStandardMaterial({ color: 0x594d3d, roughness: 0.96, transparent: true, opacity: 0.6 });
   const leafLitter = new THREE.MeshStandardMaterial({ color: 0x5b5138, roughness: 0.98, transparent: true, opacity: 0.5 });
   const wornGrass = new THREE.MeshStandardMaterial({ color: 0x6f7056, roughness: 0.98, transparent: true, opacity: 0.42 });
   const puddle = new THREE.MeshStandardMaterial({
-    color: 0x1e302d,
-    metalness: 0.12,
-    roughness: 0.18,
+    color: 0x23302d,
+    metalness: 0.18,
+    roughness: 0.09,
     transparent: true,
-    opacity: 0.32,
+    opacity: 0.38,
     depthWrite: false
   });
   const hedge = new THREE.MeshStandardMaterial({ color: 0x385a32, roughness: 0.9 });
@@ -101,11 +104,11 @@ export function createGameMaterials(rng: RandomSource): GameMaterials {
 
 function createCanvasTexture(kind: "grass" | "path" | "gravel" | "asphalt" | "concrete" | "rubber" | "mulch" | "basalt", rng: RandomSource): THREE.CanvasTexture {
   const specs = {
-    grass: { base: "#687252", fleck: [68, 77, 49], repeat: 34, count: 1050 },
+    grass: { base: "#626b4f", fleck: [69, 74, 50], repeat: 34, count: 1050 },
     path: { base: "#817763", fleck: [72, 66, 54], repeat: 11, count: 900 },
     gravel: { base: "#7d735e", fleck: [80, 73, 59], repeat: 14, count: 1250 },
-    asphalt: { base: "#2f332f", fleck: [74, 78, 72], repeat: 18, count: 1100 },
-    concrete: { base: "#979486", fleck: [107, 106, 97], repeat: 10, count: 850 },
+    asphalt: { base: "#282d2b", fleck: [84, 86, 78], repeat: 18, count: 1100 },
+    concrete: { base: "#8d8b80", fleck: [113, 111, 101], repeat: 10, count: 850 },
     rubber: { base: "#704b41", fleck: [54, 40, 36], repeat: 12, count: 1100 },
     mulch: { base: "#644833", fleck: [42, 29, 21], repeat: 13, count: 1000 },
     basalt: { base: "#4e5a56", fleck: [28, 35, 34], repeat: 7, count: 1250 }

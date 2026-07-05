@@ -68,6 +68,21 @@
       "url": "https://yoursayyarra.com.au/eg-north"
     },
     {
+      "id": "landezine-edinburgh-gardens-raingarden",
+      "label": "Landezine Edinburgh Gardens Raingarden by GHD",
+      "url": "https://landezine.com/edinburgh-gardens-raingarden-by-ghd-pty-ltd/"
+    },
+    {
+      "id": "atlan-stormtech-edinburgh-gardens-raingarden",
+      "label": "Atlan StormTech raingarden at Edinburgh Gardens",
+      "url": "https://atlanstormwater.com/au/stormtech-raingarden-at-edinburgh-gardens-fitzroy-victoria/"
+    },
+    {
+      "id": "yarra-wsud-guidelines",
+      "label": "City of Yarra water sensitive urban design guidelines",
+      "url": "https://www.yarracity.vic.gov.au/sites/default/files/2024-04/73_water_sensitive_urban_design_guidelines_city_of_yarra_as_amended_from_time_to_time.pdf"
+    },
+    {
       "id": "yarra-significant-trees-data",
       "label": "City of Yarra significant trees dataset metadata",
       "url": "https://data.gov.au/data/dataset/yarra-significant-trees"
@@ -160,6 +175,9 @@
         "vicmap-elevation-1m-dem",
         "edinburgh-gardens-3068-archive",
         "yarra-northern-precinct",
+        "landezine-edinburgh-gardens-raingarden",
+        "atlan-stormtech-edinburgh-gardens-raingarden",
+        "yarra-wsud-guidelines",
         "yarra-significant-trees-data",
         "yarra-brunswick-street-oval",
         "brunswick-tree-protection-plan"
@@ -305,6 +323,17 @@
         "yarra-edinburgh-gardens",
         "yarra-northern-precinct",
         "edinburgh-gardens-cmp"
+      ]
+    },
+    {
+      "id": "path-and-raingarden-audit",
+      "path": "docs/research/path-and-raingarden-audit-2026-07-05.md",
+      "sourceIds": [
+        "osm-map-bbox",
+        "osm-way-api",
+        "landezine-edinburgh-gardens-raingarden",
+        "atlan-stormtech-edinburgh-gardens-raingarden",
+        "yarra-wsud-guidelines"
       ]
     },
     {

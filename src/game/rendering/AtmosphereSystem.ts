@@ -22,6 +22,7 @@ export class AtmosphereSystem {
   private readonly rainPositions: Float32Array;
   private readonly rainGeometry: THREE.BufferGeometry;
   private readonly cloudLayers: THREE.Mesh[] = [];
+  private readonly groundMistLayers: THREE.Mesh[] = [];
   private readonly lightning = new THREE.PointLight(0x9fb8ff, 0, 520);
   private nextLightningAt = 9.5;
   private lightningTimer = 0;
@@ -42,6 +43,7 @@ export class AtmosphereSystem {
     this.addStars();
     this.addMoon();
     this.addCloudLayers();
+    this.addGroundMistLayers();
 
     const rainCount = smokeMode ? 150 : 420;
     this.rainPositions = new Float32Array(rainCount * 2 * 3);
@@ -60,6 +62,11 @@ export class AtmosphereSystem {
       layer.rotation.z += dt * (index === 0 ? 0.003 : -0.0018);
       layer.position.x = Math.sin(now * 0.018 + index) * 26;
       layer.position.z = Math.cos(now * 0.014 + index * 1.7) * 22;
+    });
+    this.groundMistLayers.forEach((layer, index) => {
+      layer.rotation.z += dt * (index === 0 ? 0.0022 : -0.0015);
+      layer.position.x = Math.sin(now * 0.022 + index * 1.4) * 14;
+      layer.position.z = Math.cos(now * 0.017 + index * 1.9) * 16;
     });
 
     if (this.lightningTimer > 0) {
@@ -199,6 +206,37 @@ export class AtmosphereSystem {
       mesh.renderOrder = -20;
       this.cloudLayers.push(mesh);
       this.root.add(mesh);
+    }
+  }
+
+  private addGroundMistLayers(): void {
+    const textureA = this.createCloudTexture(0.3);
+    const textureB = this.createCloudTexture(0.22);
+    const layers = [
+      { texture: textureA, y: 0.42, scale: 230, opacity: this.smokeMode ? 0.08 : 0.13, color: 0x9a9987 },
+      { texture: textureB, y: 1.05, scale: 175, opacity: this.smokeMode ? 0.055 : 0.09, color: 0x747b70 }
+    ];
+
+    for (const layer of layers) {
+      const mist = new THREE.Mesh(
+        new THREE.PlaneGeometry(1, 1),
+        new THREE.MeshBasicMaterial({
+          map: layer.texture,
+          color: layer.color,
+          transparent: true,
+          opacity: layer.opacity,
+          depthWrite: false,
+          fog: false
+        })
+      );
+      mist.name = "Low wet-ground mist";
+      mist.rotation.x = -Math.PI / 2;
+      mist.position.y = layer.y;
+      mist.scale.set(layer.scale, layer.scale, 1);
+      mist.frustumCulled = false;
+      mist.renderOrder = 4;
+      this.groundMistLayers.push(mist);
+      this.root.add(mist);
     }
   }
 

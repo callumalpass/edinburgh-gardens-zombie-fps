@@ -99,6 +99,7 @@ export class WorldBuilder {
     this.addPathSurfacePatches();
     this.addHardscapeLines();
     this.addDampGroundDetails();
+    this.addWetPathSheen();
     this.addGrassClumps();
     this.addRailTrailRemnants();
     this.addLandmarks();
@@ -282,6 +283,52 @@ export class WorldBuilder {
     });
   }
 
+  private addWetPathSheen(): void {
+    const sheenMaterial = new THREE.MeshStandardMaterial({
+      color: 0xaeb3a5,
+      metalness: 0.08,
+      roughness: 0.16,
+      transparent: true,
+      opacity: 0.16,
+      depthWrite: false
+    });
+    let placed = 0;
+
+    for (const path of this.level.paths.filter((candidate) => candidate.kind !== "rail")) {
+      if (placed >= 58) break;
+      for (let i = 0; i < path.points.length - 1; i += 1) {
+        if (placed >= 58) break;
+        const a = path.points[i];
+        const b = path.points[i + 1];
+        const segmentLength = distance(a, b);
+        if (segmentLength < 9) continue;
+        const angle = Math.atan2(b.z - a.z, b.x - a.x);
+        const count = Math.min(2, Math.max(1, Math.floor(segmentLength / 72)));
+
+        for (let step = 0; step < count; step += 1) {
+          const seedX = (a.x + b.x) * 0.5 + step * 13.7;
+          const seedZ = (a.z + b.z) * 0.5 - step * 9.1;
+          if (this.stableNoise(seedX, seedZ, 31) < 0.46) continue;
+          const t = (step + 1) / (count + 1);
+          const point = { x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t };
+          const offset = (this.stableNoise(seedX, seedZ, 32) - 0.5) * path.width * 0.42;
+          const center = {
+            x: point.x + Math.cos(angle + Math.PI / 2) * offset,
+            z: point.z + Math.sin(angle + Math.PI / 2) * offset
+          };
+          if (!pointInPolygon(center, this.level.boundary)) continue;
+          const length = THREE.MathUtils.lerp(3.6, Math.min(13, segmentLength * 0.32), this.stableNoise(seedX, seedZ, 33));
+          const width = THREE.MathUtils.lerp(path.width * 0.12, path.width * 0.34, this.stableNoise(seedX, seedZ, 34));
+          const mesh = this.createTerrainRect(center, angle + this.stableNoise(seedX, seedZ, 35) * 0.16 - 0.08, length, width, 0.172, 0.006, sheenMaterial);
+          mesh.receiveShadow = false;
+          this.scene.add(mesh);
+          placed += 1;
+          if (placed >= 58) break;
+        }
+      }
+    }
+  }
+
   private addGrassClumps(): void {
     this.renderedGrassClumpCount = 0;
     const minX = Math.min(...this.level.boundary.map((point) => point.x)) + 2;
@@ -382,12 +429,14 @@ export class WorldBuilder {
       const material =
         path.surface === "concrete"
           ? this.materials.concrete
+          : path.kind === "steps"
+          ? this.materials.concrete
           : path.kind === "rail" || path.kind === "cycleway" || path.kind === "service" || path.surface === "asphalt"
           ? this.materials.asphalt
           : path.kind === "perimeter" || path.surface === "gravel"
             ? this.materials.gravel
             : this.materials.path;
-      const shoulderWidth = path.width + (path.kind === "rail" ? 2.1 : path.kind === "cycleway" ? 1.45 : path.kind === "service" ? 1.2 : 0.95);
+      const shoulderWidth = path.width + (path.kind === "steps" ? 0.36 : path.kind === "rail" ? 2.1 : path.kind === "cycleway" ? 1.45 : path.kind === "service" ? 1.2 : 0.95);
       for (let i = 0; i < path.points.length - 1; i += 1) {
         const a = path.points[i];
         const b = path.points[i + 1];
@@ -455,6 +504,26 @@ export class WorldBuilder {
     if (path.kind === "cycleway") {
       const dashMaterial = new THREE.MeshBasicMaterial({ color: 0xe4dfc5, transparent: true, opacity: 0.54 });
       this.addDashedPathLine(path.points, 0, 3.2, 4.7, 0.12, dashMaterial);
+    }
+
+    if (path.kind === "steps") {
+      const treadMaterial = new THREE.MeshBasicMaterial({ color: 0x8e897e, transparent: true, opacity: 0.62 });
+      for (let i = 0; i < path.points.length - 1; i += 1) {
+        const a = path.points[i];
+        const b = path.points[i + 1];
+        const segmentLength = distance(a, b);
+        if (segmentLength < 0.3) continue;
+        const dx = b.x - a.x;
+        const dz = b.z - a.z;
+        const angle = Math.atan2(dz, dx);
+        const count = Math.max(1, Math.floor(segmentLength / 0.55));
+        for (let step = 1; step <= count; step += 1) {
+          const t = step / (count + 1);
+          const point = { x: a.x + dx * t, z: a.z + dz * t };
+          const mesh = this.createTerrainRect(point, angle + Math.PI / 2, path.width * 0.82, 0.035, 0.142, 0.012, treadMaterial);
+          this.scene.add(mesh);
+        }
+      }
     }
   }
 
@@ -644,8 +713,7 @@ export class WorldBuilder {
   private addGardenZone(landmark: Landmark): void {
     if (!landmark.polygon) return;
     if (landmark.id === "raingarden-reservoir") {
-      this.addFlatPolygon(landmark.polygon, this.materials.puddle, 0.072, 0.42);
-      this.addFeatureOutline(landmark.polygon, 0x6f9288, 0.5);
+      this.addRaingarden(landmark.polygon);
       return;
     }
     this.addFlatPolygon(landmark.polygon, this.materials.wornGrass, 0.064, landmark.id === "north-activity-precinct" ? 0.2 : 0.32);
@@ -656,6 +724,112 @@ export class WorldBuilder {
     if (landmark.id === "north-activity-precinct") {
       this.addActivityPrecinctDetails(landmark.polygon);
     }
+  }
+
+  private addRaingarden(polygon: Vec2[]): void {
+    const footprint = this.fitBoxFromPolygon(polygon, 1.8, 1.35);
+    const center = footprint.center;
+    const rotation = -footprint.angle;
+    const terraceWidth = Math.max(4.5, footprint.halfX * 1.72);
+    const terraceDepth = Math.max(1.2, footprint.halfZ * 0.32);
+    const plantedDepth = Math.max(6, footprint.halfZ * 1.55);
+    const startZ = -plantedDepth * 0.5 + terraceDepth * 0.5;
+
+    const base = this.createTerrainRect(center, rotation, terraceWidth + 1.2, plantedDepth + 1.1, 0.066, 0.028, this.materials.leafLitter);
+    base.receiveShadow = true;
+    this.scene.add(base);
+    this.addFeatureOutline(polygon, 0x7fa08c, 0.5);
+
+    for (let terrace = 0; terrace < 4; terrace += 1) {
+      const localZ = startZ + terrace * (plantedDepth / 4);
+      const material = terrace % 2 === 0 ? this.materials.mulch : this.materials.wornGrass;
+      this.addLocalBox(center, rotation, 0, localZ, terraceWidth, 0.04, terraceDepth, material, 0.08, false);
+      if (terrace < 3) {
+        this.addLocalBox(center, rotation, 0, localZ + terraceDepth * 0.58, terraceWidth * 0.94, 0.18, 0.13, this.materials.basalt, 0.15);
+      }
+    }
+
+    const channelLocal: Vec2[] = [
+      { x: -footprint.halfX * 0.62, z: -plantedDepth * 0.42 },
+      { x: footprint.halfX * 0.54, z: -plantedDepth * 0.25 },
+      { x: -footprint.halfX * 0.5, z: -plantedDepth * 0.07 },
+      { x: footprint.halfX * 0.52, z: plantedDepth * 0.12 },
+      { x: -footprint.halfX * 0.36, z: plantedDepth * 0.29 },
+      { x: footprint.halfX * 0.58, z: plantedDepth * 0.43 }
+    ];
+    this.addRaingardenLowFlowChannel(center, rotation, channelLocal);
+
+    const inlet = channelLocal[0];
+    const outlet = channelLocal[channelLocal.length - 1];
+    this.addLocalCylinder(center, rotation, inlet.x - 0.55, inlet.z - 0.25, 0.52, 0.58, 0.09, this.materials.basalt);
+    this.addLocalCylinder(center, rotation, inlet.x - 0.55, inlet.z - 0.25, 0.35, 0.35, 0.045, this.materials.metal, 0.09);
+    this.addLocalCylinder(center, rotation, outlet.x + 0.4, outlet.z + 0.25, 0.48, 0.52, 0.08, this.materials.concrete);
+    this.addLocalCylinder(center, rotation, outlet.x + 0.4, outlet.z + 0.25, 0.28, 0.28, 0.04, this.materials.metal, 0.08);
+    this.addLocalBox(center, rotation, 0, plantedDepth * 0.49, terraceWidth * 0.62, 0.035, 0.32, this.materials.concrete, 0.105, false);
+    this.addRaingardenPlanting(center, rotation, footprint.halfX, plantedDepth, polygon);
+  }
+
+  private addRaingardenLowFlowChannel(center: Vec2, rotation: number, localPoints: Vec2[]): void {
+    for (let i = 0; i < localPoints.length - 1; i += 1) {
+      const a = this.localPoint(center, rotation, localPoints[i].x, localPoints[i].z);
+      const b = this.localPoint(center, rotation, localPoints[i + 1].x, localPoints[i + 1].z);
+      const segmentLength = distance(a, b);
+      if (segmentLength < 0.3) continue;
+      const angle = Math.atan2(b.z - a.z, b.x - a.x);
+      const segmentCenter = { x: (a.x + b.x) * 0.5, z: (a.z + b.z) * 0.5 };
+      const water = this.createTerrainRect(segmentCenter, angle, segmentLength, 0.36, 0.12, 0.022, this.materials.puddle);
+      water.receiveShadow = true;
+      this.scene.add(water);
+
+      const nx = -Math.sin(angle);
+      const nz = Math.cos(angle);
+      for (const side of [-1, 1]) {
+        const edgeCenter = { x: segmentCenter.x + nx * side * 0.24, z: segmentCenter.z + nz * side * 0.24 };
+        const edge = this.createTerrainRect(edgeCenter, angle, segmentLength, 0.055, 0.145, 0.035, this.materials.metal);
+        edge.receiveShadow = true;
+        this.scene.add(edge);
+      }
+    }
+  }
+
+  private addRaingardenPlanting(center: Vec2, rotation: number, halfX: number, plantedDepth: number, polygon: Vec2[]): void {
+    const positions: Array<{ point: Vec2; height: number; radius: number }> = [];
+    for (let row = 0; row < 4; row += 1) {
+      for (let column = 0; column < 10; column += 1) {
+        const localX = -halfX * 0.72 + column * ((halfX * 1.44) / 9) + (this.stableNoise(row, column, 41) - 0.5) * 0.34;
+        const localZ = -plantedDepth * 0.38 + row * ((plantedDepth * 0.76) / 3) + (this.stableNoise(row, column, 73) - 0.5) * 0.28;
+        if (Math.abs(localX) < halfX * 0.18 && row % 2 === 1) continue;
+        const point = this.localPoint(center, rotation, localX, localZ);
+        if (!pointInPolygon(point, polygon)) continue;
+        positions.push({
+          point,
+          height: 0.55 + this.stableNoise(localX, localZ, 5) * 0.65,
+          radius: 0.18 + this.stableNoise(localX, localZ, 9) * 0.16
+        });
+      }
+    }
+    if (positions.length === 0) return;
+
+    const geometry = new THREE.ConeGeometry(1, 1, 5);
+    const material = new THREE.MeshStandardMaterial({ color: 0x58705b, roughness: 0.94 });
+    const mesh = new THREE.InstancedMesh(geometry, material, positions.length);
+    const matrix = new THREE.Matrix4();
+    const quaternion = new THREE.Quaternion();
+    const scale = new THREE.Vector3();
+    for (let i = 0; i < positions.length; i += 1) {
+      const placement = positions[i];
+      quaternion.setFromEuler(new THREE.Euler(0, (i % 7) * 0.38, 0));
+      scale.set(placement.radius, placement.height, placement.radius);
+      matrix.compose(
+        new THREE.Vector3(placement.point.x, this.groundY(placement.point) + 0.1 + placement.height * 0.5, placement.point.z),
+        quaternion,
+        scale
+      );
+      mesh.setMatrixAt(i, matrix);
+    }
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    this.scene.add(mesh);
   }
 
   private addFeatureOutline(polygon: Vec2[], color: number, opacity: number): void {
@@ -1164,11 +1338,12 @@ export class WorldBuilder {
     radiusTop: number,
     radiusBottom: number,
     height: number,
-    material: THREE.Material
+    material: THREE.Material,
+    yOffset = 0
   ): THREE.Mesh {
     const position = this.localPoint(center, rotation, localX, localZ);
     const mesh = new THREE.Mesh(new THREE.CylinderGeometry(radiusTop, radiusBottom, height, 10), material);
-    mesh.position.set(position.x, this.groundY(position) + height / 2, position.z);
+    mesh.position.set(position.x, this.groundY(position) + yOffset + height / 2, position.z);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     this.scene.add(mesh);
@@ -2126,7 +2301,7 @@ export class WorldBuilder {
   private addPathLights(): void {
     const used = new Set<string>();
     let placed = 0;
-    for (const path of this.level.paths.filter((candidate) => candidate.kind !== "footway")) {
+    for (const path of this.level.paths.filter((candidate) => candidate.kind !== "footway" && candidate.kind !== "steps" && candidate.kind !== "service")) {
       if (placed >= 34) break;
       for (let i = 0; i < path.points.length - 1; i += 1) {
         if (placed >= 34) break;
@@ -2173,6 +2348,20 @@ export class WorldBuilder {
       const glow = new THREE.PointLight(0xf0c96a, 0.55, 18);
       glow.position.set(0, 3.25, -0.9);
       group.add(glow);
+
+      const spill = new THREE.Mesh(
+        new THREE.CircleGeometry(4.6, 24),
+        new THREE.MeshBasicMaterial({
+          color: 0xc49a55,
+          transparent: true,
+          opacity: 0.1,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending
+        })
+      );
+      spill.position.set(0, 0.045, -0.9);
+      spill.rotation.x = -Math.PI / 2;
+      group.add(spill);
     }
     group.position.set(position.x, this.groundY(position), position.z);
     group.rotation.y = -angle;
