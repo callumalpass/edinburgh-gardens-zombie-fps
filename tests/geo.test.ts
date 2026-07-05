@@ -232,8 +232,8 @@ describe("map geometry", () => {
   it("includes researched hardscape edge and drain features", () => {
     const level = createLevelData();
     const hardscapeIds = new Set(level.hardscapeLines.map((line) => line.id));
-    expect(level.hardscapeLines.length).toBeGreaterThanOrEqual(4);
-    expect(hardscapeIds.has("hardscape-elm-avenue-basalt-edging")).toBe(true);
+    expect(level.hardscapeLines.length).toBeGreaterThanOrEqual(3);
+    expect(hardscapeIds.has("hardscape-elm-avenue-basalt-edging")).toBe(false);
     expect(hardscapeIds.has("hardscape-oval-east-bluestone-drain")).toBe(true);
     expect(hardscapeIds.has("hardscape-alfred-crescent-retaining-wall")).toBe(true);
     expect(level.hardscapeLines.every((line) => line.source?.includes("CMP"))).toBe(true);
@@ -346,6 +346,8 @@ describe("map geometry", () => {
     expect(pathIds.has("osm-22760905-plinth-east-connector")).toBe(true);
     expect(pathIds.has("osm-75488632-rail-trail-central-cross-link")).toBe(true);
     expect(pathIds.has("osm-210387722-bowling-service-track")).toBe(true);
+    expect(pathIds.has("osm-1340462810-emely-baker-napier-footpath")).toBe(true);
+    expect(pathIds.has("elm-avenue-main")).toBe(false);
     for (const id of [
       "osm-22760900-north-west-short-footway",
       "osm-22760906-tennis-service-path",
@@ -372,6 +374,19 @@ describe("map geometry", () => {
     expect(level.amenities.filter((amenity) => amenity.kind === "picnic_table").length).toBeGreaterThanOrEqual(4);
     expect(level.amenities.filter((amenity) => amenity.kind === "table_tennis").length).toBeGreaterThanOrEqual(1);
     expect(level.amenities.filter((amenity) => pointInPolygon(amenity.position, level.boundary)).length).toBe(level.amenities.length);
+  });
+
+  it("does not render an unsupported Emely Baker to south playground diagonal path", () => {
+    const level = createLevelData();
+    const emelyBaker = geoToWorld({ lat: -37.785739, lon: 144.9825 });
+    const southPlayground = geoToWorld({ lat: -37.788998, lon: 144.983849 });
+    const crossGardenPaths = level.paths.filter(
+      (path) =>
+        path.points.some((point) => distance(point, emelyBaker) < 45) &&
+        path.points.some((point) => distance(point, southPlayground) < 90)
+    );
+
+    expect(crossGardenPaths.map((path) => path.id)).toEqual([]);
   });
 
   it("models open lawns and park feature precincts as accessible landmarks", () => {

@@ -445,14 +445,6 @@ const RAIL_TRAIL_GEO = [
   g(-37.7855758, 144.9845932)
 ];
 
-const ELM_AVENUE_PATH_GEO = [
-  g(-37.78572, 144.98226),
-  g(-37.78642, 144.98247),
-  g(-37.78712, 144.98272),
-  g(-37.78801, 144.98299),
-  g(-37.78905, 144.98332)
-];
-
 const ALFRED_CRESCENT_PATH_GEO = [
   g(-37.78939, 144.98354),
   g(-37.78900, 144.98433),
@@ -1316,6 +1308,21 @@ const OSM_EXTRA_PATHS_GEO: Array<{
     ]
   },
   {
+    id: "osm-1340462810-emely-baker-napier-footpath",
+    label: "Emely Baker to Napier Street footpath",
+    kind: "footway",
+    width: 2.1,
+    surface: "asphalt",
+    source: "OpenStreetMap way 1340462810",
+    points: [
+      g(-37.7855462, 144.9826139),
+      g(-37.7855722, 144.9825176),
+      g(-37.7856435, 144.9823221),
+      g(-37.7857389, 144.9820802),
+      g(-37.7857457, 144.9820572)
+    ]
+  },
+  {
     id: "osm-22760900-north-west-short-footway",
     label: "North-west short footway",
     kind: "footway",
@@ -1353,6 +1360,8 @@ const OSM_EXTRA_PATHS_GEO: Array<{
     label: "Eastern diagonal shared path",
     kind: "cycleway",
     width: 3.2,
+    surface: "asphalt",
+    source: "OpenStreetMap way 22694584",
     points: [
       g(-37.7895214, 144.9833220),
       g(-37.7894202, 144.9833266),
@@ -2297,15 +2306,6 @@ const HARDSCAPE_LINES_GEO: Array<{
   points: GeoPoint[];
 }> = [
   {
-    id: "hardscape-elm-avenue-basalt-edging",
-    label: "Remnant basalt edging along the formal north-south path",
-    kind: "basalt-edging",
-    width: 3.2,
-    height: 0.18,
-    source: "Edinburgh Gardens CMP 2004 section 3.4.26; 3068 Group CMP summary",
-    points: ELM_AVENUE_PATH_GEO
-  },
-  {
     id: "hardscape-alfred-crescent-basalt-edging",
     label: "Bluestone and basalt edging on Alfred Crescent path sections",
     kind: "basalt-edging",
@@ -2586,7 +2586,7 @@ function distanceToPolyline(point: Vec2, points: readonly Vec2[]): number {
 }
 
 type HeritageTreeLines = {
-  elmAvenue: readonly Vec2[];
+  elmAvenues: readonly Vec2[][];
   crescentPath: readonly Vec2[];
   railTrail: readonly Vec2[];
   englishOakAvenue: readonly Vec2[];
@@ -2595,7 +2595,7 @@ type HeritageTreeLines = {
 function isHeritageAvenuePoint(point: Vec2, heritageLines: HeritageTreeLines): boolean {
   return (
     distanceToPolyline(point, heritageLines.englishOakAvenue) < 13 ||
-    distanceToPolyline(point, heritageLines.elmAvenue) < 14 ||
+    distanceToAnyPolyline(point, heritageLines.elmAvenues) < 14 ||
     distanceToPolyline(point, heritageLines.railTrail) < 11 ||
     distanceToPolyline(point, heritageLines.crescentPath) < 10
   );
@@ -2608,6 +2608,10 @@ function inferMappedTreeProfile(point: Vec2, index: number, heritageLines: Herit
   }
   if (index % 13 === 0) return "gum";
   return index % 5 === 0 ? "elm" : "generic";
+}
+
+function distanceToAnyPolyline(point: Vec2, lines: readonly (readonly Vec2[])[]): number {
+  return lines.reduce((closest, line) => Math.min(closest, distanceToPolyline(point, line)), Number.POSITIVE_INFINITY);
 }
 
 function pointInTreeExclusionZone(point: Vec2, zone: TreeExclusionZone): boolean {
@@ -2969,17 +2973,6 @@ export function createLevelData(): LevelData {
   ];
   const railTrail = pathFromGeo("inner-circle-rail-trail", "Inner Circle Rail Trail", "rail", RAIL_TRAIL_GEO, 4.5);
 
-  const formalNorthSouth = pathFromGeo(
-    "elm-avenue-main",
-    "Elm Avenue",
-    "footway",
-    ELM_AVENUE_PATH_GEO,
-    3.2,
-    {
-      surface: "asphalt",
-      source: "Edinburgh Gardens CMP asphalt-path context; mapped formal elm avenue path"
-    }
-  );
   const crescentPath = pathFromGeo(
     "alfred-crescent-inside-path",
     "Alfred Crescent path",
@@ -3007,6 +3000,14 @@ export function createLevelData(): LevelData {
     surface: path.surface,
     source: path.source
   }));
+  const emelyBakerNapierPaths = osmPaths.filter((path) =>
+    [
+      "osm-22673070-north-west-footpath",
+      "osm-22768137-north-west-diagonal-footpath",
+      "osm-1340462810-emely-baker-napier-footpath",
+      "osm-22760900-north-west-short-footway"
+    ].includes(path.id)
+  );
   const mappedAmenities: AmenityPoint[] = OSM_AMENITY_GEO.map((amenity) => {
     const position = geoToWorld(amenity.point);
     const visiblePosition =
@@ -3364,7 +3365,7 @@ export function createLevelData(): LevelData {
 
   const treeLines = [
     samplePolyline(railTrail.points, 12),
-    samplePolyline(formalNorthSouth.points, 12),
+    ...emelyBakerNapierPaths.map((path) => samplePolyline(path.points, 12)),
     samplePolyline(crescentPath.points, 15),
     samplePolyline(polygonFromGeo([g(-37.78605, 144.98115), g(-37.78685, 144.98172), g(-37.78754, 144.98218)]), 12),
     samplePolyline(polygonFromGeo([g(-37.78875, 144.98230), g(-37.78837, 144.98312), g(-37.78815, 144.98382)]), 12)
@@ -3389,7 +3390,7 @@ export function createLevelData(): LevelData {
     );
   });
   const heritageTreeLines = {
-    elmAvenue: formalNorthSouth.points,
+    elmAvenues: emelyBakerNapierPaths.map((path) => path.points),
     crescentPath: crescentPath.points,
     railTrail: railTrail.points,
     englishOakAvenue
@@ -3437,7 +3438,7 @@ export function createLevelData(): LevelData {
     radius: treeColliderRadius(tree),
     source: tree.source
   }));
-  const paths = [railTrail, formalNorthSouth, crescentPath, ovalPath, rotundaLoop, ...osmPaths];
+  const paths = [railTrail, crescentPath, ovalPath, rotundaLoop, ...osmPaths];
   const terrainModifiers: TerrainModifier[] = [
     ...paths.flatMap(pathTerrainModifiers),
     ...trees.map(treeRootTerrainModifier),
