@@ -49,15 +49,8 @@ export class MeshFactory {
       group.add(guard);
 
       if (firstPerson) {
-        const handMaterial = new THREE.MeshStandardMaterial({ color: 0xb88962, roughness: 0.74 });
-        const sleeveMaterial = new THREE.MeshStandardMaterial({ color: 0x314038, roughness: 0.86 });
-        const sleeve = new THREE.Mesh(new THREE.CapsuleGeometry(0.09, 0.48, 4, 8), sleeveMaterial);
-        sleeve.position.set(0.12, -0.34, 0.28);
-        sleeve.rotation.set(-0.62, 0.08, 0.22);
-        group.add(sleeve);
-        const hand = new THREE.Mesh(new THREE.SphereGeometry(0.105, 10, 8), handMaterial);
-        hand.position.set(0.05, -0.2, 0.1);
-        group.add(hand);
+        this.addFirstPersonArm(group, 1, { x: 0.12, y: -0.34, z: 0.28 }, { x: -0.62, y: 0.08, z: 0.22 }, { x: 0.05, y: -0.2, z: 0.1 });
+        this.addGripWraps(group, length * 0.26, width, gripMaterial);
       }
 
       this.applyAnimeMeshStyle(group, firstPerson ? 1.025 : 1.04);
@@ -83,16 +76,38 @@ export class MeshFactory {
     barrel.castShadow = true;
     group.add(barrel);
 
+    const muzzle = new THREE.Mesh(new THREE.CylinderGeometry(0.052, 0.042, 0.1, 10), metalMaterial);
+    muzzle.rotation.x = Math.PI / 2;
+    muzzle.position.set(0, 0.08, -length * 1.08);
+    muzzle.castShadow = true;
+    group.add(muzzle);
+
     const grip = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.38, 0.16), bodyMaterial);
     grip.position.set(0, -0.24, firstPerson ? 0.2 : 0.12);
     grip.rotation.x = -0.28;
     grip.castShadow = true;
     group.add(grip);
 
+    const triggerGuard = new THREE.Mesh(new THREE.TorusGeometry(0.08, 0.012, 6, 12, Math.PI * 1.45), metalMaterial);
+    triggerGuard.position.set(0, -0.12, length * 0.02);
+    triggerGuard.rotation.set(Math.PI / 2, 0, Math.PI * 0.08);
+    group.add(triggerGuard);
+
     const stock = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, isSmg ? 0.22 : 0.42), bodyMaterial);
     stock.position.set(0, -0.01, length * 0.48);
     stock.castShadow = true;
     group.add(stock);
+
+    const magazine = new THREE.Mesh(new THREE.BoxGeometry(0.13, isShotgun ? 0.12 : 0.28, isShotgun ? 0.5 : 0.18), metalMaterial);
+    magazine.position.set(0, isShotgun ? -0.03 : -0.22, isShotgun ? -0.28 : -0.02);
+    magazine.rotation.x = isShotgun ? Math.PI / 2 : -0.08;
+    magazine.castShadow = true;
+    group.add(magazine);
+
+    const sightPost = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.095, 0.035), accentMaterial);
+    sightPost.position.set(0, 0.24, -length * 0.88);
+    sightPost.castShadow = true;
+    group.add(sightPost);
 
     if (isShotgun || isLong) {
       const rail = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.08, 0.48), accentMaterial);
@@ -125,21 +140,61 @@ export class MeshFactory {
     }
 
     if (firstPerson) {
-      const handMaterial = new THREE.MeshStandardMaterial({ color: 0xb88962, roughness: 0.74 });
-      const sleeveMaterial = new THREE.MeshStandardMaterial({ color: 0x314038, roughness: 0.86 });
       for (const side of [-1, 1]) {
-        const sleeve = new THREE.Mesh(new THREE.CapsuleGeometry(0.08, 0.42, 4, 8), sleeveMaterial);
-        sleeve.position.set(side * 0.18, -0.3, 0.18);
-        sleeve.rotation.z = side * 0.35;
-        group.add(sleeve);
-        const hand = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 8), handMaterial);
-        hand.position.set(side * 0.1, -0.21, -0.18);
-        group.add(hand);
+        this.addFirstPersonArm(
+          group,
+          side,
+          { x: side * 0.18, y: -0.3, z: 0.18 },
+          { x: side < 0 ? -0.12 : 0.04, y: side * 0.06, z: side * 0.35 },
+          { x: side * 0.1, y: -0.21, z: -0.18 }
+        );
       }
     }
 
     this.applyAnimeMeshStyle(group, firstPerson ? 1.025 : 1.04);
     return group;
+  }
+
+  private addFirstPersonArm(
+    group: THREE.Group,
+    side: number,
+    sleevePosition: { x: number; y: number; z: number },
+    sleeveRotation: { x: number; y: number; z: number },
+    handPosition: { x: number; y: number; z: number }
+  ): void {
+    const handMaterial = new THREE.MeshStandardMaterial({ color: 0xc28f66, roughness: 0.82 });
+    const gloveMaterial = new THREE.MeshStandardMaterial({ color: 0x202b2d, roughness: 0.9 });
+    const sleeveMaterial = new THREE.MeshStandardMaterial({ color: 0x273f46, roughness: 0.92 });
+    const cuffMaterial = new THREE.MeshStandardMaterial({ color: 0xd39f54, roughness: 0.78, metalness: 0.08 });
+
+    const sleeve = new THREE.Mesh(new THREE.CapsuleGeometry(0.085, 0.5, 4, 8), sleeveMaterial);
+    sleeve.position.set(sleevePosition.x, sleevePosition.y, sleevePosition.z);
+    sleeve.rotation.set(sleeveRotation.x, sleeveRotation.y, sleeveRotation.z);
+    group.add(sleeve);
+
+    const cuff = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.092, 0.05, 10), cuffMaterial);
+    cuff.position.set(sleevePosition.x - side * 0.018, sleevePosition.y + 0.15, sleevePosition.z - 0.13);
+    cuff.rotation.set(Math.PI / 2 + sleeveRotation.x * 0.25, sleeveRotation.y, sleeveRotation.z);
+    group.add(cuff);
+
+    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.105, 10, 8), handMaterial);
+    hand.position.set(handPosition.x, handPosition.y, handPosition.z);
+    hand.scale.set(1.16, 0.86, 1.02);
+    group.add(hand);
+
+    const knuckle = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.034, 0.07), gloveMaterial);
+    knuckle.position.set(handPosition.x + side * 0.018, handPosition.y + 0.022, handPosition.z - 0.07);
+    knuckle.rotation.z = side * 0.18;
+    group.add(knuckle);
+  }
+
+  private addGripWraps(group: THREE.Group, gripZ: number, bladeWidth: number, material: THREE.Material): void {
+    for (const offset of [-0.09, 0.02, 0.13]) {
+      const wrap = new THREE.Mesh(new THREE.BoxGeometry(bladeWidth * 1.52, 0.018, 0.035), material);
+      wrap.position.set(0, 0.066, gripZ + offset);
+      wrap.rotation.x = -0.16;
+      group.add(wrap);
+    }
   }
 
   createWeaponDropMesh(weaponId: WeaponId): THREE.Object3D {
