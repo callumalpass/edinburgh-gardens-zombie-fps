@@ -1191,6 +1191,13 @@ export class WorldBuilder {
           this.addLocalBox(center, rotation, x * footprint.halfX, frontZ + 0.58, 0.26, 0.54, 0.3, this.materials.metal, 0.34);
         }
       }
+      if (building.id === "osm-building-1475006769") {
+        this.addBuildingGutter(center, rotation, 0, frontZ + 0.02, footprint.halfX * 1.76, building.height);
+        this.addBuildingGutter(center, rotation, 0, rearZ - 0.02, footprint.halfX * 1.38, building.height);
+        this.addLocalBox(center, rotation, -footprint.halfX * 0.18, frontZ + 0.075, footprint.halfX * 0.74, 0.1, 0.06, this.materials.metal, 1.18, false);
+        this.addBuildingRoofVent(center, rotation, footprint.halfX * 0.42, -footprint.halfZ * 0.16, building.height, 0.34, 0.26);
+        this.addLocalBox(center, rotation, footprint.halfX * 0.56, frontZ + 0.52, 0.5, 0.42, 0.34, this.materials.timber, 0.31);
+      }
     }
   }
 
