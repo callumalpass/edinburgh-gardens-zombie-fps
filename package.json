@@ -9,14 +9,14 @@
     "multiplayer": "node server/multiplayer-server.mjs",
     "build": "tsc --noEmit && vite build",
     "test": "vitest",
-    "test:run": "vitest run",
+    "test:run": "vitest run --reporter=dot",
     "research:check": "node scripts/validate-research-assets.mjs",
     "preview:e2e": "vite preview --host 127.0.0.1 --port 5481 --strictPort",
     "test:e2e": "node scripts/run-e2e.mjs",
     "test:e2e:quick": "node scripts/run-e2e.mjs --skip-build",
-    "perf:bench": "vitest bench --run --reporter=verbose",
+    "perf:bench": "vitest bench tests/performance.bench.ts --run --reporter=verbose",
     "perf:report": "node scripts/performance-report.mjs",
-    "perf:check": "vitest run --reporter=dot && node scripts/performance-report.mjs"
+    "perf:check": "npm run test:run && node scripts/performance-report.mjs"
   },
   "dependencies": {
     "three": "^0.185.1",

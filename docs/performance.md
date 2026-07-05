@@ -4,7 +4,7 @@ Use these checks when changing runtime systems, level geometry, visibility, terr
 
 ## Commands
 
-- `npm run test:run` runs unit tests. Benchmark files are excluded from normal test collection in `vite.config.ts`.
+- `npm run test:run` runs unit tests with Vitest's compact dot reporter. Benchmark files are excluded from normal test collection in `vite.config.ts`.
 - `npm run perf:bench` runs Vitest benchmarks in `tests/performance.bench.ts`.
 - `npm run perf:report` runs the benchmark suite and writes a normalized JSON summary to `test-results/performance/latest-summary.json`.
 - `npm run perf:check` runs the unit suite with a compact reporter, then runs `npm run perf:report`.
@@ -12,7 +12,7 @@ Use these checks when changing runtime systems, level geometry, visibility, terr
 
 The unit-test config keeps Vitest globals disabled because all tests import `describe`, `it`, `expect` and helpers explicitly. This avoids global API injection overhead during regular test runs.
 
-`test-results/` is gitignored, so benchmark summaries are safe to generate during local iteration. To compare two runs, keep a summary path and use:
+`test-results/` is gitignored, so benchmark summaries are safe to generate during local iteration. `npm run perf:report` runs `tests/performance.bench.ts` directly to avoid unrelated benchmark discovery; use `--bench-file <path>` when adding a separate benchmark file. To compare two runs, keep a summary path and use:
 
 ```sh
 node scripts/performance-report.mjs --compare test-results/performance/baseline-summary.json
@@ -28,10 +28,12 @@ The benchmark suite covers representative hot paths:
 - Line-of-sight queries across level obstacles.
 - Point visibility checks used by HUD/minimap and AI perception.
 - Nearby obstacle-index queries used by movement and collision filtering.
+- Indexed movement-surface lookups used by player movement, bike movement and stealth.
+- The previous linear movement-surface scan as a comparison baseline.
 - Dense zombie separation over 128 circular agents.
 
 When comparing runs, use the `hz` and `mean` columns together. Vitest benchmarks are noisy on shared machines, so treat repeated regressions as meaningful rather than a single outlier.
 
 ## Runtime Hot Paths
 
-Movement, bike movement, thrown-distraction placement, zombie steering, cover checks and skate-bowl settling should use `ObstacleIndex` rather than scanning `level.obstacles` directly. Visibility and minimap checks should reuse a visibility context within a frame when possible. Terrain sampling should avoid string-keyed per-point cache lookups in frame-time paths.
+Movement, bike movement, thrown-distraction placement, zombie steering, cover checks and skate-bowl settling should use `ObstacleIndex` rather than scanning `level.obstacles` directly. Player and bike surface checks should use `MovementSurfaceSampler` rather than calling the linear `movementSurfaceAt` helper in frame-time paths. Visibility and minimap checks should reuse a visibility context within a frame when possible. Terrain sampling should avoid string-keyed per-point cache lookups in frame-time paths.

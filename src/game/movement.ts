@@ -2,6 +2,9 @@ import { distanceToSegment } from "./geo";
 import type { MovementSurface } from "./noise";
 import type { LevelPath, Vec2 } from "./types";
 
+const SURFACE_GRID_SIZE = 18;
+const PATH_SURFACE_WIDTH_SCALE = 0.78;
+
 export interface MovementSurfaceLevel {
   paths: readonly LevelPath[];
 }
@@ -13,7 +16,7 @@ export function movementSurfaceAt(level: MovementSurfaceLevel, point: Vec2): Mov
   for (const path of level.paths) {
     for (let index = 0; index < path.points.length - 1; index += 1) {
       const pathDistance = distanceToSegment(point, path.points[index], path.points[index + 1]);
-      if (pathDistance <= path.width * 0.78 && pathDistance < nearestDistance) {
+      if (pathDistance <= path.width * PATH_SURFACE_WIDTH_SCALE && pathDistance < nearestDistance) {
         nearestDistance = pathDistance;
         nearestSurface = pathMovementSurface(path);
       }
@@ -49,11 +52,39 @@ export function bikeSurfaceSpeedMultiplier(surface: MovementSurface): number {
   return 0.82;
 }
 
+interface IndexedPathSegment {
+  surface: MovementSurface;
+  start: Vec2;
+  end: Vec2;
+  dx: number;
+  dz: number;
+  lengthSquared: number;
+  width: number;
+  widthSquared: number;
+}
+
 export class MovementSurfaceSampler {
-  constructor(private readonly level: MovementSurfaceLevel) {}
+  private readonly grid = new Map<number, Map<number, IndexedPathSegment[]>>();
+  private readonly gridSize: number;
+
+  constructor(private readonly level: MovementSurfaceLevel, options: { gridSize?: number } = {}) {
+    this.gridSize = options.gridSize ?? SURFACE_GRID_SIZE;
+    this.indexPaths();
+  }
 
   at(point: Vec2): MovementSurface {
-    return movementSurfaceAt(this.level, point);
+    let nearestSurface: MovementSurface | null = null;
+    let nearestDistanceSquared = Number.POSITIVE_INFINITY;
+
+    for (const segment of this.bucketAt(this.cellIndex(point.x), this.cellIndex(point.z)) ?? []) {
+      const pathDistanceSquared = distanceToIndexedSegmentSquared(point, segment);
+      if (pathDistanceSquared <= segment.widthSquared && pathDistanceSquared < nearestDistanceSquared) {
+        nearestDistanceSquared = pathDistanceSquared;
+        nearestSurface = segment.surface;
+      }
+    }
+
+    return nearestSurface ?? "grass";
   }
 
   speedMultiplier(surface: MovementSurface): number {
@@ -63,4 +94,79 @@ export class MovementSurfaceSampler {
   bikeSpeedMultiplier(surface: MovementSurface): number {
     return bikeSurfaceSpeedMultiplier(surface);
   }
+
+  private indexPaths(): void {
+    for (const path of this.level.paths) {
+      const width = path.width * PATH_SURFACE_WIDTH_SCALE;
+      const widthSquared = width * width;
+      const surface = pathMovementSurface(path);
+      for (let index = 0; index < path.points.length - 1; index += 1) {
+        const start = path.points[index];
+        const end = path.points[index + 1];
+        const dx = end.x - start.x;
+        const dz = end.z - start.z;
+        const segment = {
+          surface,
+          start,
+          end,
+          dx,
+          dz,
+          lengthSquared: dx * dx + dz * dz,
+          width,
+          widthSquared
+        };
+        const minX = this.cellIndex(Math.min(start.x, end.x) - width);
+        const maxX = this.cellIndex(Math.max(start.x, end.x) + width);
+        const minZ = this.cellIndex(Math.min(start.z, end.z) - width);
+        const maxZ = this.cellIndex(Math.max(start.z, end.z) + width);
+
+        for (let x = minX; x <= maxX; x += 1) {
+          for (let z = minZ; z <= maxZ; z += 1) {
+            this.ensureBucket(x, z).push(segment);
+          }
+        }
+      }
+    }
+  }
+
+  private ensureBucket(x: number, z: number): IndexedPathSegment[] {
+    let column = this.grid.get(x);
+    if (!column) {
+      column = new Map();
+      this.grid.set(x, column);
+    }
+
+    const bucket = column.get(z);
+    if (bucket) {
+      return bucket;
+    }
+
+    const nextBucket: IndexedPathSegment[] = [];
+    column.set(z, nextBucket);
+    return nextBucket;
+  }
+
+  private bucketAt(x: number, z: number): IndexedPathSegment[] | undefined {
+    return this.grid.get(x)?.get(z);
+  }
+
+  private cellIndex(value: number): number {
+    return Math.floor(value / this.gridSize);
+  }
+}
+
+function distanceToIndexedSegmentSquared(point: Vec2, segment: IndexedPathSegment): number {
+  if (segment.lengthSquared === 0) {
+    const dx = point.x - segment.start.x;
+    const dz = point.z - segment.start.z;
+    return dx * dx + dz * dz;
+  }
+
+  const projection = ((point.x - segment.start.x) * segment.dx + (point.z - segment.start.z) * segment.dz) / segment.lengthSquared;
+  const t = Math.max(0, Math.min(1, projection));
+  const nearestX = segment.start.x + segment.dx * t;
+  const nearestZ = segment.start.z + segment.dz * t;
+  const dx = point.x - nearestX;
+  const dz = point.z - nearestZ;
+  return dx * dx + dz * dz;
 }

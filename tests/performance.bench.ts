@@ -1,6 +1,7 @@
 import { bench, describe } from "vitest";
 import { createLevelData } from "../src/game/levelData";
 import { distance } from "../src/game/geo";
+import { MovementSurfaceSampler, movementSurfaceAt } from "../src/game/movement";
 import { createTerrainOverlayRectGeometry } from "../src/game/rendering/terrainOverlay";
 import { ObstacleIndex } from "../src/game/spatial/ObstacleIndex";
 import { TerrainSampler } from "../src/game/terrain";
@@ -11,6 +12,7 @@ import type { Vec2 } from "../src/game/types";
 const level = createLevelData();
 const terrain = new TerrainSampler(level);
 const obstacleIndex = new ObstacleIndex(level.obstacles);
+const movementSurfaces = new MovementSurfaceSampler(level);
 const samplePoints = [
   ...level.boundary,
   ...level.paths.flatMap((path) => path.points),
@@ -44,6 +46,16 @@ const obstacleQueryPoints = deterministicSample(
   ],
   160
 );
+const movementSurfacePoints = deterministicSample(
+  [
+    ...level.paths.flatMap((path) => path.points),
+    ...level.spawnPoints,
+    ...level.pickupPoints,
+    ...level.amenities.map((amenity) => amenity.position),
+    ...level.trees.map((tree) => tree.position)
+  ],
+  192
+);
 const overlaySegments = deterministicSample(
   level.paths.flatMap((path) =>
     path.points.slice(0, -1).map((point, index) => ({
@@ -59,6 +71,7 @@ let terrainSink = 0;
 let sightSink = 0;
 let visibilitySink = 0;
 let obstacleSink = 0;
+let surfaceSink = 0;
 let crowdSink = 0;
 let overlaySink = 0;
 
@@ -108,6 +121,28 @@ describe("level performance", () => {
       });
     }
     obstacleSink = nearby;
+  });
+
+  bench("indexed movement-surface lookups for player and bike", () => {
+    let asphaltLike = 0;
+    for (const point of movementSurfacePoints) {
+      const surface = movementSurfaces.at(point);
+      if (surface === "asphalt" || surface === "concrete" || surface === "rail") {
+        asphaltLike += 1;
+      }
+    }
+    surfaceSink = asphaltLike;
+  });
+
+  bench("linear movement-surface scan baseline", () => {
+    let asphaltLike = 0;
+    for (const point of movementSurfacePoints) {
+      const surface = movementSurfaceAt(level, point);
+      if (surface === "asphalt" || surface === "concrete" || surface === "rail") {
+        asphaltLike += 1;
+      }
+    }
+    surfaceSink += asphaltLike;
   });
 
   bench("terrain overlay geometry over path segments", () => {

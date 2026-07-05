@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   bikeSurfaceSpeedMultiplier,
+  MovementSurfaceSampler,
   movementSurfaceAt,
   pathMovementSurface,
   surfaceSpeedMultiplier
@@ -40,8 +41,29 @@ describe("movement surfaces", () => {
     expect(movementSurfaceAt(level, { x: 0, z: 1 })).toBe("asphalt");
   });
 
+  it("indexes path segments while preserving nearest-surface classification", () => {
+    const level = {
+      paths: [
+        path({ id: "north-service", kind: "service", points: [{ x: -40, z: -18 }, { x: 10, z: -18 }, { x: 42, z: -4 }], width: 3.2 }),
+        path({ id: "cross-gravel", kind: "perimeter", points: [{ x: -8, z: -40 }, { x: -8, z: 40 }], width: 5.5 }),
+        path({ id: "rail-trail", kind: "rail", points: [{ x: 18, z: -35 }, { x: 18, z: 35 }], width: 4.2 })
+      ]
+    };
+    const sampler = new MovementSurfaceSampler(level, { gridSize: 12 });
+    const points = [
+      { x: -30, z: -18 },
+      { x: -8, z: 3 },
+      { x: 18, z: 22 },
+      { x: 40, z: -5 },
+      { x: 46, z: 28 }
+    ];
+
+    expect(points.map((point) => sampler.at(point))).toEqual(points.map((point) => movementSurfaceAt(level, point)));
+  });
+
   it("falls back to grass and keeps bike/player speed curves distinct", () => {
     expect(movementSurfaceAt({ paths: [] }, { x: 100, z: 100 })).toBe("grass");
+    expect(new MovementSurfaceSampler({ paths: [] }).at({ x: 100, z: 100 })).toBe("grass");
     expect(surfaceSpeedMultiplier("asphalt")).toBeGreaterThan(surfaceSpeedMultiplier("grass"));
     expect(bikeSurfaceSpeedMultiplier("asphalt")).toBeGreaterThan(surfaceSpeedMultiplier("asphalt"));
     expect(bikeSurfaceSpeedMultiplier("dirt")).toBeLessThan(surfaceSpeedMultiplier("dirt"));

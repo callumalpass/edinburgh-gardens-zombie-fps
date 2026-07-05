@@ -5,10 +5,12 @@ import { spawnSync } from "node:child_process";
 
 const DEFAULT_OUTPUT = "test-results/performance/latest-summary.json";
 const DEFAULT_RAW_OUTPUT = "test-results/performance/latest-vitest-bench.json";
+const DEFAULT_BENCH_FILE = "tests/performance.bench.ts";
 
 const options = parseArgs(process.argv.slice(2));
 const outputPath = resolve(options.output ?? DEFAULT_OUTPUT);
 const rawOutputPath = resolve(options.rawOutput ?? DEFAULT_RAW_OUTPUT);
+const benchFile = options.benchFile ?? DEFAULT_BENCH_FILE;
 
 if (!options.fromJson) {
   mkdirSync(dirname(rawOutputPath), { recursive: true });
@@ -16,8 +18,8 @@ if (!options.fromJson) {
   const vitestBin = existsSync("node_modules/.bin/vitest") ? "node_modules/.bin/vitest" : "npx";
   const vitestArgs =
     vitestBin === "npx"
-      ? ["vitest", "bench", "--run", "--reporter=verbose", "--outputJson", rawOutputPath]
-      : ["bench", "--run", "--reporter=verbose", "--outputJson", rawOutputPath];
+      ? ["vitest", "bench", benchFile, "--run", "--reporter=verbose", "--outputJson", rawOutputPath]
+      : ["bench", benchFile, "--run", "--reporter=verbose", "--outputJson", rawOutputPath];
   const result = spawnSync(vitestBin, vitestArgs, { stdio: "inherit" });
   if (result.status !== 0) {
     process.exit(result.status ?? 1);
@@ -55,6 +57,8 @@ function parseArgs(args) {
       parsed.rawOutput = args[++index];
     } else if (arg === "--from-json") {
       parsed.fromJson = args[++index];
+    } else if (arg === "--bench-file") {
+      parsed.benchFile = args[++index];
     } else if (arg === "--compare") {
       parsed.compare = args[++index];
     } else if (arg === "--fail-on-regression") {
@@ -147,6 +151,7 @@ function printHelp() {
 Options:
   --output <path>              Summary JSON path. Defaults to ${DEFAULT_OUTPUT}
   --raw-output <path>          Raw Vitest benchmark JSON path. Defaults to ${DEFAULT_RAW_OUTPUT}
+  --bench-file <path>          Benchmark file to run. Defaults to ${DEFAULT_BENCH_FILE}
   --from-json <path>           Summarize an existing Vitest benchmark JSON file instead of running benchmarks
   --compare <path>             Compare against a previous summary JSON
   --fail-on-regression <pct>   Exit non-zero when mean time regresses by more than this percentage
