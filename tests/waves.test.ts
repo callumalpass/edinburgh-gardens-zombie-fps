@@ -10,6 +10,9 @@ describe("wave spawning", () => {
     expect(fifth.total).toBeGreaterThan(first.total);
     expect(fifth.healthMultiplier).toBeGreaterThan(first.healthMultiplier);
     expect(fifth.spawnInterval).toBeLessThan(first.spawnInterval);
+    expect(fifth.packMax).toBeGreaterThanOrEqual(fifth.packMin);
+    expect(fifth.packInterval).toBeGreaterThan(fifth.spawnInterval);
+    expect(fifth.stragglerCount).toBeGreaterThan(first.stragglerCount);
     expect(fifth.typeWeights.crawler).toBeGreaterThan(0);
     expect(fifth.typeWeights.screamer).toBeGreaterThan(0);
   });
@@ -23,5 +26,13 @@ describe("wave spawning", () => {
     expect(spawnA).toEqual(spawnB);
     expect(spawnA.health).toBeGreaterThan(40);
     expect(spawnA.speed).toBeGreaterThan(3);
+  });
+
+  it("can group a pack around the same spawn anchor", () => {
+    const level = createLevelData();
+    const rng = new SeededRandom(321);
+    const anchor = level.spawnPoints[0];
+    const spawn = createZombieSpawn(getWaveConfig(4), level.spawnPoints, rng, anchor);
+    expect(Math.hypot(spawn.position.x - anchor.x, spawn.position.z - anchor.z)).toBeLessThan(12);
   });
 });

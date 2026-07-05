@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { RandomSource, Vec2 } from "../types";
+import { timeOfDayFromElapsed, type TimeOfDayState } from "./timeOfDay";
 
 const SKY_RADIUS = 920;
 const RAIN_ANCHOR_RADIUS = 42;
@@ -40,6 +41,46 @@ export class AtmosphereSystem {
   private readonly groundMistLayers: THREE.Mesh[] = [];
   private readonly groundMistBanks: THREE.Sprite[] = [];
   private readonly lightning = new THREE.PointLight(0x9fb8ff, 0, 520);
+  private readonly skyColors = {
+    top: new THREE.Color(),
+    mid: new THREE.Color(),
+    horizon: new THREE.Color(),
+    bottom: new THREE.Color(),
+    fog: new THREE.Color(),
+    background: new THREE.Color()
+  };
+  private readonly nightPalette = {
+    top: new THREE.Color(0x142437),
+    mid: new THREE.Color(0x07131a),
+    horizon: new THREE.Color(0x311d1b),
+    bottom: new THREE.Color(0x02070a),
+    fog: new THREE.Color(0x0d1a20),
+    background: new THREE.Color(0x071019)
+  };
+  private readonly dayPalette = {
+    top: new THREE.Color(0x668daa),
+    mid: new THREE.Color(0x5f7f85),
+    horizon: new THREE.Color(0xb99067),
+    bottom: new THREE.Color(0x263d36),
+    fog: new THREE.Color(0x6f8580),
+    background: new THREE.Color(0x536f80)
+  };
+  private readonly dawnPalette = {
+    top: new THREE.Color(0x31445c),
+    mid: new THREE.Color(0x4e5d5e),
+    horizon: new THREE.Color(0xc1784c),
+    bottom: new THREE.Color(0x172019),
+    fog: new THREE.Color(0x755c4b),
+    background: new THREE.Color(0x2f3d45)
+  };
+  private readonly cloudNightColor = new THREE.Color(0x6d8587);
+  private readonly cloudDayColor = new THREE.Color(0xa8b5aa);
+  private readonly cloudDawnColor = new THREE.Color(0x8d7866);
+  private readonly cloudColor = new THREE.Color();
+  private skyMaterial: THREE.ShaderMaterial | null = null;
+  private starMaterial: THREE.PointsMaterial | null = null;
+  private moonMaterial: THREE.SpriteMaterial | null = null;
+  private elapsedSeconds = 0;
   private nextLightningAt = 9.5;
   private lightningTimer = 0;
 
@@ -74,9 +115,13 @@ export class AtmosphereSystem {
     this.root.add(this.lightning);
     this.scene.add(this.root);
     this.scene.add(this.worldWeatherRoot);
+    this.applyTimeOfDay(timeOfDayFromElapsed(this.elapsedSeconds));
   }
 
-  update(dt: number, cameraPosition: THREE.Vector3, now: number): void {
+  update(dt: number, cameraPosition: THREE.Vector3, now: number): TimeOfDayState {
+    this.elapsedSeconds += dt;
+    const timeOfDay = timeOfDayFromElapsed(this.elapsedSeconds);
+    this.applyTimeOfDay(timeOfDay);
     this.root.position.set(cameraPosition.x, 0, cameraPosition.z);
 
     this.cloudLayers.forEach((layer, index) => {
@@ -100,7 +145,7 @@ export class AtmosphereSystem {
       bank.position.x = baseX + Math.sin(now * 0.16 + index * 1.9) * drift;
       bank.position.z = baseZ + Math.cos(now * 0.12 + index * 1.3) * drift;
       bank.position.y = (bank.userData.baseY as number) + Math.sin(now * 0.2 + index) * 0.08;
-      (bank.material as THREE.SpriteMaterial).opacity = opacity * (0.86 + Math.sin(now * 0.34 + index * 0.7) * 0.14);
+      (bank.material as THREE.SpriteMaterial).opacity = opacity * (0.72 + timeOfDay.night * 0.26) * (0.86 + Math.sin(now * 0.34 + index * 0.7) * 0.14);
     });
 
     if (this.lightningTimer > 0) {
@@ -112,6 +157,7 @@ export class AtmosphereSystem {
     }
 
     this.updateRain(dt);
+    return timeOfDay;
   }
 
   getGroundMistBankCount(): number {
@@ -124,6 +170,55 @@ export class AtmosphereSystem {
 
   getWeatherAnchorCount(): number {
     return this.anchors().length;
+  }
+
+  private applyTimeOfDay(timeOfDay: TimeOfDayState): void {
+    const dawnMix = timeOfDay.dawnDusk * 0.62;
+    this.skyColors.top.lerpColors(this.nightPalette.top, this.dayPalette.top, timeOfDay.daylight).lerp(this.dawnPalette.top, dawnMix);
+    this.skyColors.mid.lerpColors(this.nightPalette.mid, this.dayPalette.mid, timeOfDay.daylight).lerp(this.dawnPalette.mid, dawnMix);
+    this.skyColors.horizon.lerpColors(this.nightPalette.horizon, this.dayPalette.horizon, timeOfDay.daylight).lerp(this.dawnPalette.horizon, dawnMix);
+    this.skyColors.bottom.lerpColors(this.nightPalette.bottom, this.dayPalette.bottom, timeOfDay.daylight).lerp(this.dawnPalette.bottom, dawnMix * 0.55);
+    this.skyColors.fog.lerpColors(this.nightPalette.fog, this.dayPalette.fog, timeOfDay.daylight).lerp(this.dawnPalette.fog, dawnMix * 0.48);
+    this.skyColors.background.lerpColors(this.nightPalette.background, this.dayPalette.background, timeOfDay.daylight).lerp(this.dawnPalette.background, dawnMix * 0.45);
+
+    if (this.skyMaterial) {
+      (this.skyMaterial.uniforms.topColor.value as THREE.Color).copy(this.skyColors.top);
+      (this.skyMaterial.uniforms.midColor.value as THREE.Color).copy(this.skyColors.mid);
+      (this.skyMaterial.uniforms.horizonColor.value as THREE.Color).copy(this.skyColors.horizon);
+      (this.skyMaterial.uniforms.bottomColor.value as THREE.Color).copy(this.skyColors.bottom);
+    }
+
+    if (this.scene.background instanceof THREE.Color) {
+      this.scene.background.copy(this.skyColors.background);
+    } else {
+      this.scene.background = this.skyColors.background.clone();
+    }
+
+    if (this.scene.fog instanceof THREE.FogExp2) {
+      this.scene.fog.color.copy(this.skyColors.fog);
+      const baseDensity = this.smokeMode ? 0.00135 : 0.00175;
+      this.scene.fog.density = baseDensity * (0.76 + timeOfDay.night * 0.28 + timeOfDay.dawnDusk * 0.1);
+    }
+
+    if (this.starMaterial) {
+      this.starMaterial.opacity = (this.smokeMode ? 0.42 : 0.62) * (0.16 + timeOfDay.night * 0.84);
+    }
+    if (this.moonMaterial) {
+      this.moonMaterial.opacity = 0.08 + timeOfDay.night * 0.74;
+    }
+
+    this.cloudLayers.forEach((layer) => {
+      const material = layer.material as THREE.MeshBasicMaterial;
+      const baseOpacity = (layer.userData.baseOpacity as number) ?? material.opacity;
+      material.opacity = baseOpacity * (0.76 + timeOfDay.night * 0.24 + timeOfDay.dawnDusk * 0.08);
+      material.color.copy(this.cloudColor.copy(this.cloudNightColor).lerp(this.cloudDayColor, timeOfDay.daylight).lerp(this.cloudDawnColor, dawnMix * 0.28));
+    });
+
+    this.groundMistLayers.forEach((layer) => {
+      const material = layer.material as THREE.MeshBasicMaterial;
+      const baseOpacity = (layer.userData.baseOpacity as number) ?? material.opacity;
+      material.opacity = baseOpacity * (0.72 + timeOfDay.night * 0.35 + timeOfDay.dawnDusk * 0.16);
+    });
   }
 
   private addSkyDome(): void {
@@ -175,6 +270,7 @@ export class AtmosphereSystem {
         }
       `
     });
+    this.skyMaterial = material;
     const sky = new THREE.Mesh(geometry, material);
     sky.name = "Storm sky dome";
     sky.frustumCulled = false;
@@ -212,6 +308,7 @@ export class AtmosphereSystem {
       depthWrite: false,
       fog: false
     });
+    this.starMaterial = material;
     const stars = new THREE.Points(geometry, material);
     stars.name = "Cloud-broken stars";
     stars.frustumCulled = false;
@@ -220,16 +317,16 @@ export class AtmosphereSystem {
 
   private addMoon(): void {
     const texture = this.createMoonTexture();
-    const glow = new THREE.Sprite(
-      new THREE.SpriteMaterial({
+    const material = new THREE.SpriteMaterial({
         map: texture,
         transparent: true,
         opacity: 0.82,
         depthWrite: false,
         fog: false,
         blending: THREE.AdditiveBlending
-      })
-    );
+      });
+    this.moonMaterial = material;
+    const glow = new THREE.Sprite(material);
     glow.name = "Moon glow";
     glow.position.set(-245, 210, -345);
     glow.scale.set(92, 92, 1);
@@ -263,6 +360,7 @@ export class AtmosphereSystem {
       mesh.scale.set(layer.scale, layer.scale, 1);
       mesh.frustumCulled = false;
       mesh.renderOrder = -20;
+      mesh.userData.baseOpacity = layer.opacity;
       this.cloudLayers.push(mesh);
       this.root.add(mesh);
     }
@@ -299,6 +397,7 @@ export class AtmosphereSystem {
       mist.userData.baseX = center.x;
       mist.userData.baseZ = center.z;
       mist.userData.drift = layer.drift;
+      mist.userData.baseOpacity = layer.opacity;
       this.groundMistLayers.push(mist);
       this.worldWeatherRoot.add(mist);
     }

@@ -2,25 +2,31 @@ import * as THREE from "three";
 import { distance, distanceToSegment, geoToWorld, makeCircle, nearestPointOnPolygon, pointInPolygon, polygonCentroid } from "../geo";
 import { AUSTRALIAN_RULES_BEHIND_POST_HEIGHT_METRES, footballPostLocalOffsets } from "../sportsFixtures";
 import type {
+  AmenityPoint,
   HardscapeLine,
   LevelData,
   LevelPath,
   Landmark,
   MappedBuilding,
+  MappedFence,
   MappedTree,
   ParkLifeDetail,
   PathSurfacePatch,
   RandomSource,
   SportsFixture,
+  StreetEdge,
   TreeProfile,
+  UpgradeStation,
   Vec2
 } from "../types";
 import { createAnimeToonRamp } from "./animeStyle";
+import { pathPreviewMaterialKey, type ObjectPreviewTarget } from "./objectPreview";
 import {
   createTerrainOverlayDiscGeometry,
   createTerrainOverlayEllipseGeometry,
   createTerrainOverlayRectGeometry
 } from "./terrainOverlay";
+import type { TimeOfDayState } from "./timeOfDay";
 
 const COLLISION_Y = 0.04;
 const PATH_SHOULDER_SURFACE_Y = COLLISION_Y;
@@ -94,6 +100,16 @@ export class WorldBuilder {
   private readonly treeRootGeometry = new THREE.BoxGeometry(1, 1, 1);
   private readonly treeCanopyGeometry = new THREE.IcosahedronGeometry(1, 2);
   private readonly treePaleBarkGeometry = new THREE.CylinderGeometry(0.74, 0.88, 1, 8);
+  private ambientLight: THREE.HemisphereLight | null = null;
+  private keyLight: THREE.DirectionalLight | null = null;
+  private emergencyLight: THREE.PointLight | null = null;
+  private readonly ambientNightSky = new THREE.Color(0x849eb4);
+  private readonly ambientDaySky = new THREE.Color(0xc9d6cf);
+  private readonly ambientNightGround = new THREE.Color(0x16151c);
+  private readonly ambientDayGround = new THREE.Color(0x4a4938);
+  private readonly keyNightColor = new THREE.Color(0xabc4ff);
+  private readonly keyDayColor = new THREE.Color(0xffddb1);
+  private readonly keyDawnColor = new THREE.Color(0xffb678);
 
   constructor(
     private readonly scene: THREE.Scene,
@@ -105,8 +121,10 @@ export class WorldBuilder {
   ) {}
 
   createWorld(): void {
-    this.scene.add(new THREE.HemisphereLight(0xb9d4e8, 0x28222a, 1.38));
+    this.ambientLight = new THREE.HemisphereLight(0xb9d4e8, 0x28222a, 1.38);
+    this.scene.add(this.ambientLight);
     const moon = new THREE.DirectionalLight(0xc9ddff, 2.95);
+    this.keyLight = moon;
     moon.position.set(-150, 205, 75);
     moon.castShadow = true;
     moon.shadow.camera.left = -360;
@@ -117,6 +135,7 @@ export class WorldBuilder {
     this.scene.add(moon);
 
     const emergency = new THREE.PointLight(0xe34b43, 5.2, 145);
+    this.emergencyLight = emergency;
     emergency.position.set(22, 7, 48);
     this.scene.add(emergency);
 
@@ -146,20 +165,284 @@ export class WorldBuilder {
     this.addTrees();
   }
 
-  createUpgradeStations(): void {
-    const material = new THREE.MeshStandardMaterial({ color: 0xd0a343, emissive: 0x392509, emissiveIntensity: 0.4, roughness: 0.55 });
-    for (const station of this.level.upgradeStations) {
-      const group = new THREE.Group();
-      const crate = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.5, 1.8), material);
-      crate.position.y = 0.75;
-      crate.castShadow = true;
-      group.add(crate);
-      const lamp = new THREE.PointLight(0xd5a948, 1.2, 18);
-      lamp.position.y = 2.4;
-      group.add(lamp);
-      group.position.set(station.position.x, this.boxSupportY(station.position, 0, 1.3, 0.9), station.position.z);
-      this.scene.add(group);
+  createObjectPreview(target: ObjectPreviewTarget): void {
+    this.addPreviewLighting();
+    this.addPreviewGround(target);
+
+    if (target.kind === "landmark") {
+      const landmark = this.level.landmarks.find((candidate) => candidate.id === target.sourceId);
+      if (landmark) this.addLandmarkPreview(landmark);
+    } else if (target.kind === "mapped-building") {
+      const building = this.level.mappedBuildings.find((candidate) => candidate.id === target.sourceId);
+      if (building) this.addMappedBuildingPreview(building);
+    } else if (target.kind === "mapped-fence") {
+      const fence = this.level.mappedFences.find((candidate) => candidate.id === target.sourceId);
+      if (fence) this.addMappedFencePreview(fence);
+    } else if (target.kind === "hardscape-line") {
+      const line = this.level.hardscapeLines.find((candidate) => candidate.id === target.sourceId);
+      if (line) this.addHardscapeLinePreview(line);
+    } else if (target.kind === "path") {
+      const path = this.level.paths.find((candidate) => candidate.id === target.sourceId);
+      if (path) this.addPathPreview(path);
+    } else if (target.kind === "path-surface-patch") {
+      const patch = this.level.pathSurfacePatches.find((candidate) => candidate.id === target.sourceId);
+      if (patch) this.addPathSurfacePatchPreview(patch);
+    } else if (target.kind === "street-edge") {
+      const street = this.level.streetEdges.find((candidate) => candidate.id === target.sourceId);
+      if (street) this.addStreetEdgePreview(street);
+    } else if (target.kind === "sports-fixture") {
+      const fixture = this.level.sportsFixtures.find((candidate) => candidate.id === target.sourceId);
+      if (fixture) this.addSportsFixturePreview(fixture);
+    } else if (target.kind === "amenity") {
+      const amenity = this.level.amenities.find((candidate) => candidate.id === target.sourceId);
+      if (amenity) this.addAmenityPreview(amenity);
+    } else if (target.kind === "park-life-detail") {
+      const detail = this.level.parkLifeDetails.find((candidate) => candidate.id === target.sourceId);
+      if (detail) this.addParkLifeDetailPreview(detail);
+    } else if (target.kind === "tree") {
+      const tree = this.level.trees.find((candidate) => candidate.id === target.sourceId);
+      if (tree) this.addRealisticTree(tree, target.sourceIndex ?? this.level.trees.indexOf(tree));
+    } else if (target.kind === "upgrade-station") {
+      const station = this.level.upgradeStations.find((candidate) => candidate.id === target.sourceId);
+      if (station) this.addUpgradeStation(station);
     }
+  }
+
+  private addPreviewLighting(): void {
+    this.scene.add(new THREE.HemisphereLight(0xbfd7e0, 0x2a2428, 1.45));
+
+    const key = new THREE.DirectionalLight(0xffe1b2, 2.4);
+    key.position.set(-18, 28, 18);
+    key.castShadow = true;
+    this.scene.add(key);
+
+    const rim = new THREE.PointLight(0x7aa9ff, 1.3, 32);
+    rim.position.set(12, 5.5, -10);
+    this.scene.add(rim);
+  }
+
+  private addPreviewGround(target: ObjectPreviewTarget): void {
+    const radius = Math.max(4, target.radius * 1.35);
+    const platform = this.createTerrainOverlayDisc(target.position, radius, 0.02, this.materials.grass);
+    platform.receiveShadow = true;
+    this.scene.add(platform);
+
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(radius * 0.92, radius, 48),
+      new THREE.MeshBasicMaterial({ color: 0xf0cf7a, transparent: true, opacity: 0.34, side: THREE.DoubleSide })
+    );
+    ring.position.set(target.position.x, this.groundY(target.position) + 0.075, target.position.z);
+    ring.rotation.x = -Math.PI / 2;
+    this.scene.add(ring);
+
+    this.addLabel(target.label, target.position, target.height + 1.15);
+  }
+
+  private addLandmarkPreview(landmark: Landmark): void {
+    if (landmark.kind === "park") return;
+    if (landmark.kind === "garden" && landmark.polygon) this.addGardenZone(landmark);
+    if (landmark.kind === "oval" && landmark.polygon) this.addOval(landmark);
+    if (landmark.kind === "grandstand" && landmark.polygon) this.addGrandstand(landmark);
+    if (landmark.kind === "tennis" && landmark.polygon) {
+      this.addFenceAround(landmark.polygon, 2.2, 0x93a59a);
+      this.addTennisClubDetails(landmark.polygon);
+    }
+    if (landmark.kind === "court" && landmark.polygon) {
+      this.addFlatPolygon(landmark.polygon, this.materials.court, 0.09);
+      this.addTennisCourtLines(landmark.polygon);
+      this.addTennisNet(landmark.polygon);
+    }
+    if (landmark.kind === "bowls" && landmark.polygon) {
+      this.addFlatPolygon(landmark.polygon, this.materials.court, 0.08, landmark.id.startsWith("bowling-green") ? 0.86 : 0.6);
+      if (landmark.id === "bowling") {
+        this.addFenceAround(landmark.polygon, 1.15, 0x677362);
+        this.addBowlsClubDetails(landmark.polygon);
+      }
+      if (landmark.id.startsWith("bowling-green")) {
+        this.addBowlingRinkLines(landmark.polygon);
+        this.addLowHedgeAround(landmark.polygon, 0.52, 0.42);
+      }
+    }
+    if (landmark.kind === "playground" && landmark.polygon) this.addPlayground(landmark);
+    if (landmark.kind === "skate" && landmark.polygon) this.addSkatePark(landmark);
+    if (landmark.kind === "basketball" && landmark.polygon) this.addBasketball(landmark);
+    if (landmark.kind === "toilets") this.addToilets(landmark);
+    if (landmark.kind === "bbq" && landmark.position) this.addBbq(landmark.position);
+    if (landmark.kind === "rotunda" && landmark.position) this.addRotunda(landmark.position);
+    if (landmark.kind === "memorial" && landmark.position) this.addMemorial(landmark);
+  }
+
+  private addMappedBuildingPreview(building: MappedBuilding): void {
+    if (building.detailProfile === "rotunda-pavilion") {
+      this.addRotunda(polygonCentroid(building.polygon));
+      return;
+    }
+    this.addMappedBuilding(building);
+  }
+
+  private addMappedFencePreview(fence: MappedFence): void {
+    const postMaterial = new THREE.MeshStandardMaterial({ color: 0x6b7a71, metalness: 0.22, roughness: 0.58 });
+    const railMaterial = new THREE.MeshStandardMaterial({ color: 0x4f5e56, metalness: 0.32, roughness: 0.48 });
+    for (let i = 0; i < fence.points.length - 1; i += 1) {
+      this.addFenceSegment(fence.points[i], fence.points[i + 1], 0, 1, 1.65, postMaterial, railMaterial);
+    }
+  }
+
+  private addHardscapeLinePreview(line: HardscapeLine): void {
+    if (line.kind === "basalt-edging") {
+      this.addBasaltEdging(line);
+    } else if (line.kind === "bluestone-drain") {
+      this.addBluestoneDrain(line);
+    } else {
+      this.addWallLine(line);
+    }
+  }
+
+  private addPathPreview(path: LevelPath): void {
+    const material = this.materials[pathPreviewMaterialKey(path)];
+    const shoulderWidth = path.width + (path.kind === "steps" ? 0.36 : path.kind === "rail" ? 2.1 : path.kind === "cycleway" ? 1.45 : path.kind === "service" ? 1.2 : 0.95);
+    for (let i = 0; i < path.points.length - 1; i += 1) {
+      const a = path.points[i];
+      const b = path.points[i + 1];
+      this.addPathSegment(a, b, shoulderWidth, this.materials.dirt, PATH_SHOULDER_SURFACE_Y);
+      this.addPathSegment(a, b, path.width, material, PATH_SURFACE_Y);
+    }
+    for (const point of path.points) {
+      this.addPathCap(point, shoulderWidth * 0.52, this.materials.dirt, PATH_SHOULDER_SURFACE_Y);
+      this.addPathCap(point, path.width * 0.52, material, PATH_CAP_SURFACE_Y);
+    }
+    this.addPathMarkings(path);
+  }
+
+  private addPathSurfacePatchPreview(patch: PathSurfacePatch): void {
+    const mesh = this.createTerrainOverlayRect(
+      patch.position,
+      patch.angle,
+      patch.length,
+      patch.width,
+      patch.kind === "path-junction-wear" ? PATH_JUNCTION_PATCH_SURFACE_Y : PATH_PATCH_SURFACE_Y,
+      this.pathSurfacePatchMaterial(patch)
+    );
+    mesh.receiveShadow = true;
+    this.scene.add(mesh);
+  }
+
+  private addStreetEdgePreview(street: StreetEdge): void {
+    const asphalt = new THREE.MeshStandardMaterial({ color: 0x252a26, roughness: 0.88 });
+    const residential = new THREE.MeshStandardMaterial({ color: 0x2d302c, roughness: 0.9 });
+    const kerb = new THREE.MeshStandardMaterial({ color: 0xa9a18d, roughness: 0.7 });
+    const line = new THREE.MeshBasicMaterial({ color: 0xcfc8a6, transparent: true, opacity: 0.74 });
+    const rail = new THREE.MeshBasicMaterial({ color: 0x6f756d, transparent: true, opacity: 0.8 });
+    const roadMaterial = street.kind === "residential" ? residential : asphalt;
+    for (let i = 0; i < street.points.length - 1; i += 1) {
+      this.addStreetSegment(street.points[i], street.points[i + 1], street.width, roadMaterial, kerb, line, rail, street.hasTram === true);
+    }
+  }
+
+  private addSportsFixturePreview(fixture: SportsFixture): void {
+    if (fixture.kind === "football-goal") {
+      this.addFootballGoal(fixture);
+    } else {
+      this.addBasketballHoop(fixture);
+    }
+  }
+
+  private addAmenityPreview(amenity: AmenityPoint): void {
+    const angle = this.angleFromId(amenity.id);
+    if (amenity.kind === "bench") {
+      this.addBench(amenity.position, angle);
+      this.addAmenityHalo(amenity.position, 0x9ebf86, 0.62);
+    } else if (amenity.kind === "picnic_table") {
+      this.addPicnicTable(amenity.position, angle);
+      this.addAmenityHalo(amenity.position, 0x9ebf86, 0.62);
+    } else if (amenity.kind === "table_tennis") {
+      this.addTableTennis(amenity.position, angle);
+      this.addAmenityHalo(amenity.position, 0x61a8d3, 0.68);
+    } else if (amenity.kind === "waste_basket") {
+      this.addWasteBasket(amenity.position);
+      this.addAmenityHalo(amenity.position, 0xd0a343, 0.5);
+    } else if (amenity.kind === "drinking_water") {
+      this.addDrinkingFountain(amenity.position);
+      this.addAmenityHalo(amenity.position, 0x61a8d3, 0.68);
+    } else if (amenity.kind === "bicycle_parking") {
+      this.addBikeRack(amenity.position, angle);
+      this.addAmenityHalo(amenity.position, 0xc2c8ba, 0.58);
+    } else if (amenity.kind === "bbq") {
+      this.addSupplyCrate(amenity.position, angle);
+      this.addAmenityHalo(amenity.position, 0xd0a343, 0.64);
+    } else if (amenity.kind === "toilets") {
+      this.addToiletSign(amenity.position, angle);
+      this.addAmenityHalo(amenity.position, 0x61a8d3, 0.52);
+    }
+  }
+
+  private addParkLifeDetailPreview(detail: ParkLifeDetail): void {
+    if (detail.kind === "dog-sign") {
+      this.addDogAreaSign(detail);
+    } else if (detail.kind === "picnic-blanket") {
+      this.addPicnicBlanket(detail);
+    } else if (detail.kind === "notice-board") {
+      this.addNoticeBoard(detail);
+    } else if (detail.kind === "casual-bike") {
+      this.addCasualBike(detail);
+    } else if (detail.kind === "training-cones") {
+      this.addTrainingCones(detail);
+    } else if (detail.kind === "dog-water-bowl") {
+      this.addDogWaterBowl(detail);
+    } else if (detail.kind === "picnic-cooler") {
+      this.addPicnicCooler(detail);
+    } else if (detail.kind === "sports-bag") {
+      this.addSportsBag(detail);
+    } else if (detail.kind === "cricket-nets") {
+      this.addCricketNets(detail);
+    } else {
+      this.addChalkMark(detail);
+    }
+  }
+
+  updateTimeOfDay(timeOfDay: TimeOfDayState): void {
+    if (this.ambientLight) {
+      this.ambientLight.color.copy(this.ambientNightSky).lerp(this.ambientDaySky, timeOfDay.daylight);
+      this.ambientLight.groundColor.copy(this.ambientNightGround).lerp(this.ambientDayGround, timeOfDay.daylight);
+      this.ambientLight.intensity = 0.94 + timeOfDay.daylight * 0.52 + timeOfDay.dawnDusk * 0.12;
+    }
+
+    if (this.keyLight) {
+      this.keyLight.color.copy(this.keyNightColor).lerp(this.keyDayColor, timeOfDay.daylight).lerp(this.keyDawnColor, timeOfDay.dawnDusk * 0.35);
+      this.keyLight.intensity = 2.36 + timeOfDay.daylight * 0.9 + timeOfDay.dawnDusk * 0.22;
+      this.keyLight.position.set(
+        THREE.MathUtils.lerp(-150, 130, timeOfDay.daylight),
+        THREE.MathUtils.lerp(205, 175, timeOfDay.daylight),
+        THREE.MathUtils.lerp(75, -120, timeOfDay.daylight)
+      );
+    }
+
+    if (this.emergencyLight) {
+      this.emergencyLight.intensity = 3.45 + timeOfDay.night * 1.95;
+    }
+  }
+
+  createUpgradeStations(): void {
+    for (const station of this.level.upgradeStations) {
+      this.addUpgradeStation(station);
+    }
+  }
+
+  private addUpgradeStation(station: UpgradeStation): void {
+    const material = this.standardDetailMaterial("upgrade-station-crate", 0xd0a343, 0.55, 0.08);
+    const group = new THREE.Group();
+    group.name = station.label;
+    const crate = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.5, 1.8), material);
+    crate.position.y = 0.75;
+    crate.castShadow = true;
+    group.add(crate);
+
+    const lamp = new THREE.PointLight(0xd5a948, 1.2, 18);
+    lamp.position.y = 2.4;
+    group.add(lamp);
+
+    group.position.set(station.position.x, this.boxSupportY(station.position, 0, 1.3, 0.9), station.position.z);
+    this.scene.add(group);
   }
 
   getRenderedTreeCount(): number {
@@ -1384,21 +1667,40 @@ export class WorldBuilder {
     return mesh;
   }
 
-  private addBlockPolygon(polygon: Vec2[], height: number, material: THREE.Material, frontSign = -1): void {
+  private addBlockPolygon(polygon: Vec2[], height: number, material: THREE.Material, frontSign = -1, options: { openFront?: boolean } = {}): void {
     const footprint = this.fitBoxFromPolygon(polygon, 0.8, 0.45);
     const center = footprint.center;
     const rotation = -footprint.angle;
     const baseY = this.boxSupportY(center, rotation, footprint.halfX, footprint.halfZ);
-    const geometry = new THREE.BoxGeometry(footprint.halfX * 2, height, footprint.halfZ * 2);
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(center.x, baseY + height / 2, center.z);
-    mesh.rotation.y = rotation;
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    this.scene.add(mesh);
+    if (options.openFront) {
+      const wallThickness = 0.42;
+      this.addLocalBox(center, rotation, 0, -frontSign * (footprint.halfZ - wallThickness * 0.5), footprint.halfX * 2, height, wallThickness, material, height / 2);
+      for (const side of [-1, 1]) {
+        this.addLocalBox(center, rotation, side * (footprint.halfX - wallThickness * 0.5), 0, wallThickness, height, footprint.halfZ * 2, material, height / 2);
+        this.addLocalBox(
+          center,
+          rotation,
+          side * footprint.halfX * 0.78,
+          frontSign * (footprint.halfZ - wallThickness * 0.5),
+          footprint.halfX * 0.18,
+          2.9,
+          wallThickness,
+          material,
+          1.45
+        );
+      }
+    } else {
+      const geometry = new THREE.BoxGeometry(footprint.halfX * 2, height, footprint.halfZ * 2);
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.position.set(center.x, baseY + height / 2, center.z);
+      mesh.rotation.y = rotation;
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      this.scene.add(mesh);
+    }
     const roof = new THREE.Mesh(new THREE.BoxGeometry(footprint.halfX * 2 + 1.8, 0.45, footprint.halfZ * 2 + 1.6), this.materials.timber);
     roof.position.set(center.x, baseY + height + 0.25, center.z);
-    roof.rotation.y = mesh.rotation.y;
+    roof.rotation.y = rotation;
     roof.castShadow = true;
     this.scene.add(roof);
 
@@ -1894,9 +2196,14 @@ export class WorldBuilder {
     const frontOut = (distanceFromFront: number) => frontZ + frontSign * distanceFromFront;
     const frontIn = (distanceFromFront: number) => frontZ - frontSign * distanceFromFront;
 
-    this.addBlockPolygon(landmark.polygon, 5.8, this.materials.brick, frontSign);
+    this.addBlockPolygon(landmark.polygon, 5.8, this.materials.brick, frontSign, { openFront: true });
 
-    this.addLocalBox(center, rotation, 0, frontZ, footprint.halfX * 1.45, 1.35, 0.08, this.materials.darkOpening, 1.75, false);
+    const frontScreenMaterial = this.standardDetailMaterial("grandstand-front-transparent-screen", 0x0b1718, 0.5, 0.06, true, 0.24);
+    frontScreenMaterial.depthWrite = false;
+    this.addLocalBox(center, rotation, 0, frontZ, footprint.halfX * 1.36, 1.18, 0.045, frontScreenMaterial, 1.72, false);
+    for (const y of [1.16, 2.34]) {
+      this.addLocalBox(center, rotation, 0, frontOut(0.02), footprint.halfX * 1.42, 0.08, 0.08, this.materials.metal, y, false);
+    }
     for (const x of [-0.42, -0.14, 0.14, 0.42]) {
       this.addLocalCylinder(center, rotation, x * footprint.halfX * 2, frontOut(0.08), 0.09, 0.12, 2.8, this.materials.metal);
     }

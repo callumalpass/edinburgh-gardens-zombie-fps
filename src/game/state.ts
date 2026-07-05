@@ -2,11 +2,10 @@ import type * as THREE from "three";
 import type { AmenityPoint } from "./types";
 import type { WeaponId } from "./weapons";
 import type { ZombieType } from "./waves";
-import type { ActiveObjective } from "./objectives";
 
 export type GameStateName = "ready" | "playing" | "gameover";
 export type HitZone = "head" | "body" | "legs";
-export type ZombieAiState = "wander" | "investigate" | "chase";
+export type ZombieAiState = "wander" | "investigate" | "search" | "chase";
 export type WavePhase = "active" | "intermission";
 
 export interface Zombie {
@@ -25,6 +24,10 @@ export interface Zombie {
   target: { x: number; z: number } | null;
   lastKnownPlayer: { x: number; z: number } | null;
   wanderTimer: number;
+  searchTimer: number;
+  memoryTimer: number;
+  vocalCooldown: number;
+  stepCooldown: number;
   staggerTimer: number;
   screamCooldown: number;
 }
@@ -95,12 +98,6 @@ export interface Snapshot {
   crouching: boolean;
   wavePhase: WavePhase;
   intermissionTimer: number;
-  objective: {
-    id: string;
-    progress: number;
-    holdSeconds: number;
-    completed: boolean;
-  } | null;
 }
 
 export interface GameTestApi {
@@ -124,6 +121,6 @@ export interface GameTestApi {
   testZombieStates: () => Array<{ id: number; type: ZombieType; aiState: ZombieAiState; hasTarget: boolean; targetDistance: number | null; x: number; z: number }>;
   testZombieFacing: () => Array<{ id: number; faceAlignment: number; targetDistance: number }>;
   testSetCrouching: (crouching: boolean) => boolean;
-  testStartIntermission: () => ActiveObjective | null;
+  testStartIntermission: () => boolean;
   dispose: () => void;
 }

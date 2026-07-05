@@ -5,6 +5,7 @@ playwright-report/
 coverage/
 .vite/
 docs/research/raw/
+docs/research/renders/
 
 *.log
 .DS_Store

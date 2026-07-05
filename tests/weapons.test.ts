@@ -11,6 +11,7 @@ import {
   hasWeapon,
   startReload,
   switchWeapon,
+  WEAPON_DEFINITIONS,
   upgradeCost
 } from "../src/game/weapons";
 
@@ -81,5 +82,25 @@ describe("weapon upgrades", () => {
     expect(shotgun.staggerPower).toBeGreaterThan(stats.staggerPower);
     expect(shotgun.scopeZoom).toBe(1);
     expect(getWeaponStats(addWeapon(loadout, "smg")).sway).toBeGreaterThan(stats.sway);
+  });
+
+  it("gives weapons sharper tactical identities", () => {
+    let loadout = createInitialLoadout();
+    const knife = getWeaponStats(loadout);
+    loadout = addWeapon(loadout, "machete");
+    const machete = getWeaponStats(loadout);
+    loadout = addWeapon(loadout, "shotgun");
+    const shotgun = getWeaponStats(loadout);
+    loadout = addWeapon(loadout, "smg");
+    const smg = getWeaponStats(loadout);
+    loadout = addWeapon(loadout, "rifle");
+    const rifle = getWeaponStats(loadout);
+
+    expect(knife.noiseMultiplier).toBeLessThan(machete.noiseMultiplier);
+    expect(machete.penetration).toBeGreaterThan(knife.penetration);
+    expect(shotgun.noiseMultiplier).toBeGreaterThan(smg.noiseMultiplier);
+    expect(rifle.noiseMultiplier).toBeGreaterThan(shotgun.noiseMultiplier);
+    expect(smg.movingSpread).toBeGreaterThan(rifle.movingSpread);
+    expect(WEAPON_DEFINITIONS.rifle.pickupAmmo).toBeLessThan(WEAPON_DEFINITIONS.carbine.pickupAmmo);
   });
 });

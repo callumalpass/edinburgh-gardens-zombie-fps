@@ -105,11 +105,10 @@ test("game loop advances and gameplay helpers mutate state", async ({ page }) =>
   });
   expect(afterShot.ammo).toBeLessThan(beforeShot.ammo);
   expect(afterShot.shotBloom).toBeGreaterThan(0);
-  const objective = await page.evaluate(() => window.__EGAME__!.testStartIntermission());
-  expect(objective?.id).toBeTruthy();
+  const startedIntermission = await page.evaluate(() => window.__EGAME__!.testStartIntermission());
+  expect(startedIntermission).toBe(true);
   const intermission = await page.evaluate(() => window.__EGAME__!.snapshot());
   expect(intermission.wavePhase).toBe("intermission");
-  expect(intermission.objective?.completed).toBe(false);
   expect(intermission.intermissionTimer).toBeGreaterThan(0);
   await page.evaluate(() => window.__EGAME__!.testPickupWeapon("shotgun"));
   const afterPickup = await page.evaluate(() => window.__EGAME__!.snapshot());

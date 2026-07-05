@@ -6,8 +6,9 @@ describe("noise system", () => {
     expect(movementNoiseKind(0.4, true, false)).toBeNull();
     expect(movementNoiseKind(2.2, true, false)).toBe("footstep");
     expect(movementNoiseKind(9, false, true)).toBe("sprint");
-    expect(movementNoiseMultiplier(true, false)).toBeLessThan(movementNoiseMultiplier(false, false));
-    expect(movementNoiseMultiplier(false, true)).toBeGreaterThan(movementNoiseMultiplier(false, false));
+    expect(movementNoiseMultiplier(true, "grass")).toBeLessThan(movementNoiseMultiplier(false, "grass"));
+    expect(movementNoiseMultiplier(false, "gravel")).toBeGreaterThan(movementNoiseMultiplier(false, "grass"));
+    expect(movementNoiseMultiplier(false, "grass", 0.88)).toBeLessThan(movementNoiseMultiplier(false, "grass"));
   });
 
   it("returns the strongest audible event for nearby zombies and expires old events", () => {
@@ -16,9 +17,9 @@ describe("noise system", () => {
     noise.emit("gunshot", { x: 72, z: 0 });
 
     expect(noise.strongestAt({ x: 80, z: 0 })?.kind).toBe("gunshot");
-    expect(noise.strongestAt({ x: 300, z: 0 })).toBeNull();
+    expect(noise.strongestAt({ x: 370, z: 0 })).toBeNull();
 
-    noise.update(6);
+    noise.update(7);
     expect(noise.strongestAt({ x: 72, z: 0 })).toBeNull();
   });
 

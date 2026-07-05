@@ -1,7 +1,8 @@
 import { distance } from "./geo";
 import type { Vec2 } from "./types";
 
-export type NoiseKind = "footstep" | "sprint" | "gunshot" | "melee" | "reload" | "climb" | "objective" | "scream";
+export type NoiseKind = "footstep" | "sprint" | "gunshot" | "melee" | "reload" | "climb" | "scream";
+export type MovementSurface = "grass" | "dirt" | "gravel" | "asphalt" | "concrete" | "rail";
 
 export interface NoiseEvent {
   id: number;
@@ -21,11 +22,10 @@ export interface NoiseProfile {
 export const NOISE_PROFILES: Record<NoiseKind, NoiseProfile> = {
   footstep: { radius: 13, intensity: 0.34, ttl: 1.2 },
   sprint: { radius: 31, intensity: 0.72, ttl: 1.65 },
-  gunshot: { radius: 210, intensity: 1.18, ttl: 5.2 },
-  melee: { radius: 10, intensity: 0.22, ttl: 0.9 },
-  reload: { radius: 16, intensity: 0.28, ttl: 1.4 },
+  gunshot: { radius: 280, intensity: 1.36, ttl: 6.8 },
+  melee: { radius: 9, intensity: 0.2, ttl: 0.9 },
+  reload: { radius: 18, intensity: 0.3, ttl: 1.5 },
   climb: { radius: 44, intensity: 0.68, ttl: 2.2 },
-  objective: { radius: 58, intensity: 0.78, ttl: 2.6 },
   scream: { radius: 98, intensity: 0.95, ttl: 3.4 }
 };
 
@@ -46,19 +46,21 @@ export class NoiseSystem {
     this.events.length = 0;
   }
 
-  emit(kind: NoiseKind, position: Vec2, multiplier = 1): void {
+  emit(kind: NoiseKind, position: Vec2, multiplier = 1): NoiseEvent {
     const profile = NOISE_PROFILES[kind];
-    this.events.push({
+    const event = {
       id: this.nextId++,
       kind,
       position: { ...position },
       radius: profile.radius * multiplier,
       intensity: profile.intensity * multiplier,
       ttl: profile.ttl
-    });
+    };
+    this.events.push(event);
     if (this.events.length > 32) {
       this.events.shift();
     }
+    return event;
   }
 
   strongestAt(position: Vec2, hearingMultiplier = 1): NoiseEvent | null {
@@ -88,8 +90,15 @@ export function movementNoiseKind(speed: number, crouching: boolean, sprinting: 
   return "footstep";
 }
 
-export function movementNoiseMultiplier(crouching: boolean, onPath: boolean): number {
+export function movementNoiseMultiplier(crouching: boolean, surface: MovementSurface, weatherMask = 1): number {
   const stance = crouching ? 0.28 : 1;
-  const surface = onPath ? 1.22 : 0.78;
-  return stance * surface;
+  const surfaceMultiplier: Record<MovementSurface, number> = {
+    grass: 0.68,
+    dirt: 0.84,
+    gravel: 1.36,
+    asphalt: 1.18,
+    concrete: 1.08,
+    rail: 1.28
+  };
+  return stance * surfaceMultiplier[surface] * weatherMask;
 }

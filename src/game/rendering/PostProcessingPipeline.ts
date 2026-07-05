@@ -4,13 +4,16 @@ import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
+import type { TimeOfDayState } from "./timeOfDay";
 
 const ANIME_GRADE_SHADER = {
   uniforms: {
     tDiffuse: { value: null },
     time: { value: 0 },
     resolution: { value: new THREE.Vector2(1, 1) },
-    strength: { value: 1 }
+    strength: { value: 1 },
+    nightAmount: { value: 1 },
+    daylight: { value: 0 }
   },
   vertexShader: `
     varying vec2 vUv;
@@ -25,6 +28,8 @@ const ANIME_GRADE_SHADER = {
     uniform float time;
     uniform vec2 resolution;
     uniform float strength;
+    uniform float nightAmount;
+    uniform float daylight;
     varying vec2 vUv;
 
     float animeLuminance(vec3 color) {
@@ -54,9 +59,12 @@ const ANIME_GRADE_SHADER = {
       color = mix(color, color * highlights, smoothstep(0.6, 0.98, center) * 0.12);
       color = mix(color, floor(color * 12.0) / 12.0, 0.05 * strength);
       color = mix(color, vec3(0.025, 0.055, 0.075), edge * 0.18 * strength);
+      color = mix(color, color * vec3(0.68, 0.78, 0.9) + vec3(0.006, 0.012, 0.02), nightAmount * 0.26 * strength);
+      color = mix(color, color * vec3(1.04, 1.025, 0.96) + vec3(0.01, 0.008, 0.0), daylight * 0.08 * strength);
 
       float vignette = smoothstep(0.82, 0.22, distance(vUv, vec2(0.5)));
-      color *= mix(0.84, 1.03, vignette);
+      float vignetteFloor = mix(0.78, 0.87, daylight);
+      color *= mix(vignetteFloor, 1.035, vignette);
 
       float grain = hash(vUv * resolution + time * 41.0) - 0.5;
       color += grain * 0.012 * strength;
@@ -94,6 +102,11 @@ export class PostProcessingPipeline {
   setSize(width: number, height: number): void {
     this.composer.setSize(width, height);
     this.gradePass.uniforms.resolution.value.set(Math.max(1, width), Math.max(1, height));
+  }
+
+  setTimeOfDay(timeOfDay: TimeOfDayState): void {
+    this.gradePass.uniforms.nightAmount.value = timeOfDay.night;
+    this.gradePass.uniforms.daylight.value = timeOfDay.daylight;
   }
 
   render(dt: number, renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera): void {

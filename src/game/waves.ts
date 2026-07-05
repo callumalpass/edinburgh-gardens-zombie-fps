@@ -7,6 +7,11 @@ export interface WaveConfig {
   wave: number;
   total: number;
   spawnInterval: number;
+  packMin: number;
+  packMax: number;
+  packInterval: number;
+  stragglerCount: number;
+  stragglerInterval: number;
   healthMultiplier: number;
   speedMultiplier: number;
   typeWeights: Record<ZombieType, number>;
@@ -26,6 +31,11 @@ export function getWaveConfig(wave: number): WaveConfig {
     wave: clampedWave,
     total: 7 + clampedWave * 4 + Math.floor(Math.pow(clampedWave, 1.18)),
     spawnInterval: Math.max(0.45, 1.35 - clampedWave * 0.07),
+    packMin: clampedWave < 4 ? 2 : 3,
+    packMax: Math.min(6, 3 + Math.floor(clampedWave / 2)),
+    packInterval: Math.max(3.2, 6.4 - clampedWave * 0.34),
+    stragglerCount: Math.min(5, 1 + Math.floor(clampedWave / 2)),
+    stragglerInterval: Math.max(2.8, 5.8 - clampedWave * 0.22),
     healthMultiplier: 1 + (clampedWave - 1) * 0.15,
     speedMultiplier: 1 + Math.min(0.55, (clampedWave - 1) * 0.035),
     typeWeights: {
@@ -51,15 +61,16 @@ export function chooseZombieType(config: WaveConfig, rng: RandomSource): ZombieT
   return "shambler";
 }
 
-export function createZombieSpawn(config: WaveConfig, spawnPoints: readonly Vec2[], rng: RandomSource): ZombieSpawn {
+export function createZombieSpawn(config: WaveConfig, spawnPoints: readonly Vec2[], rng: RandomSource, anchor?: Vec2): ZombieSpawn {
   const type = chooseZombieType(config, rng);
   const base = ZOMBIE_PROFILES[type];
-  const anchor = rng.pick(spawnPoints);
+  const spawnAnchor = anchor ?? rng.pick(spawnPoints);
+  const spread = anchor ? 8 : 5;
   return {
     type,
     position: {
-      x: anchor.x + rng.range(-5, 5),
-      z: anchor.z + rng.range(-5, 5)
+      x: spawnAnchor.x + rng.range(-spread, spread),
+      z: spawnAnchor.z + rng.range(-spread, spread)
     },
     health: Math.round(base.health * config.healthMultiplier),
     speed: base.speed * config.speedMultiplier * rng.range(0.92, 1.08),
