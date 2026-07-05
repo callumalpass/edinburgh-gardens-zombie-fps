@@ -131,6 +131,9 @@ export interface InteractableFixture {
   label: string;
   kind: "rotunda" | "grandstand" | "playground" | "skate" | "basketball" | "toilets";
   position: Vec2;
+  accessPosition?: Vec2;
+  exitPosition?: Vec2;
+  accessRadius?: number;
   radius: number;
   height: number;
   prompt: string;

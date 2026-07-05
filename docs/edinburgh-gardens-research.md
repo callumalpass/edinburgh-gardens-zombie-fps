@@ -56,6 +56,7 @@ These notes record the real-world sources and implementation decisions used to s
 - Detailed OSM path/service research is stored in `docs/research/osm-path-service-inventory-2026-07-05.md`.
 - Hardscape and terrain-edge research is stored in `docs/research/hardscape-terrain-edges-2026-07-05.md`.
 - Built-feature research is stored in `docs/research/built-features-2026-07-05.md`.
+- Building-interaction research is stored in `docs/research/building-interactions-2026-07-05.md`.
 
 ## Data Notes
 

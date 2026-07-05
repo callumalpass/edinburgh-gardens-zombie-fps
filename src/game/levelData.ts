@@ -24,6 +24,14 @@ import type {
 } from "./types";
 
 const g = (lat: number, lon: number): GeoPoint => ({ lat, lon });
+const offsetPoint = (center: Vec2, angle: number, localX: number, localZ: number): Vec2 => {
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  return {
+    x: center.x + localX * cos - localZ * sin,
+    z: center.z + localX * sin + localZ * cos
+  };
+};
 
 export const RESEARCH_NOTES = [
   "Yarra City Council describes Edinburgh Gardens as a 24 hectare park with open lawns, specimen trees, shaded areas and an extensive path network.",
@@ -1740,6 +1748,10 @@ export function createLevelData(): LevelData {
   const cookMemorial = geoToWorld(g(-37.7873520, 144.9855420));
   const sportsmansMemorial = geoToWorld(g(-37.78754, 144.98066));
   const southToilets = geoToWorld(g(-37.788485, 144.983585));
+  const rotundaStairAccess = offsetPoint(rotundaCenter, -0.34, 0, -7.25);
+  const grandstandStairAccess = offsetPoint(grandstandCenter, 0.11, 6.8, -7.2);
+  const southToiletsLadderAccess = geoToWorld(g(-37.788476, 144.983624));
+  const northToiletsLadderAccess = geoToWorld(g(-37.785993, 144.982941));
   const southBbq = geoToWorld(g(-37.7890776, 144.9835871));
   const northBbq = geoToWorld(g(-37.7859107, 144.9831484));
   const northTableTennis = geoToWorld(g(-37.786470, 144.983075));
@@ -1967,12 +1979,15 @@ export function createLevelData(): LevelData {
     interactables: [
       {
         id: "rotunda-deck",
-        label: "Rotunda deck",
+        label: "Rotunda raised platform",
         kind: "rotunda",
         position: rotundaCenter,
-        radius: 13,
-        height: 5.25,
-        prompt: "E: climb the rotunda",
+        accessPosition: rotundaStairAccess,
+        exitPosition: rotundaStairAccess,
+        accessRadius: 4.2,
+        radius: 5.8,
+        height: 1.95,
+        prompt: "E: climb rotunda stairs",
         mode: "toggle",
         bypassObstacleIds: ["rotunda-core"]
       },
@@ -1981,9 +1996,12 @@ export function createLevelData(): LevelData {
         label: "Kevin Murray Stand seats",
         kind: "grandstand",
         position: grandstandCenter,
+        accessPosition: grandstandStairAccess,
+        exitPosition: grandstandStairAccess,
+        accessRadius: 5.5,
         radius: 12,
         height: 3.15,
-        prompt: "E: climb the stand",
+        prompt: "E: climb stand stairs",
         mode: "toggle",
         bypassObstacleIds: ["grandstand"]
       },
@@ -2014,9 +2032,12 @@ export function createLevelData(): LevelData {
         label: "South toilet block roof",
         kind: "toilets",
         position: southToilets,
+        accessPosition: southToiletsLadderAccess,
+        exitPosition: southToiletsLadderAccess,
+        accessRadius: 4.2,
         radius: 8,
         height: 3.25,
-        prompt: "E: climb the toilet block roof",
+        prompt: "E: climb service ladder",
         mode: "toggle",
         bypassObstacleIds: ["south-toilets"]
       },
@@ -2025,9 +2046,12 @@ export function createLevelData(): LevelData {
         label: "North toilet block roof",
         kind: "toilets",
         position: northToiletsCenter,
+        accessPosition: northToiletsLadderAccess,
+        exitPosition: northToiletsLadderAccess,
+        accessRadius: 4.2,
         radius: 8,
         height: 3.25,
-        prompt: "E: climb the toilet block roof",
+        prompt: "E: climb service ladder",
         mode: "toggle",
         bypassObstacleIds: ["north-toilets"]
       },

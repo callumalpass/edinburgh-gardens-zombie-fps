@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clampToPolygon, geoToWorld, pointInPolygon, polygonArea, polygonCentroid, WORLD_SCALE } from "../src/game/geo";
+import { clampToPolygon, distance, geoToWorld, pointInPolygon, polygonArea, polygonCentroid, WORLD_SCALE } from "../src/game/geo";
 import { createLevelData, PARK_BOUNDARY_GEO } from "../src/game/levelData";
 import type { MappedBuilding } from "../src/game/types";
 
@@ -79,6 +79,27 @@ describe("map geometry", () => {
     expect(landmarkIds.has("queen-victoria-plinth")).toBe(true);
     expect(landmarkIds.has("sportsmans-war-memorial")).toBe(true);
     expect(landmarkIds.has("cook-memorial-site")).toBe(true);
+  });
+
+  it("uses realistic access points for climbable building fixtures", () => {
+    const level = createLevelData();
+    const rotunda = level.interactables.find((fixture) => fixture.id === "rotunda-deck");
+    expect(rotunda?.accessPosition).toBeTruthy();
+    expect(rotunda?.exitPosition).toEqual(rotunda?.accessPosition);
+    expect(rotunda?.prompt).toContain("stairs");
+    expect(rotunda?.height).toBeGreaterThan(1.5);
+    expect(rotunda?.height).toBeLessThan(2.4);
+    expect(distance(rotunda!.position, rotunda!.accessPosition!)).toBeGreaterThan(6);
+    expect(pointInPolygon(rotunda!.accessPosition!, level.boundary)).toBe(true);
+
+    const grandstand = level.interactables.find((fixture) => fixture.id === "grandstand-seats");
+    expect(grandstand?.accessPosition).toBeTruthy();
+    expect(grandstand?.prompt).toContain("stairs");
+    expect(distance(grandstand!.position, grandstand!.accessPosition!)).toBeGreaterThan(5);
+
+    const roofFixtures = level.interactables.filter((fixture) => fixture.kind === "toilets" && fixture.id.endsWith("-roof"));
+    expect(roofFixtures.length).toBeGreaterThanOrEqual(2);
+    expect(roofFixtures.every((fixture) => fixture.accessPosition && fixture.prompt.includes("ladder"))).toBe(true);
   });
 
   it("uses a richer OSM-derived path and amenity network", () => {

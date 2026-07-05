@@ -110,6 +110,7 @@ test("game loop advances and gameplay helpers mutate state", async ({ page }) =>
   await page.waitForFunction(() => window.__EGAME__!.snapshot().elevation > 0.5);
   const afterInteract = await page.evaluate(() => window.__EGAME__!.snapshot());
   expect(afterInteract.elevation).toBeGreaterThan(0.5);
+  expect(afterInteract.elevation).toBeLessThan(2.5);
   await page.evaluate(() => window.__EGAME__!.testInteract("south-toilets-roof"));
   await page.waitForFunction(() => window.__EGAME__!.snapshot().elevation > 0.5);
   const afterRoof = await page.evaluate(() => window.__EGAME__!.snapshot());

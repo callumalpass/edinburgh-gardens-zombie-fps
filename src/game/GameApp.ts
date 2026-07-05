@@ -1164,8 +1164,11 @@ export class GameApp {
     let nearestDistance = Number.POSITIVE_INFINITY;
     const playerPoint = { x: this.player.position.x, z: this.player.position.z };
     for (const fixture of this.level.interactables.filter((candidate) => candidate.mode === "toggle")) {
-      const fixtureDistance = distance(playerPoint, fixture.position);
-      if (fixtureDistance < nearestDistance && fixtureDistance < fixture.radius + 3) {
+      const active = this.player.activeFixtureId === fixture.id;
+      const interactionPoint = active ? fixture.position : fixture.accessPosition ?? fixture.position;
+      const reach = active ? fixture.radius + 3 : fixture.accessRadius ?? fixture.radius + 3;
+      const fixtureDistance = distance(playerPoint, interactionPoint);
+      if (fixtureDistance < nearestDistance && fixtureDistance < reach) {
         nearest = fixture;
         nearestDistance = fixtureDistance;
       }
@@ -1177,12 +1180,17 @@ export class GameApp {
     if (this.player.activeFixtureId === fixture.id) {
       this.player.activeFixtureId = null;
       this.player.heightTarget = 0;
+      const exit = fixture.exitPosition ?? fixture.accessPosition;
+      if (exit) {
+        this.player.position.set(exit.x, this.groundY(exit), exit.z);
+      }
       this.flashStatus(`Dropped from ${fixture.label}`);
     } else {
       this.player.activeFixtureId = fixture.id;
       this.player.heightTarget = fixture.height;
+      this.player.position.set(fixture.position.x, this.groundY(fixture.position), fixture.position.z);
       this.flashStatus(`Climbed ${fixture.label}`);
-      this.noise.emit("climb", fixture.position);
+      this.noise.emit("climb", fixture.accessPosition ?? fixture.position);
     }
     this.playTone(420, 0.07, "sine", 0.04);
     return true;
@@ -1278,7 +1286,8 @@ export class GameApp {
     if (!fixture) {
       return false;
     }
-    this.player.position.set(fixture.position.x, this.groundY(fixture.position), fixture.position.z);
+    const access = fixture.accessPosition ?? fixture.position;
+    this.player.position.set(access.x, this.groundY(access), access.z);
     const toggled = this.toggleFixture(fixture);
     if (toggled && this.player.activeFixtureId === fixture.id) {
       this.player.heightTarget = fixture.height;
