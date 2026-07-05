@@ -11,7 +11,7 @@ export interface GeoPoint {
 export interface LevelPath {
   id: string;
   label: string;
-  kind: "rail" | "footway" | "cycleway" | "perimeter" | "service";
+  kind: "rail" | "footway" | "cycleway" | "perimeter" | "service" | "steps";
   points: Vec2[];
   width: number;
   surface?: "asphalt" | "concrete" | "gravel" | "sett" | "unknown";

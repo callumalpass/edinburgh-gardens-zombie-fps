@@ -28,10 +28,17 @@ https://www.openstreetmap.org/api/0.6/way/{way_id}/full.json
 
 - `22673070`: short asphalt footway connecting the north-west edge toward the north playground approach.
 - `22768137`: asphalt north-west diagonal footpath tying the central spine to the northern path network.
+- `22760900`: short north-west asphalt footway connecting the north playground approach to the northern perimeter path.
 - `75488632`: central asphalt cross-link between the rail-trail alignment and the central/eastern spine.
 - `22760904`: west connector to the Queen Victoria plinth circular path.
 - `22760905`: east connector from the Queen Victoria plinth path to the eastern diagonal/crescent paths.
+- `22760908`: north-east asphalt cycle/shared path link toward Alfred Crescent and the rail-trail edge.
 - `210387722`: private/service path beside the bowling/rotunda side of the western sporting precinct.
+- `22760906`: private/service path by the tennis and grandstand edge.
+- `403753751`: north oval entry connector.
+- `403753754`: west oval connector.
+- `715802681` to `715802684`: mapped Kevin Murray Stand step runs.
+- `715802685` to `715802690`: mapped Kevin Murray Stand footway and step-link cluster.
 - `1340465893`: south Alfred Crescent sidewalk/path edge, useful for the southern picnic lawn and future street-context work.
 - `1340465894`: short south entry spur off the Alfred Crescent path.
 - `1361307046`: short southern rail-trail cycle slip.
@@ -40,7 +47,6 @@ https://www.openstreetmap.org/api/0.6/way/{way_id}/full.json
 ## Implementation Notes
 
 - New `LevelPath.surface` and `LevelPath.source` metadata preserve source lineage without coupling rendering to OSM IDs.
-- `LevelPath.kind` now includes `service`, letting private/service ways render narrower and darker than formal shared paths.
+- `LevelPath.kind` now includes `service` and `steps`, letting private/service ways render narrower and darker than formal shared paths while mapped stair runs render as concrete treads.
 - No collision blockers were added for these paths. They are visual/walkable surface cues.
 - Street-edge sidewalks that cross just outside the formal park polygon are intentionally retained for realism and as a base for later road/tram context.
-

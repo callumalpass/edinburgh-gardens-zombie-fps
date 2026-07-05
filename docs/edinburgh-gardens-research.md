@@ -82,6 +82,7 @@ These notes record the real-world sources and implementation decisions used to s
 - Tree source refresh research is stored in `docs/research/tree-source-refresh-2026-07-05.md`.
 - Human-use traces research is stored in `docs/research/human-use-traces-2026-07-05.md`.
 - Full object placement audit research is stored in `docs/research/full-object-placement-audit-2026-07-05.md`.
+- Building realism pass research is stored in `docs/research/building-realism-pass-2026-07-05.md`.
 - Local raw research asset guidance is stored in `docs/research/raw-assets.md`.
 - Research/data pipeline automation is stored in `docs/research/data-pipeline-automation-2026-07-05.md` and `docs/research/research-manifest.json`.
 

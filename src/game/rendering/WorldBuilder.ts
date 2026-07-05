@@ -58,6 +58,7 @@ export interface GameMaterials {
 export class WorldBuilder {
   private renderedTreeCount = 0;
   private renderedGrassClumpCount = 0;
+  private readonly detailMaterialCache = new Map<string, THREE.Material>();
   private readonly treeMaterialCache = new Map<string, TreeMaterialSet>();
   private readonly treeTrunkGeometry = new THREE.CylinderGeometry(0.72, 1, 1, 8);
   private readonly treeBranchGeometry = new THREE.CylinderGeometry(0.55, 1, 1, 6);
@@ -776,13 +777,13 @@ export class WorldBuilder {
     const rearZ = -footprint.halfZ - 0.08;
 
     if (building.detailProfile === "tennis-pavilion") {
-      this.addLocalBox(center, rotation, 0, frontZ + 0.9, footprint.halfX * 1.45, 0.08, 1.55, this.materials.concrete, 0.14, false);
-      this.addLocalBox(center, rotation, 0, frontZ + 0.72, footprint.halfX * 1.5, 0.18, 1.28, this.materials.metal, building.height + 0.1);
+      this.addBuildingApron(center, rotation, 0, frontZ + 0.9, footprint.halfX * 1.45, 1.55);
+      this.addBuildingAwning(center, rotation, 0, frontZ + 0.72, footprint.halfX * 1.5, 1.28, building.height + 0.1, this.materials.metal);
       for (const x of [-0.42, 0, 0.42]) {
         this.addLocalCylinder(center, rotation, x * footprint.halfX * 2, frontZ + 0.42, 0.055, 0.07, 2.7, this.materials.metal);
       }
       for (const x of [-0.55, 0, 0.55]) {
-        this.addLocalBox(center, rotation, x * footprint.halfX * 1.15, rearZ - 0.03, footprint.halfX * 0.3, 1.15, 0.08, this.materials.darkOpening, 1.45, false);
+        this.addBuildingWindow(center, rotation, x * footprint.halfX * 1.15, rearZ - 0.03, footprint.halfX * 0.3, 1.15, 1.45);
       }
       this.addLocalBox(center, rotation, 0, rearZ - 0.08, footprint.halfX * 1.35, 1.55, 0.12, this.materials.hedge, 1.1);
       this.addLabel("Fitzroy Tennis Club", center, building.height + 1.45);
@@ -790,10 +791,10 @@ export class WorldBuilder {
     }
 
     if (building.detailProfile === "bowling-club") {
-      this.addLocalBox(center, rotation, -footprint.halfX * 0.18, frontZ + 0.82, footprint.halfX * 1.42, 0.12, 1.7, this.materials.concrete, 0.14, false);
-      this.addLocalBox(center, rotation, -footprint.halfX * 0.18, frontZ + 0.58, footprint.halfX * 1.5, 0.22, 1.35, this.materials.timber, building.height + 0.08);
+      this.addBuildingApron(center, rotation, -footprint.halfX * 0.18, frontZ + 0.82, footprint.halfX * 1.42, 1.7, 0.12);
+      this.addBuildingAwning(center, rotation, -footprint.halfX * 0.18, frontZ + 0.58, footprint.halfX * 1.5, 1.35, building.height + 0.08, this.materials.timber, 0.22);
       for (const x of [-0.58, -0.22, 0.14, 0.5]) {
-        this.addLocalBox(center, rotation, x * footprint.halfX, frontZ - 0.02, 1.35, 0.86, 0.09, this.materials.darkOpening, 1.36, false);
+        this.addBuildingWindow(center, rotation, x * footprint.halfX, frontZ - 0.02, 1.35, 0.86, 1.36, 0.09);
       }
       for (const x of [-0.66, 0.66]) {
         this.addLocalBox(center, rotation, x * footprint.halfX, frontZ + 0.25, 0.12, 1.35, 0.12, this.materials.timber, 0.8);
@@ -803,10 +804,10 @@ export class WorldBuilder {
     }
 
     if (building.detailProfile === "gatehouse") {
-      this.addLocalBox(center, rotation, 0, 0, footprint.halfX * 2.3, 0.42, footprint.halfZ * 2.45, this.materials.timber, building.height + 0.16);
-      this.addLocalBox(center, rotation, 0, frontZ + 0.02, footprint.halfX * 0.82, 1.65, 0.09, this.materials.darkOpening, 1.08, false);
+      this.addBuildingAwning(center, rotation, 0, 0, footprint.halfX * 2.3, footprint.halfZ * 2.45, building.height + 0.16, this.materials.timber, 0.42);
+      this.addBuildingDoor(center, rotation, 0, frontZ + 0.02, footprint.halfX * 0.82, 1.65, 1.08);
       for (const x of [-0.72, 0.72]) {
-        this.addLocalBox(center, rotation, x * footprint.halfX, frontZ + 0.015, footprint.halfX * 0.42, 0.62, 0.08, this.materials.line, 1.78, false);
+        this.addBuildingSign(center, rotation, x * footprint.halfX, frontZ + 0.015, footprint.halfX * 0.42, 0.62, 1.78, 0xe8e0b6);
       }
       this.addLabel("Freeman Street gatehouse", center, building.height + 1.15);
       return;
@@ -817,31 +818,31 @@ export class WorldBuilder {
       dome.position.set(center.x, this.radialSupportY(center, footprint.halfX) + building.height + 0.48, center.z);
       dome.castShadow = true;
       this.scene.add(dome);
-      this.addLocalBox(center, rotation, 0, frontZ + 0.18, footprint.halfX * 0.8, 1.2, 0.08, this.materials.darkOpening, 0.86, false);
+      this.addBuildingDoor(center, rotation, 0, frontZ + 0.18, footprint.halfX * 0.8, 1.2, 0.86);
       return;
     }
 
     if (building.detailProfile === "community-centre") {
-      this.addLocalBox(center, rotation, 0, frontZ + 0.48, footprint.halfX * 1.35, 0.1, 1.05, this.materials.concrete, 0.13, false);
+      this.addBuildingApron(center, rotation, 0, frontZ + 0.48, footprint.halfX * 1.35, 1.05, 0.1);
       for (const x of [-0.62, -0.22, 0.22, 0.62]) {
-        this.addLocalBox(center, rotation, x * footprint.halfX, frontZ + 0.02, footprint.halfX * 0.32, 0.72, 0.08, this.materials.darkOpening, 1.82, false);
+        this.addBuildingWindow(center, rotation, x * footprint.halfX, frontZ + 0.02, footprint.halfX * 0.32, 0.72, 1.82);
       }
       this.addLabel("Emely Baker Centre", center, building.height + 1.35);
       return;
     }
 
     if (building.detailProfile === "amenities") {
-      this.addLocalBox(center, rotation, 0, frontZ + 0.34, footprint.halfX * 1.3, 0.09, 0.84, this.materials.concrete, 0.12, false);
+      this.addBuildingApron(center, rotation, 0, frontZ + 0.34, footprint.halfX * 1.3, 0.84, 0.09);
       for (const x of [-0.42, 0, 0.42]) {
-        this.addLocalBox(center, rotation, x * footprint.halfX, frontZ + 0.02, footprint.halfX * 0.28, 1.38, 0.08, this.materials.darkOpening, 1.02, false);
+        this.addBuildingDoor(center, rotation, x * footprint.halfX, frontZ + 0.02, footprint.halfX * 0.28, 1.38, 1.02);
       }
-      this.addLocalBox(center, rotation, 0, frontZ + 0.03, footprint.halfX * 0.48, 0.45, 0.09, this.materials.line, 2.48, false);
+      this.addBuildingSign(center, rotation, 0, frontZ + 0.03, footprint.halfX * 0.48, 0.45, 2.48, 0xe8e0b6);
       return;
     }
 
     if (building.detailProfile === "bowling-shed") {
-      this.addLocalBox(center, rotation, 0, 0, footprint.halfX * 2.18, 0.22, footprint.halfZ * 2.28, this.materials.metal, building.height + 0.1);
-      this.addLocalBox(center, rotation, 0, frontZ + 0.02, footprint.halfX * 0.95, 1.15, 0.08, this.materials.darkOpening, 0.74, false);
+      this.addBuildingAwning(center, rotation, 0, 0, footprint.halfX * 2.18, footprint.halfZ * 2.28, building.height + 0.1, this.materials.metal, 0.22);
+      this.addBuildingDoor(center, rotation, 0, frontZ + 0.02, footprint.halfX * 0.95, 1.15, 0.74);
     }
   }
 
@@ -1172,6 +1173,143 @@ export class WorldBuilder {
     mesh.receiveShadow = true;
     this.scene.add(mesh);
     return mesh;
+  }
+
+  private basicDetailMaterial(key: string, color: number): THREE.MeshBasicMaterial {
+    const cacheKey = `basic:${key}:${color.toString(16)}`;
+    let material = this.detailMaterialCache.get(cacheKey);
+    if (!material) {
+      material = new THREE.MeshBasicMaterial({ color });
+      this.detailMaterialCache.set(cacheKey, material);
+    }
+    return material as THREE.MeshBasicMaterial;
+  }
+
+  private standardDetailMaterial(
+    key: string,
+    color: number,
+    roughness = 0.72,
+    metalness = 0.08,
+    transparent = false,
+    opacity = 1
+  ): THREE.MeshStandardMaterial {
+    const cacheKey = `standard:${key}:${color.toString(16)}:${roughness}:${metalness}:${transparent}:${opacity}`;
+    let material = this.detailMaterialCache.get(cacheKey);
+    if (!material) {
+      material = new THREE.MeshStandardMaterial({ color, roughness, metalness, transparent, opacity });
+      this.detailMaterialCache.set(cacheKey, material);
+    }
+    return material as THREE.MeshStandardMaterial;
+  }
+
+  private addBuildingApron(
+    center: Vec2,
+    rotation: number,
+    localX: number,
+    localZ: number,
+    width: number,
+    depth: number,
+    height = 0.08
+  ): THREE.Mesh {
+    return this.addLocalBox(center, rotation, localX, localZ, width, height, depth, this.materials.concrete, 0.13, false);
+  }
+
+  private addBuildingAwning(
+    center: Vec2,
+    rotation: number,
+    localX: number,
+    localZ: number,
+    width: number,
+    depth: number,
+    y: number,
+    material: THREE.Material = this.materials.metal,
+    height = 0.18
+  ): THREE.Mesh {
+    return this.addLocalBox(center, rotation, localX, localZ, width, height, depth, material, y);
+  }
+
+  private addBuildingDoor(
+    center: Vec2,
+    rotation: number,
+    localX: number,
+    localZ: number,
+    width: number,
+    height: number,
+    y: number,
+    depth = 0.08
+  ): THREE.Mesh {
+    return this.addLocalBox(center, rotation, localX, localZ, width, height, depth, this.materials.darkOpening, y, false);
+  }
+
+  private addBuildingWindow(
+    center: Vec2,
+    rotation: number,
+    localX: number,
+    localZ: number,
+    width: number,
+    height: number,
+    y: number,
+    depth = 0.08
+  ): THREE.Mesh {
+    return this.addLocalBox(center, rotation, localX, localZ, width, height, depth, this.materials.darkOpening, y, false);
+  }
+
+  private addBuildingSign(
+    center: Vec2,
+    rotation: number,
+    localX: number,
+    localZ: number,
+    width: number,
+    height: number,
+    y: number,
+    color = 0x2e6c79,
+    depth = 0.09
+  ): THREE.Mesh {
+    return this.addLocalBox(center, rotation, localX, localZ, width, height, depth, this.basicDetailMaterial("building-sign", color), y, false);
+  }
+
+  private addBuildingRoofVent(
+    center: Vec2,
+    rotation: number,
+    localX: number,
+    localZ: number,
+    buildingHeight: number,
+    width = 0.62,
+    depth = 0.38
+  ): THREE.Mesh {
+    return this.addLocalBox(center, rotation, localX, localZ, width, 0.22, depth, this.materials.metal, buildingHeight + 0.28);
+  }
+
+  private addBuildingWallLight(center: Vec2, rotation: number, localX: number, localZ: number, y = 2.35): THREE.Mesh {
+    const lightMaterial = this.standardDetailMaterial("warm-wall-light", 0xf0b85d, 0.42, 0.05);
+    return this.addLocalBox(center, rotation, localX, localZ, 0.28, 0.2, 0.12, lightMaterial, y, false);
+  }
+
+  private addBuildingGutter(
+    center: Vec2,
+    rotation: number,
+    localX: number,
+    localZ: number,
+    width: number,
+    buildingHeight: number
+  ): THREE.Mesh {
+    return this.addLocalBox(center, rotation, localX, localZ, width, 0.12, 0.12, this.materials.metal, buildingHeight + 0.02);
+  }
+
+  private addBuildingServiceLadder(
+    center: Vec2,
+    rotation: number,
+    localX: number,
+    localZ: number,
+    height: number,
+    y = 1.35
+  ): void {
+    for (const side of [-1, 1]) {
+      this.addLocalBox(center, rotation, localX + side * 0.18, localZ, 0.045, height, 0.055, this.materials.metal, y, false);
+    }
+    for (let rung = 0; rung < 5; rung += 1) {
+      this.addLocalBox(center, rotation, localX, localZ + 0.01, 0.46, 0.045, 0.06, this.materials.metal, 0.48 + rung * 0.42, false);
+    }
   }
 
   private addGrandstand(landmark: Landmark): void {

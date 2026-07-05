@@ -87,6 +87,7 @@ export const RESEARCH_NOTES = [
   "Street edges now use a bounded OSM road query for Alfred Crescent, Freeman Street, Brunswick Street and St Georges Road, including trunk-road tram cues.",
   "Small park-life details are stored as sourceable level data so picnic, dog-area, cycling and sports-use cues remain separate from collision and amenity loot data.",
   "A 2026-07-05 full-object placement audit checked the current OSM bounded extract against all visible, blocking and climbable object families; missing raingarden, storage-tank and cricket-net cues were added and climb blockers now have matching visible structures.",
+  "A 2026-07-05 path and raingarden review added the remaining OSM-mapped grandstand steps, oval connectors and north-side path links, and remodeled the skate-precinct stormwater garden as a terraced treatment garden.",
   "Micro-terrain modifiers now layer path crowns, worn shoulders, root mounds, oval banking and drainage swales over the broad Vicmap elevation interpolation.",
   "Path surface transition patches now derive feathered edges and compacted junctions from mapped paths, with a small set of researched desire paths through high-use lawns.",
   "See docs/edinburgh-gardens-research.md for source URLs, query notes, data licensing notes and implementation decisions."
@@ -1271,6 +1272,21 @@ const OSM_EXTRA_PATHS_GEO: Array<{
     ]
   },
   {
+    id: "osm-22760900-north-west-short-footway",
+    label: "North-west short footway",
+    kind: "footway",
+    width: 1.85,
+    surface: "asphalt",
+    source: "OpenStreetMap way 22760900",
+    points: [
+      g(-37.7856850, 144.9828163),
+      g(-37.7856637, 144.9827655),
+      g(-37.7856290, 144.9827042),
+      g(-37.7855917, 144.9826426),
+      g(-37.7855462, 144.9826139)
+    ]
+  },
+  {
     id: "osm-north-curve",
     label: "Northern shared path curve",
     kind: "cycleway",
@@ -1300,6 +1316,19 @@ const OSM_EXTRA_PATHS_GEO: Array<{
       g(-37.7877748, 144.9840060),
       g(-37.7867948, 144.9843718),
       g(-37.7860141, 144.9847216),
+      g(-37.7859099, 144.9847618)
+    ]
+  },
+  {
+    id: "osm-22760908-north-east-cycle-link",
+    label: "North-east Alfred Crescent cycle link",
+    kind: "cycleway",
+    width: 3.2,
+    surface: "asphalt",
+    source: "OpenStreetMap way 22760908",
+    points: [
+      g(-37.7867519, 144.9835302),
+      g(-37.7859575, 144.9847055),
       g(-37.7859099, 144.9847618)
     ]
   },
@@ -1458,6 +1487,179 @@ const OSM_EXTRA_PATHS_GEO: Array<{
     ]
   },
   {
+    id: "osm-403753754-oval-west-connector",
+    label: "Oval west connector",
+    kind: "footway",
+    width: 1.6,
+    surface: "asphalt",
+    source: "OpenStreetMap way 403753754",
+    points: [
+      g(-37.7883864, 144.9808514),
+      g(-37.7882541, 144.9808137)
+    ]
+  },
+  {
+    id: "osm-22760906-tennis-service-path",
+    label: "Tennis and grandstand private service path",
+    kind: "service",
+    width: 1.9,
+    surface: "unknown",
+    source: "OpenStreetMap way 22760906",
+    points: [
+      g(-37.7881334, 144.9812612),
+      g(-37.7881889, 144.9817996),
+      g(-37.7881558, 144.9817677),
+      g(-37.7881049, 144.9817389),
+      g(-37.7880482, 144.9817382),
+      g(-37.7879836, 144.9817409),
+      g(-37.7879279, 144.9817435),
+      g(-37.7878517, 144.9817474)
+    ]
+  },
+  {
+    id: "osm-715802681-grandstand-west-steps",
+    label: "Kevin Murray Stand west steps",
+    kind: "steps",
+    width: 1.2,
+    surface: "concrete",
+    source: "OpenStreetMap way 715802681",
+    points: [
+      g(-37.7882794, 144.9814656),
+      g(-37.7883026, 144.9814617),
+      g(-37.7882993, 144.9814069)
+    ]
+  },
+  {
+    id: "osm-715802682-grandstand-inner-steps",
+    label: "Kevin Murray Stand inner steps",
+    kind: "steps",
+    width: 1.2,
+    surface: "concrete",
+    source: "OpenStreetMap way 715802682",
+    points: [
+      g(-37.7883026, 144.9814617),
+      g(-37.7883118, 144.9815149)
+    ]
+  },
+  {
+    id: "osm-715802683-grandstand-east-steps",
+    label: "Kevin Murray Stand east steps",
+    kind: "steps",
+    width: 1.2,
+    surface: "concrete",
+    source: "OpenStreetMap way 715802683",
+    points: [
+      g(-37.7882995, 144.9816605),
+      g(-37.7883247, 144.9816567),
+      g(-37.7883219, 144.9816059)
+    ]
+  },
+  {
+    id: "osm-715802684-grandstand-outer-steps",
+    label: "Kevin Murray Stand outer steps",
+    kind: "steps",
+    width: 1.2,
+    surface: "concrete",
+    source: "OpenStreetMap way 715802684",
+    points: [
+      g(-37.7882583, 144.9812623),
+      g(-37.7882823, 144.9812574),
+      g(-37.7882915, 144.9813111)
+    ]
+  },
+  {
+    id: "osm-715802685-grandstand-upper-footway",
+    label: "Kevin Murray Stand upper footway",
+    kind: "footway",
+    width: 1.45,
+    surface: "concrete",
+    source: "OpenStreetMap way 715802685",
+    points: [
+      g(-37.7883936, 144.9812150),
+      g(-37.7883164, 144.9812358),
+      g(-37.7883049, 144.9812586),
+      g(-37.7883016, 144.9812919),
+      g(-37.7883079, 144.9813363),
+      g(-37.7883122, 144.9813672),
+      g(-37.7883141, 144.9813762),
+      g(-37.7883219, 144.9814139),
+      g(-37.7883372, 144.9814337),
+      g(-37.7883547, 144.9814454),
+      g(-37.7883764, 144.9814466),
+      g(-37.7884241, 144.9814365)
+    ]
+  },
+  {
+    id: "osm-715802686-grandstand-lower-footway",
+    label: "Kevin Murray Stand lower footway",
+    kind: "footway",
+    width: 1.45,
+    surface: "concrete",
+    source: "OpenStreetMap way 715802686",
+    points: [
+      g(-37.7883547, 144.9814454),
+      g(-37.7883335, 144.9814676),
+      g(-37.7883261, 144.9814968),
+      g(-37.7883247, 144.9815329),
+      g(-37.7883258, 144.9815419),
+      g(-37.7883303, 144.9815785),
+      g(-37.7883358, 144.9816223),
+      g(-37.7883496, 144.9816678),
+      g(-37.7883621, 144.9816853),
+      g(-37.7883893, 144.9816847),
+      g(-37.7884202, 144.9816783),
+      g(-37.7884599, 144.9816691)
+    ]
+  },
+  {
+    id: "osm-715802687-grandstand-west-step-link",
+    label: "Kevin Murray Stand west step link",
+    kind: "footway",
+    width: 1.15,
+    surface: "concrete",
+    source: "OpenStreetMap way 715802687",
+    points: [
+      g(-37.7882915, 144.9813111),
+      g(-37.7883079, 144.9813363)
+    ]
+  },
+  {
+    id: "osm-715802688-grandstand-inner-step-link",
+    label: "Kevin Murray Stand inner step link",
+    kind: "footway",
+    width: 1.15,
+    surface: "concrete",
+    source: "OpenStreetMap way 715802688",
+    points: [
+      g(-37.7882993, 144.9814069),
+      g(-37.7883141, 144.9813762)
+    ]
+  },
+  {
+    id: "osm-715802689-grandstand-east-step-link",
+    label: "Kevin Murray Stand east step link",
+    kind: "footway",
+    width: 1.15,
+    surface: "concrete",
+    source: "OpenStreetMap way 715802689",
+    points: [
+      g(-37.7883219, 144.9816059),
+      g(-37.7883303, 144.9815785)
+    ]
+  },
+  {
+    id: "osm-715802690-grandstand-central-step-link",
+    label: "Kevin Murray Stand central step link",
+    kind: "footway",
+    width: 1.15,
+    surface: "concrete",
+    source: "OpenStreetMap way 715802690",
+    points: [
+      g(-37.7883118, 144.9815149),
+      g(-37.7883258, 144.9815419)
+    ]
+  },
+  {
     id: "osm-south-playground-path",
     label: "South playground path",
     kind: "footway",
@@ -1558,6 +1760,18 @@ const OSM_EXTRA_PATHS_GEO: Array<{
       g(-37.7896879, 144.9815408),
       g(-37.7896496, 144.9810778),
       g(-37.7895750, 144.9806335),
+      g(-37.7894564, 144.9804378)
+    ]
+  },
+  {
+    id: "osm-403753751-oval-north-entry",
+    label: "Oval north entry connector",
+    kind: "footway",
+    width: 2,
+    surface: "asphalt",
+    source: "OpenStreetMap way 403753751",
+    points: [
+      g(-37.7896570, 144.9800422),
       g(-37.7894564, 144.9804378)
     ]
   },
@@ -2347,8 +2561,8 @@ function treeColliderRadius(tree: MappedTree): number {
 
 function pathTerrainModifiers(path: LevelPath): TerrainModifier[] {
   const broadSource = path.source ?? "mapped Edinburgh Gardens path geometry";
-  const crownDelta = path.kind === "service" ? 0.028 : path.kind === "rail" ? 0.042 : 0.055;
-  const shoulderDelta = path.kind === "service" ? -0.022 : path.kind === "rail" ? -0.03 : -0.038;
+  const crownDelta = path.kind === "steps" ? 0.018 : path.kind === "service" ? 0.028 : path.kind === "rail" ? 0.042 : 0.055;
+  const shoulderDelta = path.kind === "steps" ? -0.014 : path.kind === "service" ? -0.022 : path.kind === "rail" ? -0.03 : -0.038;
   const halfWidth = path.width * 0.5;
   return [
     {

@@ -88,6 +88,31 @@
       "url": "https://www.yarracity.vic.gov.au/planning-and-building/our-projects-and-initiatives/brunswick-street-oval"
     },
     {
+      "id": "yarra-emely-baker-centre",
+      "label": "Yarra Emely Baker Centre venue page",
+      "url": "https://www.yarracity.vic.gov.au/things-to-do/find-a-venue/emely-baker-centre"
+    },
+    {
+      "id": "yarra-edinburgh-gardens-rotunda",
+      "label": "Yarra Edinburgh Gardens Rotunda venue page",
+      "url": "https://www.yarracity.vic.gov.au/things-to-do/find-a-venue/edinburgh-gardens-rotunda"
+    },
+    {
+      "id": "yarra-fitzroy-bowls-mural",
+      "label": "Yarra Fitzroy Bowls 150 Years Memorial Wall",
+      "url": "https://www.yarracity.vic.gov.au/things-to-do/arts/gallery/public-art/fitzroy-bowls-150-years-memorial-wall"
+    },
+    {
+      "id": "yarra-news-bowling-roof",
+      "label": "Yarra News April-May 2025 Fitzroy Bowls roof upgrade",
+      "url": "https://www.yarracity.vic.gov.au/sites/default/files/2025-04/yarranews_aprmay25_fa_web_nicholls_ward.pdf"
+    },
+    {
+      "id": "brisbane-lions-brunswick-oval-upgrade",
+      "label": "Brisbane Lions Brunswick Street Oval upgrade update",
+      "url": "https://www.lions.com.au/news/2058912/brunswick-street-oval-upgrade-is-now-underway"
+    },
+    {
       "id": "yoursay-brunswick-street-oval",
       "label": "Brunswick Street Oval consultation",
       "url": "https://yoursayyarra.com.au/brunswickstoval"
@@ -280,6 +305,21 @@
         "yarra-edinburgh-gardens",
         "yarra-northern-precinct",
         "edinburgh-gardens-cmp"
+      ]
+    },
+    {
+      "id": "building-realism-pass",
+      "path": "docs/research/building-realism-pass-2026-07-05.md",
+      "sourceIds": [
+        "osm-way-api",
+        "edinburgh-gardens-cmp",
+        "yarra-edinburgh-gardens",
+        "yarra-brunswick-street-oval",
+        "yarra-emely-baker-centre",
+        "yarra-edinburgh-gardens-rotunda",
+        "yarra-fitzroy-bowls-mural",
+        "yarra-news-bowling-roof",
+        "brisbane-lions-brunswick-oval-upgrade"
       ]
     },
     {

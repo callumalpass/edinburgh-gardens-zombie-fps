@@ -272,17 +272,37 @@ describe("map geometry", () => {
   it("uses a richer OSM-derived path and amenity network", () => {
     const level = createLevelData();
     const pathIds = new Set(level.paths.map((path) => path.id));
-    expect(level.paths.length).toBeGreaterThan(30);
+    expect(level.paths.length).toBeGreaterThanOrEqual(45);
     expect(level.paths.filter((path) => path.kind === "rail").length).toBeGreaterThanOrEqual(2);
-    expect(level.paths.filter((path) => path.kind === "service").length).toBeGreaterThanOrEqual(1);
+    expect(level.paths.filter((path) => path.kind === "service").length).toBeGreaterThanOrEqual(2);
+    expect(level.paths.filter((path) => path.kind === "steps").length).toBeGreaterThanOrEqual(4);
     expect(pathIds.has("rotunda-approach-loop")).toBe(true);
     expect(pathIds.has("osm-plinth-garden-loop")).toBe(true);
     expect(pathIds.has("osm-22760904-plinth-west-connector")).toBe(true);
     expect(pathIds.has("osm-22760905-plinth-east-connector")).toBe(true);
     expect(pathIds.has("osm-75488632-rail-trail-central-cross-link")).toBe(true);
     expect(pathIds.has("osm-210387722-bowling-service-track")).toBe(true);
+    for (const id of [
+      "osm-22760900-north-west-short-footway",
+      "osm-22760906-tennis-service-path",
+      "osm-22760908-north-east-cycle-link",
+      "osm-403753751-oval-north-entry",
+      "osm-403753754-oval-west-connector",
+      "osm-715802681-grandstand-west-steps",
+      "osm-715802682-grandstand-inner-steps",
+      "osm-715802683-grandstand-east-steps",
+      "osm-715802684-grandstand-outer-steps",
+      "osm-715802685-grandstand-upper-footway",
+      "osm-715802686-grandstand-lower-footway",
+      "osm-715802687-grandstand-west-step-link",
+      "osm-715802688-grandstand-inner-step-link",
+      "osm-715802689-grandstand-east-step-link",
+      "osm-715802690-grandstand-central-step-link"
+    ]) {
+      expect(pathIds.has(id)).toBe(true);
+    }
     expect(pathIds.has("osm-rotunda-loop")).toBe(false);
-    expect(level.paths.filter((path) => path.source?.startsWith("OpenStreetMap way")).length).toBeGreaterThanOrEqual(9);
+    expect(level.paths.filter((path) => path.source?.startsWith("OpenStreetMap way")).length).toBeGreaterThanOrEqual(24);
     expect(level.amenities.length).toBeGreaterThan(40);
     expect(level.amenities.filter((amenity) => amenity.kind === "drinking_water").length).toBeGreaterThanOrEqual(3);
     expect(level.amenities.filter((amenity) => amenity.kind === "picnic_table").length).toBeGreaterThanOrEqual(4);
@@ -306,6 +326,15 @@ describe("map geometry", () => {
       }
       expect(pointInPolygon(polygonCentroid(landmark.polygon), level.boundary)).toBe(true);
     }
+
+    const skate = level.landmarks.find((landmark) => landmark.id === "skate");
+    const raingarden = level.landmarks.find((landmark) => landmark.id === "raingarden-reservoir");
+    expect(skate?.polygon).toBeDefined();
+    expect(raingarden?.polygon).toBeDefined();
+    const skateCenter = polygonCentroid(skate!.polygon!);
+    const raingardenCenter = polygonCentroid(raingarden!.polygon!);
+    expect(raingardenCenter.z).toBeGreaterThan(skateCenter.z);
+    expect(distance(raingardenCenter, skateCenter)).toBeLessThan(160);
   });
 
   it("keeps small park furniture interactive without adding collision blockers", () => {
