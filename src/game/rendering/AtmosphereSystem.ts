@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { RandomSource, Vec2 } from "../types";
 import { timeOfDayFromElapsed, type TimeOfDayState } from "./timeOfDay";
+import { weatherFromElapsed, type WeatherState } from "./weather";
 
 const SKY_RADIUS = 920;
 const RAIN_ANCHOR_RADIUS = 42;
@@ -28,6 +29,11 @@ interface RainDrop {
   speed: number;
   drift: number;
   length: number;
+}
+
+export interface AtmosphereFrameState {
+  timeOfDay: TimeOfDayState;
+  weather: WeatherState;
 }
 
 export class AtmosphereSystem {
@@ -76,10 +82,17 @@ export class AtmosphereSystem {
   private readonly cloudNightColor = new THREE.Color(0x6d8587);
   private readonly cloudDayColor = new THREE.Color(0xa8b5aa);
   private readonly cloudDawnColor = new THREE.Color(0x8d7866);
+  private readonly cloudStormColor = new THREE.Color(0x3f5360);
+  private readonly stormSkyColor = new THREE.Color(0x152531);
+  private readonly stormHorizonColor = new THREE.Color(0x30414a);
+  private readonly stormGroundColor = new THREE.Color(0x081216);
+  private readonly stormFogColor = new THREE.Color(0x44535b);
   private readonly cloudColor = new THREE.Color();
   private skyMaterial: THREE.ShaderMaterial | null = null;
   private starMaterial: THREE.PointsMaterial | null = null;
   private moonMaterial: THREE.SpriteMaterial | null = null;
+  private rainMaterial: THREE.LineBasicMaterial | null = null;
+  private currentWeather: WeatherState = weatherFromElapsed(0);
   private elapsedSeconds = 0;
   private nextLightningAt = 9.5;
   private lightningTimer = 0;
@@ -115,49 +128,61 @@ export class AtmosphereSystem {
     this.root.add(this.lightning);
     this.scene.add(this.root);
     this.scene.add(this.worldWeatherRoot);
-    this.applyTimeOfDay(timeOfDayFromElapsed(this.elapsedSeconds));
+    const initialTimeOfDay = timeOfDayFromElapsed(this.elapsedSeconds);
+    this.currentWeather = weatherFromElapsed(this.elapsedSeconds);
+    this.applyTimeOfDay(initialTimeOfDay, this.currentWeather);
   }
 
-  update(dt: number, cameraPosition: THREE.Vector3, now: number): TimeOfDayState {
+  update(dt: number, cameraPosition: THREE.Vector3, now: number): AtmosphereFrameState {
     this.elapsedSeconds += dt;
     const timeOfDay = timeOfDayFromElapsed(this.elapsedSeconds);
-    this.applyTimeOfDay(timeOfDay);
+    const weather = weatherFromElapsed(this.elapsedSeconds);
+    this.currentWeather = weather;
+    this.applyTimeOfDay(timeOfDay, weather);
     this.root.position.set(cameraPosition.x, 0, cameraPosition.z);
 
+    const windDrift = 0.62 + weather.wind * 0.86;
     this.cloudLayers.forEach((layer, index) => {
-      layer.rotation.z += dt * (index === 0 ? 0.003 : -0.0018);
-      layer.position.x = Math.sin(now * 0.018 + index) * 26;
-      layer.position.z = Math.cos(now * 0.014 + index * 1.7) * 22;
+      layer.rotation.z += dt * (index === 0 ? 0.003 : -0.0018) * windDrift;
+      layer.position.x = Math.sin(now * (0.014 + weather.wind * 0.012) + index) * (18 + weather.wind * 15);
+      layer.position.z = Math.cos(now * (0.012 + weather.wind * 0.009) + index * 1.7) * (16 + weather.wind * 12);
     });
     this.groundMistLayers.forEach((layer, index) => {
       const baseX = (layer.userData.baseX as number) ?? 0;
       const baseZ = (layer.userData.baseZ as number) ?? 0;
       const drift = (layer.userData.drift as number) ?? 1;
-      layer.rotation.z += dt * (index === 0 ? 0.0022 : -0.0015);
-      layer.position.x = baseX + Math.sin(now * 0.022 + index * 1.4) * drift;
-      layer.position.z = baseZ + Math.cos(now * 0.017 + index * 1.9) * drift;
+      layer.rotation.z += dt * (index === 0 ? 0.0022 : -0.0015) * windDrift;
+      layer.position.x = baseX + Math.sin(now * (0.018 + weather.wind * 0.014) + index * 1.4) * drift * windDrift;
+      layer.position.z = baseZ + Math.cos(now * (0.015 + weather.wind * 0.01) + index * 1.9) * drift * windDrift;
     });
+    const mistWeather = THREE.MathUtils.clamp(0.34 + weather.fog * 0.82 + weather.wetness * 0.22, 0.24, 1.32);
     this.groundMistBanks.forEach((bank, index) => {
       const baseX = bank.userData.baseX as number;
       const baseZ = bank.userData.baseZ as number;
       const drift = bank.userData.drift as number;
       const opacity = bank.userData.opacity as number;
-      bank.position.x = baseX + Math.sin(now * 0.16 + index * 1.9) * drift;
-      bank.position.z = baseZ + Math.cos(now * 0.12 + index * 1.3) * drift;
+      bank.position.x = baseX + Math.sin(now * (0.11 + weather.wind * 0.08) + index * 1.9) * drift * windDrift;
+      bank.position.z = baseZ + Math.cos(now * (0.09 + weather.wind * 0.06) + index * 1.3) * drift * windDrift;
       bank.position.y = (bank.userData.baseY as number) + Math.sin(now * 0.2 + index) * 0.08;
-      (bank.material as THREE.SpriteMaterial).opacity = opacity * (0.72 + timeOfDay.night * 0.26) * (0.86 + Math.sin(now * 0.34 + index * 0.7) * 0.14);
+      (bank.material as THREE.SpriteMaterial).opacity =
+        opacity *
+        mistWeather *
+        (0.72 + timeOfDay.night * 0.26) *
+        (0.86 + Math.sin(now * 0.34 + index * 0.7) * 0.14);
     });
 
     if (this.lightningTimer > 0) {
       this.lightningTimer -= dt;
-      this.lightning.intensity = this.lightningTimer > 0 ? 4.5 + Math.sin(now * 90) * 2.2 : 0;
-    } else if (!this.smokeMode && now > this.nextLightningAt) {
-      this.lightningTimer = 0.09;
-      this.nextLightningAt = now + this.rng.range(18, 34);
+      this.lightning.intensity = this.lightningTimer > 0 ? weather.thunder * (5.8 + Math.sin(now * 96) * 2.8) : 0;
+    } else if (!this.smokeMode && weather.thunder > 0.2 && now > this.nextLightningAt) {
+      this.lightningTimer = 0.06 + weather.thunder * 0.055;
+      this.nextLightningAt = now + this.rng.range(7, 18) / Math.max(0.35, weather.thunder);
+    } else if (weather.thunder <= 0.2) {
+      this.lightning.intensity = 0;
     }
 
-    this.updateRain(dt);
-    return timeOfDay;
+    this.updateRain(dt, weather);
+    return { timeOfDay, weather };
   }
 
   getGroundMistBankCount(): number {
@@ -172,7 +197,11 @@ export class AtmosphereSystem {
     return this.anchors().length;
   }
 
-  private applyTimeOfDay(timeOfDay: TimeOfDayState): void {
+  getWeatherState(): WeatherState {
+    return this.currentWeather;
+  }
+
+  private applyTimeOfDay(timeOfDay: TimeOfDayState, weather: WeatherState): void {
     const dawnMix = timeOfDay.dawnDusk * 0.62;
     this.skyColors.top.lerpColors(this.nightPalette.top, this.dayPalette.top, timeOfDay.daylight).lerp(this.dawnPalette.top, dawnMix);
     this.skyColors.mid.lerpColors(this.nightPalette.mid, this.dayPalette.mid, timeOfDay.daylight).lerp(this.dawnPalette.mid, dawnMix);
@@ -180,6 +209,14 @@ export class AtmosphereSystem {
     this.skyColors.bottom.lerpColors(this.nightPalette.bottom, this.dayPalette.bottom, timeOfDay.daylight).lerp(this.dawnPalette.bottom, dawnMix * 0.55);
     this.skyColors.fog.lerpColors(this.nightPalette.fog, this.dayPalette.fog, timeOfDay.daylight).lerp(this.dawnPalette.fog, dawnMix * 0.48);
     this.skyColors.background.lerpColors(this.nightPalette.background, this.dayPalette.background, timeOfDay.daylight).lerp(this.dawnPalette.background, dawnMix * 0.45);
+    const stormSkyMix = THREE.MathUtils.clamp(weather.cloudCover * 0.16 + weather.precipitation * 0.2 + weather.thunder * 0.1, 0, 0.58);
+    const stormHorizonMix = THREE.MathUtils.clamp(weather.cloudCover * 0.1 + weather.precipitation * 0.16 + weather.fog * 0.12, 0, 0.42);
+    this.skyColors.top.lerp(this.stormSkyColor, stormSkyMix);
+    this.skyColors.mid.lerp(this.stormSkyColor, stormSkyMix * 0.86);
+    this.skyColors.horizon.lerp(this.stormHorizonColor, stormHorizonMix);
+    this.skyColors.bottom.lerp(this.stormGroundColor, weather.fog * 0.18 + weather.precipitation * 0.08);
+    this.skyColors.fog.lerp(this.stormFogColor, THREE.MathUtils.clamp(weather.fog * 0.42 + weather.precipitation * 0.18, 0, 0.64));
+    this.skyColors.background.lerp(this.stormSkyColor, stormSkyMix * 0.74);
 
     if (this.skyMaterial) {
       (this.skyMaterial.uniforms.topColor.value as THREE.Color).copy(this.skyColors.top);
@@ -197,27 +234,37 @@ export class AtmosphereSystem {
     if (this.scene.fog instanceof THREE.FogExp2) {
       this.scene.fog.color.copy(this.skyColors.fog);
       const baseDensity = this.smokeMode ? 0.00135 : 0.00175;
-      this.scene.fog.density = baseDensity * (0.76 + timeOfDay.night * 0.28 + timeOfDay.dawnDusk * 0.1);
+      this.scene.fog.density = baseDensity * (0.76 + timeOfDay.night * 0.28 + timeOfDay.dawnDusk * 0.1 + weather.fog * 0.46 + weather.precipitation * 0.16);
     }
 
+    const cloudOcclusion = 1 - weather.cloudCover * 0.86;
     if (this.starMaterial) {
-      this.starMaterial.opacity = (this.smokeMode ? 0.42 : 0.62) * (0.16 + timeOfDay.night * 0.84);
+      this.starMaterial.opacity = (this.smokeMode ? 0.42 : 0.62) * (0.16 + timeOfDay.night * 0.84) * cloudOcclusion;
     }
     if (this.moonMaterial) {
-      this.moonMaterial.opacity = 0.08 + timeOfDay.night * 0.74;
+      this.moonMaterial.opacity = (0.08 + timeOfDay.night * 0.74) * (0.18 + cloudOcclusion * 0.82);
     }
 
     this.cloudLayers.forEach((layer) => {
       const material = layer.material as THREE.MeshBasicMaterial;
       const baseOpacity = (layer.userData.baseOpacity as number) ?? material.opacity;
-      material.opacity = baseOpacity * (0.76 + timeOfDay.night * 0.24 + timeOfDay.dawnDusk * 0.08);
-      material.color.copy(this.cloudColor.copy(this.cloudNightColor).lerp(this.cloudDayColor, timeOfDay.daylight).lerp(this.cloudDawnColor, dawnMix * 0.28));
+      const weatherOpacity = THREE.MathUtils.clamp(0.56 + weather.cloudCover * 0.72 + weather.precipitation * 0.18, 0.5, 1.5);
+      const stormMix = THREE.MathUtils.clamp(weather.cloudCover * 0.24 + weather.precipitation * 0.28 + weather.thunder * 0.2, 0, 0.72);
+      material.opacity = baseOpacity * weatherOpacity * (0.76 + timeOfDay.night * 0.24 + timeOfDay.dawnDusk * 0.08);
+      material.color.copy(
+        this.cloudColor
+          .copy(this.cloudNightColor)
+          .lerp(this.cloudDayColor, timeOfDay.daylight)
+          .lerp(this.cloudDawnColor, dawnMix * 0.28)
+          .lerp(this.cloudStormColor, stormMix)
+      );
     });
 
     this.groundMistLayers.forEach((layer) => {
       const material = layer.material as THREE.MeshBasicMaterial;
       const baseOpacity = (layer.userData.baseOpacity as number) ?? material.opacity;
-      material.opacity = baseOpacity * (0.72 + timeOfDay.night * 0.35 + timeOfDay.dawnDusk * 0.16);
+      const weatherOpacity = THREE.MathUtils.clamp(0.42 + weather.fog * 0.94 + weather.wetness * 0.18, 0.34, 1.34);
+      material.opacity = baseOpacity * weatherOpacity * (0.72 + timeOfDay.night * 0.35 + timeOfDay.dawnDusk * 0.16);
     });
   }
 
@@ -460,20 +507,27 @@ export class AtmosphereSystem {
       depthWrite: false,
       fog: false
     });
+    this.rainMaterial = material;
     const rain = new THREE.LineSegments(this.rainGeometry, material);
     rain.name = "Wind-blown rain";
     rain.frustumCulled = false;
     rain.renderOrder = 30;
     rain.userData.kind = "world-rain";
     this.worldWeatherRoot.add(rain);
-    this.writeRainPositions();
+    this.writeRainPositions(this.currentWeather);
   }
 
-  private updateRain(dt: number): void {
+  private updateRain(dt: number, weather: WeatherState): void {
+    if (this.rainMaterial) {
+      const baseOpacity = this.smokeMode ? 0.22 : 0.34;
+      this.rainMaterial.opacity = baseOpacity * weather.precipitation;
+    }
+    const speedScale = 0.35 + weather.precipitation * 0.86 + weather.wind * 0.32;
+    const driftScale = 0.42 + weather.wind * 1.18;
     for (const drop of this.rainDrops) {
-      drop.y -= drop.speed * dt;
-      drop.x += drop.drift * dt;
-      drop.z += drop.drift * 0.34 * dt;
+      drop.y -= drop.speed * speedScale * dt;
+      drop.x += drop.drift * driftScale * dt;
+      drop.z += drop.drift * 0.34 * driftScale * dt;
       if (drop.y < RAIN_MIN_Y) {
         const next = this.randomRainDrop();
         drop.x = next.x;
@@ -484,19 +538,21 @@ export class AtmosphereSystem {
         drop.length = next.length;
       }
     }
-    this.writeRainPositions();
+    this.writeRainPositions(weather);
   }
 
-  private writeRainPositions(): void {
+  private writeRainPositions(weather: WeatherState): void {
+    const lengthScale = 0.72 + weather.precipitation * 0.48 + weather.wind * 0.24;
+    const slantScale = 0.65 + weather.wind * 0.8;
     for (let i = 0; i < this.rainDrops.length; i += 1) {
       const drop = this.rainDrops[i];
       const offset = i * 6;
       this.rainPositions[offset] = drop.x;
       this.rainPositions[offset + 1] = drop.y;
       this.rainPositions[offset + 2] = drop.z;
-      this.rainPositions[offset + 3] = drop.x - drop.drift * 0.028;
-      this.rainPositions[offset + 4] = drop.y + drop.length;
-      this.rainPositions[offset + 5] = drop.z - drop.drift * 0.01;
+      this.rainPositions[offset + 3] = drop.x - drop.drift * 0.028 * slantScale;
+      this.rainPositions[offset + 4] = drop.y + drop.length * lengthScale;
+      this.rainPositions[offset + 5] = drop.z - drop.drift * 0.01 * slantScale;
     }
     this.rainGeometry.attributes.position.needsUpdate = true;
   }

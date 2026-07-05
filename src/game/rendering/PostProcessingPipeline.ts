@@ -5,6 +5,7 @@ import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import type { TimeOfDayState } from "./timeOfDay";
+import type { WeatherState } from "./weather";
 
 const ANIME_GRADE_SHADER = {
   uniforms: {
@@ -13,7 +14,10 @@ const ANIME_GRADE_SHADER = {
     resolution: { value: new THREE.Vector2(1, 1) },
     strength: { value: 1 },
     nightAmount: { value: 1 },
-    daylight: { value: 0 }
+    daylight: { value: 0 },
+    precipitation: { value: 0 },
+    weatherFog: { value: 0 },
+    cloudCover: { value: 0 }
   },
   vertexShader: `
     varying vec2 vUv;
@@ -30,6 +34,9 @@ const ANIME_GRADE_SHADER = {
     uniform float strength;
     uniform float nightAmount;
     uniform float daylight;
+    uniform float precipitation;
+    uniform float weatherFog;
+    uniform float cloudCover;
     varying vec2 vUv;
 
     float animeLuminance(vec3 color) {
@@ -61,13 +68,17 @@ const ANIME_GRADE_SHADER = {
       color = mix(color, vec3(0.025, 0.055, 0.075), edge * 0.18 * strength);
       color = mix(color, color * vec3(0.68, 0.78, 0.9) + vec3(0.006, 0.012, 0.02), nightAmount * 0.26 * strength);
       color = mix(color, color * vec3(1.04, 1.025, 0.96) + vec3(0.01, 0.008, 0.0), daylight * 0.08 * strength);
+      float weatherAmount = clamp(precipitation * 0.72 + weatherFog * 0.36 + cloudCover * 0.22, 0.0, 1.0);
+      color = mix(color, color * vec3(0.78, 0.88, 0.99) + vec3(0.004, 0.012, 0.022), weatherAmount * 0.22 * strength);
+      color = mix(color, vec3(animeLuminance(color)) * vec3(0.9, 0.98, 1.06), weatherFog * 0.08 * strength);
 
       float vignette = smoothstep(0.82, 0.22, distance(vUv, vec2(0.5)));
       float vignetteFloor = mix(0.78, 0.87, daylight);
+      vignetteFloor = mix(vignetteFloor, 0.72, cloudCover * 0.18 + precipitation * 0.14);
       color *= mix(vignetteFloor, 1.035, vignette);
 
       float grain = hash(vUv * resolution + time * 41.0) - 0.5;
-      color += grain * 0.012 * strength;
+      color += grain * (0.012 + precipitation * 0.006) * strength;
 
       gl_FragColor = vec4(color, base.a);
     }
@@ -107,6 +118,12 @@ export class PostProcessingPipeline {
   setTimeOfDay(timeOfDay: TimeOfDayState): void {
     this.gradePass.uniforms.nightAmount.value = timeOfDay.night;
     this.gradePass.uniforms.daylight.value = timeOfDay.daylight;
+  }
+
+  setWeather(weather: WeatherState): void {
+    this.gradePass.uniforms.precipitation.value = weather.precipitation;
+    this.gradePass.uniforms.weatherFog.value = weather.fog;
+    this.gradePass.uniforms.cloudCover.value = weather.cloudCover;
   }
 
   render(dt: number, renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera): void {

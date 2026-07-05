@@ -1,4 +1,5 @@
 import type { MovementSurface, NoiseEvent, NoiseKind } from "./noise";
+import type { WeatherState } from "./rendering/weather";
 import type { ZombieAiState } from "./state";
 import type { Vec2 } from "./types";
 import type { WeaponId } from "./weapons";
@@ -116,6 +117,8 @@ export class GameAudio {
   private context: AudioContext | null = null;
   private master: GainNode | null = null;
   private ambientGain: GainNode | null = null;
+  private ambientRainGain: GainNode | null = null;
+  private ambientWindGain: GainNode | null = null;
   private ambientSources: AudioBufferSourceNode[] = [];
   private listener: AudioListenerState = { position: { x: 0, z: 0 }, yaw: 0, height: 0 };
   private disposed = false;
@@ -163,7 +166,7 @@ export class GameAudio {
     };
   }
 
-  update(dt: number, state: { health: number; scoped: boolean; crouching: boolean }): void {
+  update(dt: number, state: { health: number; scoped: boolean; crouching: boolean; weather?: WeatherState }): void {
     if (!this.context || !this.ambientGain) {
       return;
     }
@@ -175,6 +178,11 @@ export class GameAudio {
     const current = this.ambientGain.gain.value;
     const smoothing = 1 - Math.pow(0.01, dt);
     this.ambientGain.gain.setTargetAtTime(current + (target - current) * smoothing, now, 0.18);
+
+    if (state.weather) {
+      this.ambientRainGain?.gain.setTargetAtTime(0.03 + state.weather.precipitation * 0.56 + state.weather.thunder * 0.08, now, 0.65);
+      this.ambientWindGain?.gain.setTargetAtTime(0.05 + state.weather.wind * 0.36 + state.weather.precipitation * 0.04, now, 0.8);
+    }
   }
 
   playNoise(event: NoiseEvent, options: NoisePlaybackOptions = {}): void {
@@ -330,7 +338,7 @@ export class GameAudio {
     rainFilter.type = "highpass";
     rainFilter.frequency.value = 1300;
     const rainGain = this.context.createGain();
-    rainGain.gain.value = 0.42;
+    rainGain.gain.value = 0.26;
     rain.connect(rainFilter);
     rainFilter.connect(rainGain);
     rainGain.connect(this.ambientGain);
@@ -343,12 +351,14 @@ export class GameAudio {
     windFilter.type = "lowpass";
     windFilter.frequency.value = 420;
     const windGain = this.context.createGain();
-    windGain.gain.value = 0.34;
+    windGain.gain.value = 0.22;
     wind.connect(windFilter);
     windFilter.connect(windGain);
     windGain.connect(this.ambientGain);
     wind.start();
 
+    this.ambientRainGain = rainGain;
+    this.ambientWindGain = windGain;
     this.ambientSources = [rain, wind];
   }
 
@@ -364,6 +374,8 @@ export class GameAudio {
     this.ambientSources = [];
     this.ambientGain?.disconnect();
     this.ambientGain = null;
+    this.ambientRainGain = null;
+    this.ambientWindGain = null;
   }
 
   private createSpatialBus(position: Vec2, radius: number, gainValue: number, maxDuration: number, local = false): SoundBus | null {

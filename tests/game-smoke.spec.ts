@@ -58,6 +58,15 @@ test("game loop advances and gameplay helpers mutate state", async ({ page }) =>
   expect(first.renderedMistBanks).toBeGreaterThanOrEqual(30);
   expect(first.renderedRainDrops).toBeGreaterThanOrEqual(300);
   expect(first.renderedWeatherAnchors).toBeGreaterThanOrEqual(40);
+  expect(["clear", "overcast", "drizzle", "rain", "storm"]).toContain(first.weatherKind);
+  expect(first.weatherRain).toBeGreaterThanOrEqual(0);
+  expect(first.weatherRain).toBeLessThanOrEqual(1);
+  expect(first.weatherCloudCover).toBeGreaterThanOrEqual(0);
+  expect(first.weatherCloudCover).toBeLessThanOrEqual(1);
+  expect(first.weatherFog).toBeGreaterThanOrEqual(0);
+  expect(first.weatherFog).toBeLessThanOrEqual(1);
+  expect(first.weatherWind).toBeGreaterThanOrEqual(0);
+  expect(first.weatherWind).toBeLessThanOrEqual(1);
   expect(first.weapon).toBe("knife");
   await page.waitForFunction((frame) => window.__EGAME__!.snapshot().frame > frame, first.frame);
   const second = await page.evaluate(() => window.__EGAME__!.snapshot());

@@ -30,6 +30,7 @@ import { PostProcessingPipeline } from "./rendering/PostProcessingPipeline";
 import { SceneDecals } from "./rendering/SceneDecals";
 import { WorldBuilder, type GameMaterials } from "./rendering/WorldBuilder";
 import { createGameMaterials } from "./rendering/materials";
+import { weatherFromElapsed, type WeatherState } from "./rendering/weather";
 import { freezeStaticScene } from "./rendering/staticScene";
 import type { GameStateName, GameTestApi, HitZone, Pickup, ShellCasing, SmokePuff, Snapshot, Tracer, WavePhase, WeaponDrop, Zombie } from "./state";
 import { installGameTestDriver, uninstallGameTestDriver } from "./testing/GameTestDriver";
@@ -59,7 +60,6 @@ const WALK_SPEED = 7.6;
 const SPRINT_SPEED = 11.4;
 const CROUCH_SPEED = 3.9;
 const INTERMISSION_SECONDS = 24;
-const WEATHER_FOOTSTEP_MASK = 0.88;
 
 interface AmenitySearch {
   amenity: AmenityPoint;
@@ -85,6 +85,7 @@ export class GameApp {
   private world!: WorldBuilder;
   private atmosphere!: AtmosphereSystem;
   private postProcessing!: PostProcessingPipeline;
+  private currentWeather: WeatherState = weatherFromElapsed(0);
   private state: GameStateName = "ready";
   private testApi: GameTestApi | null = null;
   private readonly events = new AbortController();
@@ -406,10 +407,13 @@ export class GameApp {
       this.camera.lookAt(0, 0, 0);
     }
 
-    const timeOfDay = this.atmosphere.update(dt, this.camera.position, time / 1000);
+    const atmosphere = this.atmosphere.update(dt, this.camera.position, time / 1000);
+    const { timeOfDay, weather } = atmosphere;
+    this.currentWeather = weather;
     this.world.updateTimeOfDay(timeOfDay);
     this.postProcessing.setTimeOfDay(timeOfDay);
-    this.renderer.toneMappingExposure = timeOfDay.exposure;
+    this.postProcessing.setWeather(weather);
+    this.renderer.toneMappingExposure = timeOfDay.exposure * weather.exposureMultiplier;
     this.postProcessing.render(dt, this.renderer, this.scene, this.camera);
     this.animationFrameId = requestAnimationFrame((next) => this.tick(next));
   }
@@ -552,7 +556,7 @@ export class GameApp {
 
     const playerPoint = { x: this.player.position.x, z: this.player.position.z };
     const surface = this.movementSurfaceAt(playerPoint);
-    this.emitNoise(kind, playerPoint, movementNoiseMultiplier(this.player.crouching, surface, WEATHER_FOOTSTEP_MASK), { surface });
+    this.emitNoise(kind, playerPoint, movementNoiseMultiplier(this.player.crouching, surface, this.currentWeather.footstepMask), { surface });
     this.movementNoiseTimer = this.player.crouching ? 0.82 : sprinting ? 0.28 : 0.46;
   }
 
@@ -571,7 +575,8 @@ export class GameApp {
     this.audio.update(dt, {
       health: this.player.health,
       scoped: this.scopeAmount > 0.55,
-      crouching: this.player.crouching
+      crouching: this.player.crouching,
+      weather: this.currentWeather
     });
   }
 
@@ -1749,6 +1754,11 @@ export class GameApp {
       renderedMistBanks: this.atmosphere.getGroundMistBankCount(),
       renderedRainDrops: this.atmosphere.getRainDropCount(),
       renderedWeatherAnchors: this.atmosphere.getWeatherAnchorCount(),
+      weatherKind: this.currentWeather.kind,
+      weatherRain: Number(this.currentWeather.precipitation.toFixed(2)),
+      weatherCloudCover: Number(this.currentWeather.cloudCover.toFixed(2)),
+      weatherFog: Number(this.currentWeather.fog.toFixed(2)),
+      weatherWind: Number(this.currentWeather.wind.toFixed(2)),
       lastHitZone: this.lastHitZone,
       meleeSwing: Number(this.meleeSwing.toFixed(3)),
       shotBloom: Number(this.shotBloom.toFixed(4)),

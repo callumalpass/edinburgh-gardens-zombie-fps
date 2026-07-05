@@ -1,4 +1,5 @@
 import type * as THREE from "three";
+import type { WeatherKind } from "./rendering/weather";
 import type { AmenityPoint } from "./types";
 import type { WeaponId } from "./weapons";
 import type { ZombieType } from "./waves";
@@ -88,6 +89,11 @@ export interface Snapshot {
   renderedMistBanks: number;
   renderedRainDrops: number;
   renderedWeatherAnchors: number;
+  weatherKind: WeatherKind;
+  weatherRain: number;
+  weatherCloudCover: number;
+  weatherFog: number;
+  weatherWind: number;
   lastHitZone: HitZone | null;
   meleeSwing: number;
   shotBloom: number;
