@@ -6,6 +6,31 @@ import { ANIME_OUTLINE_COLOR, tuneAnimeMaterial as tuneAnimeMaterialStyle } from
 
 export type PickupKind = "scrap" | "health" | "ammo";
 
+const ZOMBIE_ACCENT_COLORS: Record<ZombieType, THREE.ColorRepresentation> = {
+  shambler: 0xd0a14f,
+  sprinter: 0xf2d260,
+  bloater: 0xc25d3d,
+  crawler: 0x9ebf75,
+  screamer: 0xffe477
+};
+
+const ZOMBIE_GLOW_COLORS: Record<ZombieType, THREE.ColorRepresentation> = {
+  shambler: 0x826437,
+  sprinter: 0xffcf6b,
+  bloater: 0xb84236,
+  crawler: 0x78a45f,
+  screamer: 0xfff0a2
+};
+
+interface ZombieMarkerMaterials {
+  skin: THREE.Material;
+  shirt: THREE.Material;
+  bone: THREE.Material;
+  hair: THREE.Material;
+  accent: THREE.Material;
+  glow: THREE.Material;
+}
+
 export class MeshFactory {
   constructor(private readonly materials: GameMaterials) {}
 
@@ -236,6 +261,19 @@ export class MeshFactory {
       color: type === "screamer" ? 0x3f312f : type === "crawler" ? 0x26302b : 0x29362e,
       roughness: 0.94
     });
+    const accentMaterial = new THREE.MeshBasicMaterial({
+      color: ZOMBIE_ACCENT_COLORS[type],
+      transparent: true,
+      opacity: type === "shambler" ? 0.72 : 0.86,
+      depthWrite: false
+    });
+    const glowMaterial = new THREE.MeshBasicMaterial({
+      color: ZOMBIE_GLOW_COLORS[type],
+      transparent: true,
+      opacity: type === "screamer" ? 0.46 : 0.32,
+      depthWrite: false,
+      side: THREE.DoubleSide
+    });
 
     const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.72 * bodyScale, 1.55 * bodyScale, 5, 12), shirtMaterial);
     body.position.y = 1.48 * bodyScale;
@@ -457,6 +495,15 @@ export class MeshFactory {
       group.add(throat);
     }
 
+    this.addZombieSilhouetteMarkers(group, type, bodyScale, lowPosture, {
+      skin: skinMaterial,
+      shirt: shirtMaterial,
+      bone: boneMaterial,
+      hair: hairMaterial,
+      accent: accentMaterial,
+      glow: glowMaterial
+    });
+
     group.userData.arms = arms;
     group.userData.head = head;
     group.updateMatrixWorld(true);
@@ -468,6 +515,113 @@ export class MeshFactory {
     }
     this.applyAnimeMeshStyle(group, 1.035);
     return group;
+  }
+
+  private addZombieSilhouetteMarkers(group: THREE.Group, type: ZombieType, bodyScale: number, lowPosture: boolean, materials: ZombieMarkerMaterials): void {
+    const add = (mesh: THREE.Mesh, castShadow = true) => {
+      mesh.castShadow = castShadow;
+      mesh.userData.zombieSilhouetteMarker = true;
+      group.add(mesh);
+      return mesh;
+    };
+
+    if (type === "shambler") {
+      const sash = new THREE.Mesh(new THREE.BoxGeometry(0.1 * bodyScale, 1.02 * bodyScale, 0.04 * bodyScale), materials.accent);
+      sash.position.set(-0.22 * bodyScale, 1.78 * bodyScale, -0.68 * bodyScale);
+      sash.rotation.set(-0.06, 0, -0.44);
+      add(sash, false);
+
+      const tag = new THREE.Mesh(new THREE.BoxGeometry(0.34 * bodyScale, 0.22 * bodyScale, 0.04 * bodyScale), materials.glow);
+      tag.position.set(0.28 * bodyScale, 1.4 * bodyScale, -0.7 * bodyScale);
+      tag.rotation.z = 0.08;
+      add(tag, false);
+
+      const droppedShoulder = new THREE.Mesh(new THREE.BoxGeometry(0.48 * bodyScale, 0.16 * bodyScale, 0.34 * bodyScale), materials.shirt);
+      droppedShoulder.position.set(-0.43 * bodyScale, 2.06 * bodyScale, 0.02 * bodyScale);
+      droppedShoulder.rotation.z = 0.28;
+      add(droppedShoulder);
+      return;
+    }
+
+    if (type === "sprinter") {
+      const headband = new THREE.Mesh(new THREE.BoxGeometry(0.62 * bodyScale, 0.055 * bodyScale, 0.045 * bodyScale), materials.accent);
+      headband.position.set(0.04 * bodyScale, 3.13 * bodyScale, -0.5 * bodyScale);
+      headband.rotation.z = -0.08;
+      add(headband, false);
+
+      const backPennant = new THREE.Mesh(new THREE.ConeGeometry(0.14 * bodyScale, 0.48 * bodyScale, 3), materials.accent);
+      backPennant.position.set(0.04 * bodyScale, 2.06 * bodyScale, 0.36 * bodyScale);
+      backPennant.rotation.set(Math.PI / 2, 0, Math.PI / 6);
+      backPennant.scale.z = 0.55;
+      add(backPennant, false);
+
+      for (const side of [-1, 1]) {
+        const wrap = new THREE.Mesh(new THREE.BoxGeometry(0.13 * bodyScale, 0.42 * bodyScale, 0.045 * bodyScale), materials.accent);
+        wrap.position.set(side * 0.3 * bodyScale, 0.56 * bodyScale, -0.36 * bodyScale);
+        wrap.rotation.z = side * 0.1;
+        add(wrap, false);
+      }
+      return;
+    }
+
+    if (type === "bloater") {
+      const hump = new THREE.Mesh(new THREE.SphereGeometry(0.44 * bodyScale, 12, 8), materials.shirt);
+      hump.scale.set(1.08, 0.92, 0.62);
+      hump.position.set(0, 2.05 * bodyScale, 0.34 * bodyScale);
+      add(hump);
+
+      for (const side of [-1, 1]) {
+        const growth = new THREE.Mesh(new THREE.SphereGeometry(0.2 * bodyScale, 8, 6), materials.skin);
+        growth.scale.set(0.82, 1.06, 0.68);
+        growth.position.set(side * 0.78 * bodyScale, 1.62 * bodyScale, -0.14 * bodyScale);
+        add(growth);
+      }
+
+      const warningBand = new THREE.Mesh(new THREE.BoxGeometry(1.22 * bodyScale, 0.09 * bodyScale, 0.045 * bodyScale), materials.accent);
+      warningBand.position.set(0.04 * bodyScale, 1.2 * bodyScale, -0.84 * bodyScale);
+      warningBand.rotation.z = -0.05;
+      add(warningBand, false);
+      return;
+    }
+
+    if (type === "crawler") {
+      const crawlOffsetY = lowPosture ? -0.08 * bodyScale : 0;
+      for (const side of [-1, 1]) {
+        const claw = new THREE.Mesh(new THREE.BoxGeometry(0.08 * bodyScale, 0.12 * bodyScale, 0.48 * bodyScale), materials.bone);
+        claw.position.set(side * 0.78 * bodyScale, 0.3 * bodyScale + crawlOffsetY, -0.92 * bodyScale);
+        claw.rotation.set(-0.18, side * 0.1, side * 0.08);
+        add(claw);
+
+        const elbowSpike = new THREE.Mesh(new THREE.ConeGeometry(0.075 * bodyScale, 0.32 * bodyScale, 5), materials.bone);
+        elbowSpike.position.set(side * 0.64 * bodyScale, 0.56 * bodyScale + crawlOffsetY, -0.22 * bodyScale);
+        elbowSpike.rotation.z = -side * Math.PI / 2;
+        add(elbowSpike);
+      }
+
+      for (let ridge = 0; ridge < 3; ridge += 1) {
+        const plate = new THREE.Mesh(new THREE.BoxGeometry((0.34 - ridge * 0.04) * bodyScale, 0.07 * bodyScale, 0.08 * bodyScale), materials.accent);
+        plate.position.set(0, (1.15 + ridge * 0.22) * bodyScale + crawlOffsetY, (0.08 - ridge * 0.1) * bodyScale);
+        plate.rotation.x = 0.42;
+        add(plate, false);
+      }
+      return;
+    }
+
+    const throatRing = new THREE.Mesh(new THREE.TorusGeometry(0.34 * bodyScale, 0.014 * bodyScale, 6, 24), materials.glow);
+    throatRing.position.set(0.03 * bodyScale, 2.62 * bodyScale, -0.6 * bodyScale);
+    add(throatRing, false);
+
+    for (let spike = -2; spike <= 2; spike += 1) {
+      const hairSpike = new THREE.Mesh(new THREE.ConeGeometry(0.06 * bodyScale, 0.44 * bodyScale, 5), materials.hair);
+      hairSpike.position.set(spike * 0.12 * bodyScale, (3.36 - Math.abs(spike) * 0.02) * bodyScale, -0.02 * bodyScale);
+      hairSpike.rotation.z = spike * -0.16;
+      add(hairSpike);
+    }
+
+    const mouthSlash = new THREE.Mesh(new THREE.BoxGeometry(0.46 * bodyScale, 0.055 * bodyScale, 0.04 * bodyScale), materials.accent);
+    mouthSlash.position.set(0.03 * bodyScale, 2.72 * bodyScale, -0.58 * bodyScale);
+    mouthSlash.rotation.z = 0.08;
+    add(mouthSlash, false);
   }
 
   createPickupMesh(type: PickupKind): THREE.Object3D {
