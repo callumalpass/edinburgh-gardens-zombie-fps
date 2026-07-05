@@ -59,6 +59,7 @@ These notes record the real-world sources and implementation decisions used to s
 - Building-interaction research is stored in `docs/research/building-interactions-2026-07-05.md`.
 - Object-placement and collision research is stored in `docs/research/object-placement-collision-2026-07-05.md`.
 - Vegetation realism research is stored in `docs/research/vegetation-realism-2026-07-05.md`.
+- Street-context research is stored in `docs/research/street-context-2026-07-05.md`.
 
 ## Data Notes
 

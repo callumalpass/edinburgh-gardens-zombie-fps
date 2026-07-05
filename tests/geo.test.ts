@@ -144,6 +144,20 @@ describe("map geometry", () => {
     expect(level.hardscapeLines.filter((line) => line.points.some((point) => pointInPolygon(point, level.boundary))).length).toBe(level.hardscapeLines.length);
   });
 
+  it("includes OSM-derived street-edge context around the park", () => {
+    const level = createLevelData();
+    const streetIds = new Set(level.streetEdges.map((street) => street.id));
+    for (const id of ["street-st-georges-road", "street-brunswick-street", "street-freeman-street", "street-alfred-crescent-north-east"]) {
+      expect(streetIds.has(id)).toBe(true);
+    }
+    expect(level.streetEdges.length).toBeGreaterThanOrEqual(5);
+    expect(level.streetEdges.every((street) => street.source?.includes("OpenStreetMap Overpass road query"))).toBe(true);
+    expect(level.streetEdges.every((street) => street.points.length >= 10)).toBe(true);
+    expect(level.streetEdges.filter((street) => street.kind === "trunk" && street.hasTram).length).toBeGreaterThanOrEqual(2);
+    expect(level.streetEdges.some((street) => street.surface === "paved")).toBe(true);
+    expect(level.streetEdges.some((street) => street.points.some((point) => !pointInPolygon(point, level.boundary)))).toBe(true);
+  });
+
   it("includes the major memorial and plinth landmarks", () => {
     const level = createLevelData();
     const landmarkIds = new Set(level.landmarks.map((landmark) => landmark.id));

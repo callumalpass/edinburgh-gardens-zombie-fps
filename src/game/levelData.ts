@@ -32,6 +32,7 @@ import type {
   PolygonObstacle,
   SignificantTreePoint,
   SportsFixture,
+  StreetEdge,
   TreeCollider,
   TreeProfile,
   Vec2
@@ -79,6 +80,7 @@ export const RESEARCH_NOTES = [
   "The Edinburgh Gardens CMP records asphalt paths with remnant basalt/bluestone edging, a bluestone-pitcher open drain on the oval's eastern perimeter and a bluestone retaining wall along Alfred Crescent; these are represented as hardscape lines.",
   "Football posts, basketball hoops and solid tree trunks now share researched placement data with collision obstacles so the visuals and playable blockers stay aligned.",
   "Tree rendering now uses a single mapped-tree data model with species/profile inference from Yarra significant trees, OSM tree points and CMP heritage avenue context.",
+  "Street edges now use a bounded OSM road query for Alfred Crescent, Freeman Street, Brunswick Street and St Georges Road, including trunk-road tram cues.",
   "See docs/edinburgh-gardens-research.md for source URLs, query notes, data licensing notes and implementation decisions."
 ];
 
@@ -1689,6 +1691,137 @@ const HARDSCAPE_LINES_GEO: Array<{
   }
 ];
 
+const STREET_EDGES_GEO: Array<{
+  id: string;
+  label: string;
+  kind: StreetEdge["kind"];
+  width: number;
+  surface: StreetEdge["surface"];
+  hasTram?: boolean;
+  source: string;
+  points: GeoPoint[];
+}> = [
+  {
+    id: "street-st-georges-road",
+    label: "St Georges Road",
+    kind: "trunk",
+    width: 13.5,
+    surface: "asphalt",
+    hasTram: true,
+    source: "OpenStreetMap Overpass road query 2026-07-05; ways 201749623, 125127558, 1192255587, 12566432, 1122203928, 1122203929",
+    points: [
+      g(-37.7856329, 144.9818327),
+      g(-37.7856982, 144.9817769),
+      g(-37.7857869, 144.9817045),
+      g(-37.7860974, 144.9814377),
+      g(-37.7863561, 144.9812154),
+      g(-37.7866551, 144.9809584),
+      g(-37.7868186, 144.9807875),
+      g(-37.7870309, 144.9805740),
+      g(-37.7872190, 144.9804137),
+      g(-37.7873745, 144.9803019),
+      g(-37.7874128, 144.9805187)
+    ]
+  },
+  {
+    id: "street-brunswick-street",
+    label: "Brunswick Street",
+    kind: "trunk",
+    width: 13.5,
+    surface: "asphalt",
+    hasTram: true,
+    source: "OpenStreetMap Overpass road query 2026-07-05; ways 210387721, 210387724, 1123763616, 1123763615, 1192252486",
+    points: [
+      g(-37.7874128, 144.9805187),
+      g(-37.7873745, 144.9803019),
+      g(-37.7874306, 144.9802775),
+      g(-37.7875844, 144.9802409),
+      g(-37.7877380, 144.9802180),
+      g(-37.7879566, 144.9801910),
+      g(-37.7881336, 144.9802533),
+      g(-37.7882373, 144.9802217),
+      g(-37.7883772, 144.9801791),
+      g(-37.7885044, 144.9801408),
+      g(-37.7896484, 144.9799469),
+      g(-37.7897278, 144.9799334),
+      g(-37.7900147, 144.9798846)
+    ]
+  },
+  {
+    id: "street-freeman-street",
+    label: "Freeman Street",
+    kind: "residential",
+    width: 8.4,
+    surface: "paved",
+    source: "OpenStreetMap Overpass road query 2026-07-05; ways 1123763621, 1291914093, 1361023844",
+    points: [
+      g(-37.7897144, 144.9798339),
+      g(-37.7897278, 144.9799334),
+      g(-37.7897361, 144.9800065),
+      g(-37.7897573, 144.9801746),
+      g(-37.7897862, 144.9803998),
+      g(-37.7897954, 144.9804719),
+      g(-37.7899046, 144.9813419),
+      g(-37.7899632, 144.9818134),
+      g(-37.7899702, 144.9819086),
+      g(-37.7899764, 144.9819922),
+      g(-37.7899859, 144.9820712),
+      g(-37.7900033, 144.9821546),
+      g(-37.7900124, 144.9821658)
+    ]
+  },
+  {
+    id: "street-alfred-crescent-north-east",
+    label: "Alfred Crescent north and east",
+    kind: "residential",
+    width: 8.8,
+    surface: "asphalt",
+    source: "OpenStreetMap Overpass road query 2026-07-05; ways 1126453527, 22973332, 60354131, 1103672689, 1126453600, 1103672691, 159310644",
+    points: [
+      g(-37.7856329, 144.9818327),
+      g(-37.7856974, 144.9818725),
+      g(-37.7856974, 144.9820337),
+      g(-37.7856432, 144.9822140),
+      g(-37.7855588, 144.9823797),
+      g(-37.7854978, 144.9825619),
+      g(-37.7854030, 144.9829160),
+      g(-37.7853859, 144.9833391),
+      g(-37.7854186, 144.9837582),
+      g(-37.7855233, 144.9842132),
+      g(-37.7856436, 144.9845177),
+      g(-37.7858229, 144.9848575),
+      g(-37.7860779, 144.9851882),
+      g(-37.7863756, 144.9854389),
+      g(-37.7868035, 144.9856451),
+      g(-37.7870960, 144.9857155),
+      g(-37.7874689, 144.9857103)
+    ]
+  },
+  {
+    id: "street-alfred-crescent-south-east",
+    label: "Alfred Crescent south-east",
+    kind: "residential",
+    width: 8.8,
+    surface: "asphalt",
+    source: "OpenStreetMap Overpass road query 2026-07-05; ways 1291923179, 1291923178, 403758221, 4996320, 1291914076, 13867302, 13867284",
+    points: [
+      g(-37.7874689, 144.9857103),
+      g(-37.7876080, 144.9856806),
+      g(-37.7878696, 144.9856004),
+      g(-37.7881251, 144.9854686),
+      g(-37.7883107, 144.9853388),
+      g(-37.7884947, 144.9851398),
+      g(-37.7886544, 144.9849231),
+      g(-37.7890039, 144.9847705),
+      g(-37.7891029, 144.9844737),
+      g(-37.7892003, 144.9841741),
+      g(-37.7893412, 144.9839014),
+      g(-37.7894669, 144.9835470),
+      g(-37.7895519, 144.9831990)
+    ]
+  }
+];
+
 function obstacleFromPolygon(id: string, label: string, polygon: Vec2[], padding: number): CircularObstacle {
   const center = polygonCentroid(polygon);
   return {
@@ -2002,6 +2135,16 @@ export function createLevelData(): LevelData {
     height: line.height,
     source: line.source
   })).filter((line) => line.points.some((point) => pointInPolygon(point, boundary)));
+  const streetEdges: StreetEdge[] = STREET_EDGES_GEO.map((street) => ({
+    id: street.id,
+    label: street.label,
+    kind: street.kind,
+    points: polygonFromGeo(street.points),
+    width: street.width,
+    surface: street.surface,
+    hasTram: street.hasTram,
+    source: street.source
+  }));
 
   const landmarks: Landmark[] = [
     { id: "park", label: "Edinburgh Gardens", kind: "park", polygon: boundary },
@@ -2166,6 +2309,7 @@ export function createLevelData(): LevelData {
     mappedBuildings,
     mappedFences,
     hardscapeLines,
+    streetEdges,
     sportsFixtures,
     obstacles: [
       boxObstacleFromPolygon("grandstand", "Kevin Murray Stand", grandstand, 1.0, 0.45),

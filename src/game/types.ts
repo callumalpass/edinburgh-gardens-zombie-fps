@@ -142,6 +142,17 @@ export interface HardscapeLine {
   source?: string;
 }
 
+export interface StreetEdge {
+  id: string;
+  label: string;
+  kind: "residential" | "trunk" | "primary";
+  points: Vec2[];
+  width: number;
+  surface?: "asphalt" | "paved" | "unknown";
+  hasTram?: boolean;
+  source?: string;
+}
+
 export interface SportsFixture {
   id: string;
   label: string;
@@ -205,6 +216,7 @@ export interface LevelData {
   mappedBuildings: MappedBuilding[];
   mappedFences: MappedFence[];
   hardscapeLines: HardscapeLine[];
+  streetEdges: StreetEdge[];
   sportsFixtures: SportsFixture[];
   obstacles: CollisionObstacle[];
   spawnPoints: Vec2[];

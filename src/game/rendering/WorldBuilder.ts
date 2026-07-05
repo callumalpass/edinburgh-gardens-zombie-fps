@@ -73,6 +73,7 @@ export class WorldBuilder {
     this.scene.add(emergency);
 
     this.addGround();
+    this.addStreetEdges();
     this.addMownLawnBands();
     this.addLawnWearPatches();
     this.addPaths();
@@ -1937,7 +1938,6 @@ export class WorldBuilder {
   }
 
   private addBoundaryFence(): void {
-    this.addPerimeterStreetBand();
     const gaps = this.parkEntrances().map((entrance) => ({
       position: entrance.position,
       radius: entrance.width + 1.9
@@ -1995,20 +1995,75 @@ export class WorldBuilder {
         this.scene.add(sign);
         this.addLabel("Edinburgh Gardens", entrance.position, 3.4);
       }
+      this.addEntranceCrossing(entrance);
     }
   }
 
-  private addPerimeterStreetBand(): void {
-    const material = new THREE.MeshStandardMaterial({ color: 0x252a26, roughness: 0.88 });
-    for (let i = 0; i < this.level.boundary.length; i += 1) {
-      const a = this.level.boundary[i];
-      const b = this.level.boundary[(i + 1) % this.level.boundary.length];
-      const segmentLength = distance(a, b);
-      if (segmentLength < 3) continue;
-      const center = { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 };
-      const street = this.createTerrainRect(center, Math.atan2(b.z - a.z, b.x - a.x), segmentLength + 1.5, 7.4, 0.018, 0.035, material);
-      street.receiveShadow = true;
-      this.scene.add(street);
+  private addStreetEdges(): void {
+    const asphalt = new THREE.MeshStandardMaterial({ color: 0x252a26, roughness: 0.88 });
+    const residential = new THREE.MeshStandardMaterial({ color: 0x2d302c, roughness: 0.9 });
+    const kerb = new THREE.MeshStandardMaterial({ color: 0xa9a18d, roughness: 0.7 });
+    const line = new THREE.MeshBasicMaterial({ color: 0xcfc8a6, transparent: true, opacity: 0.74 });
+    const rail = new THREE.MeshBasicMaterial({ color: 0x6f756d, transparent: true, opacity: 0.8 });
+
+    for (const street of this.level.streetEdges) {
+      const roadMaterial = street.kind === "residential" ? residential : asphalt;
+      for (let i = 0; i < street.points.length - 1; i += 1) {
+        const a = street.points[i];
+        const b = street.points[i + 1];
+        this.addStreetSegment(a, b, street.width, roadMaterial, kerb, line, rail, street.hasTram === true);
+      }
+    }
+  }
+
+  private addStreetSegment(
+    a: Vec2,
+    b: Vec2,
+    width: number,
+    roadMaterial: THREE.Material,
+    kerbMaterial: THREE.Material,
+    lineMaterial: THREE.Material,
+    railMaterial: THREE.Material,
+    hasTram: boolean
+  ): void {
+    const segmentLength = distance(a, b);
+    if (segmentLength < 3) return;
+    const angle = Math.atan2(b.z - a.z, b.x - a.x);
+    const center = { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 };
+    const road = this.createTerrainRect(center, angle, segmentLength + 1.4, width, 0.018, 0.04, roadMaterial);
+    road.receiveShadow = true;
+    this.scene.add(road);
+
+    const normal = { x: -Math.sin(angle), z: Math.cos(angle) };
+    for (const side of [-1, 1]) {
+      const kerbCenter = { x: center.x + normal.x * side * (width * 0.5), z: center.z + normal.z * side * (width * 0.5) };
+      const kerb = this.createTerrainRect(kerbCenter, angle, segmentLength + 1.1, 0.24, 0.072, 0.06, kerbMaterial);
+      kerb.castShadow = true;
+      kerb.receiveShadow = true;
+      this.scene.add(kerb);
+    }
+
+    const centerLine = this.createTerrainRect(center, angle, segmentLength * 0.88, 0.075, 0.096, 0.012, lineMaterial);
+    this.scene.add(centerLine);
+
+    if (hasTram) {
+      for (const offset of [-0.82, 0.82]) {
+        const railCenter = { x: center.x + normal.x * offset, z: center.z + normal.z * offset };
+        const railMesh = this.createTerrainRect(railCenter, angle, segmentLength * 0.94, 0.09, 0.108, 0.016, railMaterial);
+        this.scene.add(railMesh);
+      }
+    }
+  }
+
+  private addEntranceCrossing(entrance: { position: Vec2; angle: number; width: number }): void {
+    const stripeMaterial = new THREE.MeshBasicMaterial({ color: 0xe6e0c7, transparent: true, opacity: 0.68 });
+    const normal = new THREE.Vector3(-Math.sin(entrance.angle), 0, Math.cos(entrance.angle));
+    for (let stripe = -3; stripe <= 3; stripe += 1) {
+      const center = new THREE.Vector3(entrance.position.x, 0, entrance.position.z)
+        .addScaledVector(normal, -4.2 + stripe * 0.72);
+      const point = { x: center.x, z: center.z };
+      const mesh = this.createTerrainRect(point, entrance.angle, entrance.width * 1.5, 0.28, 0.13, 0.014, stripeMaterial);
+      this.scene.add(mesh);
     }
   }
 
