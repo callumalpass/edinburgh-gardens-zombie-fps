@@ -1,4 +1,5 @@
 import type { Vec2 } from "../types";
+import { gridCellKey, type GridCellKey } from "./gridKey";
 
 export interface CircularAgent {
   id: number | string;
@@ -97,7 +98,7 @@ export function separateCircularAgents<T extends CircularAgent>(agents: readonly
 }
 
 class CircularAgentIndex<T extends CircularAgent> {
-  private readonly grid = new Map<number, Map<number, number[]>>();
+  private readonly grid = new Map<GridCellKey, number[]>();
 
   constructor(
     private readonly agents: readonly T[],
@@ -111,24 +112,19 @@ class CircularAgentIndex<T extends CircularAgent> {
   }
 
   private ensureBucket(x: number, z: number): number[] {
-    let column = this.grid.get(x);
-    if (!column) {
-      column = new Map();
-      this.grid.set(x, column);
-    }
-
-    const bucket = column.get(z);
+    const key = gridCellKey(x, z);
+    const bucket = this.grid.get(key);
     if (bucket) {
       return bucket;
     }
 
     const nextBucket: number[] = [];
-    column.set(z, nextBucket);
+    this.grid.set(key, nextBucket);
     return nextBucket;
   }
 
   private bucketAt(x: number, z: number): number[] | undefined {
-    return this.grid.get(x)?.get(z);
+    return this.grid.get(gridCellKey(x, z));
   }
 
   forNearby(agent: T, radius: number, visit: (other: T, otherIndex: number) => void): void {

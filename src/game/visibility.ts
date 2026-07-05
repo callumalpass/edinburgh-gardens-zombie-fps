@@ -7,6 +7,9 @@ const FOV_PADDING_RADIANS = 0.08;
 let cachedFov = Number.NaN;
 let cachedAspect = Number.NaN;
 let cachedVisibleDotThreshold = 0;
+let cachedYaw = Number.NaN;
+let cachedForwardX = 0;
+let cachedForwardZ = -1;
 
 export interface VisibilityContext {
   playerPosition: Vec2;
@@ -28,9 +31,10 @@ interface IndexedSightObstacle {
 const sightIndexes = new WeakMap<readonly CollisionObstacle[], SightObstacleIndex>();
 
 export function playerForward2D(yaw: number): Vec2 {
+  cachePlayerForward(yaw);
   return {
-    x: -Math.sin(yaw),
-    z: -Math.cos(yaw)
+    x: cachedForwardX,
+    z: cachedForwardZ
   };
 }
 
@@ -40,7 +44,8 @@ export function isPointVisibleToPlayer(point: Vec2, context: VisibilityContext, 
   const range = Math.hypot(dx, dz);
   if (range < 0.001) return true;
 
-  const dot = (dx / range) * -Math.sin(context.playerYaw) + (dz / range) * -Math.cos(context.playerYaw);
+  cachePlayerForward(context.playerYaw);
+  const dot = (dx / range) * cachedForwardX + (dz / range) * cachedForwardZ;
   if (dot <= 0) return false;
 
   if (dot < visibleDotThreshold(context.cameraFov, context.cameraAspect)) return false;
@@ -100,6 +105,7 @@ function buildAndCacheSightIndex(obstacles: readonly CollisionObstacle[]): Sight
 
 class SightObstacleIndex {
   private readonly grid = new Map<number, Map<number, IndexedSightObstacle[]>>();
+  private readonly entries: IndexedSightObstacle[] = [];
   private queryStamp = 0;
 
   constructor(obstacles: readonly CollisionObstacle[]) {
@@ -138,6 +144,7 @@ class SightObstacleIndex {
   private addObstacle(obstacle: CollisionObstacle): void {
     const coverRadius = computeObstacleCoverRadius(obstacle);
     const entry = { obstacle, coverRadius, coverRadiusSquared: coverRadius * coverRadius, queryStamp: 0 };
+    this.entries.push(entry);
     const minX = this.cellIndex(obstacle.center.x - entry.coverRadius);
     const maxX = this.cellIndex(obstacle.center.x + entry.coverRadius);
     const minZ = this.cellIndex(obstacle.center.z - entry.coverRadius);
@@ -176,17 +183,21 @@ class SightObstacleIndex {
 
   private nextQueryStamp(): number {
     if (this.queryStamp >= Number.MAX_SAFE_INTEGER) {
-      for (const column of this.grid.values()) {
-        for (const bucket of column.values()) {
-          for (const entry of bucket) {
-            entry.queryStamp = 0;
-          }
-        }
+      for (const entry of this.entries) {
+        entry.queryStamp = 0;
       }
       this.queryStamp = 0;
     }
     this.queryStamp += 1;
     return this.queryStamp;
+  }
+}
+
+function cachePlayerForward(yaw: number): void {
+  if (yaw !== cachedYaw) {
+    cachedYaw = yaw;
+    cachedForwardX = -Math.sin(yaw);
+    cachedForwardZ = -Math.cos(yaw);
   }
 }
 

@@ -2,6 +2,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
+import { performance } from "node:perf_hooks";
 
 const DEFAULT_OUTPUT = "test-results/performance/latest-summary.json";
 const DEFAULT_RAW_OUTPUT = "test-results/performance/latest-vitest-bench.json";
@@ -11,6 +12,12 @@ const options = parseArgs(process.argv.slice(2));
 const outputPath = resolve(options.output ?? DEFAULT_OUTPUT);
 const rawOutputPath = resolve(options.rawOutput ?? DEFAULT_RAW_OUTPUT);
 const benchFile = options.benchFile ?? DEFAULT_BENCH_FILE;
+let testRunDurationMs;
+let benchmarkDurationMs;
+
+if (options.includeTests) {
+  testRunDurationMs = runVitestTests();
+}
 
 if (!options.fromJson) {
   mkdirSync(dirname(rawOutputPath), { recursive: true });
@@ -18,9 +25,11 @@ if (!options.fromJson) {
   const vitestBin = existsSync("node_modules/.bin/vitest") ? "node_modules/.bin/vitest" : "npx";
   const vitestArgs =
     vitestBin === "npx"
-      ? ["vitest", "bench", benchFile, "--run", "--reporter=verbose", "--outputJson", rawOutputPath]
-      : ["bench", benchFile, "--run", "--reporter=verbose", "--outputJson", rawOutputPath];
+      ? ["vitest", "bench", benchFile, "--run", "--reporter=default", "--outputJson", rawOutputPath]
+      : ["bench", benchFile, "--run", "--reporter=default", "--outputJson", rawOutputPath];
+  const startedAt = performance.now();
   const result = spawnSync(vitestBin, vitestArgs, { stdio: "inherit" });
+  benchmarkDurationMs = Math.round(performance.now() - startedAt);
   if (result.status !== 0) {
     process.exit(result.status ?? 1);
   }
@@ -28,7 +37,7 @@ if (!options.fromJson) {
 
 const rawReportPath = resolve(options.fromJson ?? rawOutputPath);
 const rawReport = JSON.parse(readFileSync(rawReportPath, "utf8"));
-const summary = summarizeBenchmarks(rawReport, rawReportPath);
+const summary = summarizeBenchmarks(rawReport, rawReportPath, { benchFile, benchmarkDurationMs, testRunDurationMs });
 const comparison = options.compare ? compareSummaries(summary, JSON.parse(readFileSync(resolve(options.compare), "utf8"))) : [];
 
 mkdirSync(dirname(outputPath), { recursive: true });
@@ -66,6 +75,8 @@ function parseArgs(args) {
       if (!Number.isFinite(parsed.failOnRegression) || parsed.failOnRegression < 0) {
         throw new Error("--fail-on-regression expects a non-negative percentage");
       }
+    } else if (arg === "--include-tests") {
+      parsed.includeTests = true;
     } else if (arg === "--help" || arg === "-h") {
       printHelp();
       process.exit(0);
@@ -76,7 +87,19 @@ function parseArgs(args) {
   return parsed;
 }
 
-function summarizeBenchmarks(report, rawReportPath) {
+function runVitestTests() {
+  const vitestBin = existsSync("node_modules/.bin/vitest") ? "node_modules/.bin/vitest" : "npx";
+  const vitestArgs = vitestBin === "npx" ? ["vitest", "run", "--reporter=dot"] : ["run", "--reporter=dot"];
+  const startedAt = performance.now();
+  const result = spawnSync(vitestBin, vitestArgs, { stdio: "inherit" });
+  const duration = Math.round(performance.now() - startedAt);
+  if (result.status !== 0) {
+    process.exit(result.status ?? 1);
+  }
+  return duration;
+}
+
+function summarizeBenchmarks(report, rawReportPath, run) {
   const benchmarks = [];
   for (const file of report.files ?? []) {
     for (const group of file.groups ?? []) {
@@ -99,6 +122,11 @@ function summarizeBenchmarks(report, rawReportPath) {
   return {
     generatedAt: new Date().toISOString(),
     rawReport: relativePath(rawReportPath),
+    benchmarkFile: run.benchFile,
+    testRunDurationMs: run.testRunDurationMs,
+    benchmarkDurationMs: run.benchmarkDurationMs,
+    node: process.version,
+    platform: `${process.platform}-${process.arch}`,
     benchmarkCount: benchmarks.length,
     benchmarks
   };
@@ -125,6 +153,12 @@ function compareSummaries(current, baseline) {
 
 function printSummary(summary, comparison, outputPath) {
   console.log(`\nPerformance summary written to ${relativePath(outputPath)}`);
+  if (summary.testRunDurationMs !== undefined) {
+    console.log(`Unit test run duration: ${summary.testRunDurationMs}ms`);
+  }
+  if (summary.benchmarkDurationMs !== undefined) {
+    console.log(`Benchmark run duration: ${summary.benchmarkDurationMs}ms`);
+  }
   console.log("Benchmark                                      mean ms      hz        p99 ms   rme");
   console.log("--------------------------------------------------------------------------------");
   for (const benchmark of summary.benchmarks) {
@@ -155,6 +189,9 @@ Options:
   --from-json <path>           Summarize an existing Vitest benchmark JSON file instead of running benchmarks
   --compare <path>             Compare against a previous summary JSON
   --fail-on-regression <pct>   Exit non-zero when mean time regresses by more than this percentage
+  --include-tests              Run the unit suite first and record its wall-clock duration
+
+Generated summaries include the benchmark file, optional unit-test duration, wall-clock benchmark duration, Node version and platform.
 `);
 }
 

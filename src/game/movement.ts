@@ -1,5 +1,6 @@
 import { distanceToSegment } from "./geo";
 import type { MovementSurface } from "./noise";
+import { gridCellKey, type GridCellKey } from "./spatial/gridKey";
 import type { LevelPath, Vec2 } from "./types";
 
 const SURFACE_GRID_SIZE = 18;
@@ -64,7 +65,7 @@ interface IndexedPathSegment {
 }
 
 export class MovementSurfaceSampler {
-  private readonly grid = new Map<number, Map<number, IndexedPathSegment[]>>();
+  private readonly grid = new Map<GridCellKey, IndexedPathSegment[]>();
   private readonly gridSize: number;
 
   constructor(private readonly level: MovementSurfaceLevel, options: { gridSize?: number } = {}) {
@@ -130,24 +131,19 @@ export class MovementSurfaceSampler {
   }
 
   private ensureBucket(x: number, z: number): IndexedPathSegment[] {
-    let column = this.grid.get(x);
-    if (!column) {
-      column = new Map();
-      this.grid.set(x, column);
-    }
-
-    const bucket = column.get(z);
+    const key = gridCellKey(x, z);
+    const bucket = this.grid.get(key);
     if (bucket) {
       return bucket;
     }
 
     const nextBucket: IndexedPathSegment[] = [];
-    column.set(z, nextBucket);
+    this.grid.set(key, nextBucket);
     return nextBucket;
   }
 
   private bucketAt(x: number, z: number): IndexedPathSegment[] | undefined {
-    return this.grid.get(x)?.get(z);
+    return this.grid.get(gridCellKey(x, z));
   }
 
   private cellIndex(value: number): number {

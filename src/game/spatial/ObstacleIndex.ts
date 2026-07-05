@@ -1,4 +1,5 @@
 import type { CollisionObstacle, Vec2 } from "../types";
+import { gridCellKey, type GridCellKey } from "./gridKey";
 
 export interface ObstacleIndexOptions {
   gridSize?: number;
@@ -15,7 +16,7 @@ interface IndexedObstacle {
 export class ObstacleIndex {
   private readonly gridSize: number;
   private readonly entries = new Map<CollisionObstacle, IndexedObstacle>();
-  private readonly grid = new Map<number, Map<number, IndexedObstacle[]>>();
+  private readonly grid = new Map<GridCellKey, IndexedObstacle[]>();
   private queryStamp = 0;
 
   constructor(private readonly obstacles: readonly CollisionObstacle[], options: ObstacleIndexOptions = {}) {
@@ -107,24 +108,19 @@ export class ObstacleIndex {
   }
 
   private ensureBucket(x: number, z: number): IndexedObstacle[] {
-    let column = this.grid.get(x);
-    if (!column) {
-      column = new Map();
-      this.grid.set(x, column);
-    }
-
-    const bucket = column.get(z);
+    const key = gridCellKey(x, z);
+    const bucket = this.grid.get(key);
     if (bucket) {
       return bucket;
     }
 
     const nextBucket: IndexedObstacle[] = [];
-    column.set(z, nextBucket);
+    this.grid.set(key, nextBucket);
     return nextBucket;
   }
 
   private bucketAt(x: number, z: number): IndexedObstacle[] | undefined {
-    return this.grid.get(x)?.get(z);
+    return this.grid.get(gridCellKey(x, z));
   }
 
   private cellIndex(value: number): number {

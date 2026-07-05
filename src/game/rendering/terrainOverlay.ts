@@ -50,6 +50,7 @@ export function createTerrainOverlayRectGeometry({
   const vertices = new Float32Array(vertexCount * 3);
   const uvs = new Float32Array(vertexCount * 2);
   const indices = createIndexArray(vertexCount, lengthSegments * widthSegments * 6);
+  const point = { x: 0, z: 0 };
   let vertexOffset = 0;
   let uvOffset = 0;
   let indexOffset = 0;
@@ -58,7 +59,7 @@ export function createTerrainOverlayRectGeometry({
     const localX = -length * 0.5 + (length * lengthIndex) / lengthSegments;
     for (let widthIndex = 0; widthIndex <= widthSegments; widthIndex += 1) {
       const localZ = -width * 0.5 + (width * widthIndex) / widthSegments;
-      const point = localToWorld(center, cos, sin, localX, localZ);
+      setLocalToWorld(point, center, cos, sin, localX, localZ);
       vertices[vertexOffset++] = point.x;
       vertices[vertexOffset++] = groundYAt(point) + yOffset;
       vertices[vertexOffset++] = point.z;
@@ -113,6 +114,7 @@ export function createTerrainOverlayEllipseGeometry({
   const vertices = new Float32Array(vertexCount * 3);
   const uvs = new Float32Array(vertexCount * 2);
   const indices = createIndexArray(vertexCount, radialSegments * 3 + Math.max(0, ringCount - 1) * radialSegments * 6);
+  const point = { x: center.x, z: center.z };
   let vertexOffset = 0;
   let uvOffset = 0;
   let indexOffset = 0;
@@ -129,7 +131,7 @@ export function createTerrainOverlayEllipseGeometry({
       const theta = (segment / radialSegments) * Math.PI * 2;
       const localX = Math.cos(theta) * radiusX * radiusT;
       const localZ = Math.sin(theta) * radiusZ * radiusT;
-      const point = localToWorld(center, cos, sin, localX, localZ);
+      setLocalToWorld(point, center, cos, sin, localX, localZ);
       vertices[vertexOffset++] = point.x;
       vertices[vertexOffset++] = groundYAt(point) + yOffset;
       vertices[vertexOffset++] = point.z;
@@ -166,11 +168,9 @@ export function createTerrainOverlayEllipseGeometry({
   return buildOverlayGeometry(vertices, uvs, indices);
 }
 
-function localToWorld(center: Vec2, cos: number, sin: number, localX: number, localZ: number): Vec2 {
-  return {
-    x: center.x + localX * cos - localZ * sin,
-    z: center.z + localX * sin + localZ * cos
-  };
+function setLocalToWorld(target: Vec2, center: Vec2, cos: number, sin: number, localX: number, localZ: number): void {
+  target.x = center.x + localX * cos - localZ * sin;
+  target.z = center.z + localX * sin + localZ * cos;
 }
 
 function createIndexArray(vertexCount: number, indexCount: number): Uint16Array | Uint32Array {

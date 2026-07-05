@@ -16,7 +16,7 @@
     "test:e2e:quick": "node scripts/run-e2e.mjs --skip-build",
     "perf:bench": "vitest bench tests/performance.bench.ts --run --reporter=verbose",
     "perf:report": "node scripts/performance-report.mjs",
-    "perf:check": "npm run test:run && node scripts/performance-report.mjs"
+    "perf:check": "node scripts/performance-report.mjs --include-tests"
   },
   "dependencies": {
     "three": "^0.185.1",

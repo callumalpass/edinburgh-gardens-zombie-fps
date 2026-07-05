@@ -1,4 +1,5 @@
 import { distanceToSegmentSquared } from "./geo";
+import { gridCellKey, type GridCellKey } from "./spatial/gridKey";
 import type { LevelData, TerrainLineModifier, TerrainModifier, Vec2 } from "./types";
 
 const MODIFIER_GRID_SIZE = 32;
@@ -27,7 +28,7 @@ interface IndexedLineSegment {
 export class TerrainSampler {
   private readonly groundCache = new Map<number, Map<number, number>>();
   private groundCacheEntries = 0;
-  private readonly modifierBuckets = new Map<number, Map<number, IndexedTerrainModifier[]>>();
+  private readonly modifierBuckets = new Map<GridCellKey, IndexedTerrainModifier[]>();
   private readonly nearestAltitudes = new Array<number>(NEAREST_ELEVATION_SAMPLE_COUNT);
   private readonly nearestDistancesSquared = new Array<number>(NEAREST_ELEVATION_SAMPLE_COUNT);
 
@@ -222,24 +223,19 @@ export class TerrainSampler {
   }
 
   private ensureModifierBucket(x: number, z: number): IndexedTerrainModifier[] {
-    let column = this.modifierBuckets.get(x);
-    if (!column) {
-      column = new Map();
-      this.modifierBuckets.set(x, column);
-    }
-
-    const bucket = column.get(z);
+    const key = gridCellKey(x, z);
+    const bucket = this.modifierBuckets.get(key);
     if (bucket) {
       return bucket;
     }
 
     const nextBucket: IndexedTerrainModifier[] = [];
-    column.set(z, nextBucket);
+    this.modifierBuckets.set(key, nextBucket);
     return nextBucket;
   }
 
   private modifierBucketAt(x: number, z: number): IndexedTerrainModifier[] | undefined {
-    return this.modifierBuckets.get(x)?.get(z);
+    return this.modifierBuckets.get(gridCellKey(x, z));
   }
 }
 
