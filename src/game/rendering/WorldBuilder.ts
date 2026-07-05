@@ -927,6 +927,11 @@ export class WorldBuilder {
   }
 
   private addMappedBuilding(building: MappedBuilding): void {
+    if (building.id === "osm-man-made-715802679") {
+      this.addMappedStorageTank(building);
+      return;
+    }
+
     const material =
       building.material === "brick" ? this.materials.brick : building.material === "timber" ? this.materials.timber : this.materials.concrete;
     const mesh = this.addPrismPolygon(building.polygon, building.height, material);
@@ -941,6 +946,42 @@ export class WorldBuilder {
       this.addLabel(building.label, center, building.height + 1.8);
     }
     this.addMappedBuildingDetails(building, center);
+  }
+
+  private addMappedStorageTank(building: MappedBuilding): void {
+    const footprint = this.fitBoxFromPolygon(building.polygon, 0, 0);
+    const center = footprint.center;
+    const rotation = -footprint.angle;
+    const radius = Math.max(0.58, Math.min(footprint.halfX, footprint.halfZ) * 0.94);
+    const groundY = this.radialSupportY(center, radius + 0.35);
+    const tankMaterial = this.standardDetailMaterial("storage-tank-body", 0x7e8780, 0.56, 0.3);
+    const lidMaterial = this.standardDetailMaterial("storage-tank-lid", 0xa9b1a9, 0.48, 0.42);
+
+    const pad = new THREE.Mesh(new THREE.CylinderGeometry(radius + 0.36, radius + 0.44, 0.08, 24), this.materials.concrete);
+    pad.position.set(center.x, groundY + 0.04, center.z);
+    pad.receiveShadow = true;
+    this.scene.add(pad);
+
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius * 1.03, building.height, 28), tankMaterial);
+    body.position.set(center.x, groundY + 0.08 + building.height / 2, center.z);
+    body.castShadow = true;
+    body.receiveShadow = true;
+    this.scene.add(body);
+
+    const lid = new THREE.Mesh(new THREE.CylinderGeometry(radius * 0.96, radius, 0.1, 28), lidMaterial);
+    lid.position.set(center.x, groundY + 0.13 + building.height, center.z);
+    lid.castShadow = true;
+    this.scene.add(lid);
+    this.addLocalCylinder(center, rotation, radius * 0.18, -radius * 0.16, radius * 0.22, radius * 0.22, 0.08, this.materials.metal, building.height + 0.18);
+
+    for (const side of [-1, 1]) {
+      this.addLocalBox(center, rotation, side * 0.14, radius + 0.08, 0.045, building.height * 0.72, 0.05, this.materials.metal, 0.12 + building.height * 0.36, false);
+    }
+    for (let rung = 0; rung < 4; rung += 1) {
+      this.addLocalBox(center, rotation, 0, radius + 0.11, 0.36, 0.035, 0.055, this.materials.metal, 0.38 + rung * 0.32, false);
+    }
+    this.addLocalCylinder(center, rotation, -radius * 0.72, radius * 0.68, 0.055, 0.055, 0.72, this.materials.metal, 0.05);
+    this.addLocalBox(center, rotation, -radius * 0.72, radius * 1.02, 0.42, 0.18, 0.24, this.materials.metal, 0.22);
   }
 
   private addMappedBuildingDetails(building: MappedBuilding, center: Vec2): void {

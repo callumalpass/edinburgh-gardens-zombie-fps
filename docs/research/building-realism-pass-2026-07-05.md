@@ -54,6 +54,9 @@ Purpose: track the building-by-building realism pass for every structure current
 - `osm-building-403753784` / Fitzroy Tennis Club rooms:
   - Added court-side guttering, wall light, social-room sign, accessible ramp with rails, secure-access/works mesh, roof vents and rear court-equipment lockers.
   - Source basis: OSM way `403753784` for the L-shaped rooms footprint; CMP tennis pavilion context for the long-running club/pavilion identity; current Yarra Brunswick Street Oval project notes for accessible facilities, social/community-room context and secure-access works around the tennis precinct.
+- `osm-man-made-715802679` / Tennis-side storage tank:
+  - Replaced the generic polygon-prism rendering with a round metal tank on a concrete pad, top lid/hatch, side ladder, pipe and valve box.
+  - Source basis: OSM way `715802679` tagged `man_made=storage_tank`; the full JSON is stored locally under `docs/research/raw/osm/2026-07-05/buildings/` because this ignored research asset directly drives the visible object type.
 
 ## Implementation Notes
 
