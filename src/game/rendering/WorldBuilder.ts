@@ -1,6 +1,23 @@
 import * as THREE from "three";
-import { distance, distanceToSegment, geoToWorld, makeCircle, nearestPointOnPolygon, pointInPolygon, polygonCentroid } from "../geo";
-import { AUSTRALIAN_RULES_BEHIND_POST_HEIGHT_METRES, footballPostLocalOffsets } from "../sportsFixtures";
+import { WORLD_SCALE, distance, distanceToSegment, geoToWorld, makeCircle, nearestPointOnPolygon, pointInPolygon, polygonCentroid } from "../geo";
+import {
+  AUSTRALIAN_RULES_BEHIND_POST_HEIGHT_METRES,
+  AUSTRALIAN_RULES_CENTRE_SQUARE_METRES,
+  AUSTRALIAN_RULES_FIFTY_ARC_METRES,
+  AUSTRALIAN_RULES_GOAL_SQUARE_DEPTH_METRES,
+  AUSTRALIAN_RULES_GOAL_POST_SPACING_METRES,
+  AUSTRALIAN_RULES_INNER_CIRCLE_DIAMETER_METRES,
+  AUSTRALIAN_RULES_OUTER_CIRCLE_DIAMETER_METRES,
+  CRICKET_BOWLING_CREASE_LENGTH_METRES,
+  CRICKET_PITCH_LENGTH_METRES,
+  CRICKET_PITCH_WIDTH_METRES,
+  CRICKET_POPPING_CREASE_LENGTH_METRES,
+  CRICKET_POPPING_CREASE_OFFSET_METRES,
+  CRICKET_RETURN_CREASE_LENGTH_METRES,
+  CRICKET_STUMP_HEIGHT_METRES,
+  CRICKET_WICKET_WIDTH_METRES,
+  footballPostLocalOffsets
+} from "../sportsFixtures";
 import type {
   AmenityPoint,
   HardscapeLine,
@@ -74,6 +91,14 @@ interface ParkEntrance {
   sign: boolean;
   name: string;
   transit: "tram" | "rail-trail" | "neighbourhood";
+}
+
+interface OvalMarkingFrame {
+  center: Vec2;
+  rotation: number;
+  halfWidth: number;
+  halfLength: number;
+  goalLineZ: [number, number];
 }
 
 export interface GameMaterials {
@@ -2910,72 +2935,211 @@ export class WorldBuilder {
     if (!landmark.polygon) return;
     this.addFlatPolygon(landmark.polygon, new THREE.MeshStandardMaterial({ color: 0x5d874d, roughness: 0.9 }), 0.075);
     const center = polygonCentroid(landmark.polygon);
-    this.addOvalMowingBands(landmark.polygon, center);
-    const ring = makeCircle(center, 34, 64);
-    this.addPathRing(ring, 0xebe2bf);
-    this.addOvalBoundaryMarkers(center, 38);
-    this.addOvalSportsDetails(landmark.polygon, center);
+    const frame = this.ovalMarkingFrame(landmark.polygon, center);
+    this.addOvalMowingBands(landmark.polygon, frame);
+    this.addFeatureOutline(landmark.polygon, 0xebe2bf, 0.78);
+    this.addOvalBoundaryMarkers(landmark.polygon);
+    this.addOvalSportsDetails(landmark.polygon, frame);
     this.addLabel("W.T. Peterson Oval", center, 7);
   }
 
-  private addOvalMowingBands(polygon: Vec2[], center: Vec2): void {
-    const minX = Math.min(...polygon.map((point) => point.x));
-    const maxX = Math.max(...polygon.map((point) => point.x));
-    const minZ = Math.min(...polygon.map((point) => point.z));
-    const maxZ = Math.max(...polygon.map((point) => point.z));
-    const radiusX = (maxX - minX) * 0.42;
-    const radiusZ = (maxZ - minZ) * 0.42;
+  private ovalMarkingFrame(polygon: Vec2[], center: Vec2): OvalMarkingFrame {
+    const footballGoals = this.level.sportsFixtures
+      .filter((fixture) => fixture.kind === "football-goal" && fixture.id.startsWith("oval-"))
+      .sort((a, b) => a.position.z - b.position.z);
+    const rotation = footballGoals[0]?.angle ?? 0;
+    const localPolygon = polygon.map((point) => this.worldToLocal(center, rotation, point));
+    const maxLocalX = Math.max(...localPolygon.map((point) => Math.abs(point.x)));
+    const maxLocalZ = Math.max(...localPolygon.map((point) => Math.abs(point.z)));
+    let halfWidth = Math.max(24, maxLocalX - 4 * WORLD_SCALE);
+    let halfLength = Math.max(36, maxLocalZ - 5 * WORLD_SCALE);
+    let goalLineZ: [number, number] = [-halfLength, halfLength];
+
+    if (footballGoals.length >= 2) {
+      const localGoals = footballGoals
+        .slice(0, 2)
+        .map((fixture) => this.worldToLocal(center, rotation, fixture.position))
+        .sort((a, b) => a.z - b.z);
+      goalLineZ = [localGoals[0].z, localGoals[1].z];
+      halfLength = Math.min(halfLength, Math.abs(goalLineZ[1] - goalLineZ[0]) * 0.5 + 8 * WORLD_SCALE);
+      halfWidth = Math.min(halfWidth, Math.max(24, footballGoals[0].width * 1.75));
+    }
+
+    return { center, rotation, halfWidth, halfLength, goalLineZ };
+  }
+
+  private addOvalMowingBands(polygon: Vec2[], frame: OvalMarkingFrame): void {
     const materials = [
       new THREE.LineBasicMaterial({ color: 0x82a365, transparent: true, opacity: 0.44 }),
       new THREE.LineBasicMaterial({ color: 0x486f3f, transparent: true, opacity: 0.32 })
     ];
 
-    for (let band = 0; band < 6; band += 1) {
-      const scale = 1 - band * 0.105;
-      const points = Array.from({ length: 80 }, (_, index) => {
-        const angle = (index / 80) * Math.PI * 2;
-        const point = { x: center.x + Math.cos(angle) * radiusX * scale, z: center.z + Math.sin(angle) * radiusZ * scale };
+    for (let band = 0; band < 8; band += 1) {
+      const scale = 0.94 - band * 0.086;
+      const points = Array.from({ length: 96 }, (_, index) => {
+        const angle = (index / 96) * Math.PI * 2;
+        const point = this.localPoint(
+          frame.center,
+          frame.rotation,
+          Math.cos(angle) * frame.halfWidth * scale,
+          Math.sin(angle) * frame.halfLength * scale
+        );
         return new THREE.Vector3(point.x, this.groundY(point) + 0.155, point.z);
-      });
+      }).filter((point) => pointInPolygon({ x: point.x, z: point.z }, polygon));
+      if (points.length < 6) continue;
       this.scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([...points, points[0]]), materials[band % materials.length]));
     }
   }
 
-  private addOvalBoundaryMarkers(center: Vec2, radius: number): void {
+  private addOvalBoundaryMarkers(polygon: Vec2[]): void {
     const material = new THREE.MeshStandardMaterial({ color: 0xd6d0b5, roughness: 0.8 });
-    for (let i = 0; i < 20; i += 1) {
-      const angle = (i / 20) * Math.PI * 2;
-      const marker = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 0.55, 8), material);
-      const point = { x: center.x + Math.cos(angle) * radius, z: center.z + Math.sin(angle) * radius };
-      marker.position.set(point.x, this.groundY(point) + 0.28, point.z);
-      marker.castShadow = true;
-      this.scene.add(marker);
+    for (let index = 0; index < polygon.length; index += 1) {
+      const a = polygon[index];
+      const b = polygon[(index + 1) % polygon.length];
+      const segmentLength = distance(a, b);
+      const count = Math.floor(segmentLength / 18);
+      if (count === 0) continue;
+      for (let step = 1; step <= count; step += 1) {
+        const t = step / (count + 1);
+        const point = { x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t };
+        const marker = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 0.55, 8), material);
+        marker.position.set(point.x, this.groundY(point) + 0.28, point.z);
+        marker.castShadow = true;
+        this.scene.add(marker);
+      }
     }
   }
 
-  private addOvalSportsDetails(polygon: Vec2[], center: Vec2): void {
-    const pitch = this.createTerrainRect(center, 0.12, 4.6, 20, 0.14, 0.06, new THREE.MeshStandardMaterial({ color: 0xb8a36e, roughness: 0.93 }));
+  private addOvalSportsDetails(polygon: Vec2[], frame: OvalMarkingFrame): void {
+    this.addOvalAflMarkings(polygon, frame);
+    this.addOvalCricketPitch(frame);
+    this.addOvalMatchDayCues(polygon, frame);
+  }
+
+  private addOvalAflMarkings(polygon: Vec2[], frame: OvalMarkingFrame): void {
+    const centreSquare = Math.min(AUSTRALIAN_RULES_CENTRE_SQUARE_METRES * WORLD_SCALE, frame.halfWidth * 1.62, frame.halfLength * 0.82);
+    this.addFieldLines(frame.center, centreSquare, centreSquare, frame.rotation, [
+      { x1: -0.5, z1: -0.5, x2: 0.5, z2: -0.5 },
+      { x1: 0.5, z1: -0.5, x2: 0.5, z2: 0.5 },
+      { x1: 0.5, z1: 0.5, x2: -0.5, z2: 0.5 },
+      { x1: -0.5, z1: 0.5, x2: -0.5, z2: -0.5 }
+    ], 0xe7e0bf);
+
+    this.addCourtCircle(frame.center, (AUSTRALIAN_RULES_OUTER_CIRCLE_DIAMETER_METRES * WORLD_SCALE) / 2, 0xe7e0bf);
+    this.addCourtCircle(frame.center, (AUSTRALIAN_RULES_INNER_CIRCLE_DIAMETER_METRES * WORLD_SCALE) / 2, 0xe7e0bf);
+    const centreLine = this.createTerrainRect(frame.center, frame.rotation, frame.halfWidth * 0.34, 0.08, 0.18, 0.012, this.materials.line);
+    this.scene.add(centreLine);
+
+    for (const goalZ of frame.goalLineZ) {
+      this.addOvalFiftyArc(polygon, frame, goalZ);
+      this.addOvalGoalSquare(frame, goalZ);
+    }
+  }
+
+  private addOvalFiftyArc(polygon: Vec2[], frame: OvalMarkingFrame, goalZ: number): void {
+    const radius = AUSTRALIAN_RULES_FIFTY_ARC_METRES * WORLD_SCALE;
+    const halfArcWidth = Math.min(frame.halfWidth * 0.92, radius * 0.88);
+    const inward = goalZ < 0 ? 1 : -1;
+    const points: THREE.Vector3[] = [];
+
+    for (let step = 0; step <= 48; step += 1) {
+      const x = -halfArcWidth + (halfArcWidth * 2 * step) / 48;
+      const z = goalZ + inward * Math.sqrt(Math.max(0, radius * radius - x * x));
+      const point = this.localPoint(frame.center, frame.rotation, x, z);
+      if (!pointInPolygon(point, polygon)) continue;
+      points.push(new THREE.Vector3(point.x, this.groundY(point) + 0.18, point.z));
+    }
+
+    if (points.length > 2) {
+      this.scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), new THREE.LineBasicMaterial({ color: 0xe7e0bf, transparent: true, opacity: 0.78 })));
+    }
+  }
+
+  private addOvalGoalSquare(frame: OvalMarkingFrame, goalZ: number): void {
+    const inward = goalZ < 0 ? 1 : -1;
+    const depth = AUSTRALIAN_RULES_GOAL_SQUARE_DEPTH_METRES * WORLD_SCALE;
+    const width = AUSTRALIAN_RULES_GOAL_POST_SPACING_METRES * WORLD_SCALE;
+    const squareCenter = this.localPoint(frame.center, frame.rotation, 0, goalZ + inward * depth * 0.5);
+    this.addFieldLines(squareCenter, width, depth, frame.rotation, [
+      { x1: -0.5, z1: -0.5, x2: 0.5, z2: -0.5 },
+      { x1: 0.5, z1: -0.5, x2: 0.5, z2: 0.5 },
+      { x1: 0.5, z1: 0.5, x2: -0.5, z2: 0.5 },
+      { x1: -0.5, z1: 0.5, x2: -0.5, z2: -0.5 }
+    ], 0xe7e0bf);
+  }
+
+  private addOvalCricketPitch(frame: OvalMarkingFrame): void {
+    const pitchLength = CRICKET_PITCH_LENGTH_METRES * WORLD_SCALE;
+    const pitchWidth = CRICKET_PITCH_WIDTH_METRES * WORLD_SCALE;
+    const creaseMaterial = this.basicDetailMaterial("cricket-crease-whitewash", 0xf0e8c8);
+    const stumpMaterial = this.standardDetailMaterial("cricket-stumps-wet-ash", 0xd3bd80, 0.64, 0.04);
+    const pitch = this.createTerrainRect(
+      frame.center,
+      frame.rotation + Math.PI / 2,
+      pitchLength,
+      pitchWidth,
+      0.14,
+      0.055,
+      new THREE.MeshStandardMaterial({ color: 0xb8a36e, roughness: 0.93 })
+    );
     pitch.receiveShadow = true;
     this.scene.add(pitch);
-    this.addFieldLines(center, 4.8, 20.5, 0.12, [
-      { x1: -0.5, z1: -0.32, x2: 0.5, z2: -0.32 },
-      { x1: -0.5, z1: 0.32, x2: 0.5, z2: 0.32 },
-      { x1: -0.18, z1: -0.42, x2: -0.18, z2: -0.25 },
-      { x1: 0.18, z1: -0.42, x2: 0.18, z2: -0.25 },
-      { x1: -0.18, z1: 0.42, x2: -0.18, z2: 0.25 },
-      { x1: 0.18, z1: 0.42, x2: 0.18, z2: 0.25 }
-    ], 0xf0e8c8);
 
-    const lineMaterial = new THREE.LineBasicMaterial({ color: 0xe7e0bf, transparent: true, opacity: 0.82 });
-    const centreCirclePoints = makeCircle(center, 9.5, 48);
-    const centreCircle = new THREE.Line(
-      new THREE.BufferGeometry().setFromPoints(
-        [...centreCirclePoints, centreCirclePoints[0]].map((point) => new THREE.Vector3(point.x, this.groundY(point) + 0.18, point.z))
-      ),
-      lineMaterial
-    );
-    this.scene.add(centreCircle);
+    const bowlingCrease = CRICKET_BOWLING_CREASE_LENGTH_METRES * WORLD_SCALE;
+    const poppingCrease = CRICKET_POPPING_CREASE_LENGTH_METRES * WORLD_SCALE;
+    const poppingOffset = CRICKET_POPPING_CREASE_OFFSET_METRES * WORLD_SCALE;
+    const returnLength = CRICKET_RETURN_CREASE_LENGTH_METRES * WORLD_SCALE;
+    const returnOffset = (bowlingCrease * 0.5);
+    const stumpHeight = CRICKET_STUMP_HEIGHT_METRES;
+    const wicketWidth = CRICKET_WICKET_WIDTH_METRES * WORLD_SCALE;
 
+    for (const endZ of [-pitchLength * 0.5, pitchLength * 0.5]) {
+      const inward = endZ < 0 ? 1 : -1;
+      const bowlingCenter = this.localPoint(frame.center, frame.rotation, 0, endZ);
+      const poppingCenter = this.localPoint(frame.center, frame.rotation, 0, endZ + inward * poppingOffset);
+      this.scene.add(this.createTerrainRect(bowlingCenter, frame.rotation, bowlingCrease, 0.07, 0.188, 0.012, creaseMaterial));
+      this.scene.add(this.createTerrainRect(poppingCenter, frame.rotation, poppingCrease, 0.07, 0.19, 0.012, creaseMaterial));
+
+      for (const side of [-1, 1]) {
+        const returnCenter = this.localPoint(frame.center, frame.rotation, side * returnOffset, endZ + inward * (poppingOffset - returnLength * 0.5));
+        this.scene.add(this.createTerrainRect(returnCenter, frame.rotation + Math.PI / 2, returnLength, 0.06, 0.19, 0.012, creaseMaterial));
+      }
+
+      for (const localX of [-wicketWidth * 0.5, 0, wicketWidth * 0.5]) {
+        this.addLocalCylinder(frame.center, frame.rotation, localX, endZ, 0.022, 0.026, stumpHeight, stumpMaterial, 0.01);
+      }
+      this.addLocalBox(frame.center, frame.rotation, 0, endZ, wicketWidth + 0.13, 0.024, 0.036, stumpMaterial, stumpHeight + 0.035);
+    }
+
+    for (const localZ of [-pitchLength * 0.28, pitchLength * 0.28]) {
+      const sheenCenter = this.localPoint(frame.center, frame.rotation, 0, localZ);
+      const sheen = this.createTerrainOverlayEllipse(sheenCenter, frame.rotation, pitchWidth * 0.62, 0.55, PATH_PATCH_SURFACE_Y + 0.018, this.materials.puddle);
+      sheen.receiveShadow = true;
+      this.scene.add(sheen);
+    }
+  }
+
+  private addOvalMatchDayCues(polygon: Vec2[], frame: OvalMarkingFrame): void {
+    const grandstand = this.level.landmarks.find((candidate) => candidate.kind === "grandstand" && candidate.polygon);
+    const grandstandLocal = grandstand?.polygon ? this.worldToLocal(frame.center, frame.rotation, polygonCentroid(grandstand.polygon)) : { x: -1, z: 0 };
+    const spectatorSide = grandstandLocal.x < 0 ? -1 : 1;
+    const benchMaterial = this.standardDetailMaterial("oval-match-day-bench", 0x71806c, 0.74, 0.04);
+    const scoreboardMaterial = this.canvasSignMaterial("oval-scoreboard", "FITZROY", "#26352f", "#f0d996");
+
+    for (const localZ of [-frame.halfLength * 0.22, frame.halfLength * 0.18]) {
+      const point = this.localPoint(frame.center, frame.rotation, spectatorSide * frame.halfWidth * 0.82, localZ);
+      if (!pointInPolygon(point, polygon)) continue;
+      this.addLocalBox(frame.center, frame.rotation, spectatorSide * frame.halfWidth * 0.82, localZ, 3.9, 0.28, 0.72, benchMaterial, 0.26);
+      this.addLocalBox(frame.center, frame.rotation, spectatorSide * frame.halfWidth * 0.82, localZ + 0.45, 3.7, 0.72, 0.08, benchMaterial, 0.7);
+    }
+
+    const boardPoint = this.localPoint(frame.center, frame.rotation, -spectatorSide * frame.halfWidth * 0.9, frame.halfLength * 0.08);
+    if (pointInPolygon(boardPoint, polygon)) {
+      this.addLocalBox(frame.center, frame.rotation, -spectatorSide * frame.halfWidth * 0.9, frame.halfLength * 0.08, 4.2, 1.72, 0.18, scoreboardMaterial, 1.18, false);
+      for (const side of [-1, 1]) {
+        this.addLocalCylinder(frame.center, frame.rotation, -spectatorSide * frame.halfWidth * 0.9 + side * 1.8, frame.halfLength * 0.08, 0.05, 0.06, 1.4, this.materials.metal);
+      }
+    }
   }
 
   private addPathRing(points: Vec2[], color: number): void {

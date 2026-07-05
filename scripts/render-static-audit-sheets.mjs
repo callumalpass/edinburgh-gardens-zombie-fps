@@ -10,6 +10,10 @@ await mkdir(outDir, { recursive: true });
 
 const sheets = [
   {
+    name: "oval-sports-markings-audit",
+    svg: ovalSportsSheet()
+  },
+  {
     name: "facade-placement-audit",
     svg: facadeSheet()
   },
@@ -58,6 +62,57 @@ function svgShell(title, body, width = 1600, height = 1040) {
   <text x="44" y="54" class="title">${escapeXml(title)}</text>
   ${body}
 </svg>`;
+}
+
+function ovalSportsSheet() {
+  const content = `
+  <g transform="translate(56 104)">
+    <rect class="panel" x="0" y="0" width="980" height="804" rx="8"/>
+    <text x="28" y="48" class="label">W.T. Peterson Oval, OSM-footprint sport overlay</text>
+    <ellipse cx="490" cy="404" rx="354" ry="306" fill="#5d874d"/>
+    <ellipse cx="490" cy="404" rx="354" ry="306" fill="none" stroke="#ebe2bf" stroke-width="7"/>
+    <ellipse cx="490" cy="404" rx="318" ry="274" fill="none" stroke="#82a365" stroke-width="4" opacity="0.64"/>
+    <ellipse cx="490" cy="404" rx="284" ry="244" fill="none" stroke="#486f3f" stroke-width="4" opacity="0.5"/>
+    <ellipse cx="490" cy="404" rx="250" ry="214" fill="none" stroke="#82a365" stroke-width="3" opacity="0.5"/>
+    <path d="M 256 260 Q 490 404 724 260" fill="none" stroke="#e7e0bf" stroke-width="5" opacity="0.82"/>
+    <path d="M 256 548 Q 490 404 724 548" fill="none" stroke="#e7e0bf" stroke-width="5" opacity="0.82"/>
+    <rect x="362" y="276" width="256" height="256" fill="none" stroke="#e7e0bf" stroke-width="5"/>
+    <circle cx="490" cy="404" r="38" fill="none" stroke="#e7e0bf" stroke-width="5"/>
+    <circle cx="490" cy="404" r="14" fill="none" stroke="#e7e0bf" stroke-width="4"/>
+    <line x1="434" y1="404" x2="546" y2="404" stroke="#e7e0bf" stroke-width="5" stroke-linecap="round"/>
+    <rect x="448" y="152" width="84" height="52" fill="none" stroke="#e7e0bf" stroke-width="4"/>
+    <rect x="448" y="604" width="84" height="52" fill="none" stroke="#e7e0bf" stroke-width="4"/>
+    ${footballPosts(490, 152, -1)}
+    ${footballPosts(490, 656, 1)}
+    <rect x="468" y="306" width="44" height="196" fill="#b8a36e" opacity="0.96"/>
+    <line x1="456" y1="306" x2="524" y2="306" stroke="#f0e8c8" stroke-width="4"/>
+    <line x1="456" y1="502" x2="524" y2="502" stroke="#f0e8c8" stroke-width="4"/>
+    <line x1="450" y1="318" x2="530" y2="318" stroke="#f0e8c8" stroke-width="3"/>
+    <line x1="450" y1="490" x2="530" y2="490" stroke="#f0e8c8" stroke-width="3"/>
+    ${stumps(490, 306)}
+    ${stumps(490, 502)}
+    <ellipse cx="490" cy="348" rx="30" ry="9" fill="#8cb0b7" opacity="0.34"/>
+    <ellipse cx="490" cy="460" rx="30" ry="9" fill="#8cb0b7" opacity="0.34"/>
+    ${bench(178, 326)}
+    ${bench(178, 466)}
+    ${textBox(740, 390, 132, 46, "FITZROY", "#26352f")}
+    ${[0, 1, 2, 3, 4, 5, 6, 7].map((i) => circle(490 + Math.cos(i * Math.PI / 4) * 360, 404 + Math.sin(i * Math.PI / 4) * 310, 8, "#d6d0b5")).join("")}
+    ${noteText(42, 724, 890, "The runtime renderer now derives this frame from the two real oval football-goal fixtures, clips markings to the OSM oval polygon, and uses AFL 50m/centre-square plus MCC cricket pitch dimensions scaled through WORLD_SCALE.", "small", 18)}
+  </g>
+
+  <g transform="translate(1084 104)">
+    <rect class="panel" x="0" y="0" width="452" height="804" rx="8"/>
+    <text x="24" y="48" class="label">Placement checks</text>
+    <rect class="note" x="24" y="84" width="404" height="104" rx="6"/>
+    ${noteText(44, 116, 360, "Boundary markers are sampled from the mapped oval polygon, replacing the old generic circle.", "small", 18)}
+    <rect class="note" x="24" y="218" width="404" height="126" rx="6"/>
+    ${noteText(44, 250, 360, "Goal squares use the goal-post span, while behind posts remain driven by the shared sports fixture data.", "small", 18)}
+    <rect class="note" x="24" y="374" width="404" height="126" rx="6"/>
+    ${noteText(44, 406, 360, "The cricket wicket now has a 22 yard pitch, popping creases, return creases, vertical stumps and wet run-up sheen.", "small", 18)}
+    <rect class="note" x="24" y="530" width="404" height="126" rx="6"/>
+    ${noteText(44, 562, 360, "Benches and scoreboard are placed on the grandstand/spectator side inside the oval footprint, not as collision blockers.", "small", 18)}
+  </g>`;
+  return svgShell("Oval Sports Markings Audit", content);
 }
 
 function facadeSheet() {
@@ -452,6 +507,33 @@ function winterWeatherStrip(x, y) {
     ${[0, 1, 2, 3, 4].map((i) => line(x + 36 + i * 54, y + 126, x + 62 + i * 54, y + 96, "#61a8d3", 5)).join("")}
     ${circle(x + 304, y + 112, 34, "#c49a55", 0.3)}
     ${rect(x + 298, y + 76, 10, 70, "#353c39")}
+  </g>`;
+}
+
+function footballPosts(x, y, direction) {
+  const postY = y + direction * 8;
+  return `<g>
+    ${[-78, -26, 26, 78].map((offset, index) => {
+      const height = index === 1 || index === 2 ? 88 : 52;
+      return `${rect(x + offset - 4, postY - (direction < 0 ? height : 0), 8, height, "#eef0dc")}${rect(x + offset - 12, postY - (direction < 0 ? 22 : -2), 24, 22, "#31596d")}`;
+    }).join("")}
+    <line x1="${x - 78}" y1="${y}" x2="${x + 78}" y2="${y}" stroke="#e7e0bf" stroke-width="5"/>
+  </g>`;
+}
+
+function stumps(x, y) {
+  return `<g>
+    ${[-9, 0, 9].map((offset) => rect(x + offset - 2, y - 13, 4, 26, "#d3bd80")).join("")}
+    <line x1="${x - 15}" y1="${y - 15}" x2="${x + 15}" y2="${y - 15}" stroke="#d3bd80" stroke-width="4" stroke-linecap="round"/>
+  </g>`;
+}
+
+function bench(x, y) {
+  return `<g>
+    ${rect(x, y, 112, 20, "#71806c")}
+    ${rect(x, y - 34, 112, 14, "#71806c")}
+    ${rect(x + 12, y + 18, 8, 34, "#4f5e56")}
+    ${rect(x + 92, y + 18, 8, 34, "#4f5e56")}
   </g>`;
 }
 

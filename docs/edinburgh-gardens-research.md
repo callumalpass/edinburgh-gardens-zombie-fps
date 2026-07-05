@@ -31,6 +31,12 @@ These notes record the real-world sources and implementation decisions used to s
 - OpenStreetMap map API playground and oval access extracts:
   - `24489879` south playground, `543616019` north playground, `14946934` W. T. Peterson Oval and connector ways `403753751`, `403753754`, `403753756`.
   - Used on 2026-07-06 to refresh the fenced-playground and gated oval-fence pass after Overpass returned busy-server HTML.
+- CITS WA Australian rules football dimensions guide: https://www.cits.wa.gov.au/sport-and-recreation/sports-dimensions-guide/football-%28australian-rules%29
+  - Used for Australian-rules football goal and behind-post spacing.
+- AFL oval line-marking guide: https://play.afl/sites/default/files/2024-10/Measure%20Out%20and%20Line%20Mark%20of%20Australian%20Rules%20Oval_v1.pdf
+  - Used for W. T. Peterson Oval 50 m arcs, centre square, centre circles, goal squares and boundary marker spacing cues.
+- MCC Laws of Cricket 2017 Code, 4th Edition 2026: https://www.lords.org/getattachment/a9ec27d0-0828-4fc1-bf10-7f7edf5204a1/Laws-of-Cricket-2017-Code-4th-Edition-2026.pdf
+  - Used for the oval cricket pitch, crease, wicket and stump dimensions.
 - Landezine, Edinburgh Gardens Raingarden by GHD: https://landezine.com/edinburgh-gardens-raingarden-by-ghd-pty-ltd/
   - Used for the raingarden's project map marker and four-terrace treatment-garden design, zig-zag low-flow steel channel, 700 sqm filter area, 200 KL underground storage and stormwater-harvesting role. The marker is not used as the visible garden footprint centroid after the Lovell Chen Figure 96 placement audit.
 - Atlan StormTech, StormTech Raingarden at Edinburgh Gardens: https://atlanstormwater.com/au/stormtech-raingarden-at-edinburgh-gardens-fitzroy-victoria/
@@ -127,6 +133,7 @@ These notes record the real-world sources and implementation decisions used to s
 - The 2026-07-06 structure-depth pass adds source-backed grandstand umpire-room, Emely Baker kitchenette, bowling shed service-locker, north toilet service-room and rotunda memorial-plaque interactions, plus richer building details for tennis social-space, Emely Baker venue use, grandstand secure gates, toilet service hardware and rotunda memorial setting.
 - The 2026-07-06 structure-utility pass adds source-backed grandstand kiosk/public-toilet interactions and powered-building switchboards that activate exterior floodlights with a visibility tradeoff, while preserving the rotunda source's no-current-power constraint.
 - The 2026-07-06 heritage-furniture/weather pass adds non-colliding CMP-backed Chandler Fountain, cast-iron gas-lamp, cast-iron bollard, reproduction-seat and interpretive-sign artifacts, and retunes weather phases against BOM Melbourne July climate normals while preserving the existing 420 second gameplay loop.
+- The 2026-07-06 oval sports-marking pass replaces the old generic circular oval cue with an OSM-footprint-aware W. T. Peterson Oval overlay: mapped-polygon boundary markers, AFL 50 m arcs, centre square/circles, goal squares, a scaled MCC cricket pitch/crease/stump set, wet run-up sheen and spectator-side benches/scoreboard.
 - Tree placement refresh research is stored in `docs/research/tree-placement-refresh-2026-07-05.md`.
 - Detailed OSM path/service research is stored in `docs/research/osm-path-service-inventory-2026-07-05.md`.
 - Hardscape and terrain-edge research is stored in `docs/research/hardscape-terrain-edges-2026-07-05.md`.
@@ -155,6 +162,7 @@ These notes record the real-world sources and implementation decisions used to s
 - Structure depth research is stored in `docs/research/structure-depth-pass-2026-07-06.md`.
 - Structure utility interaction research is stored in `docs/research/structure-utility-interactions-2026-07-06.md`.
 - Heritage furniture and winter-weather research is stored in `docs/research/heritage-furniture-winter-weather-2026-07-06.md`.
+- Oval sports-marking research is stored in `docs/research/oval-sports-markings-2026-07-06.md`.
 - Local raw research asset guidance is stored in `docs/research/raw-assets.md`.
 - Research/data pipeline automation is stored in `docs/research/data-pipeline-automation-2026-07-05.md` and `docs/research/research-manifest.json`.
 
@@ -165,6 +173,7 @@ These notes record the real-world sources and implementation decisions used to s
 - On 2026-07-06, the playground/fence pass used small OSM map API XML extracts for the two playgrounds and oval access connectors after a targeted Overpass playground/fence/gate request returned busy-server HTML.
 - The north playground fence decision changed on follow-up review: older visit/CMP sources can describe an earlier or pre-relocation north playground, while current/recent north-playground sources do not support a fence around the relocated OSM footprint.
 - No public measured Fitzy Bowl CAD geometry was found. Bowl depths and feature families are source-backed, while bowl ellipses, roll-out gaps and street-section object positions are approximate within the OSM skatepark polygon.
+- No public measured W. T. Peterson Oval line-marking CAD geometry was found. The sports-surface overlay uses the OSM oval polygon, existing source-backed football goal fixtures and published AFL/MCC sport dimensions, with the centre square clamped to stay inside the mapped playable footprint.
 - No public GIS point layer was found for each individual heritage furniture item. The Chandler Fountain, gas lamps, bollards, reproduction seats and interpretive signs are hand-placed from CMP setting descriptions and nearby mapped landmarks.
 - Raw API responses are kept locally under ignored `docs/research/raw/` when useful. The durable checked-in artifacts are source notes plus compact derived constants in `src/game/levelData.ts`.
 - The Vicmap elevation samples are sparse. They are appropriate for broad park slope and local rise/fall, not for fine kerbs, gutters, steps or detailed drainage modelling.

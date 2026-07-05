@@ -238,6 +238,11 @@
       "url": "https://play.afl/sites/default/files/2024-10/Measure%20Out%20and%20Line%20Mark%20of%20Australian%20Rules%20Oval_v1.pdf"
     },
     {
+      "id": "mcc-laws-cricket-2026",
+      "label": "MCC Laws of Cricket 2017 Code 4th Edition 2026",
+      "url": "https://www.lords.org/getattachment/a9ec27d0-0828-4fc1-bf10-7f7edf5204a1/Laws-of-Cricket-2017-Code-4th-Edition-2026.pdf"
+    },
+    {
       "id": "fiba-equipment",
       "label": "FIBA basketball rules and equipment",
       "url": "https://assets.fiba.basketball/image/upload/documents-corporate-fiba-official-rules-2024-official-basketball-rules-and-basketball-equipment.pdf"
@@ -292,7 +297,10 @@
         "yarra-edinburgh-gardens-rotunda",
         "yarra-fitzroy-bowls-mural",
         "fitzroy-bowls-official",
-        "brunswick-tree-protection-plan"
+        "brunswick-tree-protection-plan",
+        "cits-australian-rules-dimensions",
+        "afl-line-marking",
+        "mcc-laws-cricket-2026"
       ]
     },
     {
@@ -599,6 +607,20 @@
       "path": "docs/research/heritage-furniture-winter-weather-2026-07-06.md",
       "requiredHeadings": ["## Sources", "## Findings", "## Implementation Translation", "## Uncertainty", "## Validation"],
       "sourceIds": ["edinburgh-gardens-cmp", "bom-melbourne-regional-office-climate"]
+    },
+    {
+      "id": "oval-sports-markings",
+      "path": "docs/research/oval-sports-markings-2026-07-06.md",
+      "requiredHeadings": ["## Sources", "## Findings", "## Implementation Translation", "## Uncertainty", "## Validation"],
+      "sourceIds": [
+        "yarra-edinburgh-gardens",
+        "yarra-brunswick-street-oval",
+        "osm-playground-fence-map-api",
+        "osm-way-api",
+        "cits-australian-rules-dimensions",
+        "afl-line-marking",
+        "mcc-laws-cricket-2026"
+      ]
     },
     {
       "id": "data-pipeline-automation",

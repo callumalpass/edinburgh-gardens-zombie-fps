@@ -30,7 +30,8 @@ try {
 
   await mkdir(outDir, { recursive: true });
   const browser = await chromium.launch({
-    args: ["--use-gl=swiftshader", "--ignore-gpu-blocklist"]
+    chromiumSandbox: false,
+    args: ["--use-gl=swiftshader", "--ignore-gpu-blocklist", "--disable-setuid-sandbox"]
   });
   const page = await browser.newPage({ viewport: { width: 640, height: 640 }, deviceScaleFactor: 1 });
   const previewUrl = previewPageUrl(baseURL);

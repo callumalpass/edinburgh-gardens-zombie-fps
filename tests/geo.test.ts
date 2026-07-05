@@ -3,9 +3,21 @@ import { clampToPolygon, distance, distanceToSegment, geoToWorld, pointInPolygon
 import { pointInRaisedFootprint } from "../src/game/interactables";
 import { createLevelData, PARK_BOUNDARY_GEO } from "../src/game/levelData";
 import {
+  AUSTRALIAN_RULES_CENTRE_SQUARE_METRES,
+  AUSTRALIAN_RULES_FIFTY_ARC_METRES,
   AUSTRALIAN_RULES_FULL_GOAL_WIDTH_METRES,
+  AUSTRALIAN_RULES_GOAL_SQUARE_DEPTH_METRES,
+  AUSTRALIAN_RULES_GOAL_POST_SPACING_METRES,
+  AUSTRALIAN_RULES_INNER_CIRCLE_DIAMETER_METRES,
+  AUSTRALIAN_RULES_OUTER_CIRCLE_DIAMETER_METRES,
   BASKETBALL_BACKBOARD_WIDTH_METRES,
   BASKETBALL_RIM_HEIGHT_METRES,
+  CRICKET_BOWLING_CREASE_LENGTH_METRES,
+  CRICKET_PITCH_LENGTH_METRES,
+  CRICKET_PITCH_WIDTH_METRES,
+  CRICKET_POPPING_CREASE_OFFSET_METRES,
+  CRICKET_STUMP_HEIGHT_METRES,
+  CRICKET_WICKET_WIDTH_METRES,
   footballPostLocalOffsets
 } from "../src/game/sportsFixtures";
 import { TerrainSampler } from "../src/game/terrain";
@@ -208,6 +220,21 @@ describe("map geometry", () => {
     expect(basketballHoops.every((fixture) => fixture.height === BASKETBALL_RIM_HEIGHT_METRES)).toBe(true);
     expect(basketballHoops.every((fixture) => obstacleIds.has(`${fixture.id}-post`))).toBe(true);
     expect(basketballHoops.every((fixture) => level.obstacles.find((obstacle) => obstacle.id === `${fixture.id}-post`)?.blocksSight === false)).toBe(true);
+  });
+
+  it("keeps sport marking constants aligned with source dimensions", () => {
+    expect(AUSTRALIAN_RULES_FIFTY_ARC_METRES).toBe(50);
+    expect(AUSTRALIAN_RULES_CENTRE_SQUARE_METRES).toBe(50);
+    expect(AUSTRALIAN_RULES_OUTER_CIRCLE_DIAMETER_METRES).toBe(10);
+    expect(AUSTRALIAN_RULES_INNER_CIRCLE_DIAMETER_METRES).toBe(3);
+    expect(AUSTRALIAN_RULES_GOAL_SQUARE_DEPTH_METRES).toBe(9);
+    expect(AUSTRALIAN_RULES_GOAL_POST_SPACING_METRES).toBe(6.4);
+    expect(CRICKET_PITCH_LENGTH_METRES).toBeCloseTo(20.12);
+    expect(CRICKET_PITCH_WIDTH_METRES).toBeCloseTo(3.05);
+    expect(CRICKET_BOWLING_CREASE_LENGTH_METRES).toBeCloseTo(2.64);
+    expect(CRICKET_POPPING_CREASE_OFFSET_METRES).toBeCloseTo(1.22);
+    expect(CRICKET_STUMP_HEIGHT_METRES).toBeCloseTo(0.711);
+    expect(CRICKET_WICKET_WIDTH_METRES).toBeCloseTo(0.229);
   });
 
   it("keeps the real-map scale expanded but close to measured metres", () => {
