@@ -30,6 +30,7 @@ import {
   type ActiveObjective,
   type ObjectiveDefinition
 } from "./objectives";
+import { PostProcessingPipeline } from "./rendering/PostProcessingPipeline";
 import { SeededRandom } from "./random";
 import { AtmosphereSystem } from "./rendering/AtmosphereSystem";
 import { MeshFactory } from "./rendering/MeshFactory";
@@ -80,6 +81,7 @@ export class GameApp {
   private hud!: HudController;
   private miniMap!: MiniMapRenderer;
   private meshFactory!: MeshFactory;
+  private postProcessing!: PostProcessingPipeline;
   private world!: WorldBuilder;
   private atmosphere!: AtmosphereSystem;
   private audio: AudioContext | null = null;
@@ -189,6 +191,7 @@ export class GameApp {
     this.addPlayerTorch();
     this.rebuildViewWeapon();
     this.createWorld();
+    this.postProcessing = new PostProcessingPipeline(this.renderer, this.scene, this.camera, this.smokeMode);
     this.world.createUpgradeStations();
     freezeStaticScene(this.scene, [this.camera, this.atmosphere.root, this.atmosphere.worldWeatherRoot]);
     this.spawnInitialWeapons();
@@ -258,6 +261,7 @@ export class GameApp {
       if (Array.isArray(material)) {
         material.forEach((entry) => materials.add(entry));
       } else if (material) {
+    this.postProcessing.dispose();
         materials.add(material);
       }
     });
@@ -407,7 +411,7 @@ export class GameApp {
     }
 
     this.atmosphere.update(dt, this.camera.position, time / 1000);
-    this.renderer.render(this.scene, this.camera);
+    this.postProcessing.render(dt, this.renderer, this.scene, this.camera);
     this.animationFrameId = requestAnimationFrame((next) => this.tick(next));
   }
 
@@ -1542,6 +1546,7 @@ export class GameApp {
         ? {
             id: this.activeObjective.id,
             progress: Number(this.activeObjective.progress.toFixed(2)),
+    this.postProcessing.setSize(clientWidth, clientHeight);
             holdSeconds: this.activeObjective.holdSeconds,
             completed: this.activeObjective.completed
           }
