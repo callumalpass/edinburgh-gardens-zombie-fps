@@ -1724,6 +1724,22 @@ export class WorldBuilder {
     for (let i = -4; i <= 4; i += 1) {
       this.addLocalBox(center, rotation, (i / 4) * footprint.halfX * 0.9, 0, 0.08, 0.09, footprint.halfZ * 2 + 2.3, this.materials.metal, 6.12);
     }
+    for (let step = 0; step < 5; step += 1) {
+      this.addLocalBox(
+        center,
+        rotation,
+        0,
+        frontZ + frontSign * (0.74 - step * 0.48),
+        footprint.halfX * 0.52,
+        0.16,
+        0.34,
+        this.materials.concrete,
+        0.16 + step * 0.17
+      );
+    }
+    for (const side of [-1, 1]) {
+      this.addLocalBox(center, rotation, side * footprint.halfX * 0.31, frontIn(0.62), 0.07, 0.08, 2.35, this.materials.metal, 0.82);
+    }
     for (let step = 0; step < 4; step += 1) {
       this.addLocalBox(center, rotation, footprint.halfX + 0.55, frontIn(0.55 + step * 0.42), 1.1, 0.16, 0.32, this.materials.concrete, 0.18 + step * 0.18);
     }

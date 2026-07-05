@@ -52,6 +52,12 @@ const offsetPoint = (center: Vec2, angle: number, localX: number, localZ: number
   };
 };
 
+const localZFromPoint = (center: Vec2, angle: number, point: Vec2): number => {
+  const dx = point.x - center.x;
+  const dz = point.z - center.z;
+  return -dx * Math.sin(angle) + dz * Math.cos(angle);
+};
+
 const footprintFromPolygon = (polygon: readonly Vec2[]): { center: Vec2; halfX: number; halfZ: number; angle: number } => {
   const center = polygonCentroid(polygon);
   const first = polygon[0];
@@ -2819,8 +2825,6 @@ export function createLevelData(): LevelData {
   const northToiletsRoofRadius = Math.max(8, boundingRadius(northToilets, northToiletsCenter) + 1.2);
   const rotundaStairAccess = offsetPoint(rotundaCenter, -0.34, 0, -7.25);
   const rotundaStairLanding = offsetPoint(rotundaCenter, -0.34, 0, -3.45);
-  const grandstandStairAccess = offsetPoint(grandstandCenter, 0.11, 6.8, -7.2);
-  const grandstandStairLanding = offsetPoint(grandstandCenter, 0.11, 5.8, -3.6);
   const southToiletsLadderAccess = polygonEdgePointFromLocal(
     southAmenitiesBuilding,
     southAmenitiesFootprint.center,
@@ -2842,6 +2846,23 @@ export function createLevelData(): LevelData {
   const basketballRotation = -basketballFootprint.angle;
   const basketballHoopOffset = Math.max(basketballFootprint.halfX, basketballFootprint.halfZ) * 0.74;
   const ovalCenter = polygonCentroid(oval);
+  const grandstandFootprint = footprintFromPolygon(grandstand);
+  const grandstandRotation = -grandstandFootprint.angle;
+  const grandstandFrontSign = localZFromPoint(grandstandCenter, grandstandRotation, ovalCenter) < 0 ? -1 : 1;
+  const grandstandVisualHalfZ = grandstandFootprint.halfZ + 0.45;
+  const grandstandStairAccess = offsetPoint(
+    grandstandCenter,
+    grandstandRotation,
+    0,
+    grandstandFrontSign * (grandstandVisualHalfZ + 1.05)
+  );
+  const grandstandStairLanding = offsetPoint(
+    grandstandCenter,
+    grandstandRotation,
+    0,
+    grandstandFrontSign * (grandstandVisualHalfZ - 2.4)
+  );
+  const grandstandStairHeading = Math.atan2(grandstandStairLanding.z - grandstandStairAccess.z, grandstandStairLanding.x - grandstandStairAccess.x);
   const ovalMinZ = Math.min(...oval.map((point) => point.z));
   const ovalMaxZ = Math.max(...oval.map((point) => point.z));
   const sportsFixtures: SportsFixture[] = [
@@ -3468,7 +3489,7 @@ export function createLevelData(): LevelData {
       geoToWorld(g(-37.78948, 144.98045)),
       geoToWorld(g(-37.78972, 144.98215)),
       geoToWorld(g(-37.78805, 144.98535)),
-      geoToWorld(g(-37.78608, 144.98473)),
+      geoToWorld(g(-37.78612, 144.98448)),
       geoToWorld(g(-37.78632, 144.98146)),
       geoToWorld(g(-37.78574, 144.98385)),
       geoToWorld(g(-37.78914, 144.98402))
@@ -3516,7 +3537,7 @@ export function createLevelData(): LevelData {
         exitPosition: grandstandStairAccess,
         accessRadius: 5.5,
         accessKind: "stairs",
-        accessHeading: 0.11,
+        accessHeading: grandstandStairHeading,
         radius: 12,
         height: 3.15,
         prompt: "E: climb stand stairs",
