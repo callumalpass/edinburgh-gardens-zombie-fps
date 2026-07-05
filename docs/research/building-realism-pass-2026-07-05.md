@@ -45,6 +45,12 @@ Purpose: track the building-by-building realism pass for every structure current
 | `north-toilets` | North public toilet block | OSM/Yarra facilities | Functional toilet block with doors, accessible signage, vents, roof service details and screened planting |
 | `south-toilets` | South public toilet block | OSM/Yarra facilities | Functional public-toilet rendering aligned with the mapped south facilities and service access cues |
 
+## Building Pass Log
+
+- `osm-building-242003562` / South service and amenities building:
+  - Implemented public-toilet door bank with high louvre vents, a blue accessible-facility sign, front/rear gutters, multiple roof vents, wall light, short bollards and a rear service ladder.
+  - Source basis: OSM way `242003562` for the irregular footprint; Yarra Edinburgh Gardens facility/accessibility listing for public toilets and accessible park context; CMP guidance that toilet blocks are functional facilities rather than heritage showpieces.
+
 ## Implementation Notes
 
 - Building detail code should use shared helper methods for facade panels, roof vents, gutters, signs, lights and ladders rather than repeating anonymous box geometry.

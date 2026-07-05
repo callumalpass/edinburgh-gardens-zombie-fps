@@ -1009,8 +1009,22 @@ export class WorldBuilder {
       this.addBuildingApron(center, rotation, 0, frontZ + 0.34, footprint.halfX * 1.3, 0.84, 0.09);
       for (const x of [-0.42, 0, 0.42]) {
         this.addBuildingDoor(center, rotation, x * footprint.halfX, frontZ + 0.02, footprint.halfX * 0.28, 1.38, 1.02);
+        this.addLocalBox(center, rotation, x * footprint.halfX, frontZ + 0.075, footprint.halfX * 0.22, 0.14, 0.055, this.materials.metal, 1.86, false);
       }
       this.addBuildingSign(center, rotation, 0, frontZ + 0.03, footprint.halfX * 0.48, 0.45, 2.48, 0xe8e0b6);
+      if (building.id === "osm-building-242003562") {
+        this.addBuildingSign(center, rotation, -footprint.halfX * 0.82, frontZ + 0.04, footprint.halfX * 0.24, 0.38, 2.16, 0x246ca8);
+        this.addBuildingWallLight(center, rotation, footprint.halfX * 0.82, frontZ + 0.06, 2.34);
+        this.addBuildingGutter(center, rotation, 0, frontZ + 0.02, footprint.halfX * 1.82, building.height);
+        this.addBuildingGutter(center, rotation, 0, rearZ - 0.02, footprint.halfX * 1.55, building.height);
+        for (const x of [-0.44, 0.18, 0.68]) {
+          this.addBuildingRoofVent(center, rotation, x * footprint.halfX, -footprint.halfZ * 0.32, building.height, 0.5, 0.34);
+        }
+        this.addBuildingServiceLadder(center, rotation, footprint.halfX * 0.86, rearZ - 0.03, 2.15, 1.28);
+        for (const x of [-0.58, 0.58]) {
+          this.addLocalCylinder(center, rotation, x * footprint.halfX, frontZ + 0.78, 0.09, 0.1, 0.82, this.materials.metal);
+        }
+      }
       return;
     }
 
