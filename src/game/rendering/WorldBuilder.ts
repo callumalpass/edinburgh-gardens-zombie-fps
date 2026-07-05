@@ -1038,10 +1038,18 @@ export class WorldBuilder {
 
     if (building.detailProfile === "gatehouse") {
       this.addBuildingAwning(center, rotation, 0, 0, footprint.halfX * 2.3, footprint.halfZ * 2.45, building.height + 0.16, this.materials.timber, 0.42);
+      this.addBuildingApron(center, rotation, 0, frontZ + 0.7, footprint.halfX * 1.15, 0.72, 0.08);
       this.addBuildingDoor(center, rotation, 0, frontZ + 0.02, footprint.halfX * 0.82, 1.65, 1.08);
+      this.addBuildingGutter(center, rotation, 0, frontZ + 0.02, footprint.halfX * 2.05, building.height);
+      this.addBuildingWindow(center, rotation, 0, rearZ - 0.02, footprint.halfX * 0.72, 0.46, 1.48, 0.08);
+      this.addBuildingSign(center, rotation, 0, rearZ - 0.035, footprint.halfX * 0.9, 0.32, 1.95, 0x5c4630);
       for (const x of [-0.72, 0.72]) {
         this.addBuildingSign(center, rotation, x * footprint.halfX, frontZ + 0.015, footprint.halfX * 0.42, 0.62, 1.78, 0xe8e0b6);
       }
+      for (const x of [-0.92, 0.92]) {
+        this.addLocalBox(center, rotation, x * footprint.halfX, frontZ + 0.72, 0.12, 0.88, 0.12, this.materials.metal, 0.5);
+      }
+      this.addLocalBox(center, rotation, 0, frontZ + 0.72, footprint.halfX * 1.85, 0.08, 0.08, this.materials.metal, 0.74);
       this.addLabel("Freeman Street gatehouse", center, building.height + 1.15);
       return;
     }

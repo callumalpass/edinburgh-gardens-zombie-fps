@@ -57,6 +57,9 @@ Purpose: track the building-by-building realism pass for every structure current
 - `osm-man-made-715802679` / Tennis-side storage tank:
   - Replaced the generic polygon-prism rendering with a round metal tank on a concrete pad, top lid/hatch, side ladder, pipe and valve box.
   - Source basis: OSM way `715802679` tagged `man_made=storage_tank`; the full JSON is stored locally under `docs/research/raw/osm/2026-07-05/buildings/` because this ignored research asset directly drives the visible object type.
+- `osm-building-543505638` / Freeman Street gatehouse:
+  - Added a small threshold pad, front gate door, guttering, rear ticket-style window, interpretive plaque, paired sign panels, bollards and low rail so it reads as a narrow park/oval gatehouse rather than a plain block.
+  - Source basis: OSM way `543505638` for the long narrow footprint; CMP hard-landscaping/buildings schedule for gatehouse significance and signage priority.
 
 ## Implementation Notes
 
