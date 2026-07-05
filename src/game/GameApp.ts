@@ -77,11 +77,11 @@ import {
   BOTTLE_BOMB_PULSE_MIN_SECONDS,
   bottleBombEffectAtDistance
 } from "./throwables";
-import { LanMultiplayerClient, multiplayerConfigFromLocation } from "./multiplayer/LanMultiplayerClient";
+import { NetworkSession, type NetworkInputFrame } from "./multiplayer/NetworkSession";
+import { RemotePlayerRoster } from "./multiplayer/RemotePlayerRoster";
 import type {
   NetworkAction,
   NetworkGameSnapshot,
-  NetworkInputState,
   NetworkPickupSnapshot,
   NetworkPlayerSnapshot,
   NetworkWeaponDropSnapshot,
@@ -98,8 +98,6 @@ import {
   JUMP_STAMINA_COST,
   MACHETE_STAMINA_COST,
   MELEE_STAMINA_COST,
-  NETWORK_INPUT_HZ,
-  NETWORK_SNAPSHOT_HZ,
   PLAYER_HEIGHT,
   PLAYER_RADIUS,
   REST_SECONDS,
@@ -157,7 +155,7 @@ export class GameApp {
   private readonly noise = new NoiseSystem();
   private readonly rng = new SeededRandom(0xed1b97);
   private readonly waveDirector: WaveDirector;
-  private readonly multiplayerConfig = multiplayerConfigFromLocation();
+  private readonly network = new NetworkSession();
   private readonly smokeMode = new URLSearchParams(window.location.search).has("smoke");
   private readonly audio = new GameAudio({ enabled: !this.smokeMode });
   private renderer!: THREE.WebGLRenderer;
@@ -221,17 +219,7 @@ export class GameApp {
   private materials!: GameMaterials;
   private bike: RideableBike | null = null;
   private bikePedalPhase = 0;
-  private multiplayer: LanMultiplayerClient | null = null;
-  private localNetworkId = "local";
-  private networkInputSequence = 0;
-  private networkActionSequence = 0;
-  private networkInputTimer = 0;
-  private networkSnapshotTimer = 0;
-  private networkRemainingSpawns = 0;
-  private networkWave = 1;
-  private networkWavePhase: WavePhase = "active";
-  private networkIntermissionTimer = 0;
-  private readonly networkPlayers = new Map<string, NetworkRemotePlayer>();
+  private remotePlayers!: RemotePlayerRoster;
 
   private get zombies(): Zombie[] {
     return this.entities.zombies;
@@ -303,31 +291,31 @@ export class GameApp {
 
   private get wave(): number {
     if (this.isNetworkClient) {
-      return this.networkWave;
+      return this.network.wave;
     }
     return this.waveDirector.wave;
   }
 
   private get wavePhase(): WavePhase {
     if (this.isNetworkClient) {
-      return this.networkWavePhase;
+      return this.network.wavePhase;
     }
     return this.waveDirector.phase;
   }
 
   private get intermissionTimer(): number {
     if (this.isNetworkClient) {
-      return this.networkIntermissionTimer;
+      return this.network.intermissionTimer;
     }
     return this.waveDirector.intermissionTimer;
   }
 
   private get isNetworkHost(): boolean {
-    return this.multiplayerConfig.enabled && this.multiplayerConfig.role === "host";
+    return this.network.isHost;
   }
 
   private get isNetworkClient(): boolean {
-    return this.multiplayerConfig.enabled && this.multiplayerConfig.role === "client";
+    return this.network.isClient;
   }
 
   constructor(root: HTMLElement) {
@@ -380,6 +368,11 @@ export class GameApp {
     this.postProcessing = new PostProcessingPipeline(this.renderer, this.scene, this.camera, this.smokeMode);
     this.materials = createGameMaterials(this.rng);
     this.meshFactory = new MeshFactory(this.materials);
+    this.remotePlayers = new RemotePlayerRoster({
+      scene: this.scene,
+      meshFactory: this.meshFactory,
+      groundY: (point) => this.groundY(point)
+    });
     this.miniMap = new MiniMapRenderer(this.hud.miniMap, this.level);
     this.scene.add(this.camera);
     this.camera.add(this.weaponModel);
@@ -441,11 +434,8 @@ export class GameApp {
     if (document.pointerLockElement === this.canvas) {
       document.exitPointerLock?.();
     }
-    this.multiplayer?.close();
-    for (const player of this.networkPlayers.values()) {
-      this.scene.remove(player.mesh);
-    }
-    this.networkPlayers.clear();
+    this.network.close();
+    this.remotePlayers?.clear();
     this.audio.dispose();
 
     disposeThreeResources(this.scene);
@@ -492,48 +482,27 @@ export class GameApp {
   }
 
   private setupMultiplayer(): void {
-    if (!this.multiplayerConfig.enabled || this.smokeMode) {
-      return;
-    }
+    const connected = this.network.connect(
+      {
+        status: (message) => this.flashStatus(message),
+        peerJoined: (playerId, name) => this.remotePlayers.add(playerId, name),
+        peerLeft: (playerId) => this.remotePlayers.remove(playerId),
+        input: (playerId, input) => {
+          const player = this.remotePlayers.get(playerId) ?? this.remotePlayers.add(playerId, `Player ${playerId}`);
+          player.input = input;
+          player.yaw = input.yaw;
+          player.pitch = input.pitch;
+          player.lastInputAt = performance.now() / 1000;
+        },
+        action: (playerId, action) => this.handleNetworkPlayerAction(playerId, action),
+        snapshot: (snapshot) => this.applyNetworkSnapshot(snapshot)
+      },
+      { disabled: this.smokeMode }
+    );
 
-    this.multiplayer = new LanMultiplayerClient(this.multiplayerConfig);
-    this.multiplayer.on("welcome", (message) => {
-      this.localNetworkId = message.playerId;
-      this.flashStatus(message.role === "host" ? "LAN host ready" : "Joined LAN game");
-    });
-    this.multiplayer.on("status", (message) => this.flashStatus(message));
-    this.multiplayer.on("peerJoined", (message) => {
-      if (this.isNetworkHost) {
-        this.addNetworkPlayer(message.playerId, message.name);
-      }
-    });
-    this.multiplayer.on("peerLeft", (message) => this.removeNetworkPlayer(message.playerId));
-    this.multiplayer.on("input", (message) => {
-      if (!this.isNetworkHost) return;
-      const player = this.networkPlayers.get(message.playerId) ?? this.addNetworkPlayer(message.playerId, `Player ${message.playerId}`);
-      player.input = message.input;
-      player.yaw = message.input.yaw;
-      player.pitch = message.input.pitch;
-      player.lastInputAt = performance.now() / 1000;
-    });
-    this.multiplayer.on("action", (message) => {
-      if (this.isNetworkHost) {
-        this.handleNetworkPlayerAction(message.playerId, message.action);
-      }
-    });
-    this.multiplayer.on("snapshot", (message) => {
-      if (this.isNetworkClient) {
-        this.applyNetworkSnapshot(message.snapshot);
-      }
-    });
-
-    if (this.isNetworkClient) {
+    if (connected && this.isNetworkClient) {
       this.clearNetworkAuthoritativeEntities();
-      this.flashStatus("Connecting to LAN host");
-    } else {
-      this.flashStatus("Starting LAN host");
     }
-    this.multiplayer.connect();
   }
 
   private handleShootInput(now: number): void {
@@ -586,17 +555,11 @@ export class GameApp {
   }
 
   private sendNetworkAction(type: NetworkAction["type"], slot?: number): boolean {
-    if (!this.isNetworkClient || !this.multiplayer) {
-      return false;
-    }
-    this.multiplayer.sendAction({
-      type,
+    return this.network.sendAction(type, {
       slot,
-      sequence: ++this.networkActionSequence,
       yaw: this.player.yaw,
       pitch: this.player.pitch
     });
-    return true;
   }
 
   private start(): void {
@@ -663,14 +626,14 @@ export class GameApp {
     this.nearestBike = null;
     this.nearestBrokenBike = null;
     this.resetRideableBike();
-    this.resetNetworkPlayersForHost();
+    if (this.isNetworkHost) {
+      this.remotePlayers.reset();
+    }
     this.hud.setRestartVisible(false);
     this.state = "playing";
     this.spawnInitialWeapons();
     this.updateHud();
-    if (this.isNetworkHost && this.multiplayer?.connected) {
-      this.multiplayer.sendSnapshot(this.buildNetworkSnapshot());
-    }
+    this.sendNetworkSnapshotNow();
   }
 
   private tick(dt: number, now: number): void {
@@ -777,21 +740,12 @@ export class GameApp {
   }
 
   private sendNetworkInputFrame(dt: number): void {
-    if (!this.isNetworkClient || !this.multiplayer || this.state !== "playing") {
-      return;
-    }
-    this.networkInputTimer -= dt;
-    if (this.networkInputTimer > 0) {
-      return;
-    }
-    this.multiplayer.sendInput(this.currentNetworkInput());
-    this.networkInputTimer = 1 / NETWORK_INPUT_HZ;
+    this.network.sendInputFrame(dt, this.state, this.currentNetworkInput());
   }
 
-  private currentNetworkInput(): NetworkInputState {
+  private currentNetworkInput(): NetworkInputFrame {
     const movement = this.input?.movement() ?? { x: 0, z: 0, length: 0 };
     return {
-      sequence: ++this.networkInputSequence,
       moveX: movement.x,
       moveZ: movement.z,
       sprint: this.input?.isSprinting() ?? false,
@@ -803,29 +757,27 @@ export class GameApp {
   }
 
   private sendNetworkSnapshotFrame(dt: number): void {
-    if (!this.isNetworkHost || !this.multiplayer || !this.multiplayer.connected) {
-      return;
+    this.network.sendSnapshotFrame(dt, () => this.buildNetworkSnapshot());
+  }
+
+  private sendNetworkSnapshotNow(): void {
+    if (this.isNetworkHost) {
+      this.network.sendSnapshot(this.buildNetworkSnapshot());
     }
-    this.networkSnapshotTimer -= dt;
-    if (this.networkSnapshotTimer > 0) {
-      return;
-    }
-    this.multiplayer.sendSnapshot(this.buildNetworkSnapshot());
-    this.networkSnapshotTimer = 1 / NETWORK_SNAPSHOT_HZ;
   }
 
   private buildNetworkSnapshot(): NetworkGameSnapshot {
     return {
       frame: this.frame,
       sentAt: performance.now(),
-      roomId: this.multiplayerConfig.roomId,
-      hostId: this.localNetworkId,
+      roomId: this.network.config.roomId,
+      hostId: this.network.localId,
       state: this.state,
       wave: this.wave,
       wavePhase: this.wavePhase,
       intermissionTimer: this.intermissionTimer,
       remainingSpawns: this.waveDirector.remainingSpawns,
-      players: [this.localPlayerNetworkSnapshot(), ...[...this.networkPlayers.values()].map((player) => this.remotePlayerNetworkSnapshot(player))],
+      players: [this.localPlayerNetworkSnapshot(), ...[...this.remotePlayers.values()].map((player) => this.remotePlayerNetworkSnapshot(player))],
       zombies: this.zombies.map((zombie) => this.zombieNetworkSnapshot(zombie)),
       pickups: this.pickups.map((pickup) => ({
         id: pickup.id,
@@ -860,8 +812,8 @@ export class GameApp {
 
   private localPlayerNetworkSnapshot(): NetworkPlayerSnapshot {
     return {
-      id: this.localNetworkId,
-      name: this.multiplayerConfig.playerName,
+      id: this.network.localId,
+      name: this.network.config.playerName,
       x: this.player.position.x,
       y: this.player.position.y,
       z: this.player.position.z,
@@ -935,11 +887,11 @@ export class GameApp {
     if (!this.isNetworkHost) {
       return;
     }
-    for (const player of this.networkPlayers.values()) {
+    for (const player of this.remotePlayers.values()) {
       player.loadout = finishReloadIfReady(player.loadout, now);
       if (player.health <= 0) {
         player.velocity.multiplyScalar(0.72);
-        this.updateRemotePlayerMesh(player);
+        this.remotePlayers.updateMesh(player);
         continue;
       }
       this.updateNetworkPlayerCrouch(player, dt);
@@ -947,7 +899,7 @@ export class GameApp {
       this.updateNetworkPlayerMovement(player, dt, now);
       this.updateNetworkPlayerVerticalState(player, dt);
       this.updateNetworkPlayerCondition(player, dt);
-      this.updateRemotePlayerMesh(player);
+      this.remotePlayers.updateMesh(player);
     }
   }
 
@@ -1015,169 +967,8 @@ export class GameApp {
     player.movementNoiseTimer = player.crouching ? 0.82 : sprinting ? 0.28 : 0.46;
   }
 
-  private addNetworkPlayer(id: string, name: string): NetworkRemotePlayer {
-    const existing = this.networkPlayers.get(id);
-    if (existing) {
-      existing.name = name;
-      return existing;
-    }
-
-    const offsetIndex = this.networkPlayers.size + 1;
-    const position = new THREE.Vector3(
-      START_POSITION.x + offsetIndex * 3.2,
-      this.groundY({ x: START_POSITION.x + offsetIndex * 3.2, z: START_POSITION.z + offsetIndex * 2.2 }),
-      START_POSITION.z + offsetIndex * 2.2
-    );
-    const loadout = createInitialLoadout();
-    const player: NetworkRemotePlayer = {
-      id,
-      name,
-      mesh: this.createRemotePlayerMesh(loadout.weaponId),
-      weaponIdRendered: loadout.weaponId,
-      position,
-      velocity: new THREE.Vector3(),
-      yaw: -2.45,
-      pitch: -0.08,
-      health: 100,
-      scrap: 70,
-      loadout,
-      condition: createInitialPlayerCondition(),
-      input: {
-        sequence: 0,
-        moveX: 0,
-        moveZ: 0,
-        sprint: false,
-        crouch: false,
-        aim: false,
-        yaw: -2.45,
-        pitch: -0.08
-      },
-      lastInputAt: performance.now() / 1000,
-      lastShotAt: 0,
-      shotBloom: 0,
-      movementNoiseTimer: 0,
-      isSprinting: false,
-      crouching: false,
-      crouchAmount: 0,
-      height: 0,
-      heightTarget: 0,
-      jumpHeight: 0,
-      jumpVelocity: 0,
-      activeFixtureId: null
-    };
-    this.scene.add(player.mesh);
-    this.updateRemotePlayerMesh(player);
-    this.networkPlayers.set(id, player);
-    return player;
-  }
-
-  private removeNetworkPlayer(id: string): void {
-    const player = this.networkPlayers.get(id);
-    if (!player) {
-      return;
-    }
-    this.scene.remove(player.mesh);
-    this.networkPlayers.delete(id);
-  }
-
-  private resetNetworkPlayersForHost(): void {
-    if (!this.isNetworkHost) {
-      return;
-    }
-    let offsetIndex = 1;
-    for (const player of this.networkPlayers.values()) {
-      const x = START_POSITION.x + offsetIndex * 3.2;
-      const z = START_POSITION.z + offsetIndex * 2.2;
-      player.position.set(x, this.groundY({ x, z }), z);
-      player.velocity.set(0, 0, 0);
-      player.yaw = -2.45;
-      player.pitch = -0.08;
-      player.health = 100;
-      player.scrap = 70;
-      player.loadout = createInitialLoadout();
-      player.condition = createInitialPlayerCondition();
-      player.lastShotAt = 0;
-      player.shotBloom = 0;
-      player.movementNoiseTimer = 0;
-      player.isSprinting = false;
-      player.crouching = false;
-      player.crouchAmount = 0;
-      player.height = 0;
-      player.heightTarget = 0;
-      player.jumpHeight = 0;
-      player.jumpVelocity = 0;
-      player.activeFixtureId = null;
-      player.input = {
-        ...player.input,
-        moveX: 0,
-        moveZ: 0,
-        sprint: false,
-        crouch: false,
-        aim: false,
-        yaw: player.yaw,
-        pitch: player.pitch
-      };
-      this.updateRemotePlayerMesh(player);
-      offsetIndex += 1;
-    }
-  }
-
-  private createRemotePlayerMesh(weaponId: WeaponId): THREE.Group {
-    const group = new THREE.Group();
-    group.userData.dynamic = true;
-    const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x6f8f93, roughness: 0.78, metalness: 0.02 });
-    const darkMaterial = new THREE.MeshStandardMaterial({ color: 0x1e282b, roughness: 0.84, metalness: 0.04 });
-    const skinMaterial = new THREE.MeshStandardMaterial({ color: 0xcaa47c, roughness: 0.74 });
-    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.46, 1.08, 4, 9), bodyMaterial);
-    body.position.y = 1.34;
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.28, 12, 10), skinMaterial);
-    head.position.y = 2.18;
-    const leftLeg = new THREE.Mesh(new THREE.CapsuleGeometry(0.15, 0.72, 3, 7), darkMaterial);
-    leftLeg.position.set(-0.19, 0.52, 0);
-    const rightLeg = leftLeg.clone();
-    rightLeg.position.x = 0.19;
-    const leftArm = new THREE.Mesh(new THREE.CapsuleGeometry(0.12, 0.78, 3, 7), bodyMaterial);
-    leftArm.position.set(-0.5, 1.38, -0.1);
-    leftArm.rotation.z = 0.22;
-    const rightArm = leftArm.clone();
-    rightArm.position.x = 0.5;
-    rightArm.rotation.z = -0.22;
-    const weapon = this.meshFactory.createWeaponMesh(weaponId, false);
-    weapon.name = "remote-weapon";
-    weapon.position.set(0.34, 1.25, -0.62);
-    weapon.rotation.set(0.2, Math.PI, -0.08);
-    weapon.scale.setScalar(0.74);
-    group.add(body, head, leftLeg, rightLeg, leftArm, rightArm, weapon);
-    return group;
-  }
-
-  private updateRemotePlayerMesh(player: NetworkRemotePlayer): void {
-    if (player.weaponIdRendered !== player.loadout.weaponId) {
-      this.rebuildRemotePlayerWeapon(player);
-    }
-    player.mesh.position.set(player.position.x, player.position.y + player.height + player.jumpHeight, player.position.z);
-    player.mesh.rotation.y = player.yaw + Math.PI;
-    const crouchScale = 1 - player.crouchAmount * 0.16;
-    player.mesh.scale.set(1, Math.max(0.82, crouchScale), 1);
-    player.mesh.visible = player.health > 0;
-  }
-
-  private rebuildRemotePlayerWeapon(player: NetworkRemotePlayer): void {
-    const previous = player.mesh.getObjectByName("remote-weapon");
-    if (previous) {
-      player.mesh.remove(previous);
-    }
-    const weapon = this.meshFactory.createWeaponMesh(player.loadout.weaponId, false);
-    weapon.name = "remote-weapon";
-    weapon.position.set(0.34, 1.25, -0.62);
-    weapon.rotation.set(0.2, Math.PI, -0.08);
-    weapon.scale.setScalar(0.74);
-    player.mesh.add(weapon);
-    player.weaponIdRendered = player.loadout.weaponId;
-  }
-
   private handleNetworkPlayerAction(playerId: string, action: NetworkAction): void {
-    const player = this.networkPlayers.get(playerId);
+    const player = this.remotePlayers.get(playerId);
     if (!player || player.health <= 0 || this.state !== "playing") {
       return;
     }
@@ -1450,20 +1241,16 @@ export class GameApp {
   }
 
   private applyNetworkSnapshot(snapshot: NetworkGameSnapshot): void {
-    if (snapshot.roomId !== this.multiplayerConfig.roomId) {
+    if (!this.network.acceptSnapshot(snapshot)) {
       return;
     }
     this.state = snapshot.state;
-    this.networkWave = snapshot.wave;
-    this.networkWavePhase = snapshot.wavePhase;
-    this.networkIntermissionTimer = snapshot.intermissionTimer;
-    this.networkRemainingSpawns = snapshot.remainingSpawns;
 
-    const self = snapshot.players.find((player) => player.id === this.localNetworkId);
+    const self = snapshot.players.find((player) => player.id === this.network.localId);
     if (self) {
       this.applyLocalPlayerSnapshot(self);
     }
-    this.applyRemotePlayerSnapshots(snapshot.players.filter((player) => player.id !== this.localNetworkId));
+    this.applyRemotePlayerSnapshots(snapshot.players.filter((player) => player.id !== this.network.localId));
     this.applyZombieSnapshots(snapshot.zombies);
     this.applyPickupSnapshots(snapshot.pickups);
     this.applyWeaponDropSnapshots(snapshot.weaponDrops);
@@ -1504,7 +1291,7 @@ export class GameApp {
     const seen = new Set<string>();
     for (const snapshot of snapshots) {
       seen.add(snapshot.id);
-      const player = this.networkPlayers.get(snapshot.id) ?? this.addNetworkPlayer(snapshot.id, snapshot.name);
+      const player = this.remotePlayers.get(snapshot.id) ?? this.remotePlayers.add(snapshot.id, snapshot.name);
       player.name = snapshot.name;
       player.position.set(snapshot.x, snapshot.y, snapshot.z);
       player.yaw = snapshot.yaw;
@@ -1525,11 +1312,11 @@ export class GameApp {
       player.jumpHeight = snapshot.jumpHeight;
       player.activeFixtureId = snapshot.activeFixtureId;
       player.input.aim = snapshot.aim;
-      this.updateRemotePlayerMesh(player);
+      this.remotePlayers.updateMesh(player);
     }
-    for (const id of [...this.networkPlayers.keys()]) {
+    for (const id of [...this.remotePlayers.keys()]) {
       if (!seen.has(id)) {
-        this.removeNetworkPlayer(id);
+        this.remotePlayers.remove(id);
       }
     }
   }
@@ -2483,7 +2270,7 @@ export class GameApp {
     combatants.length = 0;
     if (this.player.health > 0) {
       combatants.push({
-        id: this.localNetworkId,
+        id: this.network.localId,
         isLocal: true,
         position: this.player.position,
         velocity: this.player.velocity,
@@ -2499,7 +2286,7 @@ export class GameApp {
         loadout: this.loadout
       });
     }
-    for (const player of this.networkPlayers.values()) {
+    for (const player of this.remotePlayers.values()) {
       if (player.health <= 0) {
         continue;
       }
@@ -2991,7 +2778,7 @@ export class GameApp {
   }
 
   private collectPickupForNetworkPlayer(pickup: Pickup): boolean {
-    for (const player of this.networkPlayers.values()) {
+    for (const player of this.remotePlayers.values()) {
       if (player.health <= 0 || pickup.position.distanceTo(player.position) >= 4.2) {
         continue;
       }
@@ -3914,9 +3701,7 @@ export class GameApp {
     this.hud.setRestartVisible(true);
     this.hud.setStatus(`Overrun at wave ${this.wave}`);
     document.exitPointerLock?.();
-    if (this.isNetworkHost && this.multiplayer?.connected) {
-      this.multiplayer.sendSnapshot(this.buildNetworkSnapshot());
-    }
+    this.sendNetworkSnapshotNow();
   }
 
   private snapshot(): Snapshot {
@@ -3992,7 +3777,7 @@ export class GameApp {
       health: this.player.health,
       wave: this.wave,
       scrap: this.player.scrap,
-      zombieCount: this.zombies.length + (this.isNetworkClient ? this.networkRemainingSpawns : this.waveDirector.remainingSpawns),
+      zombieCount: this.zombies.length + (this.isNetworkClient ? this.network.remainingSpawns : this.waveDirector.remainingSpawns),
       loadout: this.loadout,
       reloadProgress: this.reloadProgress(performance.now() / 1000),
       playerHeight: this.playerElevation(),
@@ -4041,7 +3826,7 @@ export class GameApp {
 
   private visibilityContext() {
     return this.visibilityContextForCombatant({
-      id: this.localNetworkId,
+      id: this.network.localId,
       isLocal: true,
       position: this.player.position,
       velocity: this.player.velocity,

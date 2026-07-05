@@ -10,6 +10,8 @@ This codebase is organized around a small app shell with gameplay, rendering, an
 - `src/game/runtimeTypes.ts` contains runtime entity contracts shared by orchestration code, networking, combat, and interaction handling.
 - `src/game/runtime/FrameLoop.ts` owns requestAnimationFrame scheduling, frame delta clamping, and loop cancellation.
 - `src/game/runtime/GameEntityStore.ts` owns transient scene-backed gameplay collections, monotonic entity ids, and shared cleanup for restarts and network-authoritative resyncs.
+- `src/game/multiplayer/NetworkSession.ts` owns LAN transport lifecycle, host/client role checks, input/action sequencing, snapshot tick cadence, and replicated wave metadata.
+- `src/game/multiplayer/RemotePlayerRoster.ts` owns remote-player runtime state, deterministic co-op spawn offsets, remote survivor mesh rebuilds, reset behavior, and scene removal.
 
 ## Gameplay Modules
 
