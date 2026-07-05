@@ -84,7 +84,27 @@ const polygonEdgePointFromLocal = (
   angle: number,
   localX: number,
   localZ: number
-): Vec2 => nearestPointOnPolygon(offsetPoint(center, angle, localX, localZ), polygon);
+): Vec2 => {
+  const edgePoint = nearestPointOnPolygon(offsetPoint(center, angle, localX, localZ), polygon);
+  const dx = edgePoint.x - center.x;
+  const dz = edgePoint.z - center.z;
+  const length = Math.hypot(dx, dz) || 1;
+  return {
+    x: edgePoint.x + (dx / length) * 0.8,
+    z: edgePoint.z + (dz / length) * 0.8
+  };
+};
+
+const exteriorPointFromPolygon = (point: Vec2, polygon: readonly Vec2[], center = polygonCentroid(polygon), clearance = 0.55): Vec2 => {
+  const edgePoint = nearestPointOnPolygon(point, polygon);
+  const dx = edgePoint.x - center.x;
+  const dz = edgePoint.z - center.z;
+  const length = Math.hypot(dx, dz) || 1;
+  return {
+    x: edgePoint.x + (dx / length) * clearance,
+    z: edgePoint.z + (dz / length) * clearance
+  };
+};
 
 export const RESEARCH_NOTES = [
   "Yarra City Council describes Edinburgh Gardens as a 24 hectare park with open lawns, specimen trees, shaded areas and an extensive path network.",
@@ -2863,6 +2883,7 @@ export function createLevelData(): LevelData {
     grandstandFrontSign * (grandstandVisualHalfZ - 2.4)
   );
   const grandstandStairHeading = Math.atan2(grandstandStairLanding.z - grandstandStairAccess.z, grandstandStairLanding.x - grandstandStairAccess.x);
+  const grandstandDeckRadius = Math.max(12, boundingRadius(grandstand, grandstandCenter) + 1.2);
   const ovalMinZ = Math.min(...oval.map((point) => point.z));
   const ovalMaxZ = Math.max(...oval.map((point) => point.z));
   const sportsFixtures: SportsFixture[] = [
@@ -2951,12 +2972,21 @@ export function createLevelData(): LevelData {
     surface: path.surface,
     source: path.source
   }));
-  const mappedAmenities: AmenityPoint[] = OSM_AMENITY_GEO.map((amenity) => ({
-    id: amenity.id,
-    label: amenity.label,
-    kind: amenity.kind,
-    position: geoToWorld(amenity.point)
-  }));
+  const mappedAmenities: AmenityPoint[] = OSM_AMENITY_GEO.map((amenity) => {
+    const position = geoToWorld(amenity.point);
+    const visiblePosition =
+      amenity.kind === "toilets" && pointInPolygon(position, southAmenitiesBuilding)
+        ? exteriorPointFromPolygon(position, southAmenitiesBuilding, southToilets)
+        : amenity.kind === "toilets" && pointInPolygon(position, northToilets)
+          ? exteriorPointFromPolygon(position, northToilets, northToiletsCenter)
+          : position;
+    return {
+      id: amenity.id,
+      label: amenity.label,
+      kind: amenity.kind,
+      position: visiblePosition
+    };
+  });
   const featureAmenities: AmenityPoint[] = [
     { id: "north-table-tennis", label: "Northern activity table tennis", kind: "table_tennis", position: northTableTennis },
     { id: "north-bbq-picnic-table-1", label: "North picnic table", kind: "picnic_table", position: geoToWorld(g(-37.785870, 144.983230)) },
@@ -3026,7 +3056,7 @@ export function createLevelData(): LevelData {
       id: "brunswick-tram-bike",
       label: "Bike near Brunswick Street approach",
       kind: "casual-bike",
-      position: geoToWorld(g(-37.787185, 144.980770)),
+      position: geoToWorld(g(-37.787140, 144.980535)),
       angle: 0.92,
       source: "Yarra access context: Brunswick Street trams and cycling access"
     },
@@ -3489,7 +3519,7 @@ export function createLevelData(): LevelData {
       geoToWorld(g(-37.78948, 144.98045)),
       geoToWorld(g(-37.78972, 144.98215)),
       geoToWorld(g(-37.78805, 144.98535)),
-      geoToWorld(g(-37.78612, 144.98448)),
+      geoToWorld(g(-37.78594, 144.98462)),
       geoToWorld(g(-37.78632, 144.98146)),
       geoToWorld(g(-37.78574, 144.98385)),
       geoToWorld(g(-37.78914, 144.98402))
@@ -3538,7 +3568,7 @@ export function createLevelData(): LevelData {
         accessRadius: 5.5,
         accessKind: "stairs",
         accessHeading: grandstandStairHeading,
-        radius: 12,
+        radius: grandstandDeckRadius,
         height: 3.15,
         prompt: "E: climb stand stairs",
         mode: "toggle",

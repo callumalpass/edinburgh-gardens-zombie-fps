@@ -39,6 +39,22 @@ function distanceToObstacleBoundary(point: { x: number; z: number }, obstacle: R
   return Math.abs(distance(point, obstacle.center) - obstacle.radius);
 }
 
+function pointInsideObstacle(point: { x: number; z: number }, obstacle: ReturnType<typeof createLevelData>["obstacles"][number], padding = 0): boolean {
+  if (obstacle.shape === "polygon") {
+    return pointInPolygon(point, obstacle.polygon) || distanceToPolygonEdge(point, obstacle.polygon) < padding;
+  }
+  if (obstacle.shape === "box") {
+    const dx = point.x - obstacle.center.x;
+    const dz = point.z - obstacle.center.z;
+    const cos = Math.cos(obstacle.angle);
+    const sin = Math.sin(obstacle.angle);
+    const localX = dx * cos + dz * sin;
+    const localZ = -dx * sin + dz * cos;
+    return Math.abs(localX) < obstacle.halfX + padding && Math.abs(localZ) < obstacle.halfZ + padding;
+  }
+  return distance(point, obstacle.center) < obstacle.radius + padding;
+}
+
 describe("map geometry", () => {
   it("converts the OSM boundary into a playable non-degenerate park polygon", () => {
     const level = createLevelData();
@@ -468,7 +484,7 @@ describe("map geometry", () => {
     for (const fence of level.mappedFences) {
       expect(fence.points.some((point) => pointInPolygon(point, level.boundary)), `mapped fence ${fence.id} has no in-boundary point`).toBe(true);
     }
-    const structuralLandmarkKinds = new Set(["basketball", "bowls", "court", "grandstand", "playground", "rotunda", "skate", "tennis", "toilets"]);
+    const structuralLandmarkKinds = new Set(["bowls", "grandstand", "rotunda", "tennis", "toilets"]);
     const structuralPolygons = [
       ...level.mappedBuildings.map((building) => ({ id: building.id, polygon: building.polygon })),
       ...level.landmarks
@@ -531,6 +547,87 @@ describe("map geometry", () => {
     for (const line of level.hardscapeLines) {
       expect(line.points.some((point) => pointInPolygon(point, level.boundary)), `hardscape line ${line.id} has no in-boundary point`).toBe(true);
     }
+  });
+
+  it("keeps point-placed objects out of unrelated blockers and structural footprints", () => {
+    const level = createLevelData();
+    const structuralLandmarkKinds = new Set(["bowls", "grandstand", "rotunda", "tennis", "toilets"]);
+    const structuralZones = [
+      ...level.mappedBuildings.map((building) => ({ id: building.id, polygon: building.polygon })),
+      ...level.landmarks
+        .filter((landmark) => landmark.polygon && structuralLandmarkKinds.has(landmark.kind))
+        .map((landmark) => ({ id: landmark.id, polygon: landmark.polygon! }))
+    ];
+    const bypassByFixture = new Map(level.interactables.map((fixture) => [fixture.id, new Set(fixture.bypassObstacleIds ?? [])]));
+    const allowedById = new Map<string, Set<string>>();
+    const allow = (id: string, ...allowedIds: string[]) => {
+      allowedById.set(id, new Set(allowedIds));
+    };
+
+    allow("rotunda-armory", "osm-building-543505640", "rotunda");
+    allow("rotunda-carbine", "osm-building-543505640", "rotunda");
+    allow("grandstand-shotgun", "grandstand");
+    allow("tennis-smg", "tennis", "osm-building-403753784");
+    allow("tennis-locker", "tennis", "osm-building-403753784");
+    allow("osm-6280110915", "skate");
+    allow("osm-8464870016", "skate");
+    allow("skate-chalk-mark", "skate");
+
+    const placementErrors: string[] = [];
+    const assertClear = (label: string, point: { x: number; z: number }, allowedIds = new Set<string>()) => {
+      const obstacleOffenders = level.obstacles
+        .filter((obstacle) => !allowedIds.has(obstacle.id))
+        .filter((obstacle) => pointInsideObstacle(point, obstacle, 0.05))
+        .map((obstacle) => obstacle.id);
+      if (obstacleOffenders.length > 0) {
+        placementErrors.push(`${label} is inside unrelated blocker(s): ${obstacleOffenders.join(", ")}`);
+      }
+
+      const structuralOffenders = structuralZones
+        .filter((zone) => !allowedIds.has(zone.id))
+        .filter((zone) => pointInPolygon(point, zone.polygon))
+        .map((zone) => zone.id);
+      if (structuralOffenders.length > 0) {
+        placementErrors.push(`${label} is inside unrelated structural footprint(s): ${structuralOffenders.join(", ")}`);
+      }
+    };
+
+    level.spawnPoints.forEach((point, index) => assertClear(`spawn point ${index + 1}`, point));
+    level.pickupPoints.forEach((point, index) => assertClear(`pickup point ${index + 1}`, point));
+    level.amenities.forEach((amenity) => assertClear(`amenity ${amenity.id}`, amenity.position, allowedById.get(amenity.id)));
+    level.parkLifeDetails.forEach((detail) => assertClear(`park-life detail ${detail.id}`, detail.position, allowedById.get(detail.id)));
+    level.upgradeStations.forEach((station) => assertClear(`upgrade station ${station.id}`, station.position, allowedById.get(station.id)));
+    level.weaponSpawns.forEach((spawn) => assertClear(`weapon spawn ${spawn.id}`, spawn.position, allowedById.get(spawn.id)));
+
+    level.sportsFixtures.forEach((fixture) => {
+      const allowedIds = fixture.kind === "basketball-hoop" ? new Set([`${fixture.id}-post`]) : new Set(footballPostLocalOffsets(fixture.width).map((_, index) => `${fixture.id}-post-${index + 1}`));
+      for (const allowedId of allowedById.get(fixture.id) ?? []) {
+        allowedIds.add(allowedId);
+      }
+      assertClear(`sports fixture ${fixture.id}`, fixture.position, allowedIds);
+    });
+
+    level.interactables.forEach((fixture) => {
+      const allowedIds = new Set([...(bypassByFixture.get(fixture.id) ?? []), ...(allowedById.get(fixture.id) ?? [])]);
+      assertClear(`interactable ${fixture.id}`, fixture.position, allowedIds);
+      if (fixture.accessPosition) {
+        const accessAllowed = fixture.accessKind === "frame" ? allowedIds : new Set<string>();
+        assertClear(`interactable ${fixture.id} access`, fixture.accessPosition, accessAllowed);
+      }
+      if (fixture.landingPosition) {
+        assertClear(`interactable ${fixture.id} landing`, fixture.landingPosition, allowedIds);
+      }
+      if (fixture.exitPosition) {
+        const exitAllowed = fixture.accessKind === "frame" ? allowedIds : new Set<string>();
+        assertClear(`interactable ${fixture.id} exit`, fixture.exitPosition, exitAllowed);
+      }
+    });
+
+    level.treeColliders.forEach((tree) => {
+      assertClear(`tree collider ${tree.id}`, tree.position, new Set([tree.id]));
+    });
+
+    expect(placementErrors).toEqual([]);
   });
 
   it("clamps external points back into the park", () => {
