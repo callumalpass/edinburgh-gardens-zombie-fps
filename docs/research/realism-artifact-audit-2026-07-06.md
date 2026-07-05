@@ -14,7 +14,7 @@ Purpose: document the source-backed realism pass that tightened runtime artifact
 - Edinburgh Gardens Conservation Management Plan 2004:
   - Used for conservative treatment of heritage built forms and the hierarchy of the rotunda, oval gatehouse, grandstand, bowling club and tennis pavilion.
 - Yarra Brunswick Street Oval redevelopment page: https://www.yarracity.vic.gov.au/planning-and-building/our-projects-and-initiatives/brunswick-street-oval
-  - Used to justify tennis works cues, secure access gates, accessible facilities, grandstand stairs, refreshed sport/community facility cues and 2026-2027 planting context.
+  - Used to justify tennis works cues, six existing court renovation cues, secure access gates, accessible facilities, grandstand stairs, refreshed sport/community facility cues and 2026-2027 planting context.
 - Yarra Emely Baker Centre page: https://www.yarracity.vic.gov.au/things-to-do/find-a-venue/emely-baker-centre
   - Used to justify access-friendly entry treatment, gated outdoor area and shade sail details.
 - Yarra Fitzroy Bowls 150 Years Memorial Wall page: https://www.yarracity.vic.gov.au/things-to-do/arts/gallery/public-art/fitzroy-bowls-150-years-memorial-wall
@@ -27,6 +27,14 @@ Purpose: document the source-backed realism pass that tightened runtime artifact
 - Building preview orientation now matches gameplay orientation.
   - `WorldBuilder.fitBoxFromPolygon()` now uses the longest footprint edge so preview and gameplay facades share the same Three.js building axis.
   - This reduces incorrect preview facades on OSM ways whose first coordinate edge is not the main building axis.
+- Major mapped buildings now carry explicit source-backed frontage points.
+  - `MappedBuilding.facade.frontagePoint` is assigned for the south amenities building, Fitzroy Tennis Club rooms, Freeman Street gatehouse, Fitzroy Victoria Bowling Club rooms and Emely Baker Centre.
+  - `WorldBuilder.fitBoxFromPolygon()` accepts that point and flips the fitted axis when needed so doors, awnings, wall lights, ramps, windows, service ladders and courtyard details face the documented use side rather than an arbitrary OSM vertex order.
+  - The frontage evidence is intentionally coarse: it identifies the correct side of the mapped footprint, not the exact centimetre position of every window or vent.
+- The tennis precinct now shows the documented 2026-2027 court renovation state.
+  - Each of the six OSM-derived existing court polygons is tagged with `courtStatus: "renovating-existing"` and a Yarra source note.
+  - The renderer overlays a low-cost two-tone resurfacing state, layout tape and small works buckets on those six real court footprints.
+  - The Yarra page also confirms two brand-new synthetic courts, but public exact vertices were not available in this pass, so no speculative eighth/seventh court footprint was added.
 - Three.js runtime building details were brought closer to the committed building research notes.
   - The tennis storage tank now renders as a round tank with cap, ladder, side pipe and valve box.
   - Fitzroy Tennis Club rooms gain ramp rails, wall light, secure-access mesh and court-equipment lockers.
@@ -43,6 +51,7 @@ Purpose: document the source-backed realism pass that tightened runtime artifact
 - Wet weather and day/night dynamics now affect shared park materials and lights.
   - Rain darkens grass, paths, asphalt, concrete, timber, brick and metal toward wet palettes already compatible with the anime-minimal material style.
   - Lamp pools and facade wall lights increase at night, especially under cloud and precipitation.
+  - Mapped-building window panes now share the same night/cloud curve, moving from dark glass to a restrained warm interior glow without adding per-window light costs.
 - Runtime weapon meshes now better express existing weapon mechanics.
   - Firearms gained trigger, ejection-port, fore-end and stock-pad geometry.
   - These details support the existing recoil, reload, magazine, spread and scoped-weapon mechanics without changing balance.
@@ -55,11 +64,17 @@ Purpose: document the source-backed realism pass that tightened runtime artifact
     - `docs/research/renders/object-previews/2026-07-06-realism-audit/works-and-tree-audit.png`
     - `docs/research/renders/object-previews/2026-07-06-realism-audit/weapon-zombie-silhouette-audit.png`
     - `docs/research/renders/object-previews/2026-07-06-realism-audit/weather-night-audit.png`
+    - `docs/research/renders/object-previews/2026-07-06-facade-court-pass/static-audit/facade-placement-audit.png`
+    - `docs/research/renders/object-previews/2026-07-06-facade-court-pass/static-audit/works-and-tree-audit.png`
+    - `docs/research/renders/object-previews/2026-07-06-facade-court-pass/static-audit/weapon-zombie-silhouette-audit.png`
+    - `docs/research/renders/object-previews/2026-07-06-facade-court-pass/static-audit/weather-night-audit.png`
   - The generated PNGs are used as local QA artifacts, not committed research data.
 
 ## Uncertainty
 
 - Public sources confirm building identity, footprint and facility function, but not every current window, vent, door or sign placement. Those micro-details are conservative functional translations of the documented use, not survey-grade facade drawings.
+- The facade frontage points are evidence-backed side selectors, not surveyed doorway coordinates. They keep authored details on the correct side of the OSM footprint while accepting small local-position uncertainty.
+- The two future tennis courts are documented by Yarra but were not drawn as new playable court footprints because exact public geometry was not available; current runtime geometry limits itself to the six existing OSM court polygons plus works cues.
 - The Brunswick Street Oval redevelopment is active across 2026-2027. The runtime keeps works and secure-access cues lightweight so the park remains playable while still reflecting current public project evidence.
 - Suppressed-tree stumps mark the positions of removed OSM tree nodes from the already documented redevelopment footprint. They should not be interpreted as a full arborist stump inventory.
 - Tree placement was not refreshed in this pass because the existing Vicmap/Yarra/OSM tree model is already source-backed and more precise than hand-added decorative trunks.

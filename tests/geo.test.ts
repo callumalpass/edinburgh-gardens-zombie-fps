@@ -276,6 +276,38 @@ describe("map geometry", () => {
     expect(level.mappedBuildings.filter((building) => pointInPolygon(polygonCentroid(building.polygon), level.boundary)).length).toBe(level.mappedBuildings.length);
   });
 
+  it("keeps facade frontages source-backed for major mapped buildings", () => {
+    const level = createLevelData();
+    const facadeBuildings = [
+      "osm-building-242003562",
+      "osm-building-403753784",
+      "osm-building-543505638",
+      "osm-building-543505639",
+      "osm-building-543505702"
+    ];
+
+    for (const id of facadeBuildings) {
+      const building = level.mappedBuildings.find((candidate) => candidate.id === id);
+      expect(building?.facade?.frontagePoint).toBeTruthy();
+      expect(building?.facade?.source).toBeTruthy();
+      expect(distance(building!.facade!.frontagePoint, polygonCentroid(building!.polygon))).toBeGreaterThan(2);
+      expect(distanceToPolygonEdge(building!.facade!.frontagePoint, building!.polygon)).toBeLessThan(40);
+    }
+
+    expect(level.mappedBuildings.find((building) => building.id === "osm-building-403753784")?.facade?.source).toContain("Brunswick Street Oval");
+    expect(level.mappedBuildings.find((building) => building.id === "osm-building-543505702")?.facade?.source).toContain("Emely Baker Centre");
+    expect(level.mappedBuildings.find((building) => building.id === "osm-building-543505639")?.facade?.source).toContain("Memorial Wall");
+  });
+
+  it("marks the six existing tennis courts as current renovation surfaces", () => {
+    const level = createLevelData();
+    const tennisCourts = level.landmarks.filter((landmark) => landmark.id.startsWith("tennis-court-"));
+    expect(tennisCourts.length).toBe(6);
+    expect(tennisCourts.every((court) => court.courtStatus === "renovating-existing")).toBe(true);
+    expect(tennisCourts.every((court) => court.source?.includes("full renovation of six existing courts"))).toBe(true);
+    expect(tennisCourts.every((court) => court.polygon?.every((point) => pointInPolygon(point, level.boundary)))).toBe(true);
+  });
+
   it("includes researched hardscape edge and drain features", () => {
     const level = createLevelData();
     const hardscapeIds = new Set(level.hardscapeLines.map((line) => line.id));

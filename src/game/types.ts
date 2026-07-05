@@ -39,6 +39,7 @@ export interface Landmark {
   polygon?: Vec2[];
   position?: Vec2;
   radius?: number;
+  courtStatus?: "renovating-existing";
   gardenStyle?: "stormwater-filtration" | "stormwater-storage" | "ornamental-floral" | "ornamental-shrub" | "agapanthus";
   cover?: "dense-shrub";
   source?: string;
@@ -169,6 +170,10 @@ export interface MappedBuilding {
     | "community-centre"
     | "bowling-shed"
     | "amenities";
+  facade?: {
+    frontagePoint: Vec2;
+    source: string;
+  };
   source?: string;
   collision: boolean;
 }

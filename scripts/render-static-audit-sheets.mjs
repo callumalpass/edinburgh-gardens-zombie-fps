@@ -145,7 +145,23 @@ function worksSheet() {
     ${noteText(24, 298, 398, "Seven OSM tree nodes removed by the redevelopment plan are shown as low stump cues.", "small", 18)}
   </g>
 
-  <g transform="translate(318 548)">
+  <g transform="translate(70 548)">
+    <rect class="panel" x="0" y="0" width="460" height="306" rx="8"/>
+    <text x="24" y="44" class="label">Six Existing Courts Under Renovation</text>
+    ${rect(64, 92, 330, 150, "#408a72")}
+    ${rect(64, 92, 165, 150, "#2f715f", 0.34)}
+    ${rect(229, 92, 165, 150, "#65a17e", 0.38)}
+    ${line(229, 92, 229, 242, "#e8ddad", 5)}
+    ${line(82, 112, 376, 112, "#e8ddad", 4)}
+    ${line(82, 222, 376, 222, "#e8ddad", 4)}
+    ${line(82, 92, 82, 242, "#e8ddad", 4)}
+    ${line(376, 92, 376, 242, "#e8ddad", 4)}
+    ${circle(350, 130, 12, "#d8783c")}
+    ${rect(318, 214, 48, 16, "#d8783c")}
+    ${noteText(24, 252, 398, "Every OSM tennis court keeps its real footprint and gets a cheap resurfacing state from the Yarra works source.", "small", 18)}
+  </g>
+
+  <g transform="translate(570 548)">
     <rect class="panel" x="0" y="0" width="460" height="306" rx="8"/>
     <text x="24" y="44" class="label">Grandstand Secure Gate Works</text>
     ${rect(80, 136, 300, 82, "#e36e2f", 0.28)}
@@ -157,7 +173,7 @@ function worksSheet() {
     ${noteText(24, 252, 398, "Secure gate cue follows the public grandstand upgrade scope.", "small", 18)}
   </g>
 
-  <g transform="translate(818 548)">
+  <g transform="translate(1070 548)">
     <rect class="panel" x="0" y="0" width="460" height="306" rx="8"/>
     <text x="24" y="44" class="label">Broken and Rideable Bikes</text>
     ${bike(70, 100, "#244a42", "flat tyre")}

@@ -128,10 +128,13 @@ export class WorldBuilder {
   private readonly brickWetColor = new THREE.Color(0x7a3f38);
   private readonly metalBaseColor = new THREE.Color(0x94a3a2);
   private readonly metalWetColor = new THREE.Color(0x768a8d);
+  private readonly facadeWindowDarkColor = new THREE.Color(0x071217);
+  private readonly facadeWindowWarmColor = new THREE.Color(0xf0c16a);
   private readonly lampLights: THREE.PointLight[] = [];
   private readonly lampSpillMaterials: THREE.MeshBasicMaterial[] = [];
   private readonly facadeLights: THREE.PointLight[] = [];
   private readonly wallLightMaterials: THREE.MeshStandardMaterial[] = [];
+  private readonly facadeWindowMaterials: THREE.MeshBasicMaterial[] = [];
   private readonly scratchColor = new THREE.Color();
 
   constructor(
@@ -283,6 +286,7 @@ export class WorldBuilder {
       this.addFlatPolygon(landmark.polygon, this.materials.court, 0.09);
       this.addTennisCourtLines(landmark.polygon);
       this.addTennisNet(landmark.polygon);
+      this.addTennisCourtWorksCues(landmark);
     }
     if (landmark.kind === "bowls" && landmark.polygon) {
       this.addFlatPolygon(landmark.polygon, this.materials.court, 0.08, landmark.id.startsWith("bowling-green") ? 0.86 : 0.6);
@@ -476,6 +480,9 @@ export class WorldBuilder {
     for (const material of this.wallLightMaterials) {
       material.emissive.setHex(0xf0a64d);
       material.emissiveIntensity = 0.08 + lampT * 0.75;
+    }
+    for (const material of this.facadeWindowMaterials) {
+      material.color.copy(this.scratchColor.copy(this.facadeWindowDarkColor).lerp(this.facadeWindowWarmColor, lampT * 0.58));
     }
   }
 
@@ -1531,6 +1538,7 @@ export class WorldBuilder {
         this.addFlatPolygon(landmark.polygon, this.materials.court, 0.09);
         this.addTennisCourtLines(landmark.polygon);
         this.addTennisNet(landmark.polygon);
+        this.addTennisCourtWorksCues(landmark);
       }
       if (landmark.kind === "bowls" && landmark.polygon) {
         this.addFlatPolygon(landmark.polygon, this.materials.court, 0.08, landmark.id.startsWith("bowling-green") ? 0.86 : 0.6);
@@ -1623,7 +1631,7 @@ export class WorldBuilder {
 
   private addMappedBuildingDetails(building: MappedBuilding, center: Vec2): void {
     if (!building.detailProfile) return;
-    const footprint = this.fitBoxFromPolygon(building.polygon, 0, 0);
+    const footprint = this.fitBoxFromPolygon(building.polygon, 0, 0, building.facade?.frontagePoint);
     const rotation = -footprint.angle;
     const frontZ = footprint.halfZ + 0.08;
     const rearZ = -footprint.halfZ - 0.08;
@@ -2078,7 +2086,12 @@ export class WorldBuilder {
     return new THREE.Mesh(geometry, material);
   }
 
-  private fitBoxFromPolygon(polygon: Vec2[], paddingX: number, paddingZ: number): { center: Vec2; halfX: number; halfZ: number; angle: number } {
+  private fitBoxFromPolygon(
+    polygon: Vec2[],
+    paddingX: number,
+    paddingZ: number,
+    frontagePoint?: Vec2
+  ): { center: Vec2; halfX: number; halfZ: number; angle: number } {
     const center = polygonCentroid(polygon);
     let longestA = polygon[0];
     let longestB = polygon[1] ?? polygon[0];
@@ -2093,7 +2106,7 @@ export class WorldBuilder {
         longestB = b;
       }
     }
-    const angle = Math.atan2(longestB.z - longestA.z, longestB.x - longestA.x);
+    let angle = Math.atan2(longestB.z - longestA.z, longestB.x - longestA.x);
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
     let halfX = 0;
@@ -2104,6 +2117,10 @@ export class WorldBuilder {
       const dz = point.z - center.z;
       halfX = Math.max(halfX, Math.abs(dx * cos + dz * sin));
       halfZ = Math.max(halfZ, Math.abs(-dx * sin + dz * cos));
+    }
+
+    if (frontagePoint && this.worldToLocal(center, -angle, frontagePoint).z < 0) {
+      angle += Math.PI;
     }
 
     return { center, halfX: halfX + paddingX, halfZ: halfZ + paddingZ, angle };
@@ -2389,7 +2406,19 @@ export class WorldBuilder {
     y: number,
     depth = 0.08
   ): THREE.Mesh {
-    return this.addLocalBox(center, rotation, localX, localZ, width, height, depth, this.materials.darkOpening, y, false);
+    return this.addLocalBox(center, rotation, localX, localZ, width, height, depth, this.facadeWindowMaterial(), y, false);
+  }
+
+  private facadeWindowMaterial(): THREE.MeshBasicMaterial {
+    const cacheKey = "basic:facade-window-night-glow";
+    let material = this.detailMaterialCache.get(cacheKey);
+    if (!material) {
+      const windowMaterial = new THREE.MeshBasicMaterial({ color: 0x071217 });
+      material = windowMaterial;
+      this.detailMaterialCache.set(cacheKey, windowMaterial);
+      this.facadeWindowMaterials.push(windowMaterial);
+    }
+    return material as THREE.MeshBasicMaterial;
   }
 
   private addBuildingSign(
@@ -2849,6 +2878,42 @@ export class WorldBuilder {
       const localX = netAlongX ? side * postOffset : 0;
       const localZ = netAlongX ? 0 : side * postOffset;
       this.addLocalCylinder(footprint.center, rotation, localX, localZ, 0.055, 0.07, 1.05, this.materials.metal);
+    }
+  }
+
+  private addTennisCourtWorksCues(landmark: Landmark): void {
+    if (!landmark.polygon || landmark.courtStatus !== "renovating-existing") return;
+
+    const footprint = this.fitBoxFromPolygon(landmark.polygon, 0, 0);
+    const rotation = -footprint.angle;
+    const center = footprint.center;
+    const courtLength = footprint.halfX * 1.7;
+    const courtWidth = footprint.halfZ * 1.7;
+    const patchedSurface = this.standardDetailMaterial("tennis-renovation-patched-synthetic", 0x65a17e, 0.78, 0.02, true, 0.34);
+    const scuffedSurface = this.standardDetailMaterial("tennis-renovation-scuffed-existing", 0x2f715f, 0.82, 0.02, true, 0.24);
+    const tapeMaterial = this.standardDetailMaterial("tennis-renovation-layout-tape", 0xe8ddad, 0.66, 0.02);
+    const worksOchre = this.standardDetailMaterial("tennis-renovation-works-ochre", 0xd8783c, 0.7, 0.02);
+
+    for (const patch of [
+      { localX: -footprint.halfX * 0.42, material: scuffedSurface },
+      { localX: footprint.halfX * 0.42, material: patchedSurface }
+    ]) {
+      const patchCenter = this.localPoint(center, rotation, patch.localX, 0);
+      const overlay = this.createTerrainOverlayRect(patchCenter, rotation, courtLength * 0.48, courtWidth, PATH_PATCH_SURFACE_Y + 0.018, patch.material);
+      overlay.receiveShadow = true;
+      this.scene.add(overlay);
+    }
+
+    this.addLocalBox(center, rotation, 0, 0, 0.09, 0.018, courtWidth * 0.92, tapeMaterial, 0.155, false);
+    this.addLocalBox(center, rotation, -footprint.halfX * 0.84, 0, 0.08, 0.018, courtWidth * 0.9, tapeMaterial, 0.153, false);
+    this.addLocalBox(center, rotation, footprint.halfX * 0.84, 0, 0.08, 0.018, courtWidth * 0.9, tapeMaterial, 0.153, false);
+
+    const courtNumber = Number(landmark.id.match(/\d+$/)?.[0] ?? 0);
+    if (courtNumber % 3 === 1) {
+      for (const localZ of [-footprint.halfZ * 0.62, footprint.halfZ * 0.62]) {
+        this.addLocalCylinder(center, rotation, footprint.halfX * 0.78, localZ, 0.11, 0.12, 0.28, worksOchre, 0.08);
+        this.addLocalBox(center, rotation, footprint.halfX * 0.6, localZ, 0.52, 0.08, 0.22, worksOchre, 0.12);
+      }
     }
   }
 

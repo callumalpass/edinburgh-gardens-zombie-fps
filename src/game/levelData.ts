@@ -167,6 +167,7 @@ export const RESEARCH_NOTES = [
   "Micro-terrain modifiers now layer path crowns, worn shoulders, root mounds, oval banking and drainage swales over the broad Vicmap elevation interpolation.",
   "Path surface transition patches now derive feathered edges and compacted junctions from mapped paths, with a small set of researched desire paths through high-use lawns.",
   "A 2026-07-06 realism artifact audit aligned Three.js object-preview building orientation with the restored Three.js runtime, added source-backed facade, current-works, suppressed-tree-stump, wet-weather and night-light details, and tightened zombie/weapon silhouettes while preserving low-poly anime minimalism.",
+  "A later 2026-07-06 facade and tennis-works pass added explicit source-backed frontage points for the major mapped buildings and renovation-surface cues on all six existing tennis courts, based on Yarra's 2026-2027 Brunswick Street Oval works page.",
   "See docs/edinburgh-gardens-research.md for source URLs, query notes, data licensing notes and implementation decisions."
 ];
 
@@ -2053,6 +2054,8 @@ const OSM_BUILDING_FOOTPRINTS_GEO: Array<{
   height: number;
   material: MappedBuilding["material"];
   detailProfile?: MappedBuilding["detailProfile"];
+  frontagePoint?: GeoPoint;
+  facadeSource?: string;
   source: string;
   collision: boolean;
   points: GeoPoint[];
@@ -2063,6 +2066,8 @@ const OSM_BUILDING_FOOTPRINTS_GEO: Array<{
     height: 3.4,
     material: "utility",
     detailProfile: "amenities",
+    frontagePoint: g(-37.7884306, 144.9835333),
+    facadeSource: "OSM toilet amenity node 7576808731; Yarra Edinburgh Gardens public facilities listing",
     source: "OSM way 242003562 full JSON; Yarra Edinburgh Gardens facilities listing",
     collision: true,
     points: [
@@ -2091,6 +2096,8 @@ const OSM_BUILDING_FOOTPRINTS_GEO: Array<{
     height: 3.8,
     material: "utility",
     detailProfile: "tennis-pavilion",
+    frontagePoint: g(-37.7880800, 144.9822400),
+    facadeSource: "Yarra Brunswick Street Oval redevelopment tennis clubhouse and new social-space scope; tennis locker gameplay point near court-side frontage",
     source: "OSM way 403753784 full JSON; Edinburgh Gardens CMP 2004 tennis pavilion analysis; Yarra Brunswick Street Oval tennis pavilion project",
     collision: false,
     points: [
@@ -2138,6 +2145,8 @@ const OSM_BUILDING_FOOTPRINTS_GEO: Array<{
     height: 2.7,
     material: "brick",
     detailProfile: "gatehouse",
+    frontagePoint: g(-37.7897200, 144.9801800),
+    facadeSource: "CMP Freeman Street and Brunswick Street oval-entry context; OSM surrounding-road geometry",
     source: "OSM way 543505638 full JSON; Edinburgh Gardens CMP 2004 hard-landscaping and buildings schedule",
     collision: true,
     points: [
@@ -2154,6 +2163,8 @@ const OSM_BUILDING_FOOTPRINTS_GEO: Array<{
     height: 4.2,
     material: "brick",
     detailProfile: "bowling-club",
+    frontagePoint: g(-37.7879900, 144.9802500),
+    facadeSource: "Yarra Fitzroy Bowls 150 Years Memorial Wall notes the Brunswick Street club building as a prominent perimeter gateway",
     source: "OSM way 543505639 full JSON; Edinburgh Gardens CMP 2004 bowling club analysis",
     collision: false,
     points: [
@@ -2203,6 +2214,8 @@ const OSM_BUILDING_FOOTPRINTS_GEO: Array<{
     height: 4.2,
     material: "brick",
     detailProfile: "community-centre",
+    frontagePoint: g(-37.7856400, 144.9824800),
+    facadeSource: "Yarra Emely Baker Centre page: Alfred Crescent venue, access-friendly status, gated outdoor area and shade sail",
     source: "OSM way 543505702 full JSON",
     collision: true,
     points: [
@@ -3326,6 +3339,12 @@ export function createLevelData(): LevelData {
     height: building.height,
     material: building.material,
     detailProfile: building.detailProfile,
+    facade: building.frontagePoint
+      ? {
+          frontagePoint: geoToWorld(building.frontagePoint),
+          source: building.facadeSource ?? building.source
+        }
+      : undefined,
     source: building.source,
     collision: building.collision
   })).filter((building) => pointInPolygon(polygonCentroid(building.polygon), boundary));
@@ -3414,7 +3433,9 @@ export function createLevelData(): LevelData {
       id: `tennis-court-${index + 1}`,
       label: `Court ${index + 1}`,
       kind: "court" as const,
-      polygon: polygonFromGeo(court)
+      polygon: polygonFromGeo(court),
+      courtStatus: "renovating-existing" as const,
+      source: "Yarra Brunswick Street Oval redevelopment: full renovation of six existing courts during the 2026-2027 tennis works"
     })),
     { id: "bowling", label: "Fitzroy Victoria Bowling & Sports Club", kind: "bowls", polygon: bowling },
     ...BOWLS_GREENS_GEO.map((green, index) => ({
