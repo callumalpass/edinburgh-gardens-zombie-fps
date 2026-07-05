@@ -20,6 +20,9 @@ export function resolveObstacle(point: Vec2, radius: number, obstacle: Collision
     if (Math.abs(localX) >= expandedX || Math.abs(localZ) >= expandedZ) {
       return point;
     }
+    if (pointWithinBoxAccessGap(localX, localZ, radius, obstacle)) {
+      return point;
+    }
 
     const pushX = expandedX - Math.abs(localX);
     const pushZ = expandedZ - Math.abs(localZ);
@@ -87,6 +90,16 @@ export function resolveObstacle(point: Vec2, radius: number, obstacle: Collision
     x: obstacle.center.x + (dx / length) * minDistance,
     z: obstacle.center.z + (dz / length) * minDistance
   };
+}
+
+function pointWithinBoxAccessGap(localX: number, localZ: number, radius: number, obstacle: Extract<CollisionObstacle, { shape: "box" }>): boolean {
+  return (
+    obstacle.accessGaps?.some(
+      (gap) =>
+        Math.abs(localX - gap.localCenterX) <= gap.halfX + radius &&
+        Math.abs(localZ - gap.localCenterZ) <= gap.halfZ + radius
+    ) ?? false
+  );
 }
 
 export function shouldBypassObstacle(obstacleId: string, point: Vec2, context: ObstacleBypassContext): boolean {

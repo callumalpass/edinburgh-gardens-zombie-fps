@@ -5,6 +5,8 @@ import type { BoxObstacle, CollisionObstacle } from "../src/game/types";
 const box: BoxObstacle = {
   id: "wall",
   label: "Wall",
+  sourceObjectId: "wall",
+  sourceObjectKind: "landmark",
   shape: "box",
   center: { x: 0, z: -10 },
   halfX: 4,
@@ -49,7 +51,17 @@ describe("visibility system", () => {
       isLineOfSightBlocked(
         { x: 0, z: 0 },
         { x: 0, z: -20 },
-        context([{ id: "tree", label: "Tree trunk", center: { x: 0, z: -10 }, radius: 2.5, blocksSight: false }]),
+        context([
+          {
+            id: "tree",
+            label: "Tree trunk",
+            sourceObjectId: "tree",
+            sourceObjectKind: "tree-collider",
+            center: { x: 0, z: -10 },
+            radius: 2.5,
+            blocksSight: false
+          }
+        ]),
         0
       )
     ).toBe(false);

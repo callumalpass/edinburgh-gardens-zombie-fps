@@ -74,6 +74,7 @@ Purpose: track the building-by-building realism pass for every structure current
 - `grandstand` / Kevin Murray Stand:
   - Corrected the stand frontage so seating, front posts and stairs face W. T. Peterson Oval instead of inheriting a fixed side from the OSM polygon point order.
   - Corrected the climb/access fixture to use that same oval-facing side, and added collision tests so the stair prompt stays outside the stand blocker and blocker bypass IDs resolve to actual obstacles.
+  - Follow-up collision audit: the stand blocker now stores an explicit front stair access gap tied to `grandstand-seats`; all collision obstacles now declare the landmark, mapped building, sports fixture or tree-collider object that generated them.
   - Source basis: OSM grandstand footprint and W. T. Peterson Oval geometry; Yarra Brunswick Street Oval works context for the stand's external stairs and oval-facing sports use.
 - `rotunda` / Edinburgh Gardens Rotunda:
   - Rendered the climbable raised platform with lower storey vents, Tuscan-style columns, copper dome, lantern, finial, stairs, handrails, plaques and a capped service plate rather than powered lighting.

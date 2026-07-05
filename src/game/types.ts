@@ -41,33 +41,47 @@ export interface Landmark {
   radius?: number;
 }
 
-export interface CircularObstacle {
+export type CollisionSourceKind = "landmark" | "mapped-building" | "sports-fixture" | "tree-collider";
+
+export interface CollisionSourceRef {
+  sourceObjectId: string;
+  sourceObjectKind: CollisionSourceKind;
+}
+
+export interface BoxObstacleAccessGap {
+  id: string;
+  fixtureId?: string;
+  localCenterX: number;
+  localCenterZ: number;
+  halfX: number;
+  halfZ: number;
+}
+
+interface CollisionObstacleBase extends CollisionSourceRef {
   id: string;
   label: string;
-  shape?: "circle";
-  center: Vec2;
-  radius: number;
   blocksSight?: boolean;
 }
 
-export interface BoxObstacle {
-  id: string;
-  label: string;
+export interface CircularObstacle extends CollisionObstacleBase {
+  shape?: "circle";
+  center: Vec2;
+  radius: number;
+}
+
+export interface BoxObstacle extends CollisionObstacleBase {
   shape: "box";
   center: Vec2;
   halfX: number;
   halfZ: number;
   angle: number;
-  blocksSight?: boolean;
+  accessGaps?: BoxObstacleAccessGap[];
 }
 
-export interface PolygonObstacle {
-  id: string;
-  label: string;
+export interface PolygonObstacle extends CollisionObstacleBase {
   shape: "polygon";
   center: Vec2;
   polygon: Vec2[];
-  blocksSight?: boolean;
 }
 
 export type CollisionObstacle = CircularObstacle | BoxObstacle | PolygonObstacle;

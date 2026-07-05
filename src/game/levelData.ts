@@ -21,7 +21,9 @@ import {
 import type {
   AmenityPoint,
   BoxObstacle,
+  BoxObstacleAccessGap,
   CircularObstacle,
+  CollisionSourceRef,
   GeoPoint,
   HardscapeLine,
   Landmark,
@@ -53,9 +55,16 @@ const offsetPoint = (center: Vec2, angle: number, localX: number, localZ: number
 };
 
 const localZFromPoint = (center: Vec2, angle: number, point: Vec2): number => {
+  return localPointFromWorld(center, angle, point).z;
+};
+
+const localPointFromWorld = (center: Vec2, angle: number, point: Vec2): Vec2 => {
   const dx = point.x - center.x;
   const dz = point.z - center.z;
-  return -dx * Math.sin(angle) + dz * Math.cos(angle);
+  return {
+    x: dx * Math.cos(angle) + dz * Math.sin(angle),
+    z: -dx * Math.sin(angle) + dz * Math.cos(angle)
+  };
 };
 
 const footprintFromPolygon = (polygon: readonly Vec2[]): { center: Vec2; halfX: number; halfZ: number; angle: number } => {
@@ -2456,17 +2465,26 @@ const STREET_EDGES_GEO: Array<{
   }
 ];
 
-function obstacleFromPolygon(id: string, label: string, polygon: Vec2[], padding: number): CircularObstacle {
+function obstacleFromPolygon(id: string, label: string, polygon: Vec2[], padding: number, source: CollisionSourceRef): CircularObstacle {
   const center = polygonCentroid(polygon);
   return {
     id,
     label,
+    ...source,
     center,
     radius: boundingRadius(polygon, center) + padding
   };
 }
 
-function boxObstacleFromPolygon(id: string, label: string, polygon: Vec2[], paddingX: number, paddingZ: number): BoxObstacle {
+function boxObstacleFromPolygon(
+  id: string,
+  label: string,
+  polygon: Vec2[],
+  paddingX: number,
+  paddingZ: number,
+  source: CollisionSourceRef,
+  accessGaps: BoxObstacleAccessGap[] = []
+): BoxObstacle {
   const center = polygonCentroid(polygon);
   const first = polygon[0];
   const second = polygon[1] ?? first;
@@ -2486,18 +2504,21 @@ function boxObstacleFromPolygon(id: string, label: string, polygon: Vec2[], padd
   return {
     id,
     label,
+    ...source,
     shape: "box",
     center,
     halfX: halfX + paddingX,
     halfZ: halfZ + paddingZ,
-    angle
+    angle,
+    ...(accessGaps.length > 0 ? { accessGaps } : {})
   };
 }
 
-function polygonObstacleFromPolygon(id: string, label: string, polygon: Vec2[]): PolygonObstacle {
+function polygonObstacleFromPolygon(id: string, label: string, polygon: Vec2[], source: CollisionSourceRef): PolygonObstacle {
   return {
     id,
     label,
+    ...source,
     shape: "polygon",
     center: polygonCentroid(polygon),
     polygon
@@ -2669,6 +2690,8 @@ function sportsFixtureObstacles(fixture: SportsFixture): CircularObstacle[] {
       {
         id: `${fixture.id}-post`,
         label: fixture.label,
+        sourceObjectId: fixture.id,
+        sourceObjectKind: "sports-fixture",
         center: fixture.position,
         radius: fixture.radius,
         blocksSight: false
@@ -2679,6 +2702,8 @@ function sportsFixtureObstacles(fixture: SportsFixture): CircularObstacle[] {
   return footballPostLocalOffsets(fixture.width).map((localX, index) => ({
     id: `${fixture.id}-post-${index + 1}`,
     label: fixture.label,
+    sourceObjectId: fixture.id,
+    sourceObjectKind: "sports-fixture",
     center: offsetPoint(fixture.position, fixture.angle, localX, 0),
     radius: fixture.radius,
     blocksSight: false
@@ -2883,6 +2908,16 @@ export function createLevelData(): LevelData {
     grandstandFrontSign * (grandstandVisualHalfZ - 2.4)
   );
   const grandstandStairHeading = Math.atan2(grandstandStairLanding.z - grandstandStairAccess.z, grandstandStairLanding.x - grandstandStairAccess.x);
+  const grandstandStairAccessLocal = localPointFromWorld(grandstandCenter, grandstandFootprint.angle, grandstandStairAccess);
+  const grandstandStairLandingLocal = localPointFromWorld(grandstandCenter, grandstandFootprint.angle, grandstandStairLanding);
+  const grandstandStairGap: BoxObstacleAccessGap = {
+    id: "grandstand-front-stair-gap",
+    fixtureId: "grandstand-seats",
+    localCenterX: (grandstandStairAccessLocal.x + grandstandStairLandingLocal.x) * 0.5,
+    localCenterZ: (grandstandStairAccessLocal.z + grandstandStairLandingLocal.z) * 0.5,
+    halfX: Math.max(2.4, grandstandFootprint.halfX * 0.28),
+    halfZ: Math.abs(grandstandStairAccessLocal.z - grandstandStairLandingLocal.z) * 0.5 + 0.55
+  };
   const grandstandDeckRadius = Math.max(12, boundingRadius(grandstand, grandstandCenter) + 1.2);
   const ovalMinZ = Math.min(...oval.map((point) => point.z));
   const ovalMaxZ = Math.max(...oval.map((point) => point.z));
@@ -3496,20 +3531,54 @@ export function createLevelData(): LevelData {
     streetEdges,
     sportsFixtures,
     obstacles: [
-      boxObstacleFromPolygon("grandstand", "Kevin Murray Stand", grandstand, 1.0, 0.45),
-      polygonObstacleFromPolygon("tennis", "Fitzroy Tennis Club", tennis),
-      polygonObstacleFromPolygon("bowling", "Fitzroy Victoria Bowling & Sports Club", bowling),
-      boxObstacleFromPolygon("north-toilets", "North toilets", northToilets, 0.6, 0.6),
-      { id: "north-playground", label: "North playground tower", center: northPlaygroundCenter, radius: 3.6, blocksSight: false },
-      { id: "south-playground", label: "South playground tower", center: southPlaygroundCenter, radius: 3.6, blocksSight: false },
-      { ...polygonObstacleFromPolygon("skate", "Fitzroy Skatepark ramps", skate), blocksSight: false },
+      boxObstacleFromPolygon(
+        "grandstand",
+        "Kevin Murray Stand",
+        grandstand,
+        1.0,
+        0.45,
+        { sourceObjectId: "grandstand", sourceObjectKind: "landmark" },
+        [grandstandStairGap]
+      ),
+      polygonObstacleFromPolygon("tennis", "Fitzroy Tennis Club", tennis, { sourceObjectId: "tennis", sourceObjectKind: "landmark" }),
+      polygonObstacleFromPolygon("bowling", "Fitzroy Victoria Bowling & Sports Club", bowling, { sourceObjectId: "bowling", sourceObjectKind: "landmark" }),
+      boxObstacleFromPolygon("north-toilets", "North toilets", northToilets, 0.6, 0.6, { sourceObjectId: "north-toilets", sourceObjectKind: "landmark" }),
+      {
+        id: "north-playground",
+        label: "North playground tower",
+        sourceObjectId: "north-playground",
+        sourceObjectKind: "landmark",
+        center: northPlaygroundCenter,
+        radius: 3.6,
+        blocksSight: false
+      },
+      {
+        id: "south-playground",
+        label: "South playground tower",
+        sourceObjectId: "south-playground",
+        sourceObjectKind: "landmark",
+        center: southPlaygroundCenter,
+        radius: 3.6,
+        blocksSight: false
+      },
+      {
+        ...polygonObstacleFromPolygon("skate", "Fitzroy Skatepark ramps", skate, { sourceObjectId: "skate", sourceObjectKind: "landmark" }),
+        blocksSight: false
+      },
       ...mappedBuildings
         .filter((building) => building.collision)
-        .map((building) => polygonObstacleFromPolygon(building.id, building.label, building.polygon)),
+        .map((building) =>
+          polygonObstacleFromPolygon(building.id, building.label, building.polygon, {
+            sourceObjectId: building.id,
+            sourceObjectKind: "mapped-building"
+          })
+        ),
       ...sportsFixtures.flatMap(sportsFixtureObstacles),
       ...treeColliders.map((tree) => ({
         id: tree.id,
         label: tree.label,
+        sourceObjectId: tree.id,
+        sourceObjectKind: "tree-collider" as const,
         center: tree.position,
         radius: tree.radius,
         blocksSight: false
