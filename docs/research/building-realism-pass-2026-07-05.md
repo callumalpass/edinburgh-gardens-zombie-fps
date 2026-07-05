@@ -66,6 +66,9 @@ Purpose: track the building-by-building realism pass for every structure current
 - `osm-building-543505640` / Round pavilion building:
   - Added a threshold apron, front notice panel, eight perimeter posts, internal bench planks and a roof vent to make the round footprint read as an open timber pavilion.
   - Source basis: OSM way `543505640` for the circular footprint; CMP built-feature inventory context for small park pavilion structures.
+- `osm-building-543505702` / Emely Baker Centre:
+  - Added an access-friendly ramp with rails, venue sign, rear concrete courtyard, low gate/fence rails, sloped shade sail and roof/service vent.
+  - Source basis: OSM way `543505702` for footprint and orientation; Yarra Emely Baker Centre venue page for access-friendly status plus gated outdoor area and shade sail.
 
 ## Implementation Notes
 

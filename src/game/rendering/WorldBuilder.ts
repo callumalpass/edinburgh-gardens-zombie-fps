@@ -1097,6 +1097,32 @@ export class WorldBuilder {
       for (const x of [-0.62, -0.22, 0.22, 0.62]) {
         this.addBuildingWindow(center, rotation, x * footprint.halfX, frontZ + 0.02, footprint.halfX * 0.32, 0.72, 1.82);
       }
+      this.addBuildingSign(center, rotation, -footprint.halfX * 0.24, frontZ + 0.04, footprint.halfX * 0.52, 0.34, 2.42, 0x315d67);
+      this.addLocalBox(center, rotation, -footprint.halfX * 0.62, frontZ + 1.04, footprint.halfX * 0.48, 0.07, 1.1, this.materials.concrete, 0.16, false);
+      for (const side of [-1, 1]) {
+        this.addLocalBox(center, rotation, -footprint.halfX * 0.62 + side * footprint.halfX * 0.28, frontZ + 1.04, 0.055, 0.7, 1.05, this.materials.metal, 0.52);
+      }
+      const courtyardZ = rearZ - 1.65;
+      this.addLocalBox(center, rotation, 0, courtyardZ, footprint.halfX * 1.46, 0.06, 2.4, this.materials.concrete, 0.1, false);
+      for (const x of [-0.78, 0.78]) {
+        for (const z of [-0.56, 0.56]) {
+          this.addLocalCylinder(center, rotation, x * footprint.halfX, courtyardZ + z * 2.05, 0.045, 0.055, 1.25, this.materials.metal);
+        }
+      }
+      this.addLocalBox(center, rotation, 0, courtyardZ - 1.15, footprint.halfX * 1.62, 0.08, 0.08, this.materials.metal, 0.72);
+      this.addLocalBox(center, rotation, 0, courtyardZ + 1.15, footprint.halfX * 1.62, 0.08, 0.08, this.materials.metal, 0.72);
+      this.addLocalShadeSail(
+        center,
+        rotation,
+        [
+          { x: -footprint.halfX * 0.82, z: courtyardZ - 1.05, y: 2.55 },
+          { x: footprint.halfX * 0.76, z: courtyardZ - 0.92, y: 2.95 },
+          { x: footprint.halfX * 0.88, z: courtyardZ + 1.08, y: 2.62 },
+          { x: -footprint.halfX * 0.72, z: courtyardZ + 0.92, y: 2.88 }
+        ],
+        this.standardDetailMaterial("emely-shade-sail", 0xc8d3cf, 0.78, 0.02, true, 0.82)
+      );
+      this.addBuildingRoofVent(center, rotation, footprint.halfX * 0.48, -footprint.halfZ * 0.22, building.height, 0.46, 0.32);
       this.addLabel("Emely Baker Centre", center, building.height + 1.35);
       return;
     }
@@ -1599,6 +1625,29 @@ export class WorldBuilder {
     for (let rung = 0; rung < 5; rung += 1) {
       this.addLocalBox(center, rotation, localX, localZ + 0.01, 0.46, 0.045, 0.06, this.materials.metal, 0.48 + rung * 0.42, false);
     }
+  }
+
+  private addLocalShadeSail(
+    center: Vec2,
+    rotation: number,
+    corners: Array<{ x: number; z: number; y: number }>,
+    material: THREE.Material
+  ): void {
+    const vertices: number[] = [];
+    for (const corner of corners) {
+      const point = this.localPoint(center, rotation, corner.x, corner.z);
+      vertices.push(point.x, this.groundY(point) + corner.y, point.z);
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+    geometry.setIndex([0, 1, 2, 0, 2, 3]);
+    geometry.computeVertexNormals();
+    const sailMaterial = material.clone();
+    sailMaterial.side = THREE.DoubleSide;
+    const mesh = new THREE.Mesh(geometry, sailMaterial);
+    mesh.castShadow = true;
+    mesh.receiveShadow = false;
+    this.scene.add(mesh);
   }
 
   private addGrandstand(landmark: Landmark): void {
