@@ -956,8 +956,26 @@ export class WorldBuilder {
       for (const x of [-0.42, 0, 0.42]) {
         this.addLocalCylinder(center, rotation, x * footprint.halfX * 2, frontZ + 0.42, 0.055, 0.07, 2.7, this.materials.metal);
       }
+      this.addBuildingGutter(center, rotation, 0, frontZ + 0.03, footprint.halfX * 1.86, building.height);
+      this.addBuildingWallLight(center, rotation, -footprint.halfX * 0.72, frontZ + 0.06, 2.32);
+      this.addBuildingSign(center, rotation, -footprint.halfX * 0.28, frontZ + 0.04, footprint.halfX * 0.36, 0.34, 2.28, 0x2f735c);
+      this.addLocalBox(center, rotation, -footprint.halfX * 0.62, frontZ + 1.42, footprint.halfX * 0.58, 0.07, 1.12, this.materials.concrete, 0.16, false);
+      for (const side of [-1, 1]) {
+        this.addLocalBox(center, rotation, -footprint.halfX * 0.62 + side * footprint.halfX * 0.34, frontZ + 1.42, 0.055, 0.72, 1.08, this.materials.metal, 0.52);
+      }
+      const worksMesh = this.standardDetailMaterial("tennis-works-mesh", 0xd06a2c, 0.68, 0.02, true, 0.58);
+      for (const x of [0.42, 0.82]) {
+        this.addLocalBox(center, rotation, x * footprint.halfX, frontZ + 1.58, 0.08, 1.28, 0.08, this.materials.metal, 0.74);
+      }
+      this.addLocalBox(center, rotation, footprint.halfX * 0.62, frontZ + 1.58, footprint.halfX * 0.62, 0.78, 0.045, worksMesh, 0.78, false);
       for (const x of [-0.55, 0, 0.55]) {
         this.addBuildingWindow(center, rotation, x * footprint.halfX * 1.15, rearZ - 0.03, footprint.halfX * 0.3, 1.15, 1.45);
+      }
+      for (const x of [-0.48, 0.36]) {
+        this.addBuildingRoofVent(center, rotation, x * footprint.halfX, -footprint.halfZ * 0.2, building.height, 0.52, 0.32);
+      }
+      for (const x of [0.42, 0.7]) {
+        this.addLocalBox(center, rotation, x * footprint.halfX, rearZ - 0.42, 0.52, 0.82, 0.42, this.materials.metal, 0.5);
       }
       this.addLocalBox(center, rotation, 0, rearZ - 0.08, footprint.halfX * 1.35, 1.55, 0.12, this.materials.hedge, 1.1);
       this.addLabel("Fitzroy Tennis Club", center, building.height + 1.45);
