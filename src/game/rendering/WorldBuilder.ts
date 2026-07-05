@@ -21,6 +21,7 @@ export interface GameMaterials {
   dirt: THREE.MeshStandardMaterial;
   leafLitter: THREE.MeshStandardMaterial;
   wornGrass: THREE.MeshStandardMaterial;
+  puddle: THREE.MeshStandardMaterial;
   hedge: THREE.MeshStandardMaterial;
   line: THREE.MeshBasicMaterial;
   timber: THREE.MeshStandardMaterial;
@@ -44,8 +45,8 @@ export class WorldBuilder {
   ) {}
 
   createWorld(): void {
-    this.scene.add(new THREE.HemisphereLight(0xbfd9c2, 0x1c1a14, 1.4));
-    const moon = new THREE.DirectionalLight(0xe6f0d2, 2.25);
+    this.scene.add(new THREE.HemisphereLight(0xcde4d1, 0x262217, 1.65));
+    const moon = new THREE.DirectionalLight(0xeef4d7, 2.65);
     moon.position.set(-150, 205, 75);
     moon.castShadow = true;
     moon.shadow.camera.left = -360;
@@ -63,6 +64,7 @@ export class WorldBuilder {
     this.addMownLawnBands();
     this.addLawnWearPatches();
     this.addPaths();
+    this.addDampGroundDetails();
     this.addRailTrailRemnants();
     this.addLandmarks();
     this.addMappedBuildings();
@@ -181,15 +183,42 @@ export class WorldBuilder {
     });
   }
 
+  private addDampGroundDetails(): void {
+    const puddleCandidates = [
+      ...this.level.paths.filter((path) => path.kind !== "rail").flatMap((path) => path.points.filter((_, index) => index % 4 === 0)),
+      ...this.level.amenities.filter((amenity) => amenity.kind === "drinking_water" || amenity.kind === "toilets").map((amenity) => amenity.position),
+      ...this.level.upgradeStations.map((station) => station.position)
+    ];
+
+    puddleCandidates.slice(0, 38).forEach((point, index) => {
+      const center = {
+        x: point.x + this.rng.range(-1.6, 1.6),
+        z: point.z + this.rng.range(-1.6, 1.6)
+      };
+      if (!pointInPolygon(center, this.level.boundary)) {
+        return;
+      }
+      const radius = index % 5 === 0 ? this.rng.range(1.8, 3.8) : this.rng.range(0.7, 1.7);
+      const puddle = new THREE.Mesh(new THREE.CircleGeometry(radius, 18), this.materials.puddle);
+      puddle.position.set(center.x, this.groundY(center) + 0.154, center.z);
+      puddle.rotation.set(-Math.PI / 2, 0, this.rng.range(0, Math.PI));
+      puddle.scale.set(this.rng.range(1.4, 2.7), this.rng.range(0.28, 0.74), 1);
+      puddle.receiveShadow = true;
+      this.scene.add(puddle);
+    });
+  }
+
   private addPaths(): void {
     for (const path of this.level.paths) {
       const material =
-        path.kind === "rail" || path.kind === "cycleway"
+        path.surface === "concrete"
+          ? this.materials.concrete
+          : path.kind === "rail" || path.kind === "cycleway" || path.kind === "service" || path.surface === "asphalt"
           ? this.materials.asphalt
-          : path.kind === "perimeter"
+          : path.kind === "perimeter" || path.surface === "gravel"
             ? this.materials.gravel
             : this.materials.path;
-      const shoulderWidth = path.width + (path.kind === "rail" ? 2.1 : path.kind === "cycleway" ? 1.45 : 0.95);
+      const shoulderWidth = path.width + (path.kind === "rail" ? 2.1 : path.kind === "cycleway" ? 1.45 : path.kind === "service" ? 1.2 : 0.95);
       for (let i = 0; i < path.points.length - 1; i += 1) {
         const a = path.points[i];
         const b = path.points[i + 1];

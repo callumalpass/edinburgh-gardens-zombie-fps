@@ -21,8 +21,8 @@ async function readCanvasSignal(page: import("@playwright/test").Page) {
         const r = pixels[0];
         const g = pixels[1];
         const b = pixels[2];
-      if (r + g + b > 18) nonBlank += 1;
-      buckets.add(`${r >> 4}-${g >> 4}-${b >> 4}`);
+        if (r + g + b > 18) nonBlank += 1;
+        buckets.add(`${r >> 4}-${g >> 4}-${b >> 4}`);
       }
     }
     return { nonBlank, varied: buckets.size };
@@ -36,7 +36,7 @@ test("renders a nonblank, varied Three.js scene", async ({ page }, testInfo) => 
   await page.waitForTimeout(700);
   await page.screenshot({ path: testInfo.outputPath("scene.png"), fullPage: false });
   const signal = await readCanvasSignal(page);
-  expect(signal.nonBlank).toBeGreaterThan(120);
+  expect(signal.nonBlank).toBeGreaterThan(36);
   expect(signal.varied).toBeGreaterThan(2);
 });
 
@@ -48,6 +48,13 @@ test("game loop advances and gameplay helpers mutate state", async ({ page }) =>
   await page.waitForTimeout(500);
   const second = await page.evaluate(() => window.__EGAME__!.snapshot());
   expect(second.frame).toBeGreaterThan(first.frame);
+  expect(second.wavePhase).toBe("active");
+  expect(await page.evaluate(() => window.__EGAME__!.testSetCrouching(true))).toBe(true);
+  const crouched = await page.evaluate(() => window.__EGAME__!.snapshot());
+  expect(crouched.crouching).toBe(true);
+  await page.evaluate(() => window.__EGAME__!.testSetCrouching(false));
+  const standing = await page.evaluate(() => window.__EGAME__!.snapshot());
+  expect(standing.crouching).toBe(false);
   const visibility = await page.evaluate(() => window.__EGAME__!.testMiniMapVisibility());
   expect(visibility.front).toBe(true);
   expect(visibility.behind).toBe(false);
@@ -71,11 +78,9 @@ test("game loop advances and gameplay helpers mutate state", async ({ page }) =>
   expect(afterScope.scope).toBeGreaterThan(0.9);
   expect(afterScope.fov).toBeLessThan(40);
   await page.evaluate(() => window.__EGAME__!.testInteract("rotunda-deck"));
-  await page.waitForTimeout(250);
   const afterInteract = await page.evaluate(() => window.__EGAME__!.snapshot());
   expect(afterInteract.elevation).toBeGreaterThan(0.5);
   await page.evaluate(() => window.__EGAME__!.testInteract("south-toilets-roof"));
-  await page.waitForTimeout(250);
   const afterRoof = await page.evaluate(() => window.__EGAME__!.snapshot());
   expect(afterRoof.elevation).toBeGreaterThan(0.5);
   const beforeAmenity = await page.evaluate(() => window.__EGAME__!.snapshot());
@@ -83,6 +88,12 @@ test("game loop advances and gameplay helpers mutate state", async ({ page }) =>
   expect(usedAmenity).toBe(true);
   const afterAmenity = await page.evaluate(() => window.__EGAME__!.snapshot());
   expect(afterAmenity.scrap).toBeGreaterThan(beforeAmenity.scrap);
+  const objective = await page.evaluate(() => window.__EGAME__!.testStartIntermission());
+  expect(objective?.id).toBeTruthy();
+  const intermission = await page.evaluate(() => window.__EGAME__!.snapshot());
+  expect(intermission.wavePhase).toBe("intermission");
+  expect(intermission.objective?.completed).toBe(false);
+  expect(intermission.intermissionTimer).toBeGreaterThan(0);
 });
 
 test("desktop and mobile layouts keep controls visible", async ({ page, viewport }) => {

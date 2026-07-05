@@ -103,54 +103,71 @@ export class MeshFactory {
 
   createZombieMesh(type: ZombieType): THREE.Group {
     const group = new THREE.Group();
-    const bodyScale = type === "bloater" ? 1.45 : type === "sprinter" ? 0.84 : 1;
+    const bodyScale = type === "bloater" ? 1.45 : type === "sprinter" ? 0.84 : type === "crawler" ? 0.62 : type === "screamer" ? 1.04 : 1;
+    const lowPosture = type === "crawler";
     const skinMaterial = new THREE.MeshStandardMaterial({
-      color: type === "bloater" ? 0x71815b : type === "sprinter" ? 0x657556 : 0x6f7752,
+      color: type === "bloater" ? 0x71815b : type === "sprinter" ? 0x657556 : type === "crawler" ? 0x566344 : type === "screamer" ? 0x85795e : 0x6f7752,
       roughness: 0.94
     });
-    const shirtMaterial = new THREE.MeshStandardMaterial({ color: type === "sprinter" ? 0x4d5548 : 0x3f4b3b, roughness: 0.9 });
+    const shirtMaterial = new THREE.MeshStandardMaterial({
+      color: type === "sprinter" ? 0x4d5548 : type === "crawler" ? 0x344139 : type === "screamer" ? 0x5a443f : 0x3f4b3b,
+      roughness: 0.9
+    });
     const pantsMaterial = new THREE.MeshStandardMaterial({ color: 0x282d2b, roughness: 0.88 });
     const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.72 * bodyScale, 1.55 * bodyScale, 5, 12), shirtMaterial);
     body.position.y = 1.48 * bodyScale;
+    body.rotation.x = lowPosture ? 0.52 : 0;
     body.castShadow = true;
     body.name = "body";
     group.add(body);
     const head = new THREE.Mesh(new THREE.IcosahedronGeometry(0.5 * bodyScale, 2), skinMaterial);
-    head.position.set(0.06 * bodyScale, 2.92 * bodyScale, -0.02);
-    head.rotation.z = type === "sprinter" ? -0.12 : 0.1;
+    head.position.set(0.06 * bodyScale, 2.92 * bodyScale - (lowPosture ? 0.18 : 0), lowPosture ? -0.3 : -0.02);
+    head.rotation.z = type === "sprinter" ? -0.12 : type === "crawler" ? -0.26 : type === "screamer" ? 0.22 : 0.1;
     head.castShadow = true;
     head.name = "head";
     group.add(head);
     const jaw = new THREE.Mesh(new THREE.BoxGeometry(0.34 * bodyScale, 0.12 * bodyScale, 0.24 * bodyScale), skinMaterial);
-    jaw.position.set(0.04 * bodyScale, 2.72 * bodyScale, -0.28 * bodyScale);
+    jaw.position.set(0.04 * bodyScale, 2.72 * bodyScale - (lowPosture ? 0.18 : 0), -0.28 * bodyScale - (lowPosture ? 0.3 : 0));
     jaw.castShadow = true;
     group.add(jaw);
-    const eyeMaterial = new THREE.MeshBasicMaterial({ color: type === "bloater" ? 0xf6a84b : 0xe05b43 });
+    const eyeMaterial = new THREE.MeshBasicMaterial({ color: type === "bloater" ? 0xf6a84b : type === "screamer" ? 0xf5dc6a : 0xe05b43 });
     for (const x of [-0.18, 0.18]) {
       const eye = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 8), eyeMaterial);
-      eye.position.set(x * bodyScale, 2.98 * bodyScale, -0.42 * bodyScale);
+      eye.position.set(x * bodyScale, 2.98 * bodyScale - (lowPosture ? 0.18 : 0), -0.42 * bodyScale - (lowPosture ? 0.3 : 0));
       group.add(eye);
     }
     const arms: THREE.Mesh[] = [];
     for (const side of [-1, 1]) {
       const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.13 * bodyScale, 1.1 * bodyScale, 4, 8), skinMaterial);
-      arm.position.set(side * 0.78 * bodyScale, 1.68 * bodyScale, -0.18 * bodyScale);
+      arm.position.set(side * 0.78 * bodyScale, 1.68 * bodyScale - (lowPosture ? 0.12 : 0), -0.18 * bodyScale - (lowPosture ? 0.18 : 0));
       arm.rotation.z = side * 0.28;
-      arm.rotation.x = -0.85;
+      arm.rotation.x = lowPosture ? -1.38 : -0.85;
       arm.castShadow = true;
       arms.push(arm);
       group.add(arm);
       const leg = new THREE.Mesh(new THREE.CapsuleGeometry(0.17 * bodyScale, 1.0 * bodyScale, 4, 8), pantsMaterial);
       leg.position.set(side * 0.25 * bodyScale, 0.48 * bodyScale, 0);
+      leg.rotation.x = lowPosture ? 0.72 : 0;
       leg.castShadow = true;
       leg.name = side < 0 ? "leftLeg" : "rightLeg";
       group.add(leg);
     }
     const woundMaterial = new THREE.MeshBasicMaterial({ color: 0x7f2d24, transparent: true, opacity: 0.85 });
     const wound = new THREE.Mesh(new THREE.CircleGeometry(0.18 * bodyScale, 12), woundMaterial);
-    wound.position.set(-0.22 * bodyScale, 1.84 * bodyScale, -0.68 * bodyScale);
+    wound.position.set(-0.22 * bodyScale, 1.84 * bodyScale - (lowPosture ? 0.12 : 0), -0.68 * bodyScale - (lowPosture ? 0.2 : 0));
     wound.rotation.x = -0.15;
     group.add(wound);
+
+    if (type === "screamer") {
+      const throat = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.1 * bodyScale, 0.13 * bodyScale, 0.32 * bodyScale, 10),
+        new THREE.MeshBasicMaterial({ color: 0xa74735, transparent: true, opacity: 0.82 })
+      );
+      throat.position.set(0.02 * bodyScale, 2.48 * bodyScale, -0.36 * bodyScale);
+      throat.rotation.x = Math.PI / 2;
+      group.add(throat);
+    }
+
     group.userData.arms = arms;
     group.userData.head = head;
     return group;

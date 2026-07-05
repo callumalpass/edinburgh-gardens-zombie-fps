@@ -7,6 +7,8 @@ import {
   type WeaponId
 } from "../weapons";
 import type { AmenityPoint, InteractableFixture, UpgradeStation } from "../types";
+import type { ActiveObjective } from "../objectives";
+import type { WavePhase } from "../state";
 
 interface HudRefs {
   health: HTMLElement;
@@ -42,6 +44,10 @@ export interface HudUpdate {
   nearestFixture: InteractableFixture | null;
   nearestAmenity: AmenityPoint | null;
   nearestStation: UpgradeStation | null;
+  wavePhase: WavePhase;
+  intermissionTimer: number;
+  activeObjective: ActiveObjective | null;
+  isCrouching: boolean;
   amenityPrompt: (amenity: AmenityPoint) => string;
 }
 
@@ -112,10 +118,18 @@ export class HudController {
         ? `${view.nearestStation.label}: ${upgrade.label} maxed`
         : `E: ${upgrade.label} (${cost} scrap)`;
       this.refs.status.textContent = view.nearestStation.label;
+    } else if (view.activeObjective && !view.activeObjective.completed) {
+      const percent = Math.round((view.activeObjective.progress / view.activeObjective.holdSeconds) * 100);
+      this.refs.prompt.textContent = "Hold position to complete objective";
+      this.refs.status.textContent = `${view.activeObjective.label} ${percent}%`;
+    } else if (view.wavePhase === "intermission") {
+      this.refs.prompt.textContent = "";
+      this.refs.status.textContent = `Regroup before wave ${view.wave + 1}: ${Math.ceil(view.intermissionTimer)}s`;
     } else {
       this.refs.prompt.textContent = "";
       const optic = stats.scopeZoom > 1.05 ? `, ${stats.scopeZoom.toFixed(1)}x optic` : "";
-      this.refs.status.textContent = `${stats.name}${optic}${view.playerHeight > 0.4 ? `, height ${view.playerHeight.toFixed(1)}m` : ""}`;
+      const stance = view.isCrouching ? ", crouched" : "";
+      this.refs.status.textContent = `${stats.name}${optic}${stance}${view.playerHeight > 0.4 ? `, height ${view.playerHeight.toFixed(1)}m` : ""}`;
     }
 
     const weapons = view.loadout.inventory
@@ -170,6 +184,7 @@ function createMarkup(): string {
             <span>R reload</span>
             <span>E interact</span>
             <span>Shift sprint</span>
+            <span>C crouch</span>
             <span>1-4 weapons</span>
           </div>
           <button class="primary-action" data-action="start">Enter the gardens</button>
@@ -205,4 +220,3 @@ function findHudRefs(root: HTMLElement): HudRefs {
     miniMap: find(".mini-map")
   };
 }
-

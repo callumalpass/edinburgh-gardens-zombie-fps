@@ -2,9 +2,12 @@ import type * as THREE from "three";
 import type { AmenityPoint } from "./types";
 import type { WeaponId } from "./weapons";
 import type { ZombieType } from "./waves";
+import type { ActiveObjective } from "./objectives";
 
 export type GameStateName = "ready" | "playing" | "gameover";
 export type HitZone = "head" | "body" | "legs";
+export type ZombieAiState = "idle" | "investigate" | "chase";
+export type WavePhase = "active" | "intermission";
 
 export interface Zombie {
   id: number;
@@ -18,6 +21,11 @@ export interface Zombie {
   reward: number;
   attackCooldown: number;
   walkOffset: number;
+  aiState: ZombieAiState;
+  target: { x: number; z: number } | null;
+  lastKnownPlayer: { x: number; z: number } | null;
+  staggerTimer: number;
+  screamCooldown: number;
 }
 
 export interface Pickup {
@@ -76,6 +84,15 @@ export interface Snapshot {
   scope: number;
   fov: number;
   miniMapVisibleZombies: number;
+  crouching: boolean;
+  wavePhase: WavePhase;
+  intermissionTimer: number;
+  objective: {
+    id: string;
+    progress: number;
+    holdSeconds: number;
+    completed: boolean;
+  } | null;
 }
 
 export interface GameTestApi {
@@ -89,5 +106,6 @@ export interface GameTestApi {
   testInteract: (fixtureId?: string) => boolean;
   testUseAmenity: (kind?: AmenityPoint["kind"]) => boolean;
   testMiniMapVisibility: () => { front: boolean; behind: boolean; occluded: boolean };
+  testSetCrouching: (crouching: boolean) => boolean;
+  testStartIntermission: () => ActiveObjective | null;
 }
-

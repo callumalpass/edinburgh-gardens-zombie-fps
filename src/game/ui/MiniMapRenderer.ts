@@ -69,9 +69,13 @@ export class MiniMapRenderer {
     const player = this.mapPoint(state.playerPosition, w, h);
     this.drawFacingIndicator(ctx, player, state.playerYaw);
 
-    const visibleZombies = state.zombies.filter((zombie) => state.isVisible(zombie.position, zombie.radius));
+    let visibleZombieCount = 0;
     ctx.fillStyle = "rgba(207, 69, 55, 0.95)";
-    for (const zombie of visibleZombies) {
+    for (const zombie of state.zombies) {
+      if (!state.isVisible(zombie.position, zombie.radius)) {
+        continue;
+      }
+      visibleZombieCount += 1;
       const mapped = this.mapPoint(zombie.position, w, h);
       ctx.beginPath();
       ctx.arc(mapped.x, mapped.y, 2.4, 0, Math.PI * 2);
@@ -110,7 +114,7 @@ export class MiniMapRenderer {
     ctx.arc(player.x, player.y, 4, 0, Math.PI * 2);
     ctx.fill();
 
-    return visibleZombies.length;
+    return visibleZombieCount;
   }
 
   private mapPoint(point: Vec2, width: number, height: number): { x: number; y: number } {
@@ -151,4 +155,3 @@ export class MiniMapRenderer {
     ctx.fill();
   }
 }
-

@@ -4,7 +4,10 @@ export default defineConfig({
   server: {
     host: "127.0.0.1",
     port: 5480,
-    strictPort: true
+    strictPort: true,
+    watch: {
+      ignored: ["**/test-results/**", "**/playwright-report/**", "**/dist/**"]
+    }
   },
   test: {
     environment: "node",

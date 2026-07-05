@@ -18,6 +18,10 @@ export interface WeaponStats {
   bloomPerShot: number;
   maxBloom: number;
   headshotMultiplier: number;
+  staggerPower: number;
+  penetration: number;
+  noiseMultiplier: number;
+  sway: number;
   scopeZoom: number;
   aimSpreadMultiplier: number;
   aimRecoilMultiplier: number;
@@ -61,6 +65,10 @@ export const WEAPON_DEFINITIONS: Record<WeaponId, WeaponStats & { id: WeaponId; 
     bloomPerShot: 0.004,
     maxBloom: 0.028,
     headshotMultiplier: 1.85,
+    staggerPower: 0.18,
+    penetration: 1,
+    noiseMultiplier: 0.86,
+    sway: 0.55,
     scopeZoom: 1.55,
     aimSpreadMultiplier: 0.62,
     aimRecoilMultiplier: 0.72,
@@ -84,6 +92,10 @@ export const WEAPON_DEFINITIONS: Record<WeaponId, WeaponStats & { id: WeaponId; 
     bloomPerShot: 0.014,
     maxBloom: 0.058,
     headshotMultiplier: 1.35,
+    staggerPower: 0.82,
+    penetration: 1,
+    noiseMultiplier: 1.16,
+    sway: 0.72,
     scopeZoom: 1,
     aimSpreadMultiplier: 0.9,
     aimRecoilMultiplier: 0.9,
@@ -107,6 +119,10 @@ export const WEAPON_DEFINITIONS: Record<WeaponId, WeaponStats & { id: WeaponId; 
     bloomPerShot: 0.006,
     maxBloom: 0.044,
     headshotMultiplier: 1.65,
+    staggerPower: 0.1,
+    penetration: 1,
+    noiseMultiplier: 0.78,
+    sway: 0.88,
     scopeZoom: 1,
     aimSpreadMultiplier: 0.86,
     aimRecoilMultiplier: 0.82,
@@ -130,6 +146,10 @@ export const WEAPON_DEFINITIONS: Record<WeaponId, WeaponStats & { id: WeaponId; 
     bloomPerShot: 0.003,
     maxBloom: 0.016,
     headshotMultiplier: 2.25,
+    staggerPower: 0.48,
+    penetration: 2,
+    noiseMultiplier: 1.34,
+    sway: 0.42,
     scopeZoom: 2.8,
     aimSpreadMultiplier: 0.38,
     aimRecoilMultiplier: 0.56,

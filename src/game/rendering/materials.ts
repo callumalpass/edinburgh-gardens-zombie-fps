@@ -5,7 +5,7 @@ import type { GameMaterials } from "./WorldBuilder";
 export function createGameMaterials(rng: RandomSource): GameMaterials {
   const grass = new THREE.MeshStandardMaterial({
     map: createCanvasTexture("grass", rng),
-    color: 0x7d9560,
+    color: 0x789162,
     roughness: 0.94
   });
   const path = new THREE.MeshStandardMaterial({
@@ -42,6 +42,14 @@ export function createGameMaterials(rng: RandomSource): GameMaterials {
   const dirt = new THREE.MeshStandardMaterial({ color: 0x655741, roughness: 0.98, transparent: true, opacity: 0.58 });
   const leafLitter = new THREE.MeshStandardMaterial({ color: 0x5f5432, roughness: 0.98, transparent: true, opacity: 0.44 });
   const wornGrass = new THREE.MeshStandardMaterial({ color: 0x75815a, roughness: 0.98, transparent: true, opacity: 0.46 });
+  const puddle = new THREE.MeshStandardMaterial({
+    color: 0x1e302d,
+    metalness: 0.12,
+    roughness: 0.18,
+    transparent: true,
+    opacity: 0.32,
+    depthWrite: false
+  });
   const hedge = new THREE.MeshStandardMaterial({ color: 0x385a32, roughness: 0.9 });
   const line = new THREE.MeshBasicMaterial({ color: 0xe8e0b6 });
   const timber = new THREE.MeshStandardMaterial({ color: 0x7b5636, roughness: 0.78 });
@@ -62,6 +70,7 @@ export function createGameMaterials(rng: RandomSource): GameMaterials {
     dirt,
     leafLitter,
     wornGrass,
+    puddle,
     hedge,
     line,
     timber,
@@ -75,7 +84,7 @@ export function createGameMaterials(rng: RandomSource): GameMaterials {
 
 function createCanvasTexture(kind: "grass" | "path" | "gravel" | "asphalt" | "concrete" | "rubber" | "mulch", rng: RandomSource): THREE.CanvasTexture {
   const specs = {
-    grass: { base: "#73845a", fleck: [37, 71, 36], repeat: 34, count: 900 },
+    grass: { base: "#6f865c", fleck: [38, 72, 38], repeat: 34, count: 1050 },
     path: { base: "#b79962", fleck: [83, 63, 42], repeat: 11, count: 900 },
     gravel: { base: "#aa925f", fleck: [93, 78, 55], repeat: 14, count: 1250 },
     asphalt: { base: "#2f332f", fleck: [74, 78, 72], repeat: 18, count: 1100 },
@@ -107,10 +116,32 @@ function createCanvasTexture(kind: "grass" | "path" | "gravel" | "asphalt" | "co
       ctx.stroke();
     }
   }
+  if (kind === "grass") {
+    for (let row = -32; row < 288; row += 18) {
+      ctx.fillStyle = row % 36 === 0 ? "rgba(210, 222, 170, 0.035)" : "rgba(24, 48, 29, 0.038)";
+      ctx.save();
+      ctx.translate(128, row);
+      ctx.rotate(-0.12);
+      ctx.fillRect(-180, -4, 360, 8);
+      ctx.restore();
+    }
+  }
+  if (kind === "path" || kind === "gravel") {
+    for (let i = 0; i < 34; i += 1) {
+      ctx.strokeStyle = `rgba(55, 45, 32, ${rng.range(0.045, 0.1)})`;
+      ctx.lineWidth = rng.range(0.5, 1.6);
+      ctx.beginPath();
+      const startX = rng.range(-20, 256);
+      const startY = rng.range(0, 256);
+      ctx.moveTo(startX, startY);
+      ctx.bezierCurveTo(startX + rng.range(20, 80), startY + rng.range(-12, 12), startX + rng.range(80, 170), startY + rng.range(-14, 18), startX + rng.range(120, 270), startY + rng.range(-12, 12));
+      ctx.stroke();
+    }
+  }
   const texture = new THREE.CanvasTexture(canvas);
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.RepeatWrapping;
   texture.repeat.set(spec.repeat, spec.repeat);
+  texture.colorSpace = THREE.SRGBColorSpace;
   return texture;
 }
-

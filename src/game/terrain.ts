@@ -1,4 +1,3 @@
-import { distance } from "./geo";
 import type { LevelData, Vec2 } from "./types";
 
 export class TerrainSampler {
@@ -18,24 +17,35 @@ export class TerrainSampler {
   altitudeAt(point: Vec2): number {
     let weightedAltitude = 0;
     let totalWeight = 0;
-    const nearest = [...this.level.elevationSamples]
-      .map((sample) => ({
-        sample,
-        distance: distance(point, sample.position)
-      }))
-      .sort((a, b) => a.distance - b.distance)
-      .slice(0, 12);
+    const nearest: Array<{ altitude: number; distanceSquared: number }> = [];
+
+    for (const sample of this.level.elevationSamples) {
+      const dx = point.x - sample.position.x;
+      const dz = point.z - sample.position.z;
+      const distanceSquared = dx * dx + dz * dz;
+      if (distanceSquared < 0.01) {
+        return sample.altitude;
+      }
+
+      if (nearest.length < 12 || distanceSquared < nearest[nearest.length - 1].distanceSquared) {
+        nearest.push({ altitude: sample.altitude, distanceSquared });
+        for (let index = nearest.length - 1; index > 0 && nearest[index].distanceSquared < nearest[index - 1].distanceSquared; index -= 1) {
+          const previous = nearest[index - 1];
+          nearest[index - 1] = nearest[index];
+          nearest[index] = previous;
+        }
+        if (nearest.length > 12) {
+          nearest.pop();
+        }
+      }
+    }
 
     for (const entry of nearest) {
-      if (entry.distance < 0.1) {
-        return entry.sample.altitude;
-      }
-      const weight = 1 / Math.max(20, entry.distance * entry.distance);
-      weightedAltitude += entry.sample.altitude * weight;
+      const weight = 1 / Math.max(20, entry.distanceSquared);
+      weightedAltitude += entry.altitude * weight;
       totalWeight += weight;
     }
 
     return totalWeight > 0 ? weightedAltitude / totalWeight : this.level.elevationMin;
   }
 }
-

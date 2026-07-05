@@ -32,6 +32,7 @@ export const RESEARCH_NOTES = [
   "Heritage material emphasizes mature elm avenues, nineteenth-century formal path structure, W.T. Peterson Oval, the former railway/shared path and the rotunda.",
   "Yarra public-art records identify the Queen Victoria statue plinth in a circular garden bed, the Sportsman's War Memorial behind the bowls club, and the rotating Plinth Program work currently represented as Zone Red.",
   "Vicmap Elevation open metro contour/ground-point services show sampled park elevations from roughly 27m to 32m AHD inside the mapped boundary; those samples drive the terrain interpolation.",
+  "A 2026-07-05 bounded OSM path/service inventory added missing asphalt connectors around the northern paths, Queen Victoria plinth, central rail-trail link, southern entries and bowling-club service path.",
   "See docs/edinburgh-gardens-research.md for source URLs, query notes, data licensing notes and implementation decisions."
 ];
 
@@ -794,8 +795,35 @@ const OSM_EXTRA_PATHS_GEO: Array<{
   label: string;
   kind: LevelPath["kind"];
   width: number;
+  surface?: LevelPath["surface"];
+  source?: string;
   points: GeoPoint[];
 }> = [
+  {
+    id: "osm-22673070-north-west-footpath",
+    label: "North-west asphalt footpath connector",
+    kind: "footway",
+    width: 2.15,
+    surface: "asphalt",
+    source: "OpenStreetMap way 22673070",
+    points: [
+      g(-37.7858253, 144.9820919),
+      g(-37.7859702, 144.9827104)
+    ]
+  },
+  {
+    id: "osm-22768137-north-west-diagonal-footpath",
+    label: "North-west diagonal footpath",
+    kind: "footway",
+    width: 2.15,
+    surface: "asphalt",
+    source: "OpenStreetMap way 22768137",
+    points: [
+      g(-37.7867059, 144.9826271),
+      g(-37.7858253, 144.9820919),
+      g(-37.7857457, 144.9820572)
+    ]
+  },
   {
     id: "osm-north-curve",
     label: "Northern shared path curve",
@@ -894,6 +922,42 @@ const OSM_EXTRA_PATHS_GEO: Array<{
     ]
   },
   {
+    id: "osm-75488632-rail-trail-central-cross-link",
+    label: "Rail trail central cross link",
+    kind: "footway",
+    width: 2.2,
+    surface: "asphalt",
+    source: "OpenStreetMap way 75488632",
+    points: [
+      g(-37.7886143, 144.9824314),
+      g(-37.7877118, 144.9825794)
+    ]
+  },
+  {
+    id: "osm-22760904-plinth-west-connector",
+    label: "Queen Victoria plinth west connector",
+    kind: "footway",
+    width: 2.05,
+    surface: "asphalt",
+    source: "OpenStreetMap way 22760904",
+    points: [
+      g(-37.7867524, 144.9834658),
+      g(-37.7871801, 144.9836582)
+    ]
+  },
+  {
+    id: "osm-22760905-plinth-east-connector",
+    label: "Queen Victoria plinth east connector",
+    kind: "footway",
+    width: 2.05,
+    surface: "asphalt",
+    source: "OpenStreetMap way 22760905",
+    points: [
+      g(-37.7873642, 144.9837652),
+      g(-37.7877748, 144.9840060)
+    ]
+  },
+  {
     id: "osm-east-crescent-spine",
     label: "Eastern crescent shared path",
     kind: "cycleway",
@@ -928,6 +992,26 @@ const OSM_EXTRA_PATHS_GEO: Array<{
     ]
   },
   {
+    id: "osm-210387722-bowling-service-track",
+    label: "Bowling club private service path",
+    kind: "service",
+    width: 2.65,
+    surface: "unknown",
+    source: "OpenStreetMap way 210387722",
+    points: [
+      g(-37.7881336, 144.9802533),
+      g(-37.7881397, 144.9803023),
+      g(-37.7881511, 144.9803929),
+      g(-37.7882514, 144.9807870),
+      g(-37.7882541, 144.9808137),
+      g(-37.7882580, 144.9808512),
+      g(-37.7882464, 144.9809171),
+      g(-37.7882184, 144.9809666),
+      g(-37.7880915, 144.9811036),
+      g(-37.7880396, 144.9811556)
+    ]
+  },
+  {
     id: "osm-south-playground-path",
     label: "South playground path",
     kind: "footway",
@@ -942,6 +1026,67 @@ const OSM_EXTRA_PATHS_GEO: Array<{
       g(-37.7889325, 144.9839027),
       g(-37.7888511, 144.9837571),
       g(-37.7886669, 144.9836370)
+    ]
+  },
+  {
+    id: "osm-1340465893-south-alfred-crescent-sidewalk",
+    label: "South Alfred Crescent sidewalk",
+    kind: "footway",
+    width: 2.1,
+    surface: "asphalt",
+    source: "OpenStreetMap way 1340465893",
+    points: [
+      g(-37.7895812, 144.9847079),
+      g(-37.7891702, 144.9844369),
+      g(-37.7891579, 144.9844129),
+      g(-37.7891691, 144.9843877),
+      g(-37.7893366, 144.9841233),
+      g(-37.7894543, 144.9838897),
+      g(-37.7896214, 144.9833055),
+      g(-37.7896397, 144.9832458)
+    ]
+  },
+  {
+    id: "osm-1340465894-south-entry-spur",
+    label: "South picnic lawn entry spur",
+    kind: "footway",
+    width: 1.9,
+    surface: "asphalt",
+    source: "OpenStreetMap way 1340465894",
+    points: [
+      g(-37.7891579, 144.9844129),
+      g(-37.7891514, 144.9844385),
+      g(-37.7891506, 144.9845010),
+      g(-37.7891501, 144.9845463),
+      g(-37.7891471, 144.9846187),
+      g(-37.7891389, 144.9846636),
+      g(-37.7891199, 144.9847259)
+    ]
+  },
+  {
+    id: "osm-1361307046-south-cycle-slip",
+    label: "South rail trail cycle slip",
+    kind: "cycleway",
+    width: 2.8,
+    surface: "asphalt",
+    source: "OpenStreetMap way 1361307046",
+    points: [
+      g(-37.7895561, 144.9830577),
+      g(-37.7895718, 144.9831808)
+    ]
+  },
+  {
+    id: "osm-1361307049-south-rail-foot-link",
+    label: "South rail trail foot link",
+    kind: "footway",
+    width: 1.9,
+    surface: "asphalt",
+    source: "OpenStreetMap way 1361307049",
+    points: [
+      g(-37.7894639, 144.9831739),
+      g(-37.7894589, 144.9832294),
+      g(-37.7894538, 144.9832866),
+      g(-37.7894483, 144.9833253)
     ]
   },
   {
@@ -1437,13 +1582,21 @@ function polygonObstacleFromPolygon(id: string, label: string, polygon: Vec2[]):
   };
 }
 
-function pathFromGeo(id: string, label: string, kind: LevelPath["kind"], points: readonly GeoPoint[], width: number): LevelPath {
+function pathFromGeo(
+  id: string,
+  label: string,
+  kind: LevelPath["kind"],
+  points: readonly GeoPoint[],
+  width: number,
+  metadata: Pick<LevelPath, "surface" | "source"> = {}
+): LevelPath {
   return {
     id,
     label,
     kind,
     points: polygonFromGeo(points),
-    width
+    width,
+    ...metadata
   };
 }
 
@@ -1516,7 +1669,10 @@ export function createLevelData(): LevelData {
     OVAL_GEO,
     3.6
   );
-  const osmPaths = OSM_EXTRA_PATHS_GEO.map((path) => pathFromGeo(path.id, path.label, path.kind, path.points, path.width));
+  const osmPaths = OSM_EXTRA_PATHS_GEO.map((path) => pathFromGeo(path.id, path.label, path.kind, path.points, path.width, {
+    surface: path.surface,
+    source: path.source
+  }));
   const mappedAmenities: AmenityPoint[] = OSM_AMENITY_GEO.map((amenity) => ({
     id: amenity.id,
     label: amenity.label,

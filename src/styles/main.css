@@ -152,6 +152,15 @@ body.hit .vignette {
   opacity: 0;
 }
 
+.is-crouched .crosshair {
+  opacity: 0.82;
+  transform: translate(-50%, -50%) scale(0.78);
+}
+
+.is-scoped.is-crouched .crosshair {
+  opacity: 0;
+}
+
 .hud {
   position: absolute;
   color: oklch(88% 0.026 104);

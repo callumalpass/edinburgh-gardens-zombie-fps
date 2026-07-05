@@ -12,6 +12,7 @@ These notes record the real-world sources and implementation decisions used to s
   - Used for the escargot/crescent park boundary and as the containment polygon for filtering features.
   - OSM data is available under ODbL. Derived coordinates in `src/game/levelData.ts` should keep OSM attribution in user-facing or published material.
 - OpenStreetMap feature ways fetched individually through the OSM API:
+  - `22673070`, `22768137`, `75488632`, `22760904`, `22760905`, `210387722`, `1340465893`, `1340465894`, `1361307046`, `1361307049` path/service connectors added after a bounded path inventory.
   - `403753786` Kevin Murray Stand
   - `403753784` Fitzroy Tennis Club rooms
   - `543505702` Emely Baker Centre
@@ -51,10 +52,11 @@ These notes record the real-world sources and implementation decisions used to s
   - Buildings already inside tennis/bowls fenced precincts render visually but avoid duplicate collision blockers.
 - Paths, amenities, mapped buildings, trees, fixtures, memorials, entrances and pickups are placed relative to interpolated terrain height.
 - Existing OSM-derived paths, amenities, trees, sports facilities, memorials and park landmarks remain in `src/game/levelData.ts`.
+- Detailed OSM path/service research is stored in `docs/research/osm-path-service-inventory-2026-07-05.md`.
 
 ## Data Notes
 
 - The large combined Overpass query for every mapped feature in the park was unreliable and frequently timed out on 2026-07-05.
-- Smaller OSM API fetches for specific way IDs were reliable and are the basis for the new mapped building/fence footprints.
+- The bounded OSM path/service Overpass inventory succeeded once, but repeated calls later returned busy-server HTML. Smaller OSM API fetches for specific way IDs were reliable and are the basis for the new mapped path, building and fence footprints.
 - Raw API responses are not checked in. The durable project artifact is this source note plus compact derived constants in `src/game/levelData.ts`.
 - The Vicmap elevation samples are sparse. They are appropriate for broad park slope and local rise/fall, not for fine kerbs, gutters, steps or detailed drainage modelling.

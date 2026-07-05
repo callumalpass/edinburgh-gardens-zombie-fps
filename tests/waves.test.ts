@@ -10,6 +10,8 @@ describe("wave spawning", () => {
     expect(fifth.total).toBeGreaterThan(first.total);
     expect(fifth.healthMultiplier).toBeGreaterThan(first.healthMultiplier);
     expect(fifth.spawnInterval).toBeLessThan(first.spawnInterval);
+    expect(fifth.typeWeights.crawler).toBeGreaterThan(0);
+    expect(fifth.typeWeights.screamer).toBeGreaterThan(0);
   });
 
   it("creates deterministic zombie spawn positions from the map spawn list", () => {

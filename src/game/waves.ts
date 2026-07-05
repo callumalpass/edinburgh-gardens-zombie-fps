@@ -1,6 +1,7 @@
 import type { RandomSource, Vec2 } from "./types";
+import { ZOMBIE_PROFILES, type ZombieType } from "./zombieProfiles";
 
-export type ZombieType = "shambler" | "sprinter" | "bloater";
+export type { ZombieType } from "./zombieProfiles";
 
 export interface WaveConfig {
   wave: number;
@@ -19,12 +20,6 @@ export interface ZombieSpawn {
   reward: number;
 }
 
-const ZOMBIE_BASES: Record<ZombieType, { health: number; speed: number; reward: number }> = {
-  shambler: { health: 70, speed: 7.2, reward: 12 },
-  sprinter: { health: 48, speed: 12.4, reward: 15 },
-  bloater: { health: 150, speed: 4.6, reward: 24 }
-};
-
 export function getWaveConfig(wave: number): WaveConfig {
   const clampedWave = Math.max(1, Math.floor(wave));
   return {
@@ -36,7 +31,9 @@ export function getWaveConfig(wave: number): WaveConfig {
     typeWeights: {
       shambler: Math.max(0.35, 1 - clampedWave * 0.055),
       sprinter: Math.min(0.45, clampedWave * 0.045),
-      bloater: Math.min(0.32, Math.max(0, (clampedWave - 2) * 0.035))
+      bloater: Math.min(0.32, Math.max(0, (clampedWave - 2) * 0.035)),
+      crawler: Math.min(0.24, Math.max(0, (clampedWave - 1) * 0.035)),
+      screamer: Math.min(0.18, Math.max(0, (clampedWave - 3) * 0.028))
     }
   };
 }
@@ -56,7 +53,7 @@ export function chooseZombieType(config: WaveConfig, rng: RandomSource): ZombieT
 
 export function createZombieSpawn(config: WaveConfig, spawnPoints: readonly Vec2[], rng: RandomSource): ZombieSpawn {
   const type = chooseZombieType(config, rng);
-  const base = ZOMBIE_BASES[type];
+  const base = ZOMBIE_PROFILES[type];
   const anchor = rng.pick(spawnPoints);
   return {
     type,

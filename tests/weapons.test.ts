@@ -54,10 +54,15 @@ describe("weapon upgrades", () => {
     let loadout = addWeapon(createInitialLoadout(), "rifle");
     const stats = getWeaponStats(loadout);
     expect(stats.scopeZoom).toBeGreaterThan(2);
+    expect(stats.penetration).toBeGreaterThan(1);
     expect(damageAtDistance(stats, 35, "head")).toBeGreaterThan(damageAtDistance(stats, 35, "body"));
     expect(damageAtDistance(stats, stats.range, "legs")).toBeLessThan(stats.damage);
 
     loadout = addWeapon(loadout, "shotgun");
-    expect(getWeaponStats(loadout).reloadStyle).toBe("single");
+    const shotgun = getWeaponStats(loadout);
+    expect(shotgun.reloadStyle).toBe("single");
+    expect(shotgun.staggerPower).toBeGreaterThan(stats.staggerPower);
+    expect(shotgun.scopeZoom).toBe(1);
+    expect(getWeaponStats(addWeapon(loadout, "smg")).sway).toBeGreaterThan(stats.sway);
   });
 });

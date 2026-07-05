@@ -18,13 +18,25 @@ import {
   type WeaponId
 } from "./weapons";
 import { resolveObstacle, shouldBypassObstacle as shouldBypassCollisionObstacle } from "./collision";
-import { clampToPolygon, distance } from "./geo";
+import { clampToPolygon, distance, distanceToSegment } from "./geo";
 import { createLevelData } from "./levelData";
+import { chooseZombiePickup, chooseZombieWeaponDrop, searchAmenityLoot } from "./loot";
+import { movementNoiseKind, movementNoiseMultiplier, NoiseSystem } from "./noise";
+import {
+  claimObjectiveReward,
+  createActiveObjective,
+  createObjectiveCycle,
+  updateObjectiveProgress,
+  type ActiveObjective,
+  type ObjectiveDefinition
+} from "./objectives";
 import { SeededRandom } from "./random";
+import { AtmosphereSystem } from "./rendering/AtmosphereSystem";
 import { MeshFactory } from "./rendering/MeshFactory";
 import { WorldBuilder, type GameMaterials } from "./rendering/WorldBuilder";
 import { createGameMaterials } from "./rendering/materials";
-import type { GameStateName, GameTestApi, HitZone, Pickup, ShellCasing, SmokePuff, Snapshot, Tracer, WeaponDrop, Zombie } from "./state";
+import { freezeStaticScene } from "./rendering/staticScene";
+import type { GameStateName, GameTestApi, HitZone, Pickup, ShellCasing, SmokePuff, Snapshot, Tracer, WavePhase, WeaponDrop, Zombie } from "./state";
 import { installGameTestDriver, uninstallGameTestDriver } from "./testing/GameTestDriver";
 import { TerrainSampler } from "./terrain";
 import {
@@ -32,6 +44,7 @@ import {
   isPointVisibleToPlayer as isPointVisibleToPlayerByContext
 } from "./visibility";
 import { createZombieSpawn, getWaveConfig, type ZombieSpawn, type ZombieType } from "./waves";
+import { zombieProfile } from "./zombieProfiles";
 import { HudController } from "./ui/HudController";
 import { MiniMapRenderer } from "./ui/MiniMapRenderer";
 import type {
@@ -49,11 +62,15 @@ const BASE_CAMERA_FOV = 74;
 const START_POSITION = new THREE.Vector3(35, 0, 42);
 const WALK_SPEED = 7.6;
 const SPRINT_SPEED = 11.4;
+const CROUCH_SPEED = 3.9;
+const INTERMISSION_SECONDS = 24;
 
 export class GameApp {
   private readonly root: HTMLElement;
   private readonly level: LevelData;
   private readonly terrain: TerrainSampler;
+  private readonly objectiveCycle: ObjectiveDefinition[];
+  private readonly noise = new NoiseSystem();
   private readonly rng = new SeededRandom(0xed1b97);
   private readonly smokeMode = new URLSearchParams(window.location.search).has("smoke");
   private renderer!: THREE.WebGLRenderer;
@@ -64,6 +81,7 @@ export class GameApp {
   private miniMap!: MiniMapRenderer;
   private meshFactory!: MeshFactory;
   private world!: WorldBuilder;
+  private atmosphere!: AtmosphereSystem;
   private audio: AudioContext | null = null;
   private state: GameStateName = "ready";
   private testApi: GameTestApi | null = null;
@@ -82,12 +100,22 @@ export class GameApp {
     kills: 0,
     height: 0,
     heightTarget: 0,
+    crouching: false,
+    crouchAmount: 0,
     activeFixtureId: null as string | null
   };
   private keys = new Set<string>();
   private loadout: Loadout = createInitialLoadout();
   private lastShotAt = 0;
   private wave = 1;
+  private wavePhase: WavePhase = "active";
+  private intermissionTimer = 0;
+  private activeObjective: ActiveObjective | null = null;
+  private objectiveIndex = 0;
+  private objectiveNoiseTimer = 0;
+  private movementNoiseTimer = 0;
+  private elevatedNoiseTimer = 0;
+  private testCrouchOverride: boolean | null = null;
   private spawnQueue: ZombieSpawn[] = [];
   private spawnTimer = 0;
   private nextZombieId = 1;
@@ -123,6 +151,7 @@ export class GameApp {
     this.root = root;
     this.level = createLevelData();
     this.terrain = new TerrainSampler(this.level);
+    this.objectiveCycle = createObjectiveCycle(this.level);
     this.player.position.set(START_POSITION.x, this.groundY({ x: START_POSITION.x, z: START_POSITION.z }), START_POSITION.z);
   }
 
@@ -140,9 +169,10 @@ export class GameApp {
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
 
     this.camera = new THREE.PerspectiveCamera(BASE_CAMERA_FOV, 1, 0.1, 1800);
+    this.camera.userData.dynamic = true;
+    this.weaponModel.userData.dynamic = true;
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x08100c);
-    this.scene.fog = new THREE.FogExp2(0x08100c, 0.0025);
+    this.atmosphere = new AtmosphereSystem(this.scene, this.rng, this.smokeMode);
     this.materials = createGameMaterials(this.rng);
     this.meshFactory = new MeshFactory(this.materials);
     this.miniMap = new MiniMapRenderer(this.hud.miniMap, this.level);
@@ -151,6 +181,7 @@ export class GameApp {
     this.rebuildViewWeapon();
     this.createWorld();
     this.world.createUpgradeStations();
+    freezeStaticScene(this.scene, [this.camera, this.atmosphere.root]);
     this.spawnInitialWeapons();
     this.bindEvents();
     this.resize();
@@ -171,7 +202,9 @@ export class GameApp {
       testScope: (weaponId?: WeaponId) => this.testScope(weaponId),
       testInteract: (fixtureId?: string) => this.testInteract(fixtureId),
       testUseAmenity: (kind?: AmenityPoint["kind"]) => this.testUseAmenity(kind),
-      testMiniMapVisibility: () => this.testMiniMapVisibility()
+      testMiniMapVisibility: () => this.testMiniMapVisibility(),
+      testSetCrouching: (crouching: boolean) => this.testSetCrouching(crouching),
+      testStartIntermission: () => this.testStartIntermission()
     };
     installGameTestDriver(this.testApi);
 
@@ -238,6 +271,9 @@ export class GameApp {
       if (event.code === "KeyR") {
         this.aimHeld = false;
         this.loadout = startReload(this.loadout, performance.now() / 1000);
+        if (this.loadout.reloadingUntil > 0) {
+          this.noise.emit("reload", { x: this.player.position.x, z: this.player.position.z }, this.player.crouching ? 0.55 : 1);
+        }
       }
       if (event.code === "KeyE") {
         this.handleInteract();
@@ -294,12 +330,22 @@ export class GameApp {
     this.player.kills = 0;
     this.player.height = 0;
     this.player.heightTarget = 0;
+    this.player.crouching = false;
+    this.player.crouchAmount = 0;
     this.player.activeFixtureId = null;
     this.player.yaw = -2.45;
     this.player.pitch = -0.08;
     this.loadout = createInitialLoadout();
     this.rebuildViewWeapon();
     this.wave = 1;
+    this.wavePhase = "active";
+    this.intermissionTimer = 0;
+    this.activeObjective = null;
+    this.objectiveIndex = 0;
+    this.objectiveNoiseTimer = 0;
+    this.movementNoiseTimer = 0;
+    this.elevatedNoiseTimer = 0;
+    this.testCrouchOverride = null;
     this.spawnQueue = [];
     this.zombies.forEach((zombie) => this.scene.remove(zombie.mesh));
     this.pickups.forEach((pickup) => this.scene.remove(pickup.mesh));
@@ -320,6 +366,8 @@ export class GameApp {
     this.scopeAmount = 0;
     this.lastHitZone = null;
     this.root.classList.remove("is-scoped");
+    this.root.classList.remove("is-crouched");
+    this.noise.clear();
     this.searchedAmenityIds.clear();
     this.hud.setRestartVisible(false);
     this.state = "playing";
@@ -343,14 +391,19 @@ export class GameApp {
       this.camera.lookAt(0, 0, 0);
     }
 
+    this.atmosphere.update(dt, this.camera.position, time / 1000);
     this.renderer.render(this.scene, this.camera);
     this.animationFrameId = requestAnimationFrame((next) => this.tick(next));
   }
 
   private update(dt: number, now: number): void {
     this.loadout = finishReloadIfReady(this.loadout, now);
+    this.noise.update(dt);
+    this.updateCrouch(dt);
     this.updateMovement(dt);
     this.updateVerticalState(dt);
+    this.updateElevatedNoise(dt);
+    this.updateWavePacing(dt);
     this.updateSpawns(dt);
     this.updateZombies(dt, now);
     this.updatePickups(dt);
@@ -367,15 +420,74 @@ export class GameApp {
     this.updateHud();
     this.updateMiniMap();
 
-    if (this.zombies.length === 0 && this.spawnQueue.length === 0) {
-      this.spawnTimer -= dt;
-      if (this.spawnTimer <= -2.4) {
-        this.startWave(this.wave + 1);
+    if (this.player.health <= 0) {
+      this.gameOver();
+    }
+  }
+
+  private updateCrouch(dt: number): void {
+    const inputCrouching =
+      this.keys.has("KeyC") ||
+      this.keys.has("ControlLeft") ||
+      this.keys.has("ControlRight");
+    this.player.crouching = this.testCrouchOverride ?? inputCrouching;
+    const target = this.player.crouching ? 1 : 0;
+    const t = 1 - Math.pow(0.0008, dt);
+    this.player.crouchAmount += (target - this.player.crouchAmount) * t;
+    if (this.player.crouchAmount < 0.01) this.player.crouchAmount = 0;
+    this.root.classList.toggle("is-crouched", this.player.crouching);
+  }
+
+  private updateWavePacing(dt: number): void {
+    if (this.wavePhase === "active") {
+      if (this.zombies.length === 0 && this.spawnQueue.length === 0) {
+        this.startIntermission();
+      }
+      return;
+    }
+
+    this.intermissionTimer = Math.max(0, this.intermissionTimer - dt);
+    this.updateObjective(dt);
+    if (this.intermissionTimer <= 0) {
+      this.startWave(this.wave + 1);
+    }
+  }
+
+  private startIntermission(): ActiveObjective | null {
+    if (this.wavePhase === "intermission") {
+      return this.activeObjective;
+    }
+    this.wavePhase = "intermission";
+    this.intermissionTimer = INTERMISSION_SECONDS;
+    const definition = this.objectiveCycle[this.objectiveIndex % this.objectiveCycle.length];
+    this.objectiveIndex += 1;
+    this.activeObjective = definition ? createActiveObjective(definition) : null;
+    this.objectiveNoiseTimer = 0.4;
+    this.flashStatus(this.activeObjective ? this.activeObjective.label : `Regroup before wave ${this.wave + 1}`);
+    return this.activeObjective;
+  }
+
+  private updateObjective(dt: number): void {
+    if (!this.activeObjective || this.activeObjective.completed) {
+      return;
+    }
+
+    const previousProgress = this.activeObjective.progress;
+    this.activeObjective = updateObjectiveProgress(this.activeObjective, { x: this.player.position.x, z: this.player.position.z }, dt);
+    if (this.activeObjective.progress > previousProgress) {
+      this.objectiveNoiseTimer -= dt;
+      if (this.objectiveNoiseTimer <= 0) {
+        this.noise.emit("objective", this.activeObjective.position, 0.72);
+        this.objectiveNoiseTimer = 1.15;
       }
     }
 
-    if (this.player.health <= 0) {
-      this.gameOver();
+    if (this.activeObjective.completed) {
+      const reward = claimObjectiveReward(this.activeObjective, this.player.scrap, this.loadout);
+      this.player.scrap = reward.scrap;
+      this.loadout = reward.loadout;
+      this.intermissionTimer = Math.min(this.intermissionTimer, 5);
+      this.flashStatus(`${this.activeObjective.label} complete`);
     }
   }
 
@@ -392,8 +504,10 @@ export class GameApp {
       const cos = Math.cos(this.player.yaw);
       const forward = new THREE.Vector3(sin, 0, cos);
       const right = new THREE.Vector3(cos, 0, -sin);
-      const speed = this.keys.has("ShiftLeft") || this.keys.has("ShiftRight") ? SPRINT_SPEED : WALK_SPEED;
+      const sprinting = !this.player.crouching && (this.keys.has("ShiftLeft") || this.keys.has("ShiftRight"));
+      const speed = this.player.crouching ? CROUCH_SPEED : sprinting ? SPRINT_SPEED : WALK_SPEED;
       this.player.velocity.copy(forward.multiplyScalar(input.z).add(right.multiplyScalar(input.x))).multiplyScalar(speed);
+      this.emitMovementNoise(dt, sprinting);
     } else {
       this.player.velocity.multiplyScalar(0.78);
       if (this.player.velocity.lengthSq() < 0.01) {
@@ -410,6 +524,34 @@ export class GameApp {
       next = resolveObstacle(next, PLAYER_RADIUS, obstacle);
     }
     this.player.position.set(next.x, this.groundY(next), next.z);
+  }
+
+  private emitMovementNoise(dt: number, sprinting: boolean): void {
+    this.movementNoiseTimer -= dt;
+    if (this.movementNoiseTimer > 0) {
+      return;
+    }
+
+    const speed = this.player.velocity.length();
+    const kind = movementNoiseKind(speed, this.player.crouching, sprinting);
+    if (!kind) {
+      return;
+    }
+
+    const playerPoint = { x: this.player.position.x, z: this.player.position.z };
+    this.noise.emit(kind, playerPoint, movementNoiseMultiplier(this.player.crouching, this.isNearPath(playerPoint)));
+    this.movementNoiseTimer = this.player.crouching ? 0.82 : sprinting ? 0.28 : 0.46;
+  }
+
+  private isNearPath(point: Vec2): boolean {
+    return this.level.paths.some((path) => {
+      for (let index = 0; index < path.points.length - 1; index += 1) {
+        if (distanceToSegment(point, path.points[index], path.points[index + 1]) <= path.width * 0.75) {
+          return true;
+        }
+      }
+      return false;
+    });
   }
 
   private groundY(point: Vec2): number {
@@ -435,7 +577,11 @@ export class GameApp {
       this.player.yaw = -2.2 + Math.sin(t) * 0.18;
       this.player.pitch = -0.1 + Math.sin(t * 0.7) * 0.04;
     }
-    this.camera.position.set(this.player.position.x, this.player.position.y + PLAYER_HEIGHT + this.player.height, this.player.position.z);
+    this.camera.position.set(
+      this.player.position.x,
+      this.player.position.y + PLAYER_HEIGHT + this.player.height - this.player.crouchAmount * 0.58,
+      this.player.position.z
+    );
     this.camera.rotation.order = "YXZ";
     this.camera.rotation.y = this.player.yaw + this.recoilYaw * 0.006;
     this.camera.rotation.x = this.player.pitch - this.recoil * 0.012;
@@ -443,13 +589,17 @@ export class GameApp {
 
   private startWave(wave: number): void {
     this.wave = wave;
+    this.wavePhase = "active";
+    this.intermissionTimer = 0;
+    this.activeObjective = null;
     const config = getWaveConfig(wave);
     this.spawnQueue = Array.from({ length: config.total }, () => createZombieSpawn(config, this.level.spawnPoints, this.rng));
     this.spawnTimer = 0.4;
+    this.flashStatus(`Wave ${wave}`);
   }
 
   private updateSpawns(dt: number): void {
-    if (this.spawnQueue.length === 0) {
+    if (this.wavePhase !== "active" || this.spawnQueue.length === 0) {
       return;
     }
     const config = getWaveConfig(this.wave);
@@ -472,6 +622,7 @@ export class GameApp {
     mesh.position.set(spawn.position.x, this.groundY(spawn.position), spawn.position.z);
     this.scene.add(mesh);
     const maxHealth = spawn.health;
+    const profile = zombieProfile(spawn.type);
     this.zombies.push({
       id: this.nextZombieId++,
       type: spawn.type,
@@ -480,42 +631,97 @@ export class GameApp {
       health: maxHealth,
       maxHealth,
       speed: spawn.speed,
-      radius: spawn.type === "bloater" ? 2.2 : 1.35,
+      radius: profile.radius,
       reward: spawn.reward,
       attackCooldown: 0,
-      walkOffset: this.rng.range(0, Math.PI * 2)
+      walkOffset: this.rng.range(0, Math.PI * 2),
+      aiState: "idle",
+      target: null,
+      lastKnownPlayer: null,
+      staggerTimer: 0,
+      screamCooldown: this.rng.range(2.5, 6)
     });
   }
 
   private updateZombies(dt: number, now: number): void {
     for (const zombie of this.zombies) {
-      const toPlayer = this.scratchVector
-        .set(this.player.position.x - zombie.position.x, 0, this.player.position.z - zombie.position.z);
-      const distanceToPlayer = toPlayer.length();
-      if (distanceToPlayer > 0.001) {
-        toPlayer.normalize();
+      const profile = zombieProfile(zombie.type);
+      const playerPoint = { x: this.player.position.x, z: this.player.position.z };
+      const zombiePoint = { x: zombie.position.x, z: zombie.position.z };
+      const distanceToPlayer = distance(zombiePoint, playerPoint);
+      const seesPlayer = this.canZombieSeePlayer(zombie, distanceToPlayer);
+      const heardNoise = this.noise.strongestAt(zombiePoint, profile.hearingMultiplier);
+
+      zombie.attackCooldown -= dt;
+      zombie.staggerTimer = Math.max(0, zombie.staggerTimer - dt);
+      zombie.screamCooldown = Math.max(0, zombie.screamCooldown - dt);
+
+      if (seesPlayer) {
+        zombie.aiState = "chase";
+        zombie.lastKnownPlayer = playerPoint;
+        zombie.target = playerPoint;
+      } else if (heardNoise && zombie.aiState !== "chase") {
+        zombie.aiState = "investigate";
+        zombie.target = heardNoise.position;
+      } else if (zombie.aiState === "chase" && zombie.lastKnownPlayer) {
+        zombie.aiState = "investigate";
+        zombie.target = zombie.lastKnownPlayer;
+      } else if (zombie.target && distance(zombiePoint, zombie.target) < 2.8) {
+        zombie.aiState = "idle";
+        zombie.target = null;
       }
-      const speed = zombie.speed * (distanceToPlayer < 18 ? 1.18 : 1);
-      const candidate = zombie.position.clone().addScaledVector(toPlayer, speed * dt);
+
+      if (zombie.type === "screamer" && zombie.aiState === "chase" && zombie.screamCooldown <= 0) {
+        this.noise.emit("scream", zombiePoint);
+        zombie.screamCooldown = 9 + this.rng.range(0, 4);
+        this.playTone(118, 0.18, "sawtooth", 0.035);
+      }
+
+      const target = zombie.target;
+      const toTarget = target
+        ? this.scratchVector.set(target.x - zombie.position.x, 0, target.z - zombie.position.z)
+        : this.scratchVector.set(0, 0, 0);
+      const distanceToTarget = toTarget.length();
+      if (distanceToTarget > 0.001) {
+        toTarget.normalize();
+      }
+      const chaseBoost = zombie.aiState === "chase" && distanceToPlayer < 18 ? 1.18 : zombie.aiState === "idle" ? 0 : 1;
+      const staggerScale = zombie.staggerTimer > 0 ? 0.24 : 1;
+      const speed = zombie.speed * chaseBoost * staggerScale;
+      const candidate = zombie.position.clone().addScaledVector(toTarget, speed * dt);
       let next = clampToPolygon({ x: candidate.x, z: candidate.z }, this.level.boundary, 2.5);
       for (const obstacle of this.level.obstacles) {
         next = resolveObstacle(next, zombie.radius, obstacle);
       }
       const groundY = this.groundY(next);
       zombie.position.set(next.x, groundY, next.z);
-      zombie.mesh.rotation.y = Math.atan2(toPlayer.x, toPlayer.z);
+      if (distanceToTarget > 0.1) {
+        zombie.mesh.rotation.y = Math.atan2(toTarget.x, toTarget.z);
+      }
       zombie.mesh.position.y = groundY + Math.sin(now * 7 + zombie.walkOffset) * 0.07;
       this.animateZombie(zombie, now, distanceToPlayer);
-      zombie.attackCooldown -= dt;
       if (this.player.height < 1.4 && distanceToPlayer < zombie.radius + PLAYER_RADIUS + 0.8 && zombie.attackCooldown <= 0) {
-        this.player.health -= zombie.type === "bloater" ? 18 : 10;
-        zombie.attackCooldown = zombie.type === "sprinter" ? 0.65 : 0.95;
+        this.player.health -= profile.attackDamage;
+        zombie.attackCooldown = profile.attackCooldown;
         this.lastDamageAt = now;
         document.body.classList.add("hit");
         window.setTimeout(() => document.body.classList.remove("hit"), 120);
         this.playTone(90, 0.04, "sawtooth", 0.04);
       }
     }
+  }
+
+  private canZombieSeePlayer(zombie: Zombie, distanceToPlayer: number): boolean {
+    const profile = zombieProfile(zombie.type);
+    const crouchPenalty = this.player.crouching ? 0.56 : 1;
+    const heightBonus = this.player.height > 1.4 ? 1.35 : 1;
+    const sightRange = profile.sightRange * crouchPenalty * heightBonus;
+    if (distanceToPlayer > sightRange) {
+      return false;
+    }
+    const zombiePoint = { x: zombie.position.x, z: zombie.position.z };
+    const playerPoint = { x: this.player.position.x, z: this.player.position.z };
+    return !this.isLineOfSightBlocked(zombiePoint, playerPoint, PLAYER_RADIUS);
   }
 
   private shoot(now: number, force = false): void {
@@ -537,10 +743,12 @@ export class GameApp {
 
     this.loadout = consumeRound(this.loadout);
     this.lastShotAt = now;
-    const aimRecoil = THREE.MathUtils.lerp(1, stats.aimRecoilMultiplier, this.scopeAmount);
+    const crouchRecoil = this.player.crouching ? 0.7 : 1;
+    const aimRecoil = THREE.MathUtils.lerp(1, stats.aimRecoilMultiplier, this.scopeAmount) * crouchRecoil;
     this.recoil = Math.min(1.75, this.recoil + stats.recoilKick * aimRecoil);
     this.recoilYaw += this.rng.range(-stats.recoilDrift, stats.recoilDrift) * aimRecoil;
     this.shotBloom = Math.min(stats.maxBloom, this.shotBloom + stats.bloomPerShot);
+    this.noise.emit("gunshot", { x: this.player.position.x, z: this.player.position.z }, stats.noiseMultiplier * (this.player.crouching ? 0.86 : 1));
     this.muzzleTimer = 0.055;
     if (this.muzzleFlash) this.muzzleFlash.visible = true;
     if (this.muzzleLight) this.muzzleLight.visible = true;
@@ -549,7 +757,8 @@ export class GameApp {
     this.playTone(this.loadout.weaponId === "shotgun" ? 170 : 260 + this.rng.range(-20, 20), 0.055, "square", 0.05);
 
     const movementSpread = Math.min(1, this.player.velocity.length() / 22) * stats.movingSpread;
-    const totalSpread = (stats.spread + movementSpread + this.shotBloom) * THREE.MathUtils.lerp(1, stats.aimSpreadMultiplier, this.scopeAmount);
+    const crouchSpread = this.player.crouching ? 0.64 : 1;
+    const totalSpread = (stats.spread + movementSpread + this.shotBloom) * THREE.MathUtils.lerp(1, stats.aimSpreadMultiplier, this.scopeAmount) * crouchSpread;
     let registeredHit = false;
     for (let pellet = 0; pellet < stats.pellets; pellet += 1) {
       const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion);
@@ -557,10 +766,15 @@ export class GameApp {
       direction.y += this.rng.range(-totalSpread, totalSpread) * 0.55;
       direction.z += this.rng.range(-totalSpread, totalSpread);
       direction.normalize();
-      const hit = this.findZombieHit(this.camera.position, direction, stats.range);
-      const endPoint = hit?.point ?? this.camera.position.clone().addScaledVector(direction, stats.range);
-      if (hit) {
+      const hits = this.findZombieHits(this.camera.position, direction, stats.range, stats.penetration);
+      const endPoint = hits[0]?.point ?? this.camera.position.clone().addScaledVector(direction, stats.range);
+      for (const hit of hits) {
         hit.zombie.health -= damageAtDistance(stats, hit.distance, hit.zone);
+        const profile = zombieProfile(hit.zombie.type);
+        hit.zombie.staggerTimer = Math.max(hit.zombie.staggerTimer, (stats.staggerPower + (hit.zone === "legs" ? 0.22 : 0)) / profile.staggerResistance);
+        hit.zombie.aiState = "chase";
+        hit.zombie.target = { x: this.player.position.x, z: this.player.position.z };
+        hit.zombie.lastKnownPlayer = hit.zombie.target;
         this.lastHitZone = hit.zone;
         registeredHit = true;
         this.createHitSpark(endPoint);
@@ -579,22 +793,28 @@ export class GameApp {
   }
 
   private findZombieHit(origin: THREE.Vector3, direction: THREE.Vector3, range: number): { zombie: Zombie; point: THREE.Vector3; distance: number; zone: HitZone } | null {
-    let closest: { zombie: Zombie; point: THREE.Vector3; distance: number; zone: HitZone } | null = null;
+    return this.findZombieHits(origin, direction, range, 1)[0] ?? null;
+  }
+
+  private findZombieHits(origin: THREE.Vector3, direction: THREE.Vector3, range: number, limit: number): Array<{ zombie: Zombie; point: THREE.Vector3; distance: number; zone: HitZone }> {
+    const closestByZombie = new Map<number, { zombie: Zombie; point: THREE.Vector3; distance: number; zone: HitZone }>();
     for (const zombie of this.zombies) {
-      const bodyScale = zombie.type === "bloater" ? 1.45 : zombie.type === "sprinter" ? 0.84 : 1;
+      const bodyScale = zombie.type === "bloater" ? 1.45 : zombie.type === "sprinter" ? 0.84 : zombie.type === "crawler" ? 0.62 : 1;
+      const crouchOffset = zombie.type === "crawler" ? -0.58 : 0;
       const zones: Array<{ zone: HitZone; center: THREE.Vector3; radius: number }> = [
-        { zone: "head", center: zombie.position.clone().add(new THREE.Vector3(0.06 * bodyScale, 2.88 * bodyScale, -0.02)), radius: 0.42 * bodyScale },
-        { zone: "body", center: zombie.position.clone().add(new THREE.Vector3(0, 1.58 * bodyScale, 0)), radius: 0.72 * bodyScale },
+        { zone: "head", center: zombie.position.clone().add(new THREE.Vector3(0.06 * bodyScale, 2.88 * bodyScale + crouchOffset, -0.02)), radius: 0.42 * bodyScale },
+        { zone: "body", center: zombie.position.clone().add(new THREE.Vector3(0, 1.58 * bodyScale + crouchOffset, 0)), radius: 0.72 * bodyScale },
         { zone: "legs", center: zombie.position.clone().add(new THREE.Vector3(0, 0.62 * bodyScale, 0)), radius: 0.44 * bodyScale }
       ];
       for (const zone of zones) {
         const hit = this.raySphereHit(origin, direction, zone.center, zone.radius, range);
-        if (hit && (!closest || hit.distance < closest.distance)) {
-          closest = { zombie, point: hit.point, distance: hit.distance, zone: zone.zone };
+        const previous = closestByZombie.get(zombie.id);
+        if (hit && (!previous || hit.distance < previous.distance)) {
+          closestByZombie.set(zombie.id, { zombie, point: hit.point, distance: hit.distance, zone: zone.zone });
         }
       }
     }
-    return closest;
+    return [...closestByZombie.values()].sort((a, b) => a.distance - b.distance).slice(0, Math.max(1, limit));
   }
 
   private raySphereHit(
@@ -627,12 +847,13 @@ export class GameApp {
     this.zombies = this.zombies.filter((candidate) => candidate !== zombie);
     this.player.kills += 1;
     this.player.scrap += zombie.reward;
-    if (this.rng.next() < 0.48) {
-      const type = this.rng.next() < 0.5 ? "ammo" : this.rng.next() < 0.7 ? "health" : "scrap";
-      this.addPickup(type, zombie.position, type === "ammo" ? 18 : type === "health" ? 18 : 25);
+    const pickup = chooseZombiePickup(zombie.type, this.rng);
+    if (pickup) {
+      this.addPickup(pickup.type, zombie.position, pickup.amount);
     }
-    if (zombie.type === "bloater" || this.rng.next() < 0.38) {
-      this.addWeaponDrop(this.chooseDroppedWeapon(), zombie.position, "zombie", 30);
+    const weaponDrop = chooseZombieWeaponDrop(zombie.type, this.wave, this.rng);
+    if (weaponDrop) {
+      this.addWeaponDrop(weaponDrop, zombie.position, "zombie", 30);
     }
   }
 
@@ -677,14 +898,6 @@ export class GameApp {
     for (const spawn of this.level.weaponSpawns) {
       this.addWeaponDrop(spawn.weaponId, new THREE.Vector3(spawn.position.x, 0, spawn.position.z), "cache", Number.POSITIVE_INFINITY, spawn);
     }
-  }
-
-  private chooseDroppedWeapon(): WeaponId {
-    const roll = this.rng.next();
-    if (this.wave >= 4 && roll > 0.72) return "rifle";
-    if (roll > 0.58) return "shotgun";
-    if (roll > 0.32) return "smg";
-    return "carbine";
   }
 
   private addWeaponDrop(
@@ -814,21 +1027,12 @@ export class GameApp {
     }
 
     this.searchedAmenityIds.add(amenity.id);
-    if (amenity.kind === "waste_basket") {
-      this.player.scrap += 9 + this.rng.int(0, 8);
-      this.flashStatus("Found scrap in bin");
-    } else if (amenity.kind === "bicycle_parking") {
-      this.player.scrap += 18;
-      this.loadout = addAmmo(this.loadout, 8);
-      this.flashStatus("Stripped bike rack supplies");
-    } else if (amenity.kind === "bbq") {
-      this.player.scrap += 14;
-      this.loadout = addAmmo(this.loadout, 12);
-      this.flashStatus("Searched BBQ supplies");
-    } else if (amenity.kind === "toilets") {
-      this.player.health = Math.min(100, this.player.health + 14);
-      this.flashStatus("Sheltered at toilets");
-    }
+    const loot = searchAmenityLoot(amenity.kind, this.rng);
+    this.player.scrap += loot.scrap;
+    this.player.health = Math.min(100, this.player.health + loot.health);
+    this.loadout = addAmmo(this.loadout, loot.ammo);
+    this.noise.emit("reload", amenity.position, amenity.kind === "bbq" ? 0.85 : 0.55);
+    this.flashStatus(loot.status);
     this.playTone(520, 0.07, "triangle", 0.045);
     return true;
   }
@@ -867,6 +1071,7 @@ export class GameApp {
       this.player.activeFixtureId = fixture.id;
       this.player.heightTarget = fixture.height;
       this.flashStatus(`Climbed ${fixture.label}`);
+      this.noise.emit("climb", fixture.position);
     }
     this.playTone(420, 0.07, "sine", 0.04);
     return true;
@@ -897,6 +1102,18 @@ export class GameApp {
     this.player.height += (this.player.heightTarget - this.player.height) * t;
     if (Math.abs(this.player.height) < 0.01) {
       this.player.height = 0;
+    }
+  }
+
+  private updateElevatedNoise(dt: number): void {
+    if (this.player.height <= 1.4) {
+      this.elevatedNoiseTimer = 0;
+      return;
+    }
+    this.elevatedNoiseTimer -= dt;
+    if (this.elevatedNoiseTimer <= 0) {
+      this.noise.emit("climb", { x: this.player.position.x, z: this.player.position.z }, 0.7 + Math.min(0.8, this.player.height / 7));
+      this.elevatedNoiseTimer = 1.35;
     }
   }
 
@@ -951,7 +1168,12 @@ export class GameApp {
       return false;
     }
     this.player.position.set(fixture.position.x, this.groundY(fixture.position), fixture.position.z);
-    return this.toggleFixture(fixture);
+    const toggled = this.toggleFixture(fixture);
+    if (toggled && this.player.activeFixtureId === fixture.id) {
+      this.player.heightTarget = fixture.height;
+      this.player.height = fixture.height;
+    }
+    return toggled;
   }
 
   private testUseAmenity(kind?: AmenityPoint["kind"]): boolean {
@@ -988,6 +1210,24 @@ export class GameApp {
     this.player.pitch = previousPitch;
     this.player.height = previousHeight;
     return result;
+  }
+
+  private testSetCrouching(crouching: boolean): boolean {
+    this.testCrouchOverride = crouching;
+    this.player.crouching = crouching;
+    this.player.crouchAmount = crouching ? 1 : 0;
+    this.root.classList.toggle("is-crouched", crouching);
+    return this.player.crouching;
+  }
+
+  private testStartIntermission(): ActiveObjective | null {
+    this.spawnQueue = [];
+    for (const zombie of this.zombies) {
+      this.scene.remove(zombie.mesh);
+    }
+    this.zombies = [];
+    this.wavePhase = "active";
+    return this.startIntermission();
   }
 
   private updateNearestStation(): void {
@@ -1054,7 +1294,18 @@ export class GameApp {
       reloadProgress: Number(this.reloadProgress(performance.now() / 1000).toFixed(2)),
       scope: Number(this.scopeAmount.toFixed(2)),
       fov: Number(this.camera.fov.toFixed(1)),
-      miniMapVisibleZombies: this.miniMapVisibleZombieCount
+      miniMapVisibleZombies: this.miniMapVisibleZombieCount,
+      crouching: this.player.crouching,
+      wavePhase: this.wavePhase,
+      intermissionTimer: Number(this.intermissionTimer.toFixed(2)),
+      objective: this.activeObjective
+        ? {
+            id: this.activeObjective.id,
+            progress: Number(this.activeObjective.progress.toFixed(2)),
+            holdSeconds: this.activeObjective.holdSeconds,
+            completed: this.activeObjective.completed
+          }
+        : null
     };
   }
 
@@ -1087,6 +1338,10 @@ export class GameApp {
       nearestFixture: this.nearestFixture,
       nearestAmenity: this.nearestAmenity,
       nearestStation: this.nearestStation,
+      wavePhase: this.wavePhase,
+      intermissionTimer: this.intermissionTimer,
+      activeObjective: this.activeObjective,
+      isCrouching: this.player.crouching,
       amenityPrompt: (amenity) => this.amenityPrompt(amenity)
     });
   }
@@ -1099,13 +1354,8 @@ export class GameApp {
     this.miniMapVisibleZombieCount = this.miniMap.render({
       playerPosition: { x: this.player.position.x, z: this.player.position.z },
       playerYaw: this.player.yaw,
-      zombies: this.zombies.map((zombie) => ({
-        position: { x: zombie.position.x, z: zombie.position.z },
-        radius: zombie.radius
-      })),
-      weaponDrops: this.weaponDrops.map((drop) => ({
-        position: { x: drop.position.x, z: drop.position.z }
-      })),
+      zombies: this.zombies,
+      weaponDrops: this.weaponDrops,
       isVisible: (point, padding = 0) => this.isPointVisibleToPlayer(point, padding)
     });
   }
@@ -1201,20 +1451,23 @@ export class GameApp {
       this.muzzleLight.visible = this.muzzleTimer > 0;
       this.muzzleLight.intensity = 2.2 + this.rng.next() * 2.8;
     }
-    const bob = Math.min(1, this.player.velocity.length() / 18);
+    const stanceSway = this.player.crouching ? 0.48 : 1;
+    const bob = Math.min(1, this.player.velocity.length() / 18) * stats.sway * stanceSway;
     const t = this.frame * 0.08;
-    const reloadPose = this.loadout.reloadingUntil > performance.now() / 1000 ? 1 : 0;
+    const reloadProgress = this.reloadProgress(performance.now() / 1000);
+    const reloadPose = reloadProgress > 0 ? 0.62 + Math.sin(reloadProgress * Math.PI) * 0.38 : 0;
+    const scopeTuck = THREE.MathUtils.smoothstep(this.scopeAmount, 0, 1);
     this.weaponModel.position.set(
-      Math.sin(t) * 0.018 * bob + this.scopeAmount * 0.18,
-      Math.abs(Math.cos(t)) * -0.018 * bob - reloadPose * 0.16 - this.scopeAmount * 0.36,
-      this.recoil * 0.07 + reloadPose * 0.06 + this.scopeAmount * 0.08
+      Math.sin(t) * 0.018 * bob + scopeTuck * 0.26,
+      Math.abs(Math.cos(t)) * -0.018 * bob - reloadPose * 0.16 - scopeTuck * 0.5 - this.player.crouchAmount * 0.04,
+      this.recoil * 0.07 + reloadPose * 0.06 + scopeTuck * 0.14
     );
     this.weaponModel.rotation.set(
-      this.recoil * 0.05 + reloadPose * 0.22 - this.scopeAmount * 0.04,
-      -this.recoilYaw * 0.01 - reloadPose * 0.12 - this.scopeAmount * 0.18,
-      Math.sin(t * 0.5) * 0.015 * bob + reloadPose * 0.16 - this.scopeAmount * 0.08
+      this.recoil * 0.05 + reloadPose * 0.22 - scopeTuck * 0.08,
+      -this.recoilYaw * 0.01 - reloadPose * 0.12 - scopeTuck * 0.24,
+      Math.sin(t * 0.5) * 0.015 * bob + reloadPose * 0.16 - scopeTuck * 0.12
     );
-    this.weaponModel.scale.setScalar(THREE.MathUtils.lerp(1, 0.72, this.scopeAmount));
+    this.weaponModel.scale.setScalar(THREE.MathUtils.lerp(1, 0.56, scopeTuck));
   }
 
   private spawnShellCasing(): void {
@@ -1288,18 +1541,21 @@ export class GameApp {
   private animateZombie(zombie: Zombie, now: number, distanceToPlayer: number): void {
     const arms = zombie.mesh.userData.arms as THREE.Mesh[] | undefined;
     const head = zombie.mesh.userData.head as THREE.Mesh | undefined;
-    const pace = zombie.type === "sprinter" ? 10 : zombie.type === "bloater" ? 4.2 : 6.8;
+    const pace = zombie.type === "sprinter" ? 10 : zombie.type === "bloater" ? 4.2 : zombie.type === "crawler" ? 5.4 : zombie.type === "screamer" ? 7.6 : 6.8;
     const swing = Math.sin(now * pace + zombie.walkOffset);
     if (arms) {
       arms.forEach((arm, index) => {
         const side = index === 0 ? -1 : 1;
-        arm.rotation.x = -0.95 + swing * 0.18 * side;
-        arm.rotation.z = side * (0.28 + Math.max(0, 12 - distanceToPlayer) * 0.018);
+        const reach = zombie.type === "crawler" ? -1.45 : zombie.type === "screamer" ? -1.16 : -0.95;
+        const aggression = zombie.type === "screamer" ? 0.032 : 0.018;
+        arm.rotation.x = reach + swing * 0.18 * side;
+        arm.rotation.z = side * (0.28 + Math.max(0, 12 - distanceToPlayer) * aggression);
       });
     }
     if (head) {
-      head.rotation.y = Math.sin(now * 2.6 + zombie.walkOffset) * 0.18;
-      head.rotation.z = (zombie.type === "sprinter" ? -0.12 : 0.1) + Math.cos(now * 2.1 + zombie.walkOffset) * 0.08;
+      const baseTilt = zombie.type === "sprinter" ? -0.12 : zombie.type === "crawler" ? -0.26 : zombie.type === "screamer" ? 0.22 : 0.1;
+      head.rotation.y = Math.sin(now * 2.6 + zombie.walkOffset) * (zombie.type === "screamer" ? 0.28 : 0.18);
+      head.rotation.z = baseTilt + Math.cos(now * 2.1 + zombie.walkOffset) * 0.08;
     }
     zombie.mesh.scale.y = 1 + Math.sin(now * pace * 0.5 + zombie.walkOffset) * (zombie.type === "bloater" ? 0.035 : 0.02);
   }

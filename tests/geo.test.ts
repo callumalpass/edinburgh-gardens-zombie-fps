@@ -65,11 +65,17 @@ describe("map geometry", () => {
   it("uses a richer OSM-derived path and amenity network", () => {
     const level = createLevelData();
     const pathIds = new Set(level.paths.map((path) => path.id));
-    expect(level.paths.length).toBeGreaterThan(20);
+    expect(level.paths.length).toBeGreaterThan(30);
     expect(level.paths.filter((path) => path.kind === "rail").length).toBeGreaterThanOrEqual(2);
+    expect(level.paths.filter((path) => path.kind === "service").length).toBeGreaterThanOrEqual(1);
     expect(pathIds.has("rotunda-approach-loop")).toBe(true);
     expect(pathIds.has("osm-plinth-garden-loop")).toBe(true);
+    expect(pathIds.has("osm-22760904-plinth-west-connector")).toBe(true);
+    expect(pathIds.has("osm-22760905-plinth-east-connector")).toBe(true);
+    expect(pathIds.has("osm-75488632-rail-trail-central-cross-link")).toBe(true);
+    expect(pathIds.has("osm-210387722-bowling-service-track")).toBe(true);
     expect(pathIds.has("osm-rotunda-loop")).toBe(false);
+    expect(level.paths.filter((path) => path.source?.startsWith("OpenStreetMap way")).length).toBeGreaterThanOrEqual(9);
     expect(level.amenities.length).toBeGreaterThan(40);
     expect(level.amenities.filter((amenity) => amenity.kind === "drinking_water").length).toBeGreaterThanOrEqual(3);
     expect(level.amenities.filter((amenity) => amenity.kind === "picnic_table").length).toBeGreaterThanOrEqual(4);
