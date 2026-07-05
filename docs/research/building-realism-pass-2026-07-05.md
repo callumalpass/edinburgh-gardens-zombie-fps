@@ -86,6 +86,9 @@ Purpose: track the building-by-building realism pass for every structure current
 - `osm-building-1475006770` / Bowling green shed:
   - Added a long front gutter, hose reel, small tool crate and rear timber storage bench to make the timber shed read as rink maintenance storage.
   - Source basis: OSM way `1475006770` for footprint and timber shed scale; Fitzroy Bowls official site for active greens/BBQ operation; bowling-club precinct context from CMP.
+- `osm-building-1475006771` / Bowling green shed:
+  - Added short guttering, a small timber crate and low rear storage rail so the smallest shed keeps an appropriate lightweight maintenance role.
+  - Source basis: OSM way `1475006771` for footprint and timber shed scale; Fitzroy Bowls official site for active greens/BBQ operation; bowling-club precinct context from CMP.
 
 ## Implementation Notes
 

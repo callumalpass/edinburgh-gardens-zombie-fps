@@ -1204,6 +1204,11 @@ export class WorldBuilder {
         this.addLocalBox(center, rotation, -footprint.halfX * 0.52, frontZ + 0.52, 0.38, 0.44, 0.3, this.materials.timber, 0.3);
         this.addLocalBox(center, rotation, 0, rearZ - 0.26, footprint.halfX * 1.32, 0.3, 0.28, this.materials.timber, 0.34);
       }
+      if (building.id === "osm-building-1475006771") {
+        this.addBuildingGutter(center, rotation, 0, frontZ + 0.02, footprint.halfX * 1.62, building.height);
+        this.addLocalBox(center, rotation, footprint.halfX * 0.54, frontZ + 0.44, 0.34, 0.36, 0.28, this.materials.timber, 0.28);
+        this.addLocalBox(center, rotation, -footprint.halfX * 0.18, rearZ - 0.2, footprint.halfX * 1.02, 0.18, 0.22, this.materials.metal, 0.42);
+      }
     }
   }
 
