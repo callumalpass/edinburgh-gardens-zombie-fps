@@ -45,6 +45,7 @@ const TREE_SCALE_MULTIPLIER = 1.22;
 const GRASS_SAMPLE_STEP = 5.2;
 const GRASS_CLUSTER_LIMIT = 5600;
 const GRASS_PATH_CLEARANCE = 1.25;
+const FLOATING_WORLD_LABELS_ENABLED = false;
 const WORLD_TOON_RAMP = createAnimeToonRamp();
 
 type StyledSurfaceMaterial = THREE.MeshStandardMaterial | THREE.MeshToonMaterial;
@@ -4008,7 +4009,7 @@ export class WorldBuilder {
   }
 
   private addLabel(text: string, position: Vec2, height: number): void {
-    if (this.suppressLabels) {
+    if (!FLOATING_WORLD_LABELS_ENABLED || this.suppressLabels) {
       return;
     }
     const canvas = document.createElement("canvas");

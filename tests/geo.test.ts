@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { clampToPolygon, distance, distanceToSegment, geoToWorld, pointInPolygon, polygonArea, polygonCentroid, WORLD_SCALE } from "../src/game/geo";
+import { pointInRaisedFootprint } from "../src/game/interactables";
 import { createLevelData, PARK_BOUNDARY_GEO } from "../src/game/levelData";
 import {
   AUSTRALIAN_RULES_FULL_GOAL_WIDTH_METRES,
@@ -53,6 +54,26 @@ function pointInsideObstacle(point: { x: number; z: number }, obstacle: ReturnTy
     return Math.abs(localX) < obstacle.halfX + padding && Math.abs(localZ) < obstacle.halfZ + padding;
   }
   return distance(point, obstacle.center) < obstacle.radius + padding;
+}
+
+function boxExtentsFromPolygon(polygon: readonly { x: number; z: number }[]): { halfX: number; halfZ: number; angle: number } {
+  const center = polygonCentroid(polygon);
+  const first = polygon[0];
+  const second = polygon[1] ?? first;
+  const angle = Math.atan2(second.z - first.z, second.x - first.x);
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  let halfX = 0;
+  let halfZ = 0;
+
+  for (const point of polygon) {
+    const dx = point.x - center.x;
+    const dz = point.z - center.z;
+    halfX = Math.max(halfX, Math.abs(dx * cos + dz * sin));
+    halfZ = Math.max(halfZ, Math.abs(-dx * sin + dz * cos));
+  }
+
+  return { halfX, halfZ, angle };
 }
 
 describe("map geometry", () => {
@@ -330,6 +351,65 @@ describe("map geometry", () => {
       expect(frame.accessPosition).toEqual(hoop?.position);
       expect(distance(frame.position, hoop!.position)).toBeLessThan(0.01);
       expect(frame.bypassObstacleIds).toContain(`${hoop!.id}-post`);
+    }
+  });
+
+  it("keeps climbable raised footprints matched to visible platforms", () => {
+    const level = createLevelData();
+    const toggleFixtures = level.interactables.filter((fixture) => fixture.mode === "toggle");
+    expect(toggleFixtures.length).toBeGreaterThanOrEqual(7);
+    for (const fixture of toggleFixtures) {
+      expect(fixture.raisedFootprint, `${fixture.id} is missing a raised footprint`).toBeTruthy();
+      const landing = fixture.landingPosition ?? fixture.position;
+      expect(pointInRaisedFootprint(landing, fixture.raisedFootprint!, 0.05), `${fixture.id} landing is not on its raised footprint`).toBe(true);
+    }
+
+    const rotunda = level.interactables.find((fixture) => fixture.id === "rotunda-deck");
+    expect(rotunda?.raisedFootprint?.shape).toBe("circle");
+    if (rotunda?.raisedFootprint?.shape === "circle") {
+      expect(rotunda.raisedFootprint.radius).toBeCloseTo(5.05, 2);
+    }
+    expect(rotunda?.height).toBeCloseTo(1.86, 2);
+
+    const grandstand = level.interactables.find((fixture) => fixture.id === "grandstand-seats");
+    const grandstandPolygon = level.landmarks.find((landmark) => landmark.id === "grandstand")?.polygon;
+    expect(grandstand?.raisedFootprint?.shape).toBe("box");
+    expect(grandstandPolygon).toBeTruthy();
+    if (grandstand?.raisedFootprint?.shape === "box" && grandstandPolygon) {
+      const visible = boxExtentsFromPolygon(grandstandPolygon);
+      expect(grandstand.raisedFootprint.halfX).toBeCloseTo(visible.halfX + 0.8, 2);
+      expect(grandstand.raisedFootprint.halfZ).toBeCloseTo(visible.halfZ + 0.45, 2);
+    }
+    expect(grandstand?.height).toBeCloseTo(2.55, 2);
+
+    for (const fixtureId of ["north-playground-tower", "south-playground-tower"]) {
+      const fixture = level.interactables.find((candidate) => candidate.id === fixtureId);
+      expect(fixture?.raisedFootprint?.shape).toBe("box");
+      if (fixture?.raisedFootprint?.shape === "box") {
+        expect(fixture.raisedFootprint.halfX).toBeCloseTo(2.6, 2);
+        expect(fixture.raisedFootprint.halfZ).toBeCloseTo(2.3, 2);
+      }
+      expect(fixture?.radius).toBeLessThan(4);
+      expect(fixture?.accessPosition).toBeTruthy();
+    }
+
+    const southRoof = level.interactables.find((fixture) => fixture.id === "south-toilets-roof");
+    const southBuilding = level.mappedBuildings.find((building) => building.id === "osm-building-242003562");
+    expect(southRoof?.raisedFootprint?.shape).toBe("box");
+    expect(southBuilding).toBeTruthy();
+    if (southRoof?.raisedFootprint?.shape === "box" && southBuilding) {
+      const visible = boxExtentsFromPolygon(southBuilding.polygon);
+      expect(southRoof.raisedFootprint.halfX).toBeCloseTo(visible.halfX + 0.18, 2);
+      expect(southRoof.raisedFootprint.halfZ).toBeCloseTo(visible.halfZ + 0.18, 2);
+    }
+    expect(southRoof?.height).toBeCloseTo(3.58, 2);
+
+    for (const frame of level.interactables.filter((fixture) => fixture.kind === "basketball")) {
+      expect(frame.raisedFootprint?.shape).toBe("circle");
+      if (frame.raisedFootprint?.shape === "circle") {
+        expect(frame.raisedFootprint.radius).toBeLessThan(1.2);
+      }
+      expect(frame.radius).toBeLessThan(1.5);
     }
   });
 

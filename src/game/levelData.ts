@@ -26,6 +26,7 @@ import type {
   CollisionSourceRef,
   GeoPoint,
   HardscapeLine,
+  InteractableRaisedFootprint,
   Landmark,
   LevelData,
   LevelPath,
@@ -86,6 +87,20 @@ const footprintFromPolygon = (polygon: readonly Vec2[]): { center: Vec2; halfX: 
 
   return { center, halfX, halfZ, angle };
 };
+
+const raisedCircle = (center: Vec2, radius: number): InteractableRaisedFootprint => ({
+  shape: "circle",
+  center,
+  radius
+});
+
+const raisedBox = (center: Vec2, halfX: number, halfZ: number, angle: number): InteractableRaisedFootprint => ({
+  shape: "box",
+  center,
+  halfX,
+  halfZ,
+  angle
+});
 
 const polygonEdgePointFromLocal = (
   polygon: readonly Vec2[],
@@ -2870,8 +2885,12 @@ export function createLevelData(): LevelData {
   const cookMemorial = geoToWorld(g(-37.7873520, 144.9855420));
   const sportsmansMemorial = geoToWorld(g(-37.78754, 144.98066));
   const southToilets = southAmenitiesFootprint.center;
-  const southToiletsRoofRadius = Math.max(8, boundingRadius(southAmenitiesBuilding, southToilets) + 1.2);
-  const northToiletsRoofRadius = Math.max(8, boundingRadius(northToilets, northToiletsCenter) + 1.2);
+  const southToiletsRoofFootprint = raisedBox(southToilets, southAmenitiesFootprint.halfX + 0.18, southAmenitiesFootprint.halfZ + 0.18, southAmenitiesFootprint.angle);
+  const northToiletsRenderHalfX = Math.max(2.7, northToiletsFootprint.halfX + 0.12) + 0.35;
+  const northToiletsRenderHalfZ = Math.max(2.3, northToiletsFootprint.halfZ + 0.12) + 0.35;
+  const northToiletsRoofFootprint = raisedBox(northToiletsCenter, northToiletsRenderHalfX, northToiletsRenderHalfZ, northToiletsFootprint.angle);
+  const southToiletsRoofRadius = Math.hypot(southAmenitiesFootprint.halfX, southAmenitiesFootprint.halfZ) + 0.45;
+  const northToiletsRoofRadius = Math.hypot(northToiletsRenderHalfX, northToiletsRenderHalfZ);
   const rotundaStairAccess = offsetPoint(rotundaCenter, -0.34, 0, -7.25);
   const rotundaStairLanding = offsetPoint(rotundaCenter, -0.34, 0, -3.45);
   const southToiletsLadderAccess = polygonEdgePointFromLocal(
@@ -2923,6 +2942,9 @@ export function createLevelData(): LevelData {
     halfZ: Math.abs(grandstandStairAccessLocal.z - grandstandStairLandingLocal.z) * 0.5 + 0.55
   };
   const grandstandDeckRadius = Math.max(12, boundingRadius(grandstand, grandstandCenter) + 1.2);
+  const grandstandRaisedFootprint = raisedBox(grandstandCenter, grandstandFootprint.halfX + 0.8, grandstandFootprint.halfZ + 0.45, grandstandFootprint.angle);
+  const playgroundRaisedFootprint = (center: Vec2) => raisedBox(center, 2.6, 2.3, 0);
+  const playgroundAccess = (center: Vec2) => ({ x: center.x, z: center.z + 5.2 });
   const ovalMinZ = Math.min(...oval.map((point) => point.z));
   const ovalMaxZ = Math.max(...oval.map((point) => point.z));
   const sportsFixtures: SportsFixture[] = [
@@ -3622,7 +3644,8 @@ export function createLevelData(): LevelData {
         accessKind: "stairs",
         accessHeading: -0.34,
         radius: 5.8,
-        height: 1.95,
+        height: 1.86,
+        raisedFootprint: raisedCircle(rotundaCenter, 5.05),
         prompt: "E: climb rotunda stairs",
         mode: "toggle",
         bypassObstacleIds: ["osm-building-543505640"]
@@ -3639,7 +3662,8 @@ export function createLevelData(): LevelData {
         accessKind: "stairs",
         accessHeading: grandstandStairHeading,
         radius: grandstandDeckRadius,
-        height: 3.15,
+        height: 2.55,
+        raisedFootprint: grandstandRaisedFootprint,
         prompt: "E: climb stand stairs",
         mode: "toggle",
         bypassObstacleIds: ["grandstand"]
@@ -3649,9 +3673,14 @@ export function createLevelData(): LevelData {
         label: "North playground tower",
         kind: "playground",
         position: northPlaygroundCenter,
+        accessPosition: playgroundAccess(northPlaygroundCenter),
+        landingPosition: northPlaygroundCenter,
+        exitPosition: playgroundAccess(northPlaygroundCenter),
+        accessRadius: 3.2,
         accessKind: "play-structure",
-        radius: 9,
+        radius: 3.5,
         height: 2.35,
+        raisedFootprint: playgroundRaisedFootprint(northPlaygroundCenter),
         prompt: "E: climb the playground tower",
         mode: "toggle",
         bypassObstacleIds: ["north-playground"]
@@ -3661,9 +3690,14 @@ export function createLevelData(): LevelData {
         label: "South playground tower",
         kind: "playground",
         position: southPlaygroundCenter,
+        accessPosition: playgroundAccess(southPlaygroundCenter),
+        landingPosition: southPlaygroundCenter,
+        exitPosition: playgroundAccess(southPlaygroundCenter),
+        accessRadius: 3.2,
         accessKind: "play-structure",
-        radius: 9,
+        radius: 3.5,
         height: 2.35,
+        raisedFootprint: playgroundRaisedFootprint(southPlaygroundCenter),
         prompt: "E: climb the playground tower",
         mode: "toggle",
         bypassObstacleIds: ["south-playground"]
@@ -3679,7 +3713,8 @@ export function createLevelData(): LevelData {
         accessRadius: 4.2,
         accessKind: "ladder",
         radius: southToiletsRoofRadius,
-        height: 3.25,
+        height: 3.58,
+        raisedFootprint: southToiletsRoofFootprint,
         prompt: "E: climb service ladder",
         mode: "toggle",
         bypassObstacleIds: ["osm-building-242003562"]
@@ -3695,29 +3730,34 @@ export function createLevelData(): LevelData {
         accessRadius: 4.2,
         accessKind: "ladder",
         radius: northToiletsRoofRadius,
-        height: 3.25,
+        height: 3.55,
+        raisedFootprint: northToiletsRoofFootprint,
         prompt: "E: climb service ladder",
         mode: "toggle",
         bypassObstacleIds: ["north-toilets"]
       },
       ...sportsFixtures
         .filter((fixture) => fixture.kind === "basketball-hoop")
-        .map((fixture) => ({
-          id: `${fixture.id}-frame`,
-          label: `${fixture.label} frame`,
-          kind: "basketball" as const,
-          position: fixture.position,
-          accessPosition: fixture.position,
-          landingPosition: offsetPoint(fixture.position, fixture.angle, 0, 0.85),
-          exitPosition: fixture.position,
-          accessRadius: 3.4,
-          accessKind: "frame" as const,
-          radius: 4.2,
-          height: 2.55,
-          prompt: "E: climb the hoop frame",
-          mode: "toggle" as const,
-          bypassObstacleIds: [`${fixture.id}-post`]
-        })),
+        .map((fixture) => {
+          const landingPosition = offsetPoint(fixture.position, fixture.angle, 0, 0.85);
+          return {
+            id: `${fixture.id}-frame`,
+            label: `${fixture.label} frame`,
+            kind: "basketball" as const,
+            position: fixture.position,
+            accessPosition: fixture.position,
+            landingPosition,
+            exitPosition: fixture.position,
+            accessRadius: 3.4,
+            accessKind: "frame" as const,
+            radius: 1.35,
+            height: 2.55,
+            raisedFootprint: raisedCircle(landingPosition, 1.05),
+            prompt: "E: climb the hoop frame",
+            mode: "toggle" as const,
+            bypassObstacleIds: [`${fixture.id}-post`]
+          };
+        }),
       {
         id: "skate-ramp",
         label: "Skate ramp lip",

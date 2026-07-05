@@ -1,4 +1,5 @@
 import { distance, distanceToSegment, nearestPointOnSegment, pointInPolygon } from "./geo";
+import { pointInInteractableRaisedFootprint } from "./interactables";
 import type { CollisionObstacle, InteractableFixture, Vec2 } from "./types";
 
 export interface ObstacleBypassContext {
@@ -104,12 +105,12 @@ function pointWithinBoxAccessGap(localX: number, localZ: number, radius: number,
 
 export function shouldBypassObstacle(obstacleId: string, point: Vec2, context: ObstacleBypassContext): boolean {
   const active = context.interactables.find((fixture) => fixture.id === context.activeFixtureId);
-  if (active && fixtureCanBypass(active, obstacleId) && distance(point, active.position) <= active.radius + 5) {
+  if (active && fixtureCanBypass(active, obstacleId) && pointInInteractableRaisedFootprint(point, active, 1.2)) {
     return true;
   }
 
   return context.interactables.some(
-    (fixture) => fixture.mode === "auto" && fixtureCanBypass(fixture, obstacleId) && distance(point, fixture.position) <= fixture.radius
+    (fixture) => fixture.mode === "auto" && fixtureCanBypass(fixture, obstacleId) && pointInInteractableRaisedFootprint(point, fixture, 0.8)
   );
 }
 

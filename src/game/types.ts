@@ -228,6 +228,20 @@ export interface UpgradeStation {
   upgradeId: "damage" | "fireRate" | "magazine" | "reload" | "spread";
 }
 
+export type InteractableRaisedFootprint =
+  | {
+      shape: "circle";
+      center: Vec2;
+      radius: number;
+    }
+  | {
+      shape: "box";
+      center: Vec2;
+      halfX: number;
+      halfZ: number;
+      angle: number;
+    };
+
 export interface InteractableFixture {
   id: string;
   label: string;
@@ -241,6 +255,7 @@ export interface InteractableFixture {
   accessHeading?: number;
   radius: number;
   height: number;
+  raisedFootprint?: InteractableRaisedFootprint;
   prompt: string;
   mode: "toggle" | "auto";
   bypassObstacleIds?: string[];

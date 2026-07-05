@@ -19,6 +19,7 @@ import {
 } from "./weapons";
 import { resolveObstacle, shouldBypassObstacle as shouldBypassCollisionObstacle } from "./collision";
 import { clampToPolygon, distance, distanceToSegment, polygonCentroid } from "./geo";
+import { pointInInteractableRaisedFootprint } from "./interactables";
 import { createLevelData } from "./levelData";
 import { chooseZombiePickup, chooseZombieWeaponDrop, searchAmenityLoot } from "./loot";
 import { GameAudio, type NoisePlaybackOptions } from "./audio";
@@ -1433,6 +1434,13 @@ export class GameApp {
     const playerPoint = { x: this.player.position.x, z: this.player.position.z };
     for (const fixture of this.level.interactables.filter((candidate) => candidate.mode === "toggle")) {
       const active = this.player.activeFixtureId === fixture.id;
+      if (active) {
+        if (pointInInteractableRaisedFootprint(playerPoint, fixture, 2.2)) {
+          nearest = fixture;
+          nearestDistance = 0;
+        }
+        continue;
+      }
       const interactionPoint = active ? fixture.position : fixture.accessPosition ?? fixture.position;
       const reach = active ? fixture.radius + 3 : fixture.accessRadius ?? fixture.radius + 3;
       const fixtureDistance = distance(playerPoint, interactionPoint);
@@ -1478,8 +1486,7 @@ export class GameApp {
     const active = this.level.interactables.find((fixture) => fixture.id === this.player.activeFixtureId);
 
     if (active) {
-      const activeDistance = distance(playerPoint, active.position);
-      if (activeDistance <= active.radius + 5) {
+      if (pointInInteractableRaisedFootprint(playerPoint, active, 1.2)) {
         target = Math.max(target, active.height);
       } else {
         this.player.activeFixtureId = null;
@@ -1487,7 +1494,7 @@ export class GameApp {
     }
 
     for (const fixture of this.level.interactables.filter((candidate) => candidate.mode === "auto")) {
-      if (distance(playerPoint, fixture.position) <= fixture.radius) {
+      if (pointInInteractableRaisedFootprint(playerPoint, fixture, 0.8)) {
         target = Math.max(target, fixture.height);
       }
     }
