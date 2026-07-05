@@ -271,6 +271,18 @@
       "sourceIds": ["yarra-edinburgh-gardens", "yarra-northern-precinct", "yarra-brunswick-street-oval", "overpass-api"]
     },
     {
+      "id": "full-object-placement-audit",
+      "path": "docs/research/full-object-placement-audit-2026-07-05.md",
+      "sourceIds": [
+        "osm-map-bbox",
+        "osm-park-boundary",
+        "osm-way-api",
+        "yarra-edinburgh-gardens",
+        "yarra-northern-precinct",
+        "edinburgh-gardens-cmp"
+      ]
+    },
+    {
       "id": "data-pipeline-automation",
       "path": "docs/research/data-pipeline-automation-2026-07-05.md",
       "sourceIds": [

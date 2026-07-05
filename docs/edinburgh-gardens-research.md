@@ -24,7 +24,10 @@ These notes record the real-world sources and implementation decisions used to s
   - `543505639` Fitzroy Victoria Bowling Club rooms
   - `242003562` south service/amenities building
   - `543505638`, `543505640`, `1475006767` to `1475006773` smaller park and sports-club buildings
+  - `655160878` raingarden covered reservoir
+  - `715802679` tennis-side storage tank
   - `715802680` mapped fence segment
+  - Node `249041533` cricket nets
 - Vicmap Elevation REST API metadata: https://discover.data.vic.gov.au/dataset/vicmap-elevation-rest-api
   - Used to identify the open metro 1-5 m contour and ground-surface point FeatureServer.
 - Vicmap Elevation metro 1-5 m FeatureServer: https://services-ap1.arcgis.com/P744lA0wf4LlBZ84/ArcGIS/rest/services/Vicmap_Elevation_METRO_1_to_5_metre/FeatureServer
@@ -62,6 +65,7 @@ These notes record the real-world sources and implementation decisions used to s
   - Buildings already inside tennis/bowls fenced precincts render visually but avoid duplicate collision blockers.
 - Paths, amenities, mapped buildings, trees, fixtures, memorials, entrances and pickups are placed relative to interpolated terrain height.
 - Existing OSM-derived paths, amenities, sports facilities, memorials and park landmarks remain in `src/game/levelData.ts`; broad non-significant tree placement now comes primarily from Vicmap Vegetation Tree Urban.
+- The full-object placement audit added the OSM raingarden reservoir, tennis-side storage tank and cricket-nets cue, then aligned playground, skate and basketball climb/blocker metadata with visible objects.
 - Tree placement refresh research is stored in `docs/research/tree-placement-refresh-2026-07-05.md`.
 - Detailed OSM path/service research is stored in `docs/research/osm-path-service-inventory-2026-07-05.md`.
 - Hardscape and terrain-edge research is stored in `docs/research/hardscape-terrain-edges-2026-07-05.md`.
@@ -77,6 +81,7 @@ These notes record the real-world sources and implementation decisions used to s
 - Building affordance realism research is stored in `docs/research/building-affordance-realism-2026-07-05.md`.
 - Tree source refresh research is stored in `docs/research/tree-source-refresh-2026-07-05.md`.
 - Human-use traces research is stored in `docs/research/human-use-traces-2026-07-05.md`.
+- Full object placement audit research is stored in `docs/research/full-object-placement-audit-2026-07-05.md`.
 - Local raw research asset guidance is stored in `docs/research/raw-assets.md`.
 - Research/data pipeline automation is stored in `docs/research/data-pipeline-automation-2026-07-05.md` and `docs/research/research-manifest.json`.
 

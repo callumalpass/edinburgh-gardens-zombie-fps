@@ -86,6 +86,7 @@ export const RESEARCH_NOTES = [
   "A 2026-07-05 tree refresh added Vicmap Vegetation Tree Urban points for missing non-significant trees around the Queen Victoria plinth and broader lawns, removed synthetic avenue sample trunks and suppresses current tennis-works tree removals.",
   "Street edges now use a bounded OSM road query for Alfred Crescent, Freeman Street, Brunswick Street and St Georges Road, including trunk-road tram cues.",
   "Small park-life details are stored as sourceable level data so picnic, dog-area, cycling and sports-use cues remain separate from collision and amenity loot data.",
+  "A 2026-07-05 full-object placement audit checked the current OSM bounded extract against all visible, blocking and climbable object families; missing raingarden, storage-tank and cricket-net cues were added and climb blockers now have matching visible structures.",
   "Micro-terrain modifiers now layer path crowns, worn shoulders, root mounds, oval banking and drainage swales over the broad Vicmap elevation interpolation.",
   "Path surface transition patches now derive feathered edges and compacted junctions from mapped paths, with a small set of researched desire paths through high-use lawns.",
   "See docs/edinburgh-gardens-research.md for source URLs, query notes, data licensing notes and implementation decisions."
@@ -347,6 +348,14 @@ const BASKETBALL_GEO = [
   g(-37.7878925, 144.9837663),
   g(-37.7881420, 144.9837211),
   g(-37.7881227, 144.9835511)
+];
+
+const RAINGARDEN_RESERVOIR_GEO = [
+  g(-37.7874654, 144.9833932),
+  g(-37.7876804, 144.9833565),
+  g(-37.7876634, 144.9831974),
+  g(-37.7874484, 144.9832341),
+  g(-37.7874654, 144.9833932)
 ];
 
 const NORTH_TOILETS_GEO = [
@@ -1786,6 +1795,27 @@ const OSM_BUILDING_FOOTPRINTS_GEO: Array<{
     ]
   },
   {
+    id: "osm-man-made-715802679",
+    label: "Tennis-side storage tank",
+    height: 1.7,
+    material: "utility",
+    source: "OSM way 715802679 man_made=storage_tank; current full-object placement audit",
+    collision: false,
+    points: [
+      g(-37.7880689, 144.9816485),
+      g(-37.7880747, 144.9816588),
+      g(-37.7880745, 144.9816715),
+      g(-37.7880685, 144.9816816),
+      g(-37.7880590, 144.9816853),
+      g(-37.7880495, 144.9816812),
+      g(-37.7880438, 144.9816709),
+      g(-37.7880439, 144.9816582),
+      g(-37.7880499, 144.9816481),
+      g(-37.7880595, 144.9816444),
+      g(-37.7880689, 144.9816485)
+    ]
+  },
+  {
     id: "osm-building-543505638",
     label: "Oval gatehouse",
     height: 2.7,
@@ -2682,6 +2712,14 @@ export function createLevelData(): LevelData {
       source: "Yarra northern precinct consultation: picnic and BBQ activity context"
     },
     {
+      id: "oval-cricket-nets",
+      label: "Oval cricket nets",
+      kind: "cricket-nets",
+      position: geoToWorld(g(-37.7896906, 144.9819917)),
+      angle: -0.18,
+      source: "OpenStreetMap node 249041533 sport=cricket_nets; W.T. Peterson Oval sports context"
+    },
+    {
       id: "rail-trail-casual-bike",
       label: "Bike beside Inner Circle Rail Trail",
       kind: "casual-bike",
@@ -2923,6 +2961,12 @@ export function createLevelData(): LevelData {
     { id: "north-playground", label: "North playground", kind: "playground", polygon: northPlayground },
     { id: "skate", label: "Fitzroy Skatepark", kind: "skate", polygon: skate },
     { id: "basketball", label: "Basketball court", kind: "basketball", polygon: basketball },
+    {
+      id: "raingarden-reservoir",
+      label: "Edinburgh Gardens Raingarden Reservoir",
+      kind: "garden",
+      polygon: polygonFromGeo(RAINGARDEN_RESERVOIR_GEO)
+    },
     { id: "north-toilets", label: "North toilets", kind: "toilets", polygon: northToilets },
     { id: "south-toilets", label: "South toilets", kind: "toilets", position: southToilets, radius: 4.5 },
     { id: "south-bbq", label: "South BBQ", kind: "bbq", position: southBbq, radius: 3.5 },
@@ -3105,6 +3149,9 @@ export function createLevelData(): LevelData {
       boxObstacleFromPolygon("north-toilets", "North toilets", northToilets, 0.6, 0.6),
       { id: "south-toilets", label: "South toilets", center: southToilets, radius: 3.2 },
       { id: "rotunda-core", label: "Fitzroy Memorial Rotunda centre", center: rotundaCenter, radius: 1.6 },
+      { id: "north-playground", label: "North playground tower", center: northPlaygroundCenter, radius: 3.6, blocksSight: false },
+      { id: "south-playground", label: "South playground tower", center: southPlaygroundCenter, radius: 3.6, blocksSight: false },
+      { ...polygonObstacleFromPolygon("skate", "Fitzroy Skatepark ramps", skate), blocksSight: false },
       ...mappedBuildings
         .filter((building) => building.collision)
         .map((building) => polygonObstacleFromPolygon(building.id, building.label, building.polygon)),
@@ -3232,17 +3279,24 @@ export function createLevelData(): LevelData {
         mode: "toggle",
         bypassObstacleIds: ["north-toilets"]
       },
-      {
-        id: "basketball-hoop",
-        label: "Basketball hoop frame",
-        kind: "basketball",
-        position: { x: basketballCenter.x + 7.2, z: basketballCenter.z },
-        accessKind: "frame",
-        radius: 5.5,
-        height: 2.55,
-        prompt: "E: climb the hoop frame",
-        mode: "toggle"
-      },
+      ...sportsFixtures
+        .filter((fixture) => fixture.kind === "basketball-hoop")
+        .map((fixture) => ({
+          id: `${fixture.id}-frame`,
+          label: `${fixture.label} frame`,
+          kind: "basketball" as const,
+          position: fixture.position,
+          accessPosition: fixture.position,
+          landingPosition: offsetPoint(fixture.position, fixture.angle, 0, 0.85),
+          exitPosition: fixture.position,
+          accessRadius: 3.4,
+          accessKind: "frame" as const,
+          radius: 4.2,
+          height: 2.55,
+          prompt: "E: climb the hoop frame",
+          mode: "toggle" as const,
+          bypassObstacleIds: [`${fixture.id}-post`]
+        })),
       {
         id: "skate-ramp",
         label: "Skate ramp lip",

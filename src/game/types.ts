@@ -251,7 +251,8 @@ export interface ParkLifeDetail {
     | "dog-water-bowl"
     | "picnic-cooler"
     | "sports-bag"
-    | "chalk-mark";
+    | "chalk-mark"
+    | "cricket-nets";
   position: Vec2;
   angle: number;
   source?: string;

@@ -642,6 +642,11 @@ export class WorldBuilder {
 
   private addGardenZone(landmark: Landmark): void {
     if (!landmark.polygon) return;
+    if (landmark.id === "raingarden-reservoir") {
+      this.addFlatPolygon(landmark.polygon, this.materials.puddle, 0.072, 0.42);
+      this.addFeatureOutline(landmark.polygon, 0x6f9288, 0.5);
+      return;
+    }
     this.addFlatPolygon(landmark.polygon, this.materials.wornGrass, 0.064, landmark.id === "north-activity-precinct" ? 0.2 : 0.32);
     this.addFeatureOutline(landmark.polygon, 0xb7c99a, 0.32);
     if (landmark.id === "alfred-crescent-open-lawn") {
@@ -1774,6 +1779,8 @@ export class WorldBuilder {
         this.addPicnicCooler(detail);
       } else if (detail.kind === "sports-bag") {
         this.addSportsBag(detail);
+      } else if (detail.kind === "cricket-nets") {
+        this.addCricketNets(detail);
       } else {
         this.addChalkMark(detail);
       }
@@ -1928,6 +1935,43 @@ export class WorldBuilder {
       group.add(strap);
     }
     group.position.set(detail.position.x, this.boxSupportY(detail.position, detail.angle, 0.65, 0.32), detail.position.z);
+    group.rotation.y = detail.angle;
+    this.scene.add(group);
+  }
+
+  private addCricketNets(detail: ParkLifeDetail): void {
+    const group = new THREE.Group();
+    const netMaterial = new THREE.MeshBasicMaterial({ color: 0xc9d4c6, transparent: true, opacity: 0.42, side: THREE.DoubleSide });
+    const frameMaterial = this.materials.metal;
+    const width = 3.2;
+    const length = 8.5;
+    const height = 2.45;
+
+    for (const x of [-width * 0.5, width * 0.5]) {
+      for (const z of [-length * 0.5, length * 0.5]) {
+        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.055, height, 8), frameMaterial);
+        post.position.set(x, height * 0.5, z);
+        post.castShadow = true;
+        group.add(post);
+      }
+    }
+
+    for (const x of [-width * 0.5, width * 0.5]) {
+      const side = new THREE.Mesh(new THREE.BoxGeometry(0.03, height, length), netMaterial);
+      side.position.set(x, height * 0.5, 0);
+      group.add(side);
+    }
+    const rear = new THREE.Mesh(new THREE.BoxGeometry(width, height, 0.03), netMaterial);
+    rear.position.set(0, height * 0.5, length * 0.5);
+    group.add(rear);
+
+    const mat = new THREE.MeshStandardMaterial({ color: 0x7a725f, roughness: 0.92 });
+    const pitch = new THREE.Mesh(new THREE.BoxGeometry(width * 0.55, 0.05, length * 0.74), mat);
+    pitch.position.y = 0.035;
+    pitch.receiveShadow = true;
+    group.add(pitch);
+
+    group.position.set(detail.position.x, this.boxSupportY(detail.position, detail.angle, width * 0.5, length * 0.5), detail.position.z);
     group.rotation.y = detail.angle;
     this.scene.add(group);
   }

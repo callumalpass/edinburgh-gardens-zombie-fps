@@ -172,6 +172,7 @@ describe("map geometry", () => {
     expect(level.mappedBuildings.length).toBeGreaterThanOrEqual(12);
     expect(buildingIds.has("osm-building-543505702")).toBe(true);
     expect(buildingIds.has("osm-building-242003562")).toBe(true);
+    expect(buildingIds.has("osm-man-made-715802679")).toBe(true);
     const expectedProfiles: Array<NonNullable<MappedBuilding["detailProfile"]>> = ["tennis-pavilion", "bowling-club", "gatehouse", "community-centre", "amenities"];
     for (const profile of expectedProfiles) {
       expect(profiles.has(profile)).toBe(true);
@@ -254,6 +255,18 @@ describe("map geometry", () => {
     const roofFixtures = level.interactables.filter((fixture) => fixture.kind === "toilets" && fixture.id.endsWith("-roof"));
     expect(roofFixtures.length).toBeGreaterThanOrEqual(2);
     expect(roofFixtures.every((fixture) => fixture.accessPosition && fixture.landingPosition && fixture.accessKind === "ladder" && fixture.prompt.includes("ladder"))).toBe(true);
+
+    const basketballFrames = level.interactables.filter((fixture) => fixture.kind === "basketball" && fixture.id.endsWith("-frame"));
+    const basketballHoops = level.sportsFixtures.filter((fixture) => fixture.kind === "basketball-hoop");
+    expect(basketballFrames.length).toBe(basketballHoops.length);
+    for (const frame of basketballFrames) {
+      const hoop = basketballHoops.find((fixture) => frame.id === `${fixture.id}-frame`);
+      expect(hoop).toBeTruthy();
+      expect(frame.accessKind).toBe("frame");
+      expect(frame.accessPosition).toEqual(hoop?.position);
+      expect(distance(frame.position, hoop!.position)).toBeLessThan(0.01);
+      expect(frame.bypassObstacleIds).toContain(`${hoop!.id}-post`);
+    }
   });
 
   it("uses a richer OSM-derived path and amenity network", () => {
@@ -280,12 +293,12 @@ describe("map geometry", () => {
   it("models open lawns and park feature precincts as accessible landmarks", () => {
     const level = createLevelData();
     const landmarkIds = new Set(level.landmarks.map((landmark) => landmark.id));
-    for (const id of ["north-open-lawn", "north-activity-precinct", "alfred-crescent-open-lawn", "south-picnic-lawn"]) {
+    for (const id of ["north-open-lawn", "north-activity-precinct", "alfred-crescent-open-lawn", "south-picnic-lawn", "raingarden-reservoir"]) {
       expect(landmarkIds.has(id)).toBe(true);
     }
 
     const gardenLandmarks = level.landmarks.filter((landmark) => landmark.kind === "garden" && landmark.id !== "park");
-    expect(gardenLandmarks.length).toBeGreaterThanOrEqual(4);
+    expect(gardenLandmarks.length).toBeGreaterThanOrEqual(5);
     for (const landmark of gardenLandmarks) {
       expect(landmark.polygon).toBeDefined();
       if (!landmark.polygon) {
@@ -311,10 +324,10 @@ describe("map geometry", () => {
   it("keeps park-life details sourceable and non-colliding", () => {
     const level = createLevelData();
     const detailKinds = new Set(level.parkLifeDetails.map((detail) => detail.kind));
-    for (const kind of ["dog-sign", "picnic-blanket", "notice-board", "casual-bike", "training-cones", "dog-water-bowl", "picnic-cooler", "sports-bag", "chalk-mark"] as const) {
+    for (const kind of ["dog-sign", "picnic-blanket", "notice-board", "casual-bike", "training-cones", "dog-water-bowl", "picnic-cooler", "sports-bag", "chalk-mark", "cricket-nets"] as const) {
       expect(detailKinds.has(kind)).toBe(true);
     }
-    expect(level.parkLifeDetails.length).toBeGreaterThanOrEqual(17);
+    expect(level.parkLifeDetails.length).toBeGreaterThanOrEqual(18);
     expect(level.parkLifeDetails.every((detail) => detail.source && pointInPolygon(detail.position, level.boundary))).toBe(true);
     const obstacleIds = new Set(level.obstacles.map((obstacle) => obstacle.id));
     expect(level.parkLifeDetails.some((detail) => obstacleIds.has(detail.id))).toBe(false);
@@ -338,9 +351,17 @@ describe("map geometry", () => {
     expect(obstacleIds.has("bowling")).toBe(true);
     expect(level.obstacles.find((obstacle) => obstacle.id === "tennis")?.shape).toBe("polygon");
     expect(level.obstacles.find((obstacle) => obstacle.id === "bowling")?.shape).toBe("polygon");
-    expect(obstacleIds.has("south-playground")).toBe(false);
-    expect(obstacleIds.has("north-playground")).toBe(false);
-    expect(obstacleIds.has("skate")).toBe(false);
+    expect(obstacleIds.has("south-playground")).toBe(true);
+    expect(obstacleIds.has("north-playground")).toBe(true);
+    expect(obstacleIds.has("skate")).toBe(true);
+    expect(level.obstacles.find((obstacle) => obstacle.id === "south-playground")?.blocksSight).toBe(false);
+    expect(level.obstacles.find((obstacle) => obstacle.id === "north-playground")?.blocksSight).toBe(false);
+    expect(level.obstacles.find((obstacle) => obstacle.id === "skate")?.blocksSight).toBe(false);
+    for (const fixture of level.interactables) {
+      for (const obstacleId of fixture.bypassObstacleIds ?? []) {
+        expect(obstacleIds.has(obstacleId)).toBe(true);
+      }
+    }
     const rotundaCore = level.obstacles.find((obstacle) => obstacle.id === "rotunda-core");
     expect(rotundaCore?.shape ?? "circle").toBe("circle");
     if (rotundaCore?.shape === "box" || rotundaCore?.shape === "polygon") {
