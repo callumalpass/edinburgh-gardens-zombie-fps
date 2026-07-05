@@ -1,14 +1,18 @@
 import * as THREE from "three";
 import { distance, geoToWorld, makeCircle, pointInPolygon, polygonCentroid } from "../geo";
 import { AUSTRALIAN_RULES_BEHIND_POST_HEIGHT_METRES, footballPostLocalOffsets } from "../sportsFixtures";
-import type { HardscapeLine, LevelData, LevelPath, Landmark, MappedBuilding, RandomSource, SignificantTreePoint, SportsFixture, Vec2 } from "../types";
+import type { HardscapeLine, LevelData, LevelPath, Landmark, MappedBuilding, MappedTree, RandomSource, SportsFixture, TreeProfile, Vec2 } from "../types";
 
 const COLLISION_Y = 0.04;
 const TERRAIN_GRID_STEP = 7.5;
 const TERRAIN_EDGE_PAD = 9;
 const TREE_SCALE_MULTIPLIER = 1.22;
 
-type TreeProfile = "elm" | "gum" | "oak" | "generic";
+interface TreeMaterialSet {
+  trunk: THREE.MeshStandardMaterial;
+  leaf: THREE.MeshStandardMaterial;
+  paleBark: THREE.MeshStandardMaterial;
+}
 
 export interface GameMaterials {
   grass: THREE.MeshStandardMaterial;
@@ -36,6 +40,12 @@ export interface GameMaterials {
 
 export class WorldBuilder {
   private renderedTreeCount = 0;
+  private readonly treeMaterialCache = new Map<string, TreeMaterialSet>();
+  private readonly treeTrunkGeometry = new THREE.CylinderGeometry(0.72, 1, 1, 8);
+  private readonly treeBranchGeometry = new THREE.CylinderGeometry(0.55, 1, 1, 6);
+  private readonly treeRootGeometry = new THREE.BoxGeometry(1, 1, 1);
+  private readonly treeCanopyGeometry = new THREE.IcosahedronGeometry(1, 2);
+  private readonly treePaleBarkGeometry = new THREE.CylinderGeometry(0.74, 0.88, 1, 8);
 
   constructor(
     private readonly scene: THREE.Scene,
@@ -2004,69 +2014,21 @@ export class WorldBuilder {
 
   private addTrees(): void {
     this.renderedTreeCount = 0;
-    const placed: Vec2[] = [];
-
-    this.level.significantTrees
-      .filter((tree) => pointInPolygon(tree.position, this.level.boundary))
-      .forEach((tree, index) => {
-        this.addSignificantTree(tree, index);
-        placed.push(tree.position);
-        this.renderedTreeCount += 1;
-      });
-
-    this.level.treePoints.filter((point) => pointInPolygon(point, this.level.boundary)).forEach((point, index) => {
-      if (this.isNearExistingTree(point, placed, 3.5)) {
+    this.level.trees.forEach((tree, index) => {
+      if (!pointInPolygon(tree.position, this.level.boundary)) {
         return;
       }
-      this.addRealisticTree(point, index, "generic");
-      placed.push(point);
+      this.addRealisticTree(tree, index);
       this.renderedTreeCount += 1;
     });
-
-    this.addTreeRows(placed);
   }
 
-  private addTreeRows(placed: Vec2[]): void {
-    for (const [rowIndex, line] of this.level.treeLines.entries()) {
-      for (let index = 0; index < line.length; index += 1) {
-        const point = line[index];
-        const previous = line[Math.max(0, index - 1)];
-        const next = line[Math.min(line.length - 1, index + 1)];
-        const dx = next.x - previous.x;
-        const dz = next.z - previous.z;
-        const length = Math.hypot(dx, dz) || 1;
-        const normal = { x: -dz / length, z: dx / length };
-        const offset = rowIndex === 1 ? 6.6 : rowIndex === 2 ? 5.4 : 6.1;
-
-        for (const side of [-1, 1]) {
-          const rowPoint = {
-            x: point.x + normal.x * offset * side,
-            z: point.z + normal.z * offset * side
-          };
-          if (!pointInPolygon(rowPoint, this.level.boundary) || this.isNearExistingTree(rowPoint, placed, 5.4)) {
-            continue;
-          }
-          this.addRealisticTree(rowPoint, this.renderedTreeCount + rowIndex * 100 + index, "elm");
-          placed.push(rowPoint);
-          this.renderedTreeCount += 1;
-        }
-      }
-    }
-  }
-
-  private isNearExistingTree(point: Vec2, placed: Vec2[], minDistance: number): boolean {
-    return placed.some((candidate) => distance(point, candidate) < minDistance);
-  }
-
-  private addSignificantTree(tree: SignificantTreePoint, index: number): void {
-    const genus = tree.genus.toLowerCase();
-    const profile: TreeProfile = genus.includes("eucalyptus") ? "gum" : genus.includes("quercus") ? "oak" : genus.includes("ulmus") ? "elm" : "generic";
-    this.addRealisticTree(tree.position, index, profile, tree);
-  }
-
-  private addRealisticTree(point: Vec2, index: number, profile: TreeProfile, significant?: SignificantTreePoint): void {
+  private addRealisticTree(tree: MappedTree, index: number): void {
     const group = new THREE.Group();
-    const heritageScale = significant ? THREE.MathUtils.clamp(significant.height / 20, 0.72, 1.45) : 1;
+    const point = tree.position;
+    const profile = tree.profile;
+    const isAvenueTree = tree.source?.includes("avenue") ?? false;
+    const heritageScale = tree.height ? THREE.MathUtils.clamp(tree.height / 20, 0.72, 1.45) : isAvenueTree ? 1.08 : 1;
     const scale = this.rng.range(0.9, 1.35) * heritageScale * TREE_SCALE_MULTIPLIER;
     const trunkHeight =
       profile === "gum"
@@ -2074,15 +2036,11 @@ export class WorldBuilder {
         : profile === "oak"
           ? this.rng.range(4.5, 6.8) * scale
           : this.rng.range(5.2, 8.4) * scale;
-    const trunkRadius = this.rng.range(0.3, 0.54) * scale * (significant ? THREE.MathUtils.clamp(significant.dbh / 95, 0.8, 1.45) : 1);
-    const baseTrunkColor = profile === "gum" ? 0x746a58 : profile === "oak" ? 0x4b3829 : 0x58432e;
-    const baseLeafColor = profile === "gum" ? 0x6f806d : profile === "oak" ? 0x365636 : profile === "elm" ? 0x4d6b38 : 0x4f6f3e;
-    const trunkColor = new THREE.Color(baseTrunkColor).offsetHSL(this.rng.range(-0.02, 0.03), this.rng.range(-0.06, 0.06), this.rng.range(-0.08, 0.08));
-    const leafColor = new THREE.Color(baseLeafColor).offsetHSL(this.rng.range(-0.025, 0.025), this.rng.range(-0.08, 0.06), this.rng.range(-0.08, 0.05));
-    const trunkMaterial = new THREE.MeshStandardMaterial({ color: trunkColor, roughness: 0.92 });
-    const leafMaterial = new THREE.MeshStandardMaterial({ color: leafColor, roughness: 0.96 });
+    const trunkRadius = this.rng.range(0.3, 0.54) * scale * (tree.dbh ? THREE.MathUtils.clamp(tree.dbh / 95, 0.8, 1.45) : isAvenueTree ? 1.08 : 1);
+    const materials = this.getTreeMaterials(profile, index);
 
-    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(trunkRadius * 0.72, trunkRadius, trunkHeight, 8), trunkMaterial);
+    const trunk = new THREE.Mesh(this.treeTrunkGeometry, materials.trunk);
+    trunk.scale.set(trunkRadius, trunkHeight, trunkRadius);
     trunk.position.y = trunkHeight / 2;
     trunk.rotation.z = this.rng.range(-0.05, 0.05);
     trunk.castShadow = true;
@@ -2099,7 +2057,8 @@ export class WorldBuilder {
     for (let rootIndex = 0; rootIndex < 5; rootIndex += 1) {
       const angle = (rootIndex / 5) * Math.PI * 2 + this.rng.range(-0.22, 0.22);
       const length = trunkRadius * this.rng.range(2.6, 4.4);
-      const root = new THREE.Mesh(new THREE.BoxGeometry(length, trunkRadius * 0.22, trunkRadius * 0.38), trunkMaterial);
+      const root = new THREE.Mesh(this.treeRootGeometry, materials.trunk);
+      root.scale.set(length, trunkRadius * 0.22, trunkRadius * 0.38);
       root.position.set(Math.cos(angle) * length * 0.38, trunkRadius * 0.08, Math.sin(angle) * length * 0.38);
       root.rotation.y = -angle;
       root.castShadow = true;
@@ -2116,22 +2075,23 @@ export class WorldBuilder {
         trunkHeight * this.rng.range(profile === "gum" ? 0.72 : 0.68, 0.96),
         Math.sin(angle) * this.rng.range(profile === "gum" ? 1.0 : 1.35, profile === "oak" ? 3.2 : 2.6) * scale
       );
-      group.add(this.createBranch(start, end, trunkRadius * this.rng.range(0.28, 0.42), trunkMaterial));
+      group.add(this.createBranch(start, end, trunkRadius * this.rng.range(0.28, 0.42), materials.trunk));
     }
 
     const lobeCount = profile === "gum" ? 5 : profile === "oak" ? 7 : 6;
     for (let lobeIndex = 0; lobeIndex < lobeCount; lobeIndex += 1) {
       const angle = (lobeIndex / lobeCount) * Math.PI * 2 + this.rng.range(-0.3, 0.3);
-      const canopy = new THREE.Mesh(new THREE.IcosahedronGeometry(this.rng.range(profile === "gum" ? 1.35 : 1.65, profile === "oak" ? 2.75 : 2.55) * scale, 2), leafMaterial);
+      const canopyRadius = this.rng.range(profile === "gum" ? 1.35 : 1.65, profile === "oak" ? 2.75 : 2.55) * scale;
+      const canopy = new THREE.Mesh(this.treeCanopyGeometry, materials.leaf);
       canopy.position.set(
         Math.cos(angle) * this.rng.range(profile === "gum" ? 0.65 : 0.9, profile === "oak" ? 2.8 : 2.25) * scale,
         trunkHeight + this.rng.range(profile === "gum" ? -0.45 : 0.05, profile === "oak" ? 1.0 : 1.45) * scale,
         Math.sin(angle) * this.rng.range(profile === "gum" ? 0.65 : 0.9, profile === "oak" ? 2.8 : 2.25) * scale
       );
       canopy.scale.set(
-        this.rng.range(profile === "gum" ? 0.85 : 1.05, profile === "oak" ? 1.75 : 1.55),
-        this.rng.range(profile === "gum" ? 1.05 : 0.68, profile === "oak" ? 0.9 : 1.08),
-        this.rng.range(profile === "gum" ? 0.85 : 1.05, profile === "oak" ? 1.75 : 1.55)
+        canopyRadius * this.rng.range(profile === "gum" ? 0.85 : 1.05, profile === "oak" ? 1.75 : 1.55),
+        canopyRadius * this.rng.range(profile === "gum" ? 1.05 : 0.68, profile === "oak" ? 0.9 : 1.08),
+        canopyRadius * this.rng.range(profile === "gum" ? 0.85 : 1.05, profile === "oak" ? 1.75 : 1.55)
       );
       canopy.rotation.set(this.rng.range(-0.2, 0.2), this.rng.range(0, Math.PI), this.rng.range(-0.2, 0.2));
       canopy.castShadow = true;
@@ -2140,7 +2100,8 @@ export class WorldBuilder {
     }
 
     if (profile === "gum") {
-      const palePatch = new THREE.Mesh(new THREE.CylinderGeometry(trunkRadius * 0.74, trunkRadius * 0.88, trunkHeight * 0.38, 8), new THREE.MeshStandardMaterial({ color: 0xb9aa8e, roughness: 0.9 }));
+      const palePatch = new THREE.Mesh(this.treePaleBarkGeometry, materials.paleBark);
+      palePatch.scale.set(trunkRadius, trunkHeight * 0.38, trunkRadius);
       palePatch.position.y = trunkHeight * 0.52;
       palePatch.rotation.z = this.rng.range(-0.05, 0.05);
       palePatch.castShadow = true;
@@ -2150,19 +2111,46 @@ export class WorldBuilder {
     group.position.set(point.x, this.groundY(point), point.z);
     group.rotation.y = this.rng.range(0, Math.PI * 2);
     group.userData.treeIndex = index;
-    group.userData.treeSource = significant ? "yarra-significant" : "osm";
-    group.userData.treeSpecies = significant?.commonName ?? "Mapped tree";
+    group.userData.treeSource = tree.source ?? "mapped";
+    group.userData.treeSpecies = tree.label;
     this.scene.add(group);
   }
 
   private createBranch(start: THREE.Vector3, end: THREE.Vector3, radius: number, material: THREE.Material): THREE.Mesh {
     const direction = end.clone().sub(start);
     const length = direction.length();
-    const branch = new THREE.Mesh(new THREE.CylinderGeometry(radius * 0.55, radius, length, 6), material);
+    const branch = new THREE.Mesh(this.treeBranchGeometry, material);
+    branch.scale.set(radius, length, radius);
     branch.position.copy(start).add(end).multiplyScalar(0.5);
     branch.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize());
     branch.castShadow = true;
     return branch;
+  }
+
+  private getTreeMaterials(profile: TreeProfile, index: number): TreeMaterialSet {
+    const variant = index % 8;
+    const key = `${profile}-${variant}`;
+    const cached = this.treeMaterialCache.get(key);
+    if (cached) return cached;
+
+    const baseTrunkColor = profile === "gum" ? 0x746a58 : profile === "oak" ? 0x4b3829 : 0x58432e;
+    const baseLeafColor = profile === "gum" ? 0x6f806d : profile === "oak" ? 0x365636 : profile === "elm" ? 0x4d6b38 : 0x4f6f3e;
+    const hueOffset = (variant - 3.5) * 0.004;
+    const saturationOffset = ((variant % 3) - 1) * 0.035;
+    const lightOffset = ((variant % 5) - 2) * 0.025;
+    const materials = {
+      trunk: new THREE.MeshStandardMaterial({
+        color: new THREE.Color(baseTrunkColor).offsetHSL(hueOffset, saturationOffset, lightOffset),
+        roughness: 0.92
+      }),
+      leaf: new THREE.MeshStandardMaterial({
+        color: new THREE.Color(baseLeafColor).offsetHSL(hueOffset * 1.4, saturationOffset, lightOffset),
+        roughness: 0.96
+      }),
+      paleBark: new THREE.MeshStandardMaterial({ color: 0xb9aa8e, roughness: 0.9 })
+    };
+    this.treeMaterialCache.set(key, materials);
+    return materials;
   }
 
   private addLabel(text: string, position: Vec2, height: number): void {

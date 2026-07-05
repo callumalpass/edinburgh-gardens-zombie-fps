@@ -8,6 +8,7 @@ import {
 import {
   boundingRadius,
   distance,
+  distanceToSegment,
   geoToWorld,
   makeCircle,
   pointInPolygon,
@@ -27,10 +28,12 @@ import type {
   LevelPath,
   MappedBuilding,
   MappedFence,
+  MappedTree,
   PolygonObstacle,
   SignificantTreePoint,
   SportsFixture,
   TreeCollider,
+  TreeProfile,
   Vec2
 } from "./types";
 
@@ -75,6 +78,7 @@ export const RESEARCH_NOTES = [
   "A 2026-07-05 bounded OSM path/service inventory added missing asphalt connectors around the northern paths, Queen Victoria plinth, central rail-trail link, southern entries and bowling-club service path.",
   "The Edinburgh Gardens CMP records asphalt paths with remnant basalt/bluestone edging, a bluestone-pitcher open drain on the oval's eastern perimeter and a bluestone retaining wall along Alfred Crescent; these are represented as hardscape lines.",
   "Football posts, basketball hoops and solid tree trunks now share researched placement data with collision obstacles so the visuals and playable blockers stay aligned.",
+  "Tree rendering now uses a single mapped-tree data model with species/profile inference from Yarra significant trees, OSM tree points and CMP heritage avenue context.",
   "See docs/edinburgh-gardens-research.md for source URLs, query notes, data licensing notes and implementation decisions."
 ];
 
@@ -1733,15 +1737,54 @@ function polygonObstacleFromPolygon(id: string, label: string, polygon: Vec2[]):
   };
 }
 
-function treeColliderRadius(tree: SignificantTreePoint): number {
-  return Math.max(0.34, Math.min(1.05, (tree.dbh / 200) * WORLD_SCALE));
+function treeProfileFromGenus(genus: string): TreeProfile {
+  const normalized = genus.toLowerCase();
+  if (normalized.includes("eucalyptus")) return "gum";
+  if (normalized.includes("quercus")) return "oak";
+  if (normalized.includes("ulmus")) return "elm";
+  return "generic";
 }
 
-function appendTreeCollider(colliders: TreeCollider[], collider: TreeCollider, minSpacing: number): void {
-  if (colliders.some((existing) => distance(existing.position, collider.position) < minSpacing)) {
+function distanceToPolyline(point: Vec2, points: readonly Vec2[]): number {
+  let closest = Number.POSITIVE_INFINITY;
+  for (let index = 0; index < points.length - 1; index += 1) {
+    closest = Math.min(closest, distanceToSegment(point, points[index], points[index + 1]));
+  }
+  return closest;
+}
+
+function inferMappedTreeProfile(
+  point: Vec2,
+  index: number,
+  heritageLines: {
+    elmAvenue: readonly Vec2[];
+    crescentPath: readonly Vec2[];
+    railTrail: readonly Vec2[];
+    englishOakAvenue: readonly Vec2[];
+  }
+): TreeProfile {
+  if (distanceToPolyline(point, heritageLines.englishOakAvenue) < 13) return "oak";
+  if (
+    distanceToPolyline(point, heritageLines.elmAvenue) < 14 ||
+    distanceToPolyline(point, heritageLines.railTrail) < 11 ||
+    distanceToPolyline(point, heritageLines.crescentPath) < 10
+  ) {
+    return "elm";
+  }
+  if (index % 13 === 0) return "gum";
+  return index % 5 === 0 ? "elm" : "generic";
+}
+
+function appendMappedTree(trees: MappedTree[], tree: MappedTree, minSpacing: number): void {
+  if (trees.some((existing) => distance(existing.position, tree.position) < minSpacing)) {
     return;
   }
-  colliders.push(collider);
+  trees.push(tree);
+}
+
+function treeColliderRadius(tree: MappedTree): number {
+  const fallbackDbh = tree.profile === "oak" ? 82 : tree.profile === "elm" ? 74 : tree.profile === "gum" ? 68 : 58;
+  return Math.max(0.34, Math.min(1.05, ((tree.dbh ?? fallbackDbh) / 200) * WORLD_SCALE));
 }
 
 function sportsFixtureObstacles(fixture: SportsFixture): CircularObstacle[] {
@@ -1888,6 +1931,11 @@ export function createLevelData(): LevelData {
     ALFRED_CRESCENT_PATH_GEO,
     3.5
   );
+  const englishOakAvenue = polygonFromGeo([
+    g(-37.78705, 144.98558),
+    g(-37.7873918, 144.9853250),
+    g(-37.7877533, 144.9841097)
+  ]);
   const ovalPath = pathFromGeo(
     "oval-loop",
     "W. T. Peterson Oval loop",
@@ -2047,46 +2095,61 @@ export function createLevelData(): LevelData {
   ]
     .map((line) => line.filter((point) => pointInPolygon(point, boundary)))
     .filter((line) => line.length > 0);
-  const treeColliders: TreeCollider[] = [];
+  const trees: MappedTree[] = [];
   significantTrees.forEach((tree) => {
-    appendTreeCollider(
-      treeColliders,
+    appendMappedTree(
+      trees,
       {
-        id: `tree-collider-${tree.id}`,
-        label: `${tree.commonName} trunk`,
+        id: tree.id,
+        label: tree.commonName,
         position: tree.position,
-        radius: treeColliderRadius(tree),
+        profile: treeProfileFromGenus(tree.genus),
+        height: tree.height,
+        dbh: tree.dbh,
         source: "Yarra significant trees dataset"
       },
       1.8
     );
   });
   treePoints.forEach((position, index) => {
-    appendTreeCollider(
-      treeColliders,
+    const profile = inferMappedTreeProfile(position, index, {
+      elmAvenue: formalNorthSouth.points,
+      crescentPath: crescentPath.points,
+      railTrail: railTrail.points,
+      englishOakAvenue
+    });
+    appendMappedTree(
+      trees,
       {
-        id: `tree-collider-osm-${index + 1}`,
-        label: "Mapped tree trunk",
+        id: `osm-tree-${index + 1}`,
+        label: profile === "elm" ? "Mapped elm tree" : profile === "oak" ? "Mapped oak tree" : profile === "gum" ? "Mapped gum tree" : "Mapped tree",
         position,
-        radius: 0.42,
+        profile,
         source: "OpenStreetMap natural=tree point"
       },
       2.25
     );
   });
   treeLines.flat().forEach((position, index) => {
-    appendTreeCollider(
-      treeColliders,
+    appendMappedTree(
+      trees,
       {
-        id: `tree-collider-row-${index + 1}`,
-        label: "Avenue tree trunk",
+        id: `tree-row-${index + 1}`,
+        label: "Elm avenue tree",
         position,
-        radius: 0.44,
+        profile: "elm",
         source: "CMP/OSM-derived tree avenue sample"
       },
       2.6
     );
   });
+  const treeColliders: TreeCollider[] = trees.map((tree) => ({
+    id: `tree-collider-${tree.id}`,
+    label: `${tree.label} trunk`,
+    position: tree.position,
+    radius: treeColliderRadius(tree),
+    source: tree.source
+  }));
 
   return {
     boundary,
@@ -2095,6 +2158,7 @@ export function createLevelData(): LevelData {
     treeLines,
     treePoints,
     significantTrees,
+    trees,
     treeColliders,
     elevationSamples,
     elevationMin,

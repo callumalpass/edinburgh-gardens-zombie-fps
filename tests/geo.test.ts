@@ -32,8 +32,18 @@ describe("map geometry", () => {
     expect(level.treePoints.length).toBeGreaterThanOrEqual(126);
     expect(level.treeLines.length).toBeGreaterThanOrEqual(5);
     expect(level.significantTrees.length).toBeGreaterThanOrEqual(19);
+    expect(level.trees.length).toBeGreaterThanOrEqual(145);
+    expect(level.trees.length).toBe(level.treeColliders.length);
     expect(level.treePoints.filter((tree) => pointInPolygon(tree, level.boundary)).length).toBe(level.treePoints.length);
     expect(level.significantTrees.filter((tree) => pointInPolygon(tree.position, level.boundary)).length).toBe(level.significantTrees.length);
+    expect(level.trees.filter((tree) => pointInPolygon(tree.position, level.boundary)).length).toBe(level.trees.length);
+    const profiles = new Set(level.trees.map((tree) => tree.profile));
+    for (const profile of ["elm", "oak", "gum", "generic"] as const) {
+      expect(profiles.has(profile)).toBe(true);
+    }
+    expect(level.trees.some((tree) => tree.source?.includes("Yarra significant trees") && tree.height && tree.dbh)).toBe(true);
+    expect(level.trees.some((tree) => tree.source?.includes("OpenStreetMap") && tree.profile === "elm")).toBe(true);
+    expect(level.trees.some((tree) => tree.source?.includes("tree avenue") && tree.profile === "elm")).toBe(true);
   });
 
   it("derives solid trunk colliders from mapped and researched trees", () => {

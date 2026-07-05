@@ -82,6 +82,18 @@ export interface SignificantTreePoint {
   position: Vec2;
 }
 
+export type TreeProfile = "elm" | "gum" | "oak" | "generic";
+
+export interface MappedTree {
+  id: string;
+  label: string;
+  position: Vec2;
+  profile: TreeProfile;
+  height?: number;
+  dbh?: number;
+  source?: string;
+}
+
 export interface TreeCollider {
   id: string;
   label: string;
@@ -185,6 +197,7 @@ export interface LevelData {
   treeLines: Vec2[][];
   treePoints: Vec2[];
   significantTrees: SignificantTreePoint[];
+  trees: MappedTree[];
   treeColliders: TreeCollider[];
   elevationSamples: ElevationSample[];
   elevationMin: number;
