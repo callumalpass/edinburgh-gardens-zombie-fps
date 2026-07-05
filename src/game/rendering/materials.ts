@@ -20,12 +20,12 @@ export function createGameMaterials(rng: RandomSource): GameMaterials {
   });
   const path = new THREE.MeshStandardMaterial({
     map: createCanvasTexture("path", rng),
-    color: 0xc4a66e,
-    roughness: 0.88
+    color: 0x8c8069,
+    roughness: 0.93
   });
   const gravel = new THREE.MeshStandardMaterial({
     map: createCanvasTexture("gravel", rng),
-    color: 0xb59a68,
+    color: 0x897d62,
     roughness: 0.96
   });
   const asphalt = new THREE.MeshStandardMaterial({
@@ -102,8 +102,8 @@ export function createGameMaterials(rng: RandomSource): GameMaterials {
 function createCanvasTexture(kind: "grass" | "path" | "gravel" | "asphalt" | "concrete" | "rubber" | "mulch" | "basalt", rng: RandomSource): THREE.CanvasTexture {
   const specs = {
     grass: { base: "#687252", fleck: [68, 77, 49], repeat: 34, count: 1050 },
-    path: { base: "#b79962", fleck: [83, 63, 42], repeat: 11, count: 900 },
-    gravel: { base: "#aa925f", fleck: [93, 78, 55], repeat: 14, count: 1250 },
+    path: { base: "#817763", fleck: [72, 66, 54], repeat: 11, count: 900 },
+    gravel: { base: "#7d735e", fleck: [80, 73, 59], repeat: 14, count: 1250 },
     asphalt: { base: "#2f332f", fleck: [74, 78, 72], repeat: 18, count: 1100 },
     concrete: { base: "#979486", fleck: [107, 106, 97], repeat: 10, count: 850 },
     rubber: { base: "#704b41", fleck: [54, 40, 36], repeat: 12, count: 1100 },

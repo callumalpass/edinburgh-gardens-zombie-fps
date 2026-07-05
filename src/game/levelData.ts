@@ -2593,7 +2593,11 @@ export function createLevelData(): LevelData {
     "Elm Avenue",
     "footway",
     ELM_AVENUE_PATH_GEO,
-    3.2
+    3.2,
+    {
+      surface: "asphalt",
+      source: "Edinburgh Gardens CMP asphalt-path context; mapped formal elm avenue path"
+    }
   );
   const crescentPath = pathFromGeo(
     "alfred-crescent-inside-path",
@@ -2612,7 +2616,11 @@ export function createLevelData(): LevelData {
     "W. T. Peterson Oval loop",
     "footway",
     OVAL_GEO,
-    3.6
+    3.6,
+    {
+      surface: "asphalt",
+      source: "W.T. Peterson Oval OSM geometry; asphalt path surface inferred from CMP park-path context"
+    }
   );
   const osmPaths = OSM_EXTRA_PATHS_GEO.map((path) => pathFromGeo(path.id, path.label, path.kind, path.points, path.width, {
     surface: path.surface,
