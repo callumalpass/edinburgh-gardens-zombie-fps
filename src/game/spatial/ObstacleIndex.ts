@@ -10,7 +10,8 @@ export class ObstacleIndex {
   private readonly gridSize: number;
   private readonly coverRadii = new Map<string, number>();
   private readonly grid = new Map<number, Map<number, CollisionObstacle[]>>();
-  private readonly querySeen = new Set<string>();
+  private readonly querySeen = new Map<string, number>();
+  private queryStamp = 0;
 
   constructor(private readonly obstacles: readonly CollisionObstacle[], options: ObstacleIndexOptions = {}) {
     this.gridSize = options.gridSize ?? DEFAULT_GRID_SIZE;
@@ -22,23 +23,25 @@ export class ObstacleIndex {
     return this.coverRadii.get(obstacle.id) ?? computeObstacleCoverRadius(obstacle);
   }
 
-  forNearby(point: Vec2, radius: number, visit: (obstacle: CollisionObstacle) => void, clearance = 0.85): void {
+  forNearby(point: Vec2, radius: number, visit: (obstacle: CollisionObstacle) => boolean | void, clearance = 0.85): void {
     const extent = radius + clearance;
     const minX = this.cellIndex(point.x - extent);
     const maxX = this.cellIndex(point.x + extent);
     const minZ = this.cellIndex(point.z - extent);
     const maxZ = this.cellIndex(point.z + extent);
 
-    this.querySeen.clear();
+    const queryStamp = this.nextQueryStamp();
     for (let x = minX; x <= maxX; x += 1) {
       for (let z = minZ; z <= maxZ; z += 1) {
         const bucket = this.bucketAt(x, z);
         if (!bucket) continue;
         for (const obstacle of bucket) {
-          if (this.querySeen.has(obstacle.id)) continue;
-          this.querySeen.add(obstacle.id);
+          if (this.querySeen.get(obstacle.id) === queryStamp) continue;
+          this.querySeen.set(obstacle.id, queryStamp);
           if (this.couldOverlap(point, radius, obstacle, clearance)) {
-            visit(obstacle);
+            if (visit(obstacle)) {
+              return;
+            }
           }
         }
       }
@@ -47,7 +50,14 @@ export class ObstacleIndex {
 
   nearby(point: Vec2, radius: number, clearance = 0.85): CollisionObstacle[] {
     const nearby: CollisionObstacle[] = [];
-    this.forNearby(point, radius, (obstacle) => nearby.push(obstacle), clearance);
+    this.forNearby(
+      point,
+      radius,
+      (obstacle) => {
+        nearby.push(obstacle);
+      },
+      clearance
+    );
     return nearby;
   }
 
@@ -102,6 +112,15 @@ export class ObstacleIndex {
 
   private cellIndex(value: number): number {
     return Math.floor(value / this.gridSize);
+  }
+
+  private nextQueryStamp(): number {
+    if (this.queryStamp >= Number.MAX_SAFE_INTEGER) {
+      this.querySeen.clear();
+      this.queryStamp = 0;
+    }
+    this.queryStamp += 1;
+    return this.queryStamp;
   }
 }
 

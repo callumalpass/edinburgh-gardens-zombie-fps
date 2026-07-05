@@ -96,8 +96,9 @@ function buildAndCacheSightIndex(obstacles: readonly CollisionObstacle[]): Sight
 }
 
 class SightObstacleIndex {
-  private readonly grid = new Map<string, IndexedSightObstacle[]>();
-  private readonly querySeen = new Set<string>();
+  private readonly grid = new Map<number, Map<number, IndexedSightObstacle[]>>();
+  private readonly querySeen = new Map<string, number>();
+  private queryStamp = 0;
 
   constructor(obstacles: readonly CollisionObstacle[]) {
     for (const obstacle of obstacles) {
@@ -112,15 +113,15 @@ class SightObstacleIndex {
     const minZ = this.cellIndex(Math.min(a.z, b.z) - padding);
     const maxZ = this.cellIndex(Math.max(a.z, b.z) + padding);
 
-    this.querySeen.clear();
+    const queryStamp = this.nextQueryStamp();
     for (let x = minX; x <= maxX; x += 1) {
       for (let z = minZ; z <= maxZ; z += 1) {
-        const bucket = this.grid.get(this.cellKey(x, z));
+        const bucket = this.bucketAt(x, z);
         if (!bucket) continue;
         for (const entry of bucket) {
           const { obstacle } = entry;
-          if (this.querySeen.has(obstacle.id)) continue;
-          this.querySeen.add(obstacle.id);
+          if (this.querySeen.get(obstacle.id) === queryStamp) continue;
+          this.querySeen.set(obstacle.id, queryStamp);
           if (distanceToSegment(obstacle.center, a, b) > entry.coverRadius + padding) continue;
           if (visit(obstacle)) {
             return;
@@ -138,23 +139,43 @@ class SightObstacleIndex {
     const maxZ = this.cellIndex(obstacle.center.z + entry.coverRadius);
     for (let x = minX; x <= maxX; x += 1) {
       for (let z = minZ; z <= maxZ; z += 1) {
-        const key = this.cellKey(x, z);
-        const bucket = this.grid.get(key);
-        if (bucket) {
-          bucket.push(entry);
-        } else {
-          this.grid.set(key, [entry]);
-        }
+        this.ensureBucket(x, z).push(entry);
       }
     }
+  }
+
+  private ensureBucket(x: number, z: number): IndexedSightObstacle[] {
+    let column = this.grid.get(x);
+    if (!column) {
+      column = new Map();
+      this.grid.set(x, column);
+    }
+
+    const bucket = column.get(z);
+    if (bucket) {
+      return bucket;
+    }
+
+    const nextBucket: IndexedSightObstacle[] = [];
+    column.set(z, nextBucket);
+    return nextBucket;
+  }
+
+  private bucketAt(x: number, z: number): IndexedSightObstacle[] | undefined {
+    return this.grid.get(x)?.get(z);
   }
 
   private cellIndex(value: number): number {
     return Math.floor(value / SIGHT_GRID_SIZE);
   }
 
-  private cellKey(x: number, z: number): string {
-    return `${x}:${z}`;
+  private nextQueryStamp(): number {
+    if (this.queryStamp >= Number.MAX_SAFE_INTEGER) {
+      this.querySeen.clear();
+      this.queryStamp = 0;
+    }
+    this.queryStamp += 1;
+    return this.queryStamp;
   }
 }
 

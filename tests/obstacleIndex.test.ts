@@ -56,8 +56,32 @@ describe("ObstacleIndex", () => {
     const index = new ObstacleIndex([box], { gridSize: 2 });
     const seen: string[] = [];
 
-    index.forNearby({ x: 0, z: 0 }, 1, (obstacle) => seen.push(obstacle.id), 4);
+    index.forNearby(
+      { x: 0, z: 0 },
+      1,
+      (obstacle) => {
+        seen.push(obstacle.id);
+      },
+      4
+    );
 
     expect(seen).toEqual(["box"]);
+  });
+
+  it("allows visitors to stop a nearby query early", () => {
+    const index = new ObstacleIndex([box, tree], { gridSize: 40 });
+    const seen: string[] = [];
+
+    index.forNearby(
+      { x: 1, z: 1 },
+      50,
+      (obstacle) => {
+        seen.push(obstacle.id);
+        return true;
+      },
+      0
+    );
+
+    expect(seen).toHaveLength(1);
   });
 });

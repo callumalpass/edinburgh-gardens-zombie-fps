@@ -6,8 +6,9 @@ const NEAREST_ELEVATION_SAMPLE_COUNT = 12;
 const MAX_GROUND_CACHE_ENTRIES = 8192;
 
 export class TerrainSampler {
-  private readonly groundCache = new Map<string, number>();
-  private readonly modifierBuckets = new Map<string, TerrainModifier[]>();
+  private readonly groundCache = new Map<number, Map<number, number>>();
+  private groundCacheEntries = 0;
+  private readonly modifierBuckets = new Map<number, Map<number, TerrainModifier[]>>();
   private readonly nearestAltitudes = new Array<number>(NEAREST_ELEVATION_SAMPLE_COUNT);
   private readonly nearestDistancesSquared = new Array<number>(NEAREST_ELEVATION_SAMPLE_COUNT);
 
@@ -16,17 +17,17 @@ export class TerrainSampler {
   }
 
   groundY(point: Vec2): number {
-    const cacheKey = `${point.x}:${point.z}`;
-    const cached = this.groundCache.get(cacheKey);
+    const cached = this.cachedGroundY(point);
     if (cached !== undefined) {
       return cached;
     }
 
     const ground = Math.max(0, this.altitudeAt(point) - this.level.elevationMin + this.microReliefAt(point));
-    if (this.groundCache.size >= MAX_GROUND_CACHE_ENTRIES) {
+    if (this.groundCacheEntries >= MAX_GROUND_CACHE_ENTRIES) {
       this.groundCache.clear();
+      this.groundCacheEntries = 0;
     }
-    this.groundCache.set(cacheKey, ground);
+    this.setCachedGroundY(point, ground);
     return ground;
   }
 
@@ -96,20 +97,14 @@ export class TerrainSampler {
       const maxZ = this.cellIndex(bounds.maxZ);
       for (let x = minX; x <= maxX; x += 1) {
         for (let z = minZ; z <= maxZ; z += 1) {
-          const key = this.cellKey(x, z);
-          const bucket = this.modifierBuckets.get(key);
-          if (bucket) {
-            bucket.push(modifier);
-          } else {
-            this.modifierBuckets.set(key, [modifier]);
-          }
+          this.ensureModifierBucket(x, z).push(modifier);
         }
       }
     }
   }
 
   private nearbyTerrainModifiers(point: Vec2): TerrainModifier[] {
-    return this.modifierBuckets.get(this.cellKey(this.cellIndex(point.x), this.cellIndex(point.z))) ?? [];
+    return this.modifierBucketAt(this.cellIndex(point.x), this.cellIndex(point.z)) ?? [];
   }
 
   private modifierReliefAt(point: Vec2, modifier: TerrainModifier): number {
@@ -122,8 +117,13 @@ export class TerrainSampler {
     }
 
     if (modifier.shape === "ellipse") {
-      const local = localPointFromWorld(modifier.center, modifier.angle, point);
-      const normalized = Math.hypot(local.x / modifier.radiusX, local.z / modifier.radiusZ);
+      const dx = point.x - modifier.center.x;
+      const dz = point.z - modifier.center.z;
+      const cos = Math.cos(modifier.angle);
+      const sin = Math.sin(modifier.angle);
+      const localX = dx * cos + dz * sin;
+      const localZ = -dx * sin + dz * cos;
+      const normalized = Math.hypot(localX / modifier.radiusX, localZ / modifier.radiusZ);
       if (normalized >= 1) {
         return 0;
       }
@@ -177,8 +177,41 @@ export class TerrainSampler {
     return Math.floor(value / MODIFIER_GRID_SIZE);
   }
 
-  private cellKey(x: number, z: number): string {
-    return `${x}:${z}`;
+  private cachedGroundY(point: Vec2): number | undefined {
+    return this.groundCache.get(point.x)?.get(point.z);
+  }
+
+  private setCachedGroundY(point: Vec2, ground: number): void {
+    let row = this.groundCache.get(point.x);
+    if (!row) {
+      row = new Map();
+      this.groundCache.set(point.x, row);
+    }
+    if (!row.has(point.z)) {
+      this.groundCacheEntries += 1;
+    }
+    row.set(point.z, ground);
+  }
+
+  private ensureModifierBucket(x: number, z: number): TerrainModifier[] {
+    let column = this.modifierBuckets.get(x);
+    if (!column) {
+      column = new Map();
+      this.modifierBuckets.set(x, column);
+    }
+
+    const bucket = column.get(z);
+    if (bucket) {
+      return bucket;
+    }
+
+    const nextBucket: TerrainModifier[] = [];
+    column.set(z, nextBucket);
+    return nextBucket;
+  }
+
+  private modifierBucketAt(x: number, z: number): TerrainModifier[] | undefined {
+    return this.modifierBuckets.get(x)?.get(z);
   }
 }
 
@@ -191,21 +224,21 @@ function distanceToPolyline(point: Vec2, points: readonly Vec2[]): number {
 }
 
 function boundsForLineModifier(modifier: TerrainLineModifier): { minX: number; minZ: number; maxX: number; maxZ: number } {
-  const minX = Math.min(...modifier.points.map((point) => point.x)) - modifier.outerWidth;
-  const minZ = Math.min(...modifier.points.map((point) => point.z)) - modifier.outerWidth;
-  const maxX = Math.max(...modifier.points.map((point) => point.x)) + modifier.outerWidth;
-  const maxZ = Math.max(...modifier.points.map((point) => point.z)) + modifier.outerWidth;
-  return { minX, minZ, maxX, maxZ };
-}
-
-function localPointFromWorld(center: Vec2, angle: number, point: Vec2): Vec2 {
-  const dx = point.x - center.x;
-  const dz = point.z - center.z;
-  const cos = Math.cos(angle);
-  const sin = Math.sin(angle);
+  let minX = Number.POSITIVE_INFINITY;
+  let minZ = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxZ = Number.NEGATIVE_INFINITY;
+  for (const point of modifier.points) {
+    if (point.x < minX) minX = point.x;
+    if (point.z < minZ) minZ = point.z;
+    if (point.x > maxX) maxX = point.x;
+    if (point.z > maxZ) maxZ = point.z;
+  }
   return {
-    x: dx * cos + dz * sin,
-    z: -dx * sin + dz * cos
+    minX: minX - modifier.outerWidth,
+    minZ: minZ - modifier.outerWidth,
+    maxX: maxX + modifier.outerWidth,
+    maxZ: maxZ + modifier.outerWidth
   };
 }
 

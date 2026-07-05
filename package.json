@@ -14,7 +14,8 @@
     "preview:e2e": "vite preview --host 127.0.0.1 --port 5481 --strictPort",
     "test:e2e": "node scripts/run-e2e.mjs",
     "test:e2e:quick": "node scripts/run-e2e.mjs --skip-build",
-    "perf:bench": "vitest bench --run"
+    "perf:bench": "vitest bench --run",
+    "perf:check": "vitest run --reporter=dot && vitest bench --run --reporter=verbose"
   },
   "dependencies": {
     "three": "^0.185.1",

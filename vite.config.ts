@@ -11,7 +11,8 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    globals: true,
+    globals: false,
+    include: ["tests/**/*.test.ts"],
     exclude: ["**/node_modules/**", "**/dist/**", "**/*.spec.ts", "**/*.bench.ts"]
   }
 });

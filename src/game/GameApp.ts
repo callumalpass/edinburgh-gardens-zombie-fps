@@ -18,7 +18,7 @@ import {
   type Loadout,
   type WeaponId
 } from "./weapons";
-import { resolveObstacle, shouldBypassObstacle as shouldBypassCollisionObstacle } from "./collision";
+import { resolveObstacle } from "./collision";
 import { clampToPolygon, distance } from "./geo";
 import { pointInInteractableRaisedFootprint } from "./interactables";
 import { createLevelData } from "./levelData";
@@ -129,6 +129,7 @@ import type {
 import { FrameLoop } from "./runtime/FrameLoop";
 import type {
   AmenityPoint,
+  CollisionObstacle,
   InteractableFixture,
   LevelData,
   ParkLifeDetail,
@@ -144,6 +145,10 @@ export class GameApp {
   private readonly obstacleIndex: ObstacleIndex;
   private readonly terrain: TerrainSampler;
   private readonly movementSurfaces: MovementSurfaceSampler;
+  private readonly interactableById: Map<string, InteractableFixture>;
+  private readonly autoInteractables: InteractableFixture[];
+  private readonly toggleInteractables: InteractableFixture[];
+  private readonly brokenBikeDetails: ParkLifeDetail[];
   private readonly noise = new NoiseSystem();
   private readonly rng = new SeededRandom(0xed1b97);
   private readonly waveDirector: WaveDirector;
@@ -201,6 +206,10 @@ export class GameApp {
   private playerTorch: THREE.SpotLight | null = null;
   private readonly distractions: ThrownDistraction[] = [];
   private scratchVector = new THREE.Vector3();
+  private readonly scratchInputVector = new THREE.Vector3();
+  private readonly scratchForwardVector = new THREE.Vector3();
+  private readonly scratchRightVector = new THREE.Vector3();
+  private readonly frameCombatants: CombatantRef[] = [];
   private weaponModel = new THREE.Group();
   private muzzleFlash: THREE.Object3D | null = null;
   private muzzleLight: THREE.PointLight | null = null;
@@ -275,6 +284,10 @@ export class GameApp {
     this.obstacleIndex = new ObstacleIndex(this.level.obstacles);
     this.terrain = new TerrainSampler(this.level);
     this.movementSurfaces = new MovementSurfaceSampler(this.level);
+    this.interactableById = new Map(this.level.interactables.map((fixture) => [fixture.id, fixture]));
+    this.autoInteractables = this.level.interactables.filter((fixture) => fixture.mode === "auto");
+    this.toggleInteractables = this.level.interactables.filter((fixture) => fixture.mode === "toggle");
+    this.brokenBikeDetails = this.level.parkLifeDetails.filter((detail) => detail.kind === "broken-bike");
     this.waveDirector = new WaveDirector(this.level.spawnPoints, this.rng, {
       intermissionSeconds: INTERMISSION_SECONDS,
       initialSpawnDelay: 0.4
@@ -896,15 +909,15 @@ export class GameApp {
 
   private updateNetworkPlayerMovement(player: NetworkRemotePlayer, dt: number, now: number): void {
     const stale = now - player.lastInputAt > 1.5;
-    const input = stale ? new THREE.Vector3() : new THREE.Vector3(player.input.moveX, 0, player.input.moveZ);
+    const input = this.scratchInputVector.set(stale ? 0 : player.input.moveX, 0, stale ? 0 : player.input.moveZ);
     const inputLength = Math.min(1, Math.hypot(input.x, input.z));
 
     if (inputLength > 0.001) {
       input.normalize();
       const sin = Math.sin(player.yaw);
       const cos = Math.cos(player.yaw);
-      const forward = new THREE.Vector3(sin, 0, cos);
-      const right = new THREE.Vector3(cos, 0, -sin);
+      const forward = this.scratchForwardVector.set(sin, 0, cos);
+      const right = this.scratchRightVector.set(cos, 0, -sin);
       const wantsSprint = !player.crouching && player.input.sprint;
       const sprinting = wantsSprint && player.condition.stamina > 8 && player.condition.limpTimer <= 0;
       player.isSprinting = sprinting;
@@ -923,17 +936,17 @@ export class GameApp {
       }
     }
 
-    const candidate = player.position.clone().addScaledVector(player.velocity, dt);
-    let next = clampToPolygon({ x: candidate.x, z: candidate.z }, this.level.boundary, 3);
-    for (const obstacle of this.level.obstacles) {
+    let next = clampToPolygon(
+      { x: player.position.x + player.velocity.x * dt, z: player.position.z + player.velocity.z * dt },
+      this.level.boundary,
+      3
+    );
+    next = this.resolveNearbyObstacles(next, PLAYER_RADIUS, (obstacle, point) => {
       if (obstacle.jumpable === true && player.jumpHeight >= (obstacle.jumpBypassMinHeight ?? 0.5)) {
-        continue;
+        return true;
       }
-      if (this.shouldBypassObstacleForFixture(obstacle.id, next, player.activeFixtureId)) {
-        continue;
-      }
-      next = resolveObstacle(next, PLAYER_RADIUS, obstacle);
-    }
+      return this.shouldBypassObstacleForFixture(obstacle.id, point, player.activeFixtureId);
+    });
     next = this.resolveSkateBowlExit({ x: player.position.x, z: player.position.z }, next, player.velocity);
     player.position.set(next.x, this.groundY(next), next.z);
   }
@@ -979,7 +992,7 @@ export class GameApp {
   private updateNetworkPlayerVerticalState(player: NetworkRemotePlayer, dt: number): void {
     let target = 0;
     const playerPoint = { x: player.position.x, z: player.position.z };
-    const active = this.level.interactables.find((fixture) => fixture.id === player.activeFixtureId);
+    const active = player.activeFixtureId ? this.interactableById.get(player.activeFixtureId) : undefined;
 
     if (active) {
       if (pointInInteractableRaisedFootprint(playerPoint, active, 1.2)) {
@@ -989,7 +1002,7 @@ export class GameApp {
       }
     }
 
-    for (const fixture of this.level.interactables.filter((candidate) => candidate.mode === "auto")) {
+    for (const fixture of this.autoInteractables) {
       if (pointInInteractableRaisedFootprint(playerPoint, fixture, 0.8)) {
         target = Math.max(target, fixture.height);
       }
@@ -1350,9 +1363,7 @@ export class GameApp {
       this.level.boundary,
       4
     );
-    for (const obstacle of this.level.obstacles) {
-      target = resolveObstacle(target, 0.5, obstacle);
-    }
+    target = this.resolveNearbyObstacles(target, 0.5);
     this.distractions.push(this.createThrownCharge(target, player));
     this.emitNoise("distraction", target, 1.05);
     return true;
@@ -1758,7 +1769,7 @@ export class GameApp {
     }
 
     const movement = this.input?.movement() ?? { x: 0, z: 0, length: 0 };
-    const input = new THREE.Vector3(movement.x, 0, movement.z);
+    const input = this.scratchInputVector.set(movement.x, 0, movement.z);
 
     if (this.bike?.mounted) {
       this.updateBikeMovement(dt, input);
@@ -1768,8 +1779,8 @@ export class GameApp {
     if (movement.length > 0) {
       const sin = Math.sin(this.player.yaw);
       const cos = Math.cos(this.player.yaw);
-      const forward = new THREE.Vector3(sin, 0, cos);
-      const right = new THREE.Vector3(cos, 0, -sin);
+      const forward = this.scratchForwardVector.set(sin, 0, cos);
+      const right = this.scratchRightVector.set(cos, 0, -sin);
       const wantsSprint = !this.player.crouching && (this.input?.isSprinting() ?? false);
       const sprinting = wantsSprint && this.condition.stamina > 8 && this.condition.limpTimer <= 0;
       this.isSprinting = sprinting;
@@ -1788,17 +1799,12 @@ export class GameApp {
       }
     }
 
-    const candidate = this.player.position.clone().addScaledVector(this.player.velocity, dt);
-    let next = clampToPolygon({ x: candidate.x, z: candidate.z }, this.level.boundary, 3);
-    for (const obstacle of this.level.obstacles) {
-      if (this.shouldJumpBypassObstacle(obstacle)) {
-        continue;
-      }
-      if (this.shouldBypassObstacle(obstacle.id, next)) {
-        continue;
-      }
-      next = resolveObstacle(next, PLAYER_RADIUS, obstacle);
-    }
+    let next = clampToPolygon(
+      { x: this.player.position.x + this.player.velocity.x * dt, z: this.player.position.z + this.player.velocity.z * dt },
+      this.level.boundary,
+      3
+    );
+    next = this.resolveNearbyObstacles(next, PLAYER_RADIUS, (obstacle, point) => this.shouldJumpBypassObstacle(obstacle) || this.shouldBypassObstacle(obstacle.id, point));
     next = this.resolveSkateBowlExit({ x: this.player.position.x, z: this.player.position.z }, next, this.player.velocity);
     this.player.position.set(next.x, this.groundY(next), next.z);
   }
@@ -1842,8 +1848,10 @@ export class GameApp {
       const sin = Math.sin(this.player.yaw);
       const cos = Math.cos(this.player.yaw);
       const forwardSpeed = sprinting && forwardInput > 0 ? BIKE_SPRINT_SPEED : BIKE_FORWARD_SPEED;
-      const forward = new THREE.Vector3(-sin, 0, -cos).multiplyScalar(forwardInput >= 0 ? forwardInput * forwardSpeed : forwardInput * BIKE_REVERSE_SPEED);
-      const right = new THREE.Vector3(cos, 0, -sin).multiplyScalar(sideInput * BIKE_STRAFE_SPEED);
+      const forward = this.scratchForwardVector
+        .set(-sin, 0, -cos)
+        .multiplyScalar(forwardInput >= 0 ? forwardInput * forwardSpeed : forwardInput * BIKE_REVERSE_SPEED);
+      const right = this.scratchRightVector.set(cos, 0, -sin).multiplyScalar(sideInput * BIKE_STRAFE_SPEED);
       const surface = this.movementSurfaceAt({ x: this.player.position.x, z: this.player.position.z });
       const conditionScale = Math.max(0.72, speedMultiplierForCondition(this.condition));
       this.player.velocity.copy(forward.add(right)).multiplyScalar(this.bikeSurfaceSpeedMultiplier(surface) * conditionScale);
@@ -1856,11 +1864,12 @@ export class GameApp {
       }
     }
 
-    const candidate = this.player.position.clone().addScaledVector(this.player.velocity, dt);
-    let next = clampToPolygon({ x: candidate.x, z: candidate.z }, this.level.boundary, 3);
-    for (const obstacle of this.level.obstacles) {
-      next = resolveObstacle(next, PLAYER_RADIUS + 0.45, obstacle);
-    }
+    let next = clampToPolygon(
+      { x: this.player.position.x + this.player.velocity.x * dt, z: this.player.position.z + this.player.velocity.z * dt },
+      this.level.boundary,
+      3
+    );
+    next = this.resolveNearbyObstacles(next, PLAYER_RADIUS + 0.45);
     next = this.resolveSkateBowlExit({ x: this.player.position.x, z: this.player.position.z }, next, this.player.velocity);
     this.player.position.set(next.x, this.groundY(next), next.z);
   }
@@ -1951,9 +1960,7 @@ export class GameApp {
       this.level.boundary,
       4
     );
-    for (const obstacle of this.level.obstacles) {
-      target = resolveObstacle(target, 0.5, obstacle);
-    }
+    target = this.resolveNearbyObstacles(target, 0.5);
 
     this.distractions.push(this.createThrownCharge(target));
     this.emitNoise("distraction", target, 1.05);
@@ -2217,13 +2224,14 @@ export class GameApp {
   }
 
   private updateZombies(dt: number, now: number): void {
+    const combatants = this.collectCombatants(this.frameCombatants);
     for (const zombie of this.zombies) {
       const profile = zombieProfile(zombie.type);
       const zombiePoint = { x: zombie.position.x, z: zombie.position.z };
       const localPlayerPoint = { x: this.player.position.x, z: this.player.position.z };
       const localDistance = distance(zombiePoint, localPlayerPoint);
-      const nearestCombatant = this.nearestCombatant(zombiePoint);
-      const visibleCombatant = this.visibleCombatantForZombie(zombie, zombiePoint);
+      const nearestCombatant = this.nearestCombatant(zombiePoint, combatants);
+      const visibleCombatant = this.visibleCombatantForZombie(zombie, zombiePoint, combatants);
       const distanceToPlayer = nearestCombatant ? distance(zombiePoint, nearestCombatant.position) : localDistance;
       const heardNoise = this.noise.strongestAt(zombiePoint, profile.hearingMultiplier);
       const previousAiState = zombie.aiState;
@@ -2310,11 +2318,12 @@ export class GameApp {
               : 1;
       const staggerScale = zombie.staggerTimer > 0 ? 0.24 : 1;
       const speed = zombie.speed * stateSpeed * staggerScale;
-      const candidate = zombie.position.clone().addScaledVector(toTarget, speed * dt);
-      let next = clampToPolygon({ x: candidate.x, z: candidate.z }, this.level.boundary, 2.5);
-      for (const obstacle of this.level.obstacles) {
-        next = resolveObstacle(next, zombie.radius, obstacle);
-      }
+      let next = clampToPolygon(
+        { x: zombie.position.x + toTarget.x * speed * dt, z: zombie.position.z + toTarget.z * speed * dt },
+        this.level.boundary,
+        2.5
+      );
+      next = this.resolveNearbyObstacles(next, zombie.radius);
       const groundY = this.groundY(next);
       zombie.position.set(next.x, groundY, next.z);
       if (distanceToTarget > 0.1) {
@@ -2323,7 +2332,7 @@ export class GameApp {
       this.syncZombieMeshPosition(zombie, now);
       this.animateZombie(zombie, now, localDistance);
       this.updateZombieAudio(zombie, dt, localDistance, distanceToTarget);
-      const attackTarget = this.attackableCombatantForZombie(zombie, zombiePoint);
+      const attackTarget = this.attackableCombatantForZombie(zombie, zombiePoint, combatants);
       if (attackTarget && zombie.attackCooldown <= 0) {
         this.applyZombieHit(zombie, profile, now, attackTarget);
         zombie.attackCooldown = profile.attackCooldown;
@@ -2378,6 +2387,26 @@ export class GameApp {
     zombie.position.set(next.x, this.groundY(next), next.z);
   }
 
+  private resolveNearbyObstacles(
+    point: Vec2,
+    radius: number,
+    shouldSkip?: (obstacle: CollisionObstacle, point: Vec2) => boolean
+  ): Vec2 {
+    let next = point;
+    this.obstacleIndex.forNearby(
+      point,
+      radius,
+      (obstacle) => {
+        if (shouldSkip?.(obstacle, next)) {
+          return;
+        }
+        next = resolveObstacle(next, radius, obstacle);
+      },
+      2.4
+    );
+    return next;
+  }
+
   private syncZombieMeshPosition(zombie: Zombie, now: number): void {
     zombie.mesh.position.set(zombie.position.x, this.zombieVisualY(zombie, now), zombie.position.z);
   }
@@ -2389,9 +2418,11 @@ export class GameApp {
   private applyZombieHit(zombie: Zombie, profile: ReturnType<typeof zombieProfile>, now: number, combatant: CombatantRef): void {
     if (combatant.isLocal) {
       this.player.health -= profile.attackDamage;
+      combatant.health = this.player.health;
       this.lastDamageAt = now;
     } else if (combatant.remote) {
       combatant.remote.health -= profile.attackDamage;
+      combatant.health = combatant.remote.health;
     }
     const severity = Math.min(1, profile.attackDamage / 24);
     const roll = this.rng.next();
@@ -2450,7 +2481,11 @@ export class GameApp {
   }
 
   private combatants(): CombatantRef[] {
-    const combatants: CombatantRef[] = [];
+    return this.collectCombatants([]);
+  }
+
+  private collectCombatants(combatants: CombatantRef[]): CombatantRef[] {
+    combatants.length = 0;
     if (this.player.health > 0) {
       combatants.push({
         id: this.localNetworkId,
@@ -2502,10 +2537,11 @@ export class GameApp {
     return combatant.height + combatant.jumpHeight;
   }
 
-  private nearestCombatant(point: Vec2): CombatantRef | null {
+  private nearestCombatant(point: Vec2, combatants = this.combatants()): CombatantRef | null {
     let nearest: CombatantRef | null = null;
     let nearestDistance = Number.POSITIVE_INFINITY;
-    for (const combatant of this.combatants()) {
+    for (const combatant of combatants) {
+      if (combatant.health <= 0) continue;
       const combatantDistance = distance(point, this.combatantPoint(combatant));
       if (combatantDistance < nearestDistance) {
         nearest = combatant;
@@ -2515,9 +2551,10 @@ export class GameApp {
     return nearest;
   }
 
-  private visibleCombatantForZombie(zombie: Zombie, zombiePoint: Vec2): { combatant: CombatantRef; distance: number } | null {
+  private visibleCombatantForZombie(zombie: Zombie, zombiePoint: Vec2, combatants = this.combatants()): { combatant: CombatantRef; distance: number } | null {
     let visible: { combatant: CombatantRef; distance: number } | null = null;
-    for (const combatant of this.combatants()) {
+    for (const combatant of combatants) {
+      if (combatant.health <= 0) continue;
       const combatantDistance = distance(zombiePoint, this.combatantPoint(combatant));
       if (this.canZombieSeeCombatant(zombie, combatant, combatantDistance) && (!visible || combatantDistance < visible.distance)) {
         visible = { combatant, distance: combatantDistance };
@@ -2526,10 +2563,11 @@ export class GameApp {
     return visible;
   }
 
-  private attackableCombatantForZombie(zombie: Zombie, zombiePoint: Vec2): CombatantRef | null {
+  private attackableCombatantForZombie(zombie: Zombie, zombiePoint: Vec2, combatants = this.combatants()): CombatantRef | null {
     let target: CombatantRef | null = null;
     let nearestDistance = Number.POSITIVE_INFINITY;
-    for (const combatant of this.combatants()) {
+    for (const combatant of combatants) {
+      if (combatant.health <= 0) continue;
       const combatantDistance = distance(zombiePoint, this.combatantPoint(combatant));
       if (
         this.combatantElevation(combatant) < 1.4 &&
@@ -2587,24 +2625,20 @@ export class GameApp {
   }
 
   private isCoverNearPoint(point: Vec2, obstaclePadding = 4.2, treePadding = 5.8): boolean {
-    for (const obstacle of this.level.obstacles) {
-      const radius = this.obstacleCoverRadius(obstacle);
+    let covered = false;
+    this.obstacleIndex.forNearby(point, Math.max(obstaclePadding, treePadding), (obstacle) => {
+      const radius = this.obstacleIndex.coverRadius(obstacle);
       const coverPadding = obstacle.sourceObjectKind === "tree-collider" ? treePadding : obstaclePadding;
-      if (distance(point, obstacle.center) <= radius + coverPadding) {
+      const dx = point.x - obstacle.center.x;
+      const dz = point.z - obstacle.center.z;
+      const range = radius + coverPadding;
+      if (dx * dx + dz * dz <= range * range) {
+        covered = true;
         return true;
       }
-    }
-    return false;
-  }
-
-  private obstacleCoverRadius(obstacle: LevelData["obstacles"][number]): number {
-    if (obstacle.shape === "box") {
-      return Math.hypot(obstacle.halfX, obstacle.halfZ);
-    }
-    if (obstacle.shape === "polygon") {
-      return obstacle.polygon.length > 0 ? Math.max(...obstacle.polygon.map((point) => distance(obstacle.center, point))) : 0;
-    }
-    return obstacle.radius;
+      return false;
+    }, 0);
+    return covered;
   }
 
   private setZombieWanderTarget(zombie: Zombie, origin: Vec2): void {
@@ -2639,9 +2673,7 @@ export class GameApp {
         this.level.boundary,
         4
       );
-      for (const obstacle of this.level.obstacles) {
-        point = resolveObstacle(point, zombieRadius + 0.2, obstacle);
-      }
+      point = this.resolveNearbyObstacles(point, zombieRadius + 0.2);
 
       const travelDistance = distance(origin, point);
       if (travelDistance > 6) {
@@ -3404,7 +3436,7 @@ export class GameApp {
     let nearest: InteractableFixture | null = null;
     let nearestDistance = Number.POSITIVE_INFINITY;
     const playerPoint = { x: this.player.position.x, z: this.player.position.z };
-    for (const fixture of this.level.interactables.filter((candidate) => candidate.mode === "toggle")) {
+    for (const fixture of this.toggleInteractables) {
       const active = this.player.activeFixtureId === fixture.id;
       if (active) {
         if (pointInInteractableRaisedFootprint(playerPoint, fixture, 2.2)) {
@@ -3433,7 +3465,7 @@ export class GameApp {
     let nearest: ParkLifeDetail | null = null;
     let nearestDistance = Number.POSITIVE_INFINITY;
     const playerPoint = { x: this.player.position.x, z: this.player.position.z };
-    for (const detail of this.level.parkLifeDetails.filter((candidate) => candidate.kind === "broken-bike")) {
+    for (const detail of this.brokenBikeDetails) {
       const detailDistance = distance(playerPoint, detail.position);
       if (detailDistance < nearestDistance && detailDistance < BIKE_INTERACTION_RADIUS) {
         nearest = detail;
@@ -3498,7 +3530,7 @@ export class GameApp {
 
     let target = 0;
     const playerPoint = { x: this.player.position.x, z: this.player.position.z };
-    const active = this.level.interactables.find((fixture) => fixture.id === this.player.activeFixtureId);
+    const active = this.player.activeFixtureId ? this.interactableById.get(this.player.activeFixtureId) : undefined;
 
     if (active) {
       if (pointInInteractableRaisedFootprint(playerPoint, active, 1.2)) {
@@ -3508,7 +3540,7 @@ export class GameApp {
       }
     }
 
-    for (const fixture of this.level.interactables.filter((candidate) => candidate.mode === "auto")) {
+    for (const fixture of this.autoInteractables) {
       if (pointInInteractableRaisedFootprint(playerPoint, fixture, 0.8)) {
         target = Math.max(target, fixture.height);
       }
@@ -3560,10 +3592,17 @@ export class GameApp {
   }
 
   private shouldBypassObstacleForFixture(obstacleId: string, point: Vec2, activeFixtureId: string | null): boolean {
-    return shouldBypassCollisionObstacle(obstacleId, point, {
-      activeFixtureId,
-      interactables: this.level.interactables
-    });
+    const active = activeFixtureId ? this.interactableById.get(activeFixtureId) : undefined;
+    if (active?.bypassObstacleIds?.includes(obstacleId) && pointInInteractableRaisedFootprint(point, active, 1.2)) {
+      return true;
+    }
+
+    for (const fixture of this.autoInteractables) {
+      if (fixture.bypassObstacleIds?.includes(obstacleId) && pointInInteractableRaisedFootprint(point, fixture, 0.8)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private shouldJumpBypassObstacle(obstacle: LevelData["obstacles"][number]): boolean {
@@ -3659,13 +3698,11 @@ export class GameApp {
 
   private testInteract(fixtureId?: string): boolean {
     if (this.bike?.mounted) {
-      const fixture = this.level.interactables.find((candidate) => candidate.id === fixtureId) ?? this.level.interactables[0] ?? null;
+      const fixture = (fixtureId ? this.interactableById.get(fixtureId) : undefined) ?? this.level.interactables[0] ?? null;
       return fixture ? this.toggleFixture(fixture) : false;
     }
 
-    const fixture = fixtureId
-      ? this.level.interactables.find((candidate) => candidate.id === fixtureId) ?? null
-      : this.level.interactables[0] ?? null;
+    const fixture = fixtureId ? this.interactableById.get(fixtureId) ?? null : this.level.interactables[0] ?? null;
     if (!fixture) {
       return false;
     }
@@ -3960,12 +3997,13 @@ export class GameApp {
   }
 
   private updateMiniMap(): void {
+    const visibilityContext = this.visibilityContext();
     this.miniMapVisibleZombieCount = this.miniMap.render({
       playerPosition: { x: this.player.position.x, z: this.player.position.z },
       playerYaw: this.player.yaw,
       zombies: this.zombies,
       weaponDrops: this.weaponDrops,
-      isVisible: (point, padding = 0) => this.isPointVisibleToPlayer(point, padding)
+      isVisible: (point, padding = 0) => isPointVisibleToPlayerByContext(point, visibilityContext, padding)
     });
   }
 
