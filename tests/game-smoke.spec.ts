@@ -45,7 +45,7 @@ test("game loop advances and gameplay helpers mutate state", async ({ page }) =>
   await page.waitForFunction(() => window.__EGAME__?.ready === true);
   const first = await page.evaluate(() => window.__EGAME__!.snapshot());
   expect(first.renderedTrees).toBeGreaterThanOrEqual(145);
-  await page.waitForTimeout(500);
+  await page.waitForFunction((frame) => window.__EGAME__!.snapshot().frame > frame, first.frame);
   const second = await page.evaluate(() => window.__EGAME__!.snapshot());
   expect(second.frame).toBeGreaterThan(first.frame);
   expect(second.wavePhase).toBe("active");
@@ -69,6 +69,12 @@ test("game loop advances and gameplay helpers mutate state", async ({ page }) =>
   });
   expect(afterShot.ammo).toBeLessThan(spawned.ammo);
   expect(afterShot.shotBloom).toBeGreaterThan(0);
+  const objective = await page.evaluate(() => window.__EGAME__!.testStartIntermission());
+  expect(objective?.id).toBeTruthy();
+  const intermission = await page.evaluate(() => window.__EGAME__!.snapshot());
+  expect(intermission.wavePhase).toBe("intermission");
+  expect(intermission.objective?.completed).toBe(false);
+  expect(intermission.intermissionTimer).toBeGreaterThan(0);
   await page.evaluate(() => window.__EGAME__!.testPickupWeapon("shotgun"));
   const afterPickup = await page.evaluate(() => window.__EGAME__!.snapshot());
   expect(afterPickup.weapon).toBe("shotgun");
@@ -78,9 +84,11 @@ test("game loop advances and gameplay helpers mutate state", async ({ page }) =>
   expect(afterScope.scope).toBeGreaterThan(0.9);
   expect(afterScope.fov).toBeLessThan(40);
   await page.evaluate(() => window.__EGAME__!.testInteract("rotunda-deck"));
+  await page.waitForFunction(() => window.__EGAME__!.snapshot().elevation > 0.5);
   const afterInteract = await page.evaluate(() => window.__EGAME__!.snapshot());
   expect(afterInteract.elevation).toBeGreaterThan(0.5);
   await page.evaluate(() => window.__EGAME__!.testInteract("south-toilets-roof"));
+  await page.waitForFunction(() => window.__EGAME__!.snapshot().elevation > 0.5);
   const afterRoof = await page.evaluate(() => window.__EGAME__!.snapshot());
   expect(afterRoof.elevation).toBeGreaterThan(0.5);
   const beforeAmenity = await page.evaluate(() => window.__EGAME__!.snapshot());
@@ -88,12 +96,6 @@ test("game loop advances and gameplay helpers mutate state", async ({ page }) =>
   expect(usedAmenity).toBe(true);
   const afterAmenity = await page.evaluate(() => window.__EGAME__!.snapshot());
   expect(afterAmenity.scrap).toBeGreaterThan(beforeAmenity.scrap);
-  const objective = await page.evaluate(() => window.__EGAME__!.testStartIntermission());
-  expect(objective?.id).toBeTruthy();
-  const intermission = await page.evaluate(() => window.__EGAME__!.snapshot());
-  expect(intermission.wavePhase).toBe("intermission");
-  expect(intermission.objective?.completed).toBe(false);
-  expect(intermission.intermissionTimer).toBeGreaterThan(0);
 });
 
 test("desktop and mobile layouts keep controls visible", async ({ page, viewport }) => {
