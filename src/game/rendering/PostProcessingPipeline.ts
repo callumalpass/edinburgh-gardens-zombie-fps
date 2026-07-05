@@ -47,16 +47,16 @@ const ANIME_GRADE_SHADER = {
       float down = animeLuminance(texture2D(tDiffuse, vUv - vec2(0.0, pixel.y)).rgb);
       float edge = smoothstep(0.12, 0.32, abs(center - right) + abs(center - left) + abs(center - up) + abs(center - down));
 
-      vec3 shadows = vec3(0.045, 0.075, 0.105);
-      vec3 mids = vec3(0.88, 0.92, 0.78);
-      vec3 highlights = vec3(1.03, 0.93, 0.68);
-      color = mix(color * shadows, color * mids, smoothstep(0.08, 0.62, center));
-      color = mix(color, color * highlights, smoothstep(0.58, 0.98, center) * 0.22);
-      color = mix(color, floor(color * 12.0) / 12.0, 0.08 * strength);
-      color = mix(color, vec3(0.025, 0.055, 0.075), edge * 0.26 * strength);
+      vec3 shadowLift = vec3(0.042, 0.068, 0.086);
+      vec3 mids = vec3(0.96, 0.99, 0.94);
+      vec3 highlights = vec3(1.06, 0.98, 0.78);
+      color = color * mids + shadowLift * (1.0 - smoothstep(0.08, 0.62, center)) * 0.54;
+      color = mix(color, color * highlights, smoothstep(0.6, 0.98, center) * 0.12);
+      color = mix(color, floor(color * 12.0) / 12.0, 0.05 * strength);
+      color = mix(color, vec3(0.025, 0.055, 0.075), edge * 0.18 * strength);
 
       float vignette = smoothstep(0.82, 0.22, distance(vUv, vec2(0.5)));
-      color *= mix(0.76, 1.05, vignette);
+      color *= mix(0.84, 1.03, vignette);
 
       float grain = hash(vUv * resolution + time * 41.0) - 0.5;
       color += grain * 0.012 * strength;
