@@ -62,6 +62,7 @@ These notes record the real-world sources and implementation decisions used to s
 - Street-context research is stored in `docs/research/street-context-2026-07-05.md`.
 - Park-life and data-pipeline research is stored in `docs/research/park-life-data-pipeline-2026-07-05.md`.
 - Micro-terrain and elevation research is stored in `docs/research/micro-terrain-elevation-2026-07-05.md`.
+- Vegetation massing research is stored in `docs/research/vegetation-massing-2026-07-05.md`.
 
 ## Data Notes
 
@@ -70,3 +71,4 @@ These notes record the real-world sources and implementation decisions used to s
 - Raw API responses are kept locally under ignored `docs/research/raw/` when useful. The durable checked-in artifacts are source notes plus compact derived constants in `src/game/levelData.ts`.
 - The Vicmap elevation samples are sparse. They are appropriate for broad park slope and local rise/fall, not for fine kerbs, gutters, steps or detailed drainage modelling.
 - Fine ground details such as crowns, shoulders, root mounds, swales and oval banking are represented as deterministic local terrain modifiers layered over the broad Vicmap interpolation.
+- Tree rendering distinguishes specimen, avenue and generic mapped trees with sourceable canopy-radius/density metadata plus instanced under-canopy ground wear.

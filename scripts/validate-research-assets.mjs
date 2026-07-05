@@ -13,7 +13,8 @@ const requiredDocs = [
   "docs/research/vegetation-realism-2026-07-05.md",
   "docs/research/street-context-2026-07-05.md",
   "docs/research/park-life-data-pipeline-2026-07-05.md",
-  "docs/research/micro-terrain-elevation-2026-07-05.md"
+  "docs/research/micro-terrain-elevation-2026-07-05.md",
+  "docs/research/vegetation-massing-2026-07-05.md"
 ];
 
 const failures = [];

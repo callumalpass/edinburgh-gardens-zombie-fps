@@ -1882,6 +1882,42 @@ function treeProfileFromGenus(genus: string): TreeProfile {
   return "generic";
 }
 
+type MappedTreeInput = Omit<MappedTree, "canopyRadius" | "canopyDensity" | "canopyGroup"> & Partial<Pick<MappedTree, "canopyRadius" | "canopyDensity" | "canopyGroup">>;
+
+function completeMappedTree(tree: MappedTreeInput): MappedTree {
+  const canopyGroup = tree.canopyGroup ?? treeCanopyGroup(tree);
+  return {
+    ...tree,
+    canopyRadius: tree.canopyRadius ?? treeCanopyRadius(tree),
+    canopyDensity: tree.canopyDensity ?? treeCanopyDensity(tree.profile, canopyGroup),
+    canopyGroup
+  };
+}
+
+function treeCanopyGroup(tree: Pick<MappedTree, "profile" | "source" | "height" | "dbh">): MappedTree["canopyGroup"] {
+  if (tree.source?.includes("tree avenue") || (tree.profile === "elm" && tree.source?.includes("OpenStreetMap"))) {
+    return "avenue";
+  }
+  if (tree.source?.includes("Yarra significant trees") || (tree.height && tree.dbh)) {
+    return "specimen";
+  }
+  return "mapped";
+}
+
+function treeCanopyRadius(tree: Pick<MappedTree, "profile" | "height" | "dbh" | "source">): number {
+  const heightRadius = ((tree.height ?? (tree.profile === "gum" ? 17 : tree.profile === "oak" ? 15 : 13)) * WORLD_SCALE) / (tree.profile === "gum" ? 4.8 : 3.8);
+  const dbhRadius = ((tree.dbh ?? (tree.profile === "oak" ? 92 : tree.profile === "elm" ? 80 : 66)) / 100) * WORLD_SCALE * 3.6;
+  const profileBoost = tree.profile === "oak" ? 1.18 : tree.profile === "elm" ? 1.08 : tree.profile === "gum" ? 0.9 : 1;
+  const sourceBoost = tree.source?.includes("tree avenue") ? 0.92 : tree.source?.includes("Yarra significant trees") ? 1.12 : 1;
+  return Math.max(3.1, Math.min(12.6, ((heightRadius + dbhRadius) * 0.5) * profileBoost * sourceBoost));
+}
+
+function treeCanopyDensity(profile: TreeProfile, canopyGroup: MappedTree["canopyGroup"]): number {
+  const base = profile === "gum" ? 0.55 : profile === "oak" ? 0.88 : profile === "elm" ? 0.78 : 0.66;
+  const groupBoost = canopyGroup === "specimen" ? 0.06 : canopyGroup === "avenue" ? 0.04 : 0;
+  return Math.max(0.42, Math.min(0.95, base + groupBoost));
+}
+
 function distanceToPolyline(point: Vec2, points: readonly Vec2[]): number {
   let closest = Number.POSITIVE_INFINITY;
   for (let index = 0; index < points.length - 1; index += 1) {
@@ -1912,11 +1948,12 @@ function inferMappedTreeProfile(
   return index % 5 === 0 ? "elm" : "generic";
 }
 
-function appendMappedTree(trees: MappedTree[], tree: MappedTree, minSpacing: number): void {
+function appendMappedTree(trees: MappedTree[], tree: MappedTreeInput, minSpacing: number): void {
+  const completedTree = completeMappedTree(tree);
   if (trees.some((existing) => distance(existing.position, tree.position) < minSpacing)) {
     return;
   }
-  trees.push(tree);
+  trees.push(completedTree);
 }
 
 function treeColliderRadius(tree: MappedTree): number {

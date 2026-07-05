@@ -42,6 +42,13 @@ describe("map geometry", () => {
     for (const profile of ["elm", "oak", "gum", "generic"] as const) {
       expect(profiles.has(profile)).toBe(true);
     }
+    const canopyGroups = new Set(level.trees.map((tree) => tree.canopyGroup));
+    for (const group of ["avenue", "specimen", "mapped"] as const) {
+      expect(canopyGroups.has(group)).toBe(true);
+    }
+    expect(level.trees.every((tree) => tree.canopyRadius >= 3 && tree.canopyRadius <= 13)).toBe(true);
+    expect(level.trees.every((tree) => tree.canopyDensity >= 0.42 && tree.canopyDensity <= 0.95)).toBe(true);
+    expect(level.trees.filter((tree) => tree.canopyGroup === "specimen").length).toBeGreaterThanOrEqual(level.significantTrees.length - 1);
     expect(level.trees.some((tree) => tree.source?.includes("Yarra significant trees") && tree.height && tree.dbh)).toBe(true);
     expect(level.trees.some((tree) => tree.source?.includes("OpenStreetMap") && tree.profile === "elm")).toBe(true);
     expect(level.trees.some((tree) => tree.source?.includes("tree avenue") && tree.profile === "elm")).toBe(true);

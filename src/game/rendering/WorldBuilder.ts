@@ -89,6 +89,7 @@ export class WorldBuilder {
     this.addPathLights();
     this.addParkEntranceDetails();
     this.addBoundaryFence();
+    this.addUnderCanopyGroundWear();
     this.addTrees();
   }
 
@@ -2196,6 +2197,40 @@ export class WorldBuilder {
     });
   }
 
+  private addUnderCanopyGroundWear(): void {
+    const trees = this.level.trees.filter((tree) => pointInPolygon(tree.position, this.level.boundary));
+    if (trees.length === 0) return;
+
+    const circleGeometry = new THREE.CircleGeometry(1, 22);
+    const litterMesh = new THREE.InstancedMesh(circleGeometry, this.materials.leafLitter, trees.length);
+    const wearMesh = new THREE.InstancedMesh(circleGeometry, this.materials.wornGrass, trees.length);
+    const matrix = new THREE.Matrix4();
+    const quaternion = new THREE.Quaternion();
+    const scale = new THREE.Vector3();
+
+    for (let index = 0; index < trees.length; index += 1) {
+      const tree = trees[index];
+      const angle = this.angleFromId(tree.id);
+      const canopyRadius = tree.canopyRadius * (tree.profile === "gum" ? 0.72 : tree.profile === "oak" ? 0.95 : 0.84);
+      const y = this.groundY(tree.position);
+
+      quaternion.setFromEuler(new THREE.Euler(-Math.PI / 2, 0, angle));
+      scale.set(canopyRadius * (tree.canopyGroup === "avenue" ? 0.82 : 1), canopyRadius * 0.58, 1);
+      matrix.compose(new THREE.Vector3(tree.position.x, y + 0.038, tree.position.z), quaternion, scale);
+      litterMesh.setMatrixAt(index, matrix);
+
+      quaternion.setFromEuler(new THREE.Euler(-Math.PI / 2, 0, angle + Math.PI * 0.5));
+      scale.set(canopyRadius * 1.12, canopyRadius * 0.74, 1);
+      matrix.compose(new THREE.Vector3(tree.position.x, y + 0.033, tree.position.z), quaternion, scale);
+      wearMesh.setMatrixAt(index, matrix);
+    }
+
+    litterMesh.receiveShadow = true;
+    wearMesh.receiveShadow = true;
+    this.scene.add(wearMesh);
+    this.scene.add(litterMesh);
+  }
+
   private addRealisticTree(tree: MappedTree, index: number): void {
     const group = new THREE.Group();
     const point = tree.position;
@@ -2219,13 +2254,6 @@ export class WorldBuilder {
     trunk.castShadow = true;
     trunk.receiveShadow = true;
     group.add(trunk);
-
-    const litter = new THREE.Mesh(new THREE.CircleGeometry(trunkRadius * this.rng.range(5.0, 7.8), 18), this.materials.leafLitter);
-    litter.position.y = 0.032;
-    litter.rotation.x = -Math.PI / 2;
-    litter.scale.set(this.rng.range(1, 1.5), this.rng.range(0.65, 1.05), 1);
-    litter.receiveShadow = true;
-    group.add(litter);
 
     for (let rootIndex = 0; rootIndex < 5; rootIndex += 1) {
       const angle = (rootIndex / 5) * Math.PI * 2 + this.rng.range(-0.22, 0.22);
@@ -2251,15 +2279,16 @@ export class WorldBuilder {
       group.add(this.createBranch(start, end, trunkRadius * this.rng.range(0.28, 0.42), materials.trunk));
     }
 
-    const lobeCount = profile === "gum" ? 5 : profile === "oak" ? 7 : 6;
+    const lobeCount = Math.max(4, Math.round((profile === "gum" ? 5 : profile === "oak" ? 8 : 7) * tree.canopyDensity + (tree.canopyGroup === "specimen" ? 1 : 0)));
     for (let lobeIndex = 0; lobeIndex < lobeCount; lobeIndex += 1) {
       const angle = (lobeIndex / lobeCount) * Math.PI * 2 + this.rng.range(-0.3, 0.3);
-      const canopyRadius = this.rng.range(profile === "gum" ? 1.35 : 1.65, profile === "oak" ? 2.75 : 2.55) * scale;
+      const canopyRadius = tree.canopyRadius * this.rng.range(profile === "gum" ? 0.22 : 0.25, profile === "oak" ? 0.42 : 0.36);
+      const spread = tree.canopyRadius * (profile === "gum" ? 0.28 : profile === "oak" ? 0.5 : tree.canopyGroup === "avenue" ? 0.42 : 0.46);
       const canopy = new THREE.Mesh(this.treeCanopyGeometry, materials.leaf);
       canopy.position.set(
-        Math.cos(angle) * this.rng.range(profile === "gum" ? 0.65 : 0.9, profile === "oak" ? 2.8 : 2.25) * scale,
+        Math.cos(angle) * this.rng.range(spread * 0.45, spread),
         trunkHeight + this.rng.range(profile === "gum" ? -0.45 : 0.05, profile === "oak" ? 1.0 : 1.45) * scale,
-        Math.sin(angle) * this.rng.range(profile === "gum" ? 0.65 : 0.9, profile === "oak" ? 2.8 : 2.25) * scale
+        Math.sin(angle) * this.rng.range(spread * 0.45, spread)
       );
       canopy.scale.set(
         canopyRadius * this.rng.range(profile === "gum" ? 0.85 : 1.05, profile === "oak" ? 1.75 : 1.55),

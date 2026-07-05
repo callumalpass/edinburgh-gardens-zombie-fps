@@ -89,6 +89,9 @@ export interface MappedTree {
   label: string;
   position: Vec2;
   profile: TreeProfile;
+  canopyRadius: number;
+  canopyDensity: number;
+  canopyGroup: "avenue" | "specimen" | "mapped";
   height?: number;
   dbh?: number;
   source?: string;
