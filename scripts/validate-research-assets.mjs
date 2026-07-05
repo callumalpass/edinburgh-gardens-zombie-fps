@@ -18,7 +18,8 @@ const requiredDocs = [
   "docs/research/path-material-transitions-2026-07-05.md",
   "docs/research/building-affordance-realism-2026-07-05.md",
   "docs/research/tree-source-refresh-2026-07-05.md",
-  "docs/research/tree-placement-refresh-2026-07-05.md"
+  "docs/research/tree-placement-refresh-2026-07-05.md",
+  "docs/research/human-use-traces-2026-07-05.md"
 ];
 
 const failures = [];

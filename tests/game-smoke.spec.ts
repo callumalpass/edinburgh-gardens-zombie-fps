@@ -45,6 +45,7 @@ test("game loop advances and gameplay helpers mutate state", async ({ page }) =>
   await page.waitForFunction(() => window.__EGAME__?.ready === true);
   const first = await page.evaluate(() => window.__EGAME__!.snapshot());
   expect(first.renderedTrees).toBeGreaterThanOrEqual(145);
+  expect(first.renderedGrassClumps).toBeGreaterThanOrEqual(1200);
   expect(first.weapon).toBe("knife");
   await page.waitForFunction((frame) => window.__EGAME__!.snapshot().frame > frame, first.frame);
   const second = await page.evaluate(() => window.__EGAME__!.snapshot());

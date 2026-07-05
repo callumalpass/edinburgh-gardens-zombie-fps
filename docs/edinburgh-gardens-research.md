@@ -73,6 +73,7 @@ These notes record the real-world sources and implementation decisions used to s
 - Path material transition research is stored in `docs/research/path-material-transitions-2026-07-05.md`.
 - Building affordance realism research is stored in `docs/research/building-affordance-realism-2026-07-05.md`.
 - Tree source refresh research is stored in `docs/research/tree-source-refresh-2026-07-05.md`.
+- Human-use traces research is stored in `docs/research/human-use-traces-2026-07-05.md`.
 
 ## Data Notes
 
@@ -85,3 +86,4 @@ These notes record the real-world sources and implementation decisions used to s
 - Path material transitions are represented as sourceable visual patches for feathered edges, compacted junctions, muddy thresholds and informal desire paths.
 - Climbable fixtures now declare access kinds and landing positions so visual stairs/ladders and player placement align.
 - OSM tree records now retain source node IDs and suppress nodes in the Brunswick Street Oval redevelopment removal footprint.
+- Human-use traces add small non-colliding bowls, coolers, bags and chalk/scuff marks in documented activity zones.

@@ -305,10 +305,10 @@ describe("map geometry", () => {
   it("keeps park-life details sourceable and non-colliding", () => {
     const level = createLevelData();
     const detailKinds = new Set(level.parkLifeDetails.map((detail) => detail.kind));
-    for (const kind of ["dog-sign", "picnic-blanket", "notice-board", "casual-bike", "training-cones"] as const) {
+    for (const kind of ["dog-sign", "picnic-blanket", "notice-board", "casual-bike", "training-cones", "dog-water-bowl", "picnic-cooler", "sports-bag", "chalk-mark"] as const) {
       expect(detailKinds.has(kind)).toBe(true);
     }
-    expect(level.parkLifeDetails.length).toBeGreaterThanOrEqual(9);
+    expect(level.parkLifeDetails.length).toBeGreaterThanOrEqual(17);
     expect(level.parkLifeDetails.every((detail) => detail.source && pointInPolygon(detail.position, level.boundary))).toBe(true);
     const obstacleIds = new Set(level.obstacles.map((obstacle) => obstacle.id));
     expect(level.parkLifeDetails.some((detail) => obstacleIds.has(detail.id))).toBe(false);

@@ -242,7 +242,16 @@ export interface AmenityPoint {
 export interface ParkLifeDetail {
   id: string;
   label: string;
-  kind: "dog-sign" | "picnic-blanket" | "notice-board" | "casual-bike" | "training-cones";
+  kind:
+    | "dog-sign"
+    | "picnic-blanket"
+    | "notice-board"
+    | "casual-bike"
+    | "training-cones"
+    | "dog-water-bowl"
+    | "picnic-cooler"
+    | "sports-bag"
+    | "chalk-mark";
   position: Vec2;
   angle: number;
   source?: string;

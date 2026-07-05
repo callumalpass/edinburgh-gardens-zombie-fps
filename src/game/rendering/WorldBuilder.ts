@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { distance, geoToWorld, makeCircle, pointInPolygon, polygonCentroid } from "../geo";
+import { distance, distanceToSegment, geoToWorld, makeCircle, pointInPolygon, polygonCentroid } from "../geo";
 import { AUSTRALIAN_RULES_BEHIND_POST_HEIGHT_METRES, footballPostLocalOffsets } from "../sportsFixtures";
 import type {
   HardscapeLine,
@@ -20,6 +20,9 @@ const COLLISION_Y = 0.04;
 const TERRAIN_GRID_STEP = 7.5;
 const TERRAIN_EDGE_PAD = 9;
 const TREE_SCALE_MULTIPLIER = 1.22;
+const GRASS_SAMPLE_STEP = 5.2;
+const GRASS_CLUSTER_LIMIT = 5600;
+const GRASS_PATH_CLEARANCE = 1.25;
 
 interface TreeMaterialSet {
   trunk: THREE.MeshStandardMaterial;
@@ -29,6 +32,7 @@ interface TreeMaterialSet {
 
 export interface GameMaterials {
   grass: THREE.MeshStandardMaterial;
+  grassBlade: THREE.MeshStandardMaterial;
   path: THREE.MeshStandardMaterial;
   gravel: THREE.MeshStandardMaterial;
   asphalt: THREE.MeshStandardMaterial;
@@ -53,6 +57,7 @@ export interface GameMaterials {
 
 export class WorldBuilder {
   private renderedTreeCount = 0;
+  private renderedGrassClumpCount = 0;
   private readonly treeMaterialCache = new Map<string, TreeMaterialSet>();
   private readonly treeTrunkGeometry = new THREE.CylinderGeometry(0.72, 1, 1, 8);
   private readonly treeBranchGeometry = new THREE.CylinderGeometry(0.55, 1, 1, 6);
@@ -93,6 +98,7 @@ export class WorldBuilder {
     this.addPathSurfacePatches();
     this.addHardscapeLines();
     this.addDampGroundDetails();
+    this.addGrassClumps();
     this.addRailTrailRemnants();
     this.addLandmarks();
     this.addSportsFixtures();
@@ -125,6 +131,10 @@ export class WorldBuilder {
 
   getRenderedTreeCount(): number {
     return this.renderedTreeCount;
+  }
+
+  getRenderedGrassClumpCount(): number {
+    return this.renderedGrassClumpCount;
   }
 
   private groundY(point: Vec2): number {
@@ -269,6 +279,100 @@ export class WorldBuilder {
       puddle.receiveShadow = true;
       this.scene.add(puddle);
     });
+  }
+
+  private addGrassClumps(): void {
+    this.renderedGrassClumpCount = 0;
+    const minX = Math.min(...this.level.boundary.map((point) => point.x)) + 2;
+    const maxX = Math.max(...this.level.boundary.map((point) => point.x)) - 2;
+    const minZ = Math.min(...this.level.boundary.map((point) => point.z)) + 2;
+    const maxZ = Math.max(...this.level.boundary.map((point) => point.z)) - 2;
+    const clumps: Array<{
+      point: Vec2;
+      height: number;
+      spread: number;
+      rotation: number;
+      leanX: number;
+      leanZ: number;
+      color: THREE.Color;
+    }> = [];
+
+    outer: for (let x = minX; x <= maxX; x += GRASS_SAMPLE_STEP) {
+      for (let z = minZ; z <= maxZ; z += GRASS_SAMPLE_STEP) {
+        const density = this.stableNoise(x, z, 1);
+        if (density < 0.34) {
+          continue;
+        }
+        const point = {
+          x: x + (this.stableNoise(x, z, 2) - 0.5) * GRASS_SAMPLE_STEP * 0.86,
+          z: z + (this.stableNoise(x, z, 3) - 0.5) * GRASS_SAMPLE_STEP * 0.86
+        };
+        if (!this.isGrassEligible(point)) {
+          continue;
+        }
+
+        const shortMown = this.isMownOvalPoint(point);
+        const shaded = this.isUnderCanopy(point);
+        const variation = this.stableNoise(point.x, point.z, 4);
+        const height = shortMown
+          ? THREE.MathUtils.lerp(0.16, 0.3, variation)
+          : shaded
+            ? THREE.MathUtils.lerp(0.24, 0.46, variation)
+            : THREE.MathUtils.lerp(0.3, 0.64, variation);
+        const spread = shortMown
+          ? THREE.MathUtils.lerp(0.36, 0.68, this.stableNoise(point.x, point.z, 5))
+          : THREE.MathUtils.lerp(0.55, 1.18, this.stableNoise(point.x, point.z, 5));
+        const baseColor = shortMown ? 0x83a66a : shaded ? 0x587749 : 0x6f9854;
+        const color = new THREE.Color(baseColor).offsetHSL(
+          (this.stableNoise(point.x, point.z, 6) - 0.5) * 0.035,
+          (this.stableNoise(point.x, point.z, 7) - 0.5) * 0.08,
+          (this.stableNoise(point.x, point.z, 8) - 0.5) * 0.12
+        );
+
+        clumps.push({
+          point,
+          height,
+          spread,
+          rotation: this.stableNoise(point.x, point.z, 9) * Math.PI * 2,
+          leanX: (this.stableNoise(point.x, point.z, 10) - 0.5) * 0.16,
+          leanZ: (this.stableNoise(point.x, point.z, 11) - 0.5) * 0.16,
+          color
+        });
+        if (clumps.length >= GRASS_CLUSTER_LIMIT) {
+          break outer;
+        }
+      }
+    }
+
+    if (clumps.length === 0) {
+      return;
+    }
+
+    const mesh = new THREE.InstancedMesh(createGrassClumpGeometry(), this.materials.grassBlade, clumps.length);
+    const matrix = new THREE.Matrix4();
+    const quaternion = new THREE.Quaternion();
+    const scale = new THREE.Vector3();
+    const euler = new THREE.Euler();
+
+    clumps.forEach((clump, index) => {
+      euler.set(clump.leanX, clump.rotation, clump.leanZ);
+      quaternion.setFromEuler(euler);
+      scale.set(clump.spread, clump.height, clump.spread);
+      matrix.compose(new THREE.Vector3(clump.point.x, this.groundY(clump.point) + 0.04, clump.point.z), quaternion, scale);
+      mesh.setMatrixAt(index, matrix);
+      mesh.setColorAt(index, clump.color);
+    });
+
+    mesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+    mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) {
+      mesh.instanceColor.needsUpdate = true;
+    }
+    mesh.frustumCulled = false;
+    mesh.userData.kind = "grass-clumps";
+    mesh.userData.count = clumps.length;
+    this.renderedGrassClumpCount = clumps.length;
+    this.scene.add(mesh);
   }
 
   private addPaths(): void {
@@ -911,6 +1015,118 @@ export class WorldBuilder {
     };
   }
 
+  private isGrassEligible(point: Vec2): boolean {
+    if (!pointInPolygon(point, this.level.boundary)) {
+      return false;
+    }
+
+    for (const path of this.level.paths) {
+      const clearance = path.width * 0.5 + (path.kind === "rail" || path.kind === "cycleway" ? 1.7 : GRASS_PATH_CLEARANCE);
+      for (let i = 0; i < path.points.length - 1; i += 1) {
+        if (distanceToSegment(point, path.points[i], path.points[i + 1]) < clearance) {
+          return false;
+        }
+      }
+    }
+
+    for (const street of this.level.streetEdges) {
+      for (let i = 0; i < street.points.length - 1; i += 1) {
+        if (distanceToSegment(point, street.points[i], street.points[i + 1]) < street.width * 0.5 + 1.4) {
+          return false;
+        }
+      }
+    }
+
+    for (const line of this.level.hardscapeLines) {
+      for (let i = 0; i < line.points.length - 1; i += 1) {
+        if (distanceToSegment(point, line.points[i], line.points[i + 1]) < line.width * 0.5 + 0.65) {
+          return false;
+        }
+      }
+    }
+
+    for (const patch of this.level.pathSurfacePatches) {
+      if (this.pointInRotatedRect(point, patch.position, patch.angle, patch.length * 0.5 + 0.85, patch.width * 0.5 + 0.85)) {
+        return false;
+      }
+    }
+
+    for (const landmark of this.level.landmarks) {
+      if (landmark.kind === "park" || landmark.kind === "oval") {
+        continue;
+      }
+      if (landmark.polygon && pointInPolygon(point, landmark.polygon)) {
+        return false;
+      }
+      if (landmark.position && landmark.radius && distance(point, landmark.position) < landmark.radius + 1.2) {
+        return false;
+      }
+    }
+
+    for (const building of this.level.mappedBuildings) {
+      if (pointInPolygon(point, building.polygon)) {
+        return false;
+      }
+    }
+
+    for (const obstacle of this.level.obstacles) {
+      if (obstacle.shape === "box") {
+        if (this.pointInRotatedRect(point, obstacle.center, obstacle.angle, obstacle.halfX + 0.55, obstacle.halfZ + 0.55)) {
+          return false;
+        }
+      } else if (obstacle.shape === "polygon") {
+        if (pointInPolygon(point, obstacle.polygon)) {
+          return false;
+        }
+      } else if (distance(point, obstacle.center) < obstacle.radius + 0.45) {
+        return false;
+      }
+    }
+
+    for (const fixture of this.level.sportsFixtures) {
+      if (distance(point, fixture.position) < fixture.radius + 0.9) {
+        return false;
+      }
+    }
+
+    for (const amenity of this.level.amenities) {
+      if (distance(point, amenity.position) < 1.15) {
+        return false;
+      }
+    }
+
+    for (const detail of this.level.parkLifeDetails) {
+      if (distance(point, detail.position) < 1.8) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  private isMownOvalPoint(point: Vec2): boolean {
+    return this.level.landmarks.some((landmark) => landmark.kind === "oval" && Boolean(landmark.polygon) && pointInPolygon(point, landmark.polygon!));
+  }
+
+  private isUnderCanopy(point: Vec2): boolean {
+    return this.level.trees.some((tree) => distance(point, tree.position) < tree.canopyRadius * 0.72);
+  }
+
+  private pointInRotatedRect(point: Vec2, center: Vec2, angle: number, halfX: number, halfZ: number): boolean {
+    const dx = point.x - center.x;
+    const dz = point.z - center.z;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const localX = dx * cos + dz * sin;
+    const localZ = -dx * sin + dz * cos;
+    return Math.abs(localX) <= halfX && Math.abs(localZ) <= halfZ;
+  }
+
+  private stableNoise(x: number, z: number, salt: number): number {
+    const value = Math.sin(x * 12.9898 + z * 78.233 + salt * 37.719) * 43758.5453;
+    return value - Math.floor(value);
+  }
+
   private addLocalBox(
     center: Vec2,
     rotation: number,
@@ -1549,8 +1765,16 @@ export class WorldBuilder {
         this.addNoticeBoard(detail);
       } else if (detail.kind === "casual-bike") {
         this.addCasualBike(detail);
-      } else {
+      } else if (detail.kind === "training-cones") {
         this.addTrainingCones(detail);
+      } else if (detail.kind === "dog-water-bowl") {
+        this.addDogWaterBowl(detail);
+      } else if (detail.kind === "picnic-cooler") {
+        this.addPicnicCooler(detail);
+      } else if (detail.kind === "sports-bag") {
+        this.addSportsBag(detail);
+      } else {
+        this.addChalkMark(detail);
       }
     }
   }
@@ -1653,6 +1877,66 @@ export class WorldBuilder {
       cone.position.set(point.x, this.groundY(point) + 0.22, point.z);
       cone.castShadow = true;
       this.scene.add(cone);
+    }
+  }
+
+  private addDogWaterBowl(detail: ParkLifeDetail): void {
+    const groundY = this.groundY(detail.position);
+    const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.34, 0.16, 18), this.materials.metal);
+    bowl.position.set(detail.position.x, groundY + 0.08, detail.position.z);
+    bowl.castShadow = true;
+    this.scene.add(bowl);
+    const water = new THREE.Mesh(new THREE.CylinderGeometry(0.31, 0.31, 0.018, 18), this.materials.puddle);
+    water.position.set(detail.position.x, groundY + 0.17, detail.position.z);
+    this.scene.add(water);
+  }
+
+  private addPicnicCooler(detail: ParkLifeDetail): void {
+    const group = new THREE.Group();
+    const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x4f8f9a, roughness: 0.58 });
+    const lidMaterial = new THREE.MeshStandardMaterial({ color: 0xe6dfc8, roughness: 0.52 });
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.48, 0.58), bodyMaterial);
+    body.position.y = 0.28;
+    body.castShadow = true;
+    group.add(body);
+    const lid = new THREE.Mesh(new THREE.BoxGeometry(1.02, 0.12, 0.64), lidMaterial);
+    lid.position.y = 0.58;
+    lid.castShadow = true;
+    group.add(lid);
+    const handle = new THREE.Mesh(new THREE.TorusGeometry(0.38, 0.025, 8, 18), this.materials.metal);
+    handle.position.y = 0.74;
+    handle.rotation.x = Math.PI / 2;
+    group.add(handle);
+    group.position.set(detail.position.x, this.boxSupportY(detail.position, detail.angle, 0.52, 0.33), detail.position.z);
+    group.rotation.y = detail.angle;
+    this.scene.add(group);
+  }
+
+  private addSportsBag(detail: ParkLifeDetail): void {
+    const group = new THREE.Group();
+    const bagMaterial = new THREE.MeshStandardMaterial({ color: 0x293a4d, roughness: 0.74 });
+    const bag = new THREE.Mesh(new THREE.BoxGeometry(1.25, 0.42, 0.58), bagMaterial);
+    bag.position.y = 0.26;
+    bag.castShadow = true;
+    group.add(bag);
+    for (const x of [-0.32, 0.32]) {
+      const strap = new THREE.Mesh(new THREE.TorusGeometry(0.26, 0.022, 6, 14), this.materials.timber);
+      strap.position.set(x, 0.48, 0);
+      strap.rotation.x = Math.PI / 2;
+      strap.scale.z = 0.55;
+      group.add(strap);
+    }
+    group.position.set(detail.position.x, this.boxSupportY(detail.position, detail.angle, 0.65, 0.32), detail.position.z);
+    group.rotation.y = detail.angle;
+    this.scene.add(group);
+  }
+
+  private addChalkMark(detail: ParkLifeDetail): void {
+    const chalkMaterial = new THREE.MeshBasicMaterial({ color: 0xe8e2c7, transparent: true, opacity: 0.58 });
+    for (let mark = 0; mark < 3; mark += 1) {
+      const center = this.localPoint(detail.position, detail.angle, (mark - 1) * 0.36, Math.sin(mark) * 0.24);
+      const line = this.createTerrainRect(center, detail.angle + mark * 0.72, 1.25 - mark * 0.18, 0.045, 0.164, 0.01, chalkMaterial);
+      this.scene.add(line);
     }
   }
 
@@ -2432,4 +2716,30 @@ export class WorldBuilder {
     sprite.scale.set(18, 4.5, 1);
     this.scene.add(sprite);
   }
+}
+
+function createGrassClumpGeometry(): THREE.BufferGeometry {
+  const vertices: number[] = [];
+  const bladeCount = 7;
+
+  for (let index = 0; index < bladeCount; index += 1) {
+    const angle = (index / bladeCount) * Math.PI * 2;
+    const right = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
+    const forward = new THREE.Vector3(-Math.sin(angle), 0, Math.cos(angle));
+    const width = 0.045 + (index % 3) * 0.014;
+    const height = 0.68 + (index % 4) * 0.095;
+    const lean = 0.045 + (index % 2) * 0.035;
+    const baseOffset = forward.clone().multiplyScalar((index - bladeCount / 2) * 0.012);
+    const left = baseOffset.clone().addScaledVector(right, -width);
+    const rightBase = baseOffset.clone().addScaledVector(right, width);
+    const tip = baseOffset.clone().addScaledVector(forward, lean);
+    tip.y = height;
+
+    vertices.push(left.x, 0, left.z, rightBase.x, 0, rightBase.z, tip.x, tip.y, tip.z);
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.computeVertexNormals();
+  return geometry;
 }

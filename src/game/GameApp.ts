@@ -145,6 +145,7 @@ export class GameApp {
   private scopeAmount = 0;
   private muzzleTimer = 0;
   private renderedTreeCount = 0;
+  private renderedGrassClumpCount = 0;
   private miniMapVisibleZombieCount = 0;
   private lastHitZone: HitZone | null = null;
   private materials!: GameMaterials;
@@ -1477,6 +1478,7 @@ export class GameApp {
       weaponDrops: this.weaponDrops.length,
       elevation: Number(this.player.height.toFixed(2)),
       renderedTrees: this.renderedTreeCount,
+      renderedGrassClumps: this.renderedGrassClumpCount,
       lastHitZone: this.lastHitZone,
       meleeSwing: Number(this.meleeSwing.toFixed(3)),
       shotBloom: Number(this.shotBloom.toFixed(4)),
@@ -1580,6 +1582,7 @@ export class GameApp {
     );
     this.world.createWorld();
     this.renderedTreeCount = this.world.getRenderedTreeCount();
+    this.renderedGrassClumpCount = this.world.getRenderedGrassClumpCount();
   }
 
   private rebuildViewWeapon(): void {

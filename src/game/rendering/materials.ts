@@ -8,6 +8,12 @@ export function createGameMaterials(rng: RandomSource): GameMaterials {
     color: 0x789162,
     roughness: 0.94
   });
+  const grassBlade = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    roughness: 0.98,
+    side: THREE.DoubleSide,
+    vertexColors: true
+  });
   const path = new THREE.MeshStandardMaterial({
     map: createCanvasTexture("path", rng),
     color: 0xc4a66e,
@@ -65,6 +71,7 @@ export function createGameMaterials(rng: RandomSource): GameMaterials {
   const zombieDark = new THREE.MeshStandardMaterial({ color: 0x33402d, roughness: 0.95 });
   return {
     grass,
+    grassBlade,
     path,
     gravel,
     asphalt,
