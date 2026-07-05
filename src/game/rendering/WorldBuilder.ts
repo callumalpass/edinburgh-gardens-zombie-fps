@@ -970,6 +970,12 @@ export class WorldBuilder {
     for (let step = 0; step < 4; step += 1) {
       this.addLocalBox(center, rotation, footprint.halfX + 0.55, frontZ + 0.55 + step * 0.42, 1.1, 0.16, 0.32, this.materials.concrete, 0.18 + step * 0.18);
     }
+    for (const side of [-1, 1]) {
+      this.addLocalBox(center, rotation, footprint.halfX + 0.55 + side * 0.64, frontZ + 1.16, 0.08, 0.08, 2.4, this.materials.metal, 0.9);
+      for (const z of [0.24, 1.16, 2.08]) {
+        this.addLocalBox(center, rotation, footprint.halfX + 0.55 + side * 0.64, frontZ + z, 0.08, 0.85, 0.08, this.materials.metal, 0.48);
+      }
+    }
     this.addLabel("Kevin Murray Stand", center, 6.7);
   }
 
@@ -1965,6 +1971,20 @@ export class WorldBuilder {
       stair.receiveShadow = true;
       group.add(stair);
     }
+    for (const side of [-1, 1]) {
+      const handrail = this.createBranch(new THREE.Vector3(side * 1.48, 0.92, -7.1), new THREE.Vector3(side * 1.24, 1.78, -4.92), 0.045, this.materials.metal);
+      group.add(handrail);
+      for (const z of [-6.85, -5.95, -5.05]) {
+        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 0.92, 8), this.materials.metal);
+        post.position.set(side * 1.38, 0.56, z);
+        post.castShadow = true;
+        group.add(post);
+      }
+    }
+    const landingStrip = new THREE.Mesh(new THREE.BoxGeometry(2.9, 0.08, 0.22), plaque);
+    landingStrip.position.set(0, 1.94, -4.35);
+    landingStrip.castShadow = true;
+    group.add(landingStrip);
     for (const side of [-1, 1]) {
       const pier = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.92, 0.5), renderStone);
       pier.position.set(side * 1.62, 0.78, -5.88);

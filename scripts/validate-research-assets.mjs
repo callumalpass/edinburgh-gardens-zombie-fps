@@ -15,7 +15,10 @@ const requiredDocs = [
   "docs/research/park-life-data-pipeline-2026-07-05.md",
   "docs/research/micro-terrain-elevation-2026-07-05.md",
   "docs/research/vegetation-massing-2026-07-05.md",
-  "docs/research/path-material-transitions-2026-07-05.md"
+  "docs/research/path-material-transitions-2026-07-05.md",
+  "docs/research/building-affordance-realism-2026-07-05.md",
+  "docs/research/tree-source-refresh-2026-07-05.md",
+  "docs/research/tree-placement-refresh-2026-07-05.md"
 ];
 
 const failures = [];

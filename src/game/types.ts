@@ -220,8 +220,11 @@ export interface InteractableFixture {
   kind: "rotunda" | "grandstand" | "playground" | "skate" | "basketball" | "toilets";
   position: Vec2;
   accessPosition?: Vec2;
+  landingPosition?: Vec2;
   exitPosition?: Vec2;
   accessRadius?: number;
+  accessKind?: "stairs" | "ladder" | "play-structure" | "frame" | "ramp";
+  accessHeading?: number;
   radius: number;
   height: number;
   prompt: string;

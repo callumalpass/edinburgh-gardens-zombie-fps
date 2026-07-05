@@ -11,6 +11,8 @@ These notes record the real-world sources and implementation decisions used to s
 - OpenStreetMap park boundary, way `13815924`: https://www.openstreetmap.org/way/13815924
   - Used for the escargot/crescent park boundary and as the containment polygon for filtering features.
   - OSM data is available under ODbL. Derived coordinates in `src/game/levelData.ts` should keep OSM attribution in user-facing or published material.
+- OpenStreetMap bounded tree-node extract: https://api.openstreetmap.org/api/0.6/map?bbox=144.9798,-37.7903,144.9860,-37.7853
+  - Used on 2026-07-05 to refresh `OSM_TREE_GEO` as 126 in-boundary `natural=tree` node IDs before current works exclusions.
 - OpenStreetMap feature ways fetched individually through the OSM API:
   - `22673070`, `22768137`, `75488632`, `22760904`, `22760905`, `210387722`, `1340465893`, `1340465894`, `1361307046`, `1361307049` path/service connectors added after a bounded path inventory.
   - `403753786` Kevin Murray Stand
@@ -35,6 +37,10 @@ These notes record the real-world sources and implementation decisions used to s
   - Used for the northern activity precinct: playground, BBQ/picnic tables, chess/game elements, table tennis, skate/BMX and basketball half-court context.
 - City of Yarra significant trees dataset metadata: https://data.gov.au/data/dataset/yarra-significant-trees
   - Used for notable tree species, diameter and height context already represented by `YARRA_SIGNIFICANT_TREE_GEO`.
+- Brunswick Street Oval Redevelopment updates: https://www.yarracity.vic.gov.au/planning-and-building/our-projects-and-initiatives/brunswick-street-oval
+  - Used for current 2026 tennis works, tree-removal and replacement context around the oval/tennis precinct.
+- Brunswick Street Oval Tree Protection and Management Plan: https://www.yarracity.vic.gov.au/sites/default/files/2026-02/Tree_protection_management_plan_brunswick_street_oval.pdf
+  - Used to suppress mapped OSM tree nodes that intersect the published 2026 tennis works tree-removal footprint.
 
 ## Current Implementation
 
@@ -53,6 +59,7 @@ These notes record the real-world sources and implementation decisions used to s
   - Buildings already inside tennis/bowls fenced precincts render visually but avoid duplicate collision blockers.
 - Paths, amenities, mapped buildings, trees, fixtures, memorials, entrances and pickups are placed relative to interpolated terrain height.
 - Existing OSM-derived paths, amenities, trees, sports facilities, memorials and park landmarks remain in `src/game/levelData.ts`.
+- Tree placement refresh research is stored in `docs/research/tree-placement-refresh-2026-07-05.md`.
 - Detailed OSM path/service research is stored in `docs/research/osm-path-service-inventory-2026-07-05.md`.
 - Hardscape and terrain-edge research is stored in `docs/research/hardscape-terrain-edges-2026-07-05.md`.
 - Built-feature research is stored in `docs/research/built-features-2026-07-05.md`.
@@ -64,6 +71,8 @@ These notes record the real-world sources and implementation decisions used to s
 - Micro-terrain and elevation research is stored in `docs/research/micro-terrain-elevation-2026-07-05.md`.
 - Vegetation massing research is stored in `docs/research/vegetation-massing-2026-07-05.md`.
 - Path material transition research is stored in `docs/research/path-material-transitions-2026-07-05.md`.
+- Building affordance realism research is stored in `docs/research/building-affordance-realism-2026-07-05.md`.
+- Tree source refresh research is stored in `docs/research/tree-source-refresh-2026-07-05.md`.
 
 ## Data Notes
 
@@ -74,3 +83,5 @@ These notes record the real-world sources and implementation decisions used to s
 - Fine ground details such as crowns, shoulders, root mounds, swales and oval banking are represented as deterministic local terrain modifiers layered over the broad Vicmap interpolation.
 - Tree rendering distinguishes specimen, avenue and generic mapped trees with sourceable canopy-radius/density metadata plus instanced under-canopy ground wear.
 - Path material transitions are represented as sourceable visual patches for feathered edges, compacted junctions, muddy thresholds and informal desire paths.
+- Climbable fixtures now declare access kinds and landing positions so visual stairs/ladders and player placement align.
+- OSM tree records now retain source node IDs and suppress nodes in the Brunswick Street Oval redevelopment removal footprint.

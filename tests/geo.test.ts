@@ -30,10 +30,10 @@ describe("map geometry", () => {
 
   it("uses mapped tree points inside the park for more accurate placement", () => {
     const level = createLevelData();
-    expect(level.treePoints.length).toBeGreaterThanOrEqual(126);
+    expect(level.treePoints.length).toBe(119);
     expect(level.treeLines.length).toBeGreaterThanOrEqual(5);
-    expect(level.significantTrees.length).toBeGreaterThanOrEqual(19);
-    expect(level.trees.length).toBeGreaterThanOrEqual(145);
+    expect(level.significantTrees.length).toBe(19);
+    expect(level.trees.length).toBe(138);
     expect(level.trees.length).toBe(level.treeColliders.length);
     expect(level.treePoints.filter((tree) => pointInPolygon(tree, level.boundary)).length).toBe(level.treePoints.length);
     expect(level.significantTrees.filter((tree) => pointInPolygon(tree.position, level.boundary)).length).toBe(level.significantTrees.length);
@@ -50,19 +50,23 @@ describe("map geometry", () => {
     expect(level.trees.every((tree) => tree.canopyDensity >= 0.42 && tree.canopyDensity <= 0.95)).toBe(true);
     expect(level.trees.filter((tree) => tree.canopyGroup === "specimen").length).toBeGreaterThanOrEqual(level.significantTrees.length - 1);
     expect(level.trees.some((tree) => tree.source?.includes("Yarra significant trees") && tree.height && tree.dbh)).toBe(true);
+    expect(level.trees.some((tree) => tree.id === "osm-tree-5365391973" && tree.source?.includes("OpenStreetMap natural=tree node"))).toBe(true);
     expect(level.trees.some((tree) => tree.source?.includes("OpenStreetMap") && tree.profile === "elm")).toBe(true);
-    expect(level.trees.some((tree) => tree.source?.includes("tree avenue") && tree.profile === "elm")).toBe(true);
+    expect(level.trees.some((tree) => tree.id.startsWith("tree-row-") || tree.source?.includes("tree avenue sample"))).toBe(false);
+    for (const removedNodeId of [5365392008, 5365392009, 5365392010, 5365392011, 5365393282, 5365393283, 5365393284]) {
+      expect(level.trees.some((tree) => tree.id === `osm-tree-${removedNodeId}`)).toBe(false);
+    }
   });
 
   it("derives solid trunk colliders from mapped and researched trees", () => {
     const level = createLevelData();
     const obstacleIds = new Set(level.obstacles.map((obstacle) => obstacle.id));
-    expect(level.treeColliders.length).toBeGreaterThanOrEqual(145);
+    expect(level.treeColliders.length).toBe(138);
     expect(level.treeColliders.every((tree) => pointInPolygon(tree.position, level.boundary))).toBe(true);
     expect(level.treeColliders.every((tree) => tree.radius >= 0.34 && tree.radius <= 1.05)).toBe(true);
     expect(level.treeColliders.some((tree) => tree.source?.includes("Yarra significant trees"))).toBe(true);
     expect(level.treeColliders.some((tree) => tree.source?.includes("OpenStreetMap"))).toBe(true);
-    expect(level.treeColliders.some((tree) => tree.source?.includes("tree avenue"))).toBe(true);
+    expect(level.treeColliders.some((tree) => tree.source?.includes("tree avenue sample"))).toBe(false);
 
     const sampleTree = level.treeColliders[0];
     const sampleObstacle = level.obstacles.find((obstacle) => obstacle.id === sampleTree.id);
@@ -222,21 +226,28 @@ describe("map geometry", () => {
     const level = createLevelData();
     const rotunda = level.interactables.find((fixture) => fixture.id === "rotunda-deck");
     expect(rotunda?.accessPosition).toBeTruthy();
+    expect(rotunda?.landingPosition).toBeTruthy();
+    expect(rotunda?.accessKind).toBe("stairs");
     expect(rotunda?.exitPosition).toEqual(rotunda?.accessPosition);
     expect(rotunda?.prompt).toContain("stairs");
     expect(rotunda?.height).toBeGreaterThan(1.5);
     expect(rotunda?.height).toBeLessThan(2.4);
     expect(distance(rotunda!.position, rotunda!.accessPosition!)).toBeGreaterThan(6);
+    expect(distance(rotunda!.accessPosition!, rotunda!.landingPosition!)).toBeGreaterThan(3);
+    expect(distance(rotunda!.position, rotunda!.landingPosition!)).toBeLessThan(rotunda!.radius);
     expect(pointInPolygon(rotunda!.accessPosition!, level.boundary)).toBe(true);
 
     const grandstand = level.interactables.find((fixture) => fixture.id === "grandstand-seats");
     expect(grandstand?.accessPosition).toBeTruthy();
+    expect(grandstand?.landingPosition).toBeTruthy();
+    expect(grandstand?.accessKind).toBe("stairs");
     expect(grandstand?.prompt).toContain("stairs");
     expect(distance(grandstand!.position, grandstand!.accessPosition!)).toBeGreaterThan(5);
+    expect(distance(grandstand!.accessPosition!, grandstand!.landingPosition!)).toBeGreaterThan(3);
 
     const roofFixtures = level.interactables.filter((fixture) => fixture.kind === "toilets" && fixture.id.endsWith("-roof"));
     expect(roofFixtures.length).toBeGreaterThanOrEqual(2);
-    expect(roofFixtures.every((fixture) => fixture.accessPosition && fixture.prompt.includes("ladder"))).toBe(true);
+    expect(roofFixtures.every((fixture) => fixture.accessPosition && fixture.landingPosition && fixture.accessKind === "ladder" && fixture.prompt.includes("ladder"))).toBe(true);
   });
 
   it("uses a richer OSM-derived path and amenity network", () => {

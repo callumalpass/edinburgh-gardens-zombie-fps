@@ -1188,12 +1188,20 @@ export class GameApp {
     } else {
       this.player.activeFixtureId = fixture.id;
       this.player.heightTarget = fixture.height;
-      this.player.position.set(fixture.position.x, this.groundY(fixture.position), fixture.position.z);
-      this.flashStatus(`Climbed ${fixture.label}`);
+      const landing = fixture.landingPosition ?? fixture.position;
+      this.player.position.set(landing.x, this.groundY(landing), landing.z);
+      this.flashStatus(`${this.climbStatusVerb(fixture)} ${fixture.label}`);
       this.noise.emit("climb", fixture.accessPosition ?? fixture.position);
     }
     this.playTone(420, 0.07, "sine", 0.04);
     return true;
+  }
+
+  private climbStatusVerb(fixture: InteractableFixture): string {
+    if (fixture.accessKind === "ladder") return "Climbed ladder to";
+    if (fixture.accessKind === "stairs") return "Climbed stairs to";
+    if (fixture.accessKind === "ramp") return "Walked onto";
+    return "Climbed";
   }
 
   private updateVerticalState(dt: number): void {

@@ -17,14 +17,15 @@ Scope: tree species/form, heritage avenue cues, trunk collision alignment and tr
 - National Trust Holm Oak record: https://www.trusttrees.org.au/tree/VIC/Fitzroy_North/Edinburgh_Gardens_Brunswick_Street
   - Used to confirm the Holm Oak as a named specimen tree in Edinburgh Gardens.
 - OpenStreetMap tree points:
-  - Existing `OSM_TREE_GEO` points represent `natural=tree` map data filtered to the OSM park boundary.
+  - `OSM_TREE_GEO` stores current `natural=tree` node IDs and points filtered to the OSM park boundary.
+  - The 2026-07-05 tree-placement refresh removed stale outside-boundary coordinates and suppresses a small set of OSM nodes in the Brunswick Street Oval tennis works removal footprint.
 
 ## Implementation Decisions
 
 - `LevelData.trees` is now the source of truth for rendered trees.
   - Significant Yarra trees keep their real common name, genus-derived profile, height and DBH.
-  - OSM tree points receive a profile inferred from proximity to researched heritage lines.
-  - CMP/OSM-derived avenue samples become explicit elm-profile trees.
+  - OSM tree nodes receive a stable `osm-tree-{nodeId}` ID and a profile inferred from proximity to researched heritage lines.
+  - CMP/OSM-derived avenue samples remain guide geometry only; they no longer become rendered trunks or collision obstacles.
 - `LevelData.treeColliders` is derived from `LevelData.trees`.
   - Visual tree positions and solid trunk blockers now share one placement model.
   - Significant-tree DBH scales trunk collision; non-significant trees use profile-based DBH fallbacks.
@@ -41,4 +42,4 @@ Scope: tree species/form, heritage avenue cues, trunk collision alignment and tr
 ## Follow-Up Notes
 
 - The current OSM tree points do not include species tags. If a City of Yarra spatial tree export with species-level coordinates becomes available, it should replace profile inference for generic OSM trees.
-- The CMP identifies Dutch Elm circles; they are represented indirectly by OSM tree points and elm-profile inference for now. A later pass could add explicit circle metadata if precise centre/radius data is sourced.
+- The CMP identifies Dutch Elm circles; they are represented indirectly by OSM tree nodes and elm-profile inference for now. A later pass could add explicit circle metadata if precise centre/radius data is sourced.
