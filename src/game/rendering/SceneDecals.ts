@@ -14,7 +14,7 @@ interface DecalSpec {
 }
 
 export class SceneDecals {
-  private readonly materials = new Map<DecalKind, THREE.MeshBasicMaterial>();
+  private readonly materials = new Map<string, THREE.MeshBasicMaterial>();
 
   constructor(
     private readonly scene: THREE.Scene,
@@ -136,7 +136,7 @@ export class SceneDecals {
   }
 
   private materialFor(kind: DecalKind, opacity: number): THREE.MeshBasicMaterial {
-    const key = `${kind}-${Math.round(opacity * 100)}` as DecalKind;
+    const key = `${kind}-${Math.round(opacity * 100)}`;
     const cached = this.materials.get(key);
     if (cached) return cached;
     const material = new THREE.MeshBasicMaterial({
@@ -165,19 +165,67 @@ export class SceneDecals {
       kind === "blood" ? [137, 31, 28] :
       [31, 42, 39];
 
-    for (let i = 0; i < 34; i += 1) {
-      const alpha = this.rng.range(0.08, kind === "wet" ? 0.22 : 0.34);
-      const gradient = ctx.createRadialGradient(this.rng.range(18, 238), this.rng.range(18, 110), 0, this.rng.range(18, 238), this.rng.range(18, 110), this.rng.range(16, 62));
-      gradient.addColorStop(0, `rgba(${color[0]}, ${color[1]}, ${color[2]}, ${alpha})`);
-      gradient.addColorStop(1, `rgba(${color[0]}, ${color[1]}, ${color[2]}, 0)`);
-      ctx.fillStyle = gradient;
-      ctx.beginPath();
-      ctx.ellipse(this.rng.range(12, 244), this.rng.range(10, 118), this.rng.range(16, 52), this.rng.range(5, 24), this.rng.range(-0.6, 0.6), 0, Math.PI * 2);
-      ctx.fill();
+    this.drawSoftPaintPools(ctx, kind, color);
+    this.drawDryBrushStrokes(ctx, kind, color);
+    if (kind === "leaf") {
+      this.drawLeafMarks(ctx);
     }
 
     const texture = new THREE.CanvasTexture(canvas);
     texture.colorSpace = THREE.SRGBColorSpace;
     return texture;
+  }
+
+  private drawSoftPaintPools(ctx: CanvasRenderingContext2D, kind: DecalKind, color: number[]): void {
+    const count = kind === "wet" ? 28 : kind === "blood" ? 24 : 18;
+    for (let i = 0; i < count; i += 1) {
+      const alpha = this.rng.range(0.055, kind === "wet" ? 0.19 : kind === "blood" ? 0.28 : 0.22);
+      const x = this.rng.range(18, 238);
+      const y = this.rng.range(18, 110);
+      const gradient = ctx.createRadialGradient(x, y, 0, x + this.rng.range(-10, 10), y + this.rng.range(-6, 6), this.rng.range(18, 68));
+      gradient.addColorStop(0, `rgba(${color[0]}, ${color[1]}, ${color[2]}, ${alpha})`);
+      gradient.addColorStop(1, `rgba(${color[0]}, ${color[1]}, ${color[2]}, 0)`);
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.ellipse(this.rng.range(12, 244), this.rng.range(10, 118), this.rng.range(18, 58), this.rng.range(4, 22), this.rng.range(-0.72, 0.72), 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  private drawDryBrushStrokes(ctx: CanvasRenderingContext2D, kind: DecalKind, color: number[]): void {
+    ctx.save();
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    const count = kind === "paint" ? 26 : kind === "scuff" ? 20 : 16;
+    for (let i = 0; i < count; i += 1) {
+      const x = this.rng.range(-26, 230);
+      const y = this.rng.range(4, 124);
+      const length = this.rng.range(44, kind === "wet" ? 170 : 118);
+      ctx.strokeStyle = `rgba(${color[0]}, ${color[1]}, ${color[2]}, ${this.rng.range(0.07, kind === "wet" ? 0.18 : 0.26)})`;
+      ctx.lineWidth = this.rng.range(1.1, kind === "paint" ? 4.2 : 3.1);
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.bezierCurveTo(x + length * 0.28, y + this.rng.range(-8, 8), x + length * 0.7, y + this.rng.range(-10, 10), x + length, y + this.rng.range(-6, 6));
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  private drawLeafMarks(ctx: CanvasRenderingContext2D): void {
+    ctx.save();
+    ctx.lineCap = "round";
+    for (let i = 0; i < 18; i += 1) {
+      const x = this.rng.range(0, 250);
+      const y = this.rng.range(4, 124);
+      const length = this.rng.range(18, 42);
+      const bend = this.rng.range(-0.32, 0.32);
+      ctx.strokeStyle = `rgba(214, 184, 96, ${this.rng.range(0.12, 0.28)})`;
+      ctx.lineWidth = this.rng.range(1.2, 2.6);
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.bezierCurveTo(x + length * 0.32, y - length * bend, x + length * 0.68, y + length * bend, x + length, y + this.rng.range(-5, 5));
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 }

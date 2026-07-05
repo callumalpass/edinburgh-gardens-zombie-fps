@@ -19,7 +19,7 @@ import type {
   UpgradeStation,
   Vec2
 } from "../types";
-import { createAnimeToonRamp } from "./animeStyle";
+import { MELBOURNE_ANIME_PALETTE, createAnimeToonRamp, tuneAnimeMaterial } from "./animeStyle";
 import { MeshFactory } from "./MeshFactory";
 import { pathPreviewMaterialKey, type ObjectPreviewTarget } from "./objectPreview";
 import {
@@ -54,6 +54,7 @@ type StyledSurfaceMaterial = THREE.MeshStandardMaterial | THREE.MeshToonMaterial
 interface TreeMaterialSet {
   trunk: THREE.Material;
   leaf: THREE.Material;
+  leafHighlight: THREE.Material;
   paleBark: THREE.Material;
 }
 
@@ -169,6 +170,7 @@ export class WorldBuilder {
     this.addStreetEdges();
     this.addMownLawnBands();
     this.addLawnWearPatches();
+    this.addPaintedLawnWashes();
     this.addDistantGroundBreakup();
     this.addPaths();
     this.addPathSurfacePatches();
@@ -692,6 +694,53 @@ export class WorldBuilder {
     });
   }
 
+  private addPaintedLawnWashes(): void {
+    const minX = Math.min(...this.level.boundary.map((point) => point.x)) + 10;
+    const maxX = Math.max(...this.level.boundary.map((point) => point.x)) - 10;
+    const minZ = Math.min(...this.level.boundary.map((point) => point.z)) + 10;
+    const maxZ = Math.max(...this.level.boundary.map((point) => point.z)) - 10;
+    const washMaterials = [
+      new THREE.MeshBasicMaterial({ color: 0x8fa36a, transparent: true, opacity: 0.135, depthWrite: false }),
+      new THREE.MeshBasicMaterial({ color: 0xb3a56f, transparent: true, opacity: 0.115, depthWrite: false }),
+      new THREE.MeshBasicMaterial({ color: 0x456e60, transparent: true, opacity: 0.12, depthWrite: false }),
+      new THREE.MeshBasicMaterial({ color: 0x6f7f73, transparent: true, opacity: 0.095, depthWrite: false })
+    ];
+    const maxWashes = 76;
+    let placed = 0;
+
+    outer: for (let x = minX; x <= maxX; x += 18) {
+      for (let z = minZ; z <= maxZ; z += 18) {
+        if (this.stableNoise(x, z, 141) < 0.46) continue;
+        const point = {
+          x: x + (this.stableNoise(x, z, 142) - 0.5) * 14,
+          z: z + (this.stableNoise(x, z, 143) - 0.5) * 14
+        };
+        if (!this.isGrassEligible(point)) continue;
+
+        const shaded = this.isUnderCanopy(point);
+        const mown = this.isMownOvalPoint(point);
+        const materialIndex = shaded ? 2 + Math.floor(this.stableNoise(point.x, point.z, 144) * 2) : mown ? 1 : Math.floor(this.stableNoise(point.x, point.z, 145) * 3);
+        const longAxis = THREE.MathUtils.lerp(mown ? 24 : 12, mown ? 46 : 32, this.stableNoise(point.x, point.z, 146));
+        const shortAxis = THREE.MathUtils.lerp(shaded ? 4.4 : 3.2, shaded ? 10.5 : 8.6, this.stableNoise(point.x, point.z, 147));
+        const wash = this.createTerrainOverlayEllipse(
+          point,
+          this.stableNoise(point.x, point.z, 148) * Math.PI,
+          longAxis,
+          shortAxis,
+          0.058 + placed * 0.00001,
+          washMaterials[Math.min(washMaterials.length - 1, materialIndex)]
+        );
+        wash.receiveShadow = false;
+        wash.renderOrder = 1;
+        wash.userData.kind = "painted-lawn-wash";
+        this.scene.add(wash);
+
+        placed += 1;
+        if (placed >= maxWashes) break outer;
+      }
+    }
+  }
+
   private addDistantGroundBreakup(): void {
     const minX = Math.min(...this.level.boundary.map((point) => point.x)) + 6;
     const maxX = Math.max(...this.level.boundary.map((point) => point.x)) - 6;
@@ -699,10 +748,10 @@ export class WorldBuilder {
     const maxZ = Math.max(...this.level.boundary.map((point) => point.z)) - 6;
     const ovalGeometry = new THREE.CircleGeometry(1, 22);
     const breakupMaterials = [
-      new THREE.MeshBasicMaterial({ color: 0x1d3e2d, transparent: true, opacity: 0.2, depthWrite: false }),
-      new THREE.MeshBasicMaterial({ color: 0x58643d, transparent: true, opacity: 0.16, depthWrite: false }),
-      new THREE.MeshBasicMaterial({ color: 0x543d2a, transparent: true, opacity: 0.13, depthWrite: false }),
-      new THREE.MeshBasicMaterial({ color: 0x173024, transparent: true, opacity: 0.18, depthWrite: false })
+      new THREE.MeshBasicMaterial({ color: 0x23483d, transparent: true, opacity: 0.16, depthWrite: false }),
+      new THREE.MeshBasicMaterial({ color: 0x697047, transparent: true, opacity: 0.13, depthWrite: false }),
+      new THREE.MeshBasicMaterial({ color: 0x6b5538, transparent: true, opacity: 0.11, depthWrite: false }),
+      new THREE.MeshBasicMaterial({ color: 0x18352d, transparent: true, opacity: 0.14, depthWrite: false })
     ];
     const maxPatches = 160;
     let placed = 0;
@@ -863,12 +912,18 @@ export class WorldBuilder {
         const spread = shortMown
           ? THREE.MathUtils.lerp(0.36, 0.68, this.stableNoise(point.x, point.z, 5))
           : THREE.MathUtils.lerp(0.55, 1.18, this.stableNoise(point.x, point.z, 5));
-        const dry = this.stableNoise(point.x, point.z, 12) > 0.78;
-        const baseColor = dry ? 0x857b59 : shortMown ? 0x747d58 : shaded ? 0x4b563f : 0x62704c;
+        const dry = this.stableNoise(point.x, point.z, 12) > 0.72;
+        const baseColor = dry
+          ? MELBOURNE_ANIME_PALETTE.dryGrass
+          : shortMown
+            ? MELBOURNE_ANIME_PALETTE.couchGrass
+            : shaded
+              ? 0x50664e
+              : MELBOURNE_ANIME_PALETTE.eucalyptus;
         const color = new THREE.Color(baseColor).offsetHSL(
-          (this.stableNoise(point.x, point.z, 6) - 0.5) * 0.035,
-          (this.stableNoise(point.x, point.z, 7) - 0.5) * 0.055,
-          (this.stableNoise(point.x, point.z, 8) - 0.5) * 0.09
+          (this.stableNoise(point.x, point.z, 6) - 0.5) * 0.025,
+          (this.stableNoise(point.x, point.z, 7) - 0.5) * 0.045,
+          (this.stableNoise(point.x, point.z, 8) - 0.5) * 0.075
         );
 
         clumps.push({
@@ -2352,6 +2407,7 @@ export class WorldBuilder {
     let material = this.detailMaterialCache.get(cacheKey);
     if (!material) {
       material = new THREE.MeshStandardMaterial({ color, roughness, metalness, transparent, opacity });
+      tuneAnimeMaterial(material);
       this.detailMaterialCache.set(cacheKey, material);
     }
     return material as THREE.MeshStandardMaterial;
@@ -4126,8 +4182,8 @@ export class WorldBuilder {
   }
 
   private addParkEntranceDetails(): void {
-    const stone = new THREE.MeshStandardMaterial({ color: 0xb6aa8d, roughness: 0.74 });
-    const iron = new THREE.MeshStandardMaterial({ color: 0x202622, metalness: 0.45, roughness: 0.42 });
+    const stone = this.standardDetailMaterial("entrance-bluestone-pillars", 0xb6aa8d, 0.8, 0.04);
+    const iron = this.standardDetailMaterial("entrance-painted-iron", 0x202622, 0.56, 0.32);
     const entrances = this.parkEntrances();
 
     for (const entrance of entrances) {
@@ -4159,7 +4215,10 @@ export class WorldBuilder {
       }
 
       if (entrance.sign) {
-        const sign = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.54, 0.12), new THREE.MeshStandardMaterial({ color: 0x2e4a3a, roughness: 0.68 }));
+        const sign = new THREE.Mesh(
+          new THREE.BoxGeometry(3.2, 0.54, 0.12),
+          this.canvasSignMaterial("edinburgh-gardens-entry", "EDINBURGH", "#244c3c", "#f0d072")
+        );
         sign.position.set(entrance.position.x, this.groundY(entrance.position) + 1.35, entrance.position.z);
         sign.rotation.y = -entrance.angle;
         sign.castShadow = true;
@@ -4264,11 +4323,11 @@ export class WorldBuilder {
   }
 
   private addStreetEdges(): void {
-    const asphalt = new THREE.MeshStandardMaterial({ color: 0x252a26, roughness: 0.88 });
-    const residential = new THREE.MeshStandardMaterial({ color: 0x2d302c, roughness: 0.9 });
-    const kerb = new THREE.MeshStandardMaterial({ color: 0xa9a18d, roughness: 0.7 });
-    const line = new THREE.MeshBasicMaterial({ color: 0xcfc8a6, transparent: true, opacity: 0.74 });
-    const rail = new THREE.MeshBasicMaterial({ color: 0x6f756d, transparent: true, opacity: 0.8 });
+    const asphalt = this.standardDetailMaterial("street-wet-bitumen", 0x26363b, 0.9, 0.04);
+    const residential = this.standardDetailMaterial("street-residential-bitumen", 0x303732, 0.92, 0.03);
+    const kerb = this.standardDetailMaterial("street-kerb-bluestone", 0xa9a18d, 0.78, 0.04);
+    const line = new THREE.MeshBasicMaterial({ color: 0xd8cfaa, transparent: true, opacity: 0.62 });
+    const rail = new THREE.MeshBasicMaterial({ color: 0x858a80, transparent: true, opacity: 0.72 });
 
     for (const street of this.level.streetEdges) {
       const roadMaterial = street.kind === "residential" ? residential : asphalt;
@@ -4429,7 +4488,8 @@ export class WorldBuilder {
       const angle = (lobeIndex / lobeCount) * Math.PI * 2 + this.rng.range(-0.3, 0.3);
       const canopyRadius = tree.canopyRadius * this.rng.range(profile === "gum" ? 0.22 : 0.25, profile === "oak" ? 0.42 : 0.36);
       const spread = tree.canopyRadius * (profile === "gum" ? 0.28 : profile === "oak" ? 0.5 : tree.canopyGroup === "avenue" ? 0.42 : 0.46);
-      const canopy = new THREE.Mesh(this.treeCanopyGeometry, materials.leaf);
+      const canopyMaterial = lobeIndex % (profile === "gum" ? 3 : 4) === 0 ? materials.leafHighlight : materials.leaf;
+      const canopy = new THREE.Mesh(this.treeCanopyGeometry, canopyMaterial);
       canopy.position.set(
         Math.cos(angle) * this.rng.range(spread * 0.45, spread),
         trunkHeight + this.rng.range(profile === "gum" ? -0.45 : 0.05, profile === "oak" ? 1.0 : 1.45) * scale,
@@ -4480,8 +4540,9 @@ export class WorldBuilder {
     const cached = this.treeMaterialCache.get(key);
     if (cached) return cached;
 
-    const baseTrunkColor = profile === "gum" ? 0x8c806a : profile === "oak" ? 0x56402e : 0x684d34;
-    const baseLeafColor = profile === "gum" ? 0x6f8078 : profile === "oak" ? 0x38543c : profile === "elm" ? 0x4a6741 : 0x526940;
+    const baseTrunkColor = profile === "gum" ? 0x8b806b : profile === "oak" ? 0x56402e : 0x684d34;
+    const baseLeafColor = profile === "gum" ? 0x748782 : profile === "oak" ? 0x3d573d : profile === "elm" ? 0x506b43 : 0x597044;
+    const highlightLeafColor = profile === "gum" ? 0x9aaca3 : profile === "oak" ? 0x6f7b4c : profile === "elm" ? 0x7e8f55 : 0x81925b;
     const hueOffset = (variant - 3.5) * 0.004;
     const saturationOffset = ((variant % 3) - 1) * 0.02;
     const lightOffset = ((variant % 5) - 2) * 0.018;
@@ -4494,8 +4555,14 @@ export class WorldBuilder {
       }),
       leaf: new THREE.MeshToonMaterial({
         color: new THREE.Color(baseLeafColor).offsetHSL(hueOffset * 1.4, saturationOffset, lightOffset),
-        emissive: 0x0d2019,
-        emissiveIntensity: 0.16,
+        emissive: 0x0e2119,
+        emissiveIntensity: 0.14,
+        gradientMap: WORLD_TOON_RAMP
+      }),
+      leafHighlight: new THREE.MeshToonMaterial({
+        color: new THREE.Color(highlightLeafColor).offsetHSL(hueOffset, saturationOffset * 0.5, lightOffset * 0.7),
+        emissive: 0x17281c,
+        emissiveIntensity: 0.1,
         gradientMap: WORLD_TOON_RAMP
       }),
       paleBark: new THREE.MeshToonMaterial({
@@ -4540,22 +4607,30 @@ export class WorldBuilder {
 
 function createGrassClumpGeometry(): THREE.BufferGeometry {
   const vertices: number[] = [];
-  const bladeCount = 7;
+  const bladeCount = 9;
 
   for (let index = 0; index < bladeCount; index += 1) {
     const angle = (index / bladeCount) * Math.PI * 2;
     const right = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
     const forward = new THREE.Vector3(-Math.sin(angle), 0, Math.cos(angle));
-    const width = 0.045 + (index % 3) * 0.014;
-    const height = 0.68 + (index % 4) * 0.095;
-    const lean = 0.045 + (index % 2) * 0.035;
+    const width = 0.038 + (index % 3) * 0.012;
+    const height = 0.58 + (index % 5) * 0.082;
+    const lean = 0.055 + (index % 2) * 0.045;
     const baseOffset = forward.clone().multiplyScalar((index - bladeCount / 2) * 0.012);
     const left = baseOffset.clone().addScaledVector(right, -width);
     const rightBase = baseOffset.clone().addScaledVector(right, width);
+    const midLeft = baseOffset.clone().addScaledVector(right, -width * 0.58).addScaledVector(forward, lean * 0.42);
+    const midRight = baseOffset.clone().addScaledVector(right, width * 0.54).addScaledVector(forward, lean * 0.52);
     const tip = baseOffset.clone().addScaledVector(forward, lean);
+    midLeft.y = height * 0.56;
+    midRight.y = height * 0.62;
     tip.y = height;
 
-    vertices.push(left.x, 0, left.z, rightBase.x, 0, rightBase.z, tip.x, tip.y, tip.z);
+    vertices.push(
+      left.x, 0, left.z, rightBase.x, 0, rightBase.z, midRight.x, midRight.y, midRight.z,
+      left.x, 0, left.z, midRight.x, midRight.y, midRight.z, midLeft.x, midLeft.y, midLeft.z,
+      midLeft.x, midLeft.y, midLeft.z, midRight.x, midRight.y, midRight.z, tip.x, tip.y, tip.z
+    );
   }
 
   const geometry = new THREE.BufferGeometry();

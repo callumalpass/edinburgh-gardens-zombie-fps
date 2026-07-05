@@ -3,68 +3,80 @@ import type { RandomSource } from "../types";
 import { MELBOURNE_ANIME_PALETTE, createAnimeToonRamp } from "./animeStyle";
 import type { GameMaterials } from "./WorldBuilder";
 
-type TextureKind = "grass" | "path" | "gravel" | "asphalt" | "concrete" | "rubber" | "mulch" | "basalt" | "brick" | "timber";
+type TextureKind =
+  | "grass"
+  | "path"
+  | "gravel"
+  | "asphalt"
+  | "concrete"
+  | "rubber"
+  | "mulch"
+  | "basalt"
+  | "brick"
+  | "timber"
+  | "court";
 
 const TOON_RAMP = createAnimeToonRamp();
 
 export function createGameMaterials(rng: RandomSource): GameMaterials {
   const grass = createToonMaterial("grass", rng, {
-    color: 0x78906a,
-    emissive: 0x1d342f,
-    emissiveIntensity: 0.2,
-    bumpScale: 0.075
+    color: MELBOURNE_ANIME_PALETTE.eucalyptus,
+    emissive: 0x203a33,
+    emissiveIntensity: 0.18,
+    bumpScale: 0.055
   });
   const grassBlade = new THREE.MeshToonMaterial({
     color: 0xffffff,
-    emissive: 0x3b5d42,
-    emissiveIntensity: 0.24,
+    emissive: 0x345743,
+    emissiveIntensity: 0.2,
     gradientMap: TOON_RAMP,
     side: THREE.DoubleSide,
     vertexColors: true
   });
   const path = createToonMaterial("path", rng, {
-    color: 0xb39a6b,
-    emissive: 0x2d2419,
+    color: 0xb9a06f,
+    emissive: 0x2a2418,
     emissiveIntensity: 0.12,
-    bumpScale: 0.05
+    bumpScale: 0.042
   });
   const gravel = createToonMaterial("gravel", rng, {
-    color: 0x948a77,
+    color: 0x9a907c,
     emissive: 0x1e1f1a,
     emissiveIntensity: 0.1,
-    bumpScale: 0.09
+    bumpScale: 0.065
   });
   const asphalt = createToonMaterial("asphalt", rng, {
-    color: 0x2b4650,
+    color: 0x2a4650,
     emissive: 0x0a1c22,
-    emissiveIntensity: 0.24,
-    bumpScale: 0.07
+    emissiveIntensity: 0.2,
+    bumpScale: 0.052
   });
   const concrete = createToonMaterial("concrete", rng, {
-    color: 0xa5aaa0,
+    color: 0xaaa99a,
     emissive: 0x1c2424,
     emissiveIntensity: 0.1,
-    bumpScale: 0.045
+    bumpScale: 0.036
   });
-  const court = new THREE.MeshToonMaterial({
-    color: 0x408a72,
-    emissive: 0x12352e,
-    emissiveIntensity: 0.18,
-    gradientMap: TOON_RAMP
+  const court = createToonMaterial("court", rng, {
+    color: 0x3f826b,
+    emissive: 0x12342e,
+    emissiveIntensity: 0.16,
+    bumpScale: 0.024
   });
   const rubber = createToonMaterial("rubber", rng, {
-    color: 0xa04f43,
+    color: 0xa75547,
     emissive: 0x281014,
     emissiveIntensity: 0.12,
-    bumpScale: 0.05
+    bumpScale: 0.035
   });
   const mulch = createToonMaterial("mulch", rng, {
-    color: 0x7a5739,
+    color: 0x785636,
     emissive: 0x1a1009,
     emissiveIntensity: 0.12,
-    bumpScale: 0.1
+    bumpScale: 0.07
   });
   const dirt = new THREE.MeshToonMaterial({
+    map: createCanvasTexture("path", rng),
     color: 0x6c5a43,
     emissive: 0x15100b,
     emissiveIntensity: 0.12,
@@ -73,7 +85,8 @@ export function createGameMaterials(rng: RandomSource): GameMaterials {
     opacity: 0.62
   });
   const leafLitter = new THREE.MeshToonMaterial({
-    color: 0x8b8050,
+    map: createCanvasTexture("mulch", rng),
+    color: 0x91875b,
     emissive: 0x161207,
     emissiveIntensity: 0.12,
     gradientMap: TOON_RAMP,
@@ -81,7 +94,8 @@ export function createGameMaterials(rng: RandomSource): GameMaterials {
     opacity: 0.56
   });
   const wornGrass = new THREE.MeshToonMaterial({
-    color: 0x97926a,
+    map: createCanvasTexture("grass", rng),
+    color: 0x9d966b,
     emissive: 0x191b10,
     emissiveIntensity: 0.12,
     gradientMap: TOON_RAMP,
@@ -89,7 +103,7 @@ export function createGameMaterials(rng: RandomSource): GameMaterials {
     opacity: 0.48
   });
   const puddle = new THREE.MeshStandardMaterial({
-    color: 0x174854,
+    color: 0x1d5360,
     emissive: 0x061216,
     emissiveIntensity: 0.3,
     metalness: 0.2,
@@ -99,9 +113,10 @@ export function createGameMaterials(rng: RandomSource): GameMaterials {
     depthWrite: false
   });
   const hedge = new THREE.MeshToonMaterial({
-    color: 0x4c7249,
-    emissive: 0x0d2116,
-    emissiveIntensity: 0.12,
+    map: createCanvasTexture("grass", rng),
+    color: 0x517a50,
+    emissive: 0x0f2418,
+    emissiveIntensity: 0.11,
     gradientMap: TOON_RAMP
   });
   const line = new THREE.MeshBasicMaterial({ color: MELBOURNE_ANIME_PALETTE.tramOchre });
@@ -112,7 +127,7 @@ export function createGameMaterials(rng: RandomSource): GameMaterials {
     bumpScale: 0.055
   });
   const metal = new THREE.MeshStandardMaterial({
-    color: 0x9aaea9,
+    color: 0x9dad9f,
     emissive: 0x10191d,
     emissiveIntensity: 0.1,
     metalness: 0.32,
@@ -125,10 +140,10 @@ export function createGameMaterials(rng: RandomSource): GameMaterials {
     bumpScale: 0.06
   });
   const basalt = createToonMaterial("basalt", rng, {
-    color: 0x637e84,
+    color: MELBOURNE_ANIME_PALETTE.wetBluestone,
     emissive: 0x0c1d22,
-    emissiveIntensity: 0.18,
-    bumpScale: 0.075
+    emissiveIntensity: 0.15,
+    bumpScale: 0.052
   });
   const darkOpening = new THREE.MeshBasicMaterial({ color: 0x071217 });
   const zombie = new THREE.MeshToonMaterial({
@@ -190,16 +205,17 @@ function createToonMaterial(kind: TextureKind, rng: RandomSource, options: ToonM
 
 function createCanvasTexture(kind: TextureKind, rng: RandomSource): THREE.CanvasTexture {
   const specs = {
-    grass: { base: "#667f5c", wash: "#91a870", shade: "#203a35", fleck: [216, 226, 158], repeat: 7, count: 620, brushLight: "#c7c87d", brushDark: "#2b5645", angle: -0.18 },
-    path: { base: "#aa9067", wash: "#d0ad70", shade: "#4a3322", fleck: [229, 199, 126], repeat: 5, count: 720, brushLight: "#edd08c", brushDark: "#6f5537", angle: -0.08 },
-    gravel: { base: "#897f70", wash: "#b8ac88", shade: "#3d3d38", fleck: [222, 213, 180], repeat: 6, count: 920, brushLight: "#d9ceaa", brushDark: "#60615c", angle: 0.04 },
-    asphalt: { base: "#263e48", wash: "#486973", shade: "#0a171d", fleck: [132, 165, 164], repeat: 6, count: 860, brushLight: "#78939a", brushDark: "#132831", angle: 0.02 },
-    concrete: { base: "#9aa49d", wash: "#cfd0b7", shade: "#3a4d4d", fleck: [232, 225, 198], repeat: 4, count: 720, brushLight: "#d9d5b8", brushDark: "#61706d", angle: -0.05 },
-    rubber: { base: "#914943", wash: "#c6644e", shade: "#2d1017", fleck: [225, 137, 110], repeat: 5, count: 760, brushLight: "#e48b68", brushDark: "#642c2b", angle: 0.08 },
-    mulch: { base: "#6b4c31", wash: "#9d7345", shade: "#24150b", fleck: [180, 125, 68], repeat: 6, count: 780, brushLight: "#b9854b", brushDark: "#3c2514", angle: -0.2 },
-    basalt: { base: "#557079", wash: "#879690", shade: "#172b31", fleck: [184, 198, 188], repeat: 4, count: 880, brushLight: "#9eaaa0", brushDark: "#2e4a50", angle: -0.03 },
-    brick: { base: "#a75a45", wash: "#d27352", shade: "#341715", fleck: [232, 151, 113], repeat: 4, count: 720, brushLight: "#df875f", brushDark: "#6f2e29", angle: 0.01 },
-    timber: { base: "#825a3a", wash: "#b17d4b", shade: "#2b170c", fleck: [211, 147, 84], repeat: 4, count: 680, brushLight: "#cc9258", brushDark: "#55331e", angle: 0.04 }
+    grass: { base: "#667f5c", wash: "#9aae72", shade: "#203a35", fleck: [220, 227, 154], repeat: 7, count: 520, brushLight: "#c7c87d", brushDark: "#2b5645", angle: -0.18 },
+    path: { base: "#aa9067", wash: "#d0ad70", shade: "#4a3322", fleck: [229, 199, 126], repeat: 5, count: 600, brushLight: "#edd08c", brushDark: "#6f5537", angle: -0.08 },
+    gravel: { base: "#897f70", wash: "#b8ac88", shade: "#3d3d38", fleck: [222, 213, 180], repeat: 6, count: 760, brushLight: "#d9ceaa", brushDark: "#60615c", angle: 0.04 },
+    asphalt: { base: "#263e48", wash: "#486973", shade: "#0a171d", fleck: [132, 165, 164], repeat: 6, count: 700, brushLight: "#78939a", brushDark: "#132831", angle: 0.02 },
+    concrete: { base: "#9aa49d", wash: "#cfd0b7", shade: "#3a4d4d", fleck: [232, 225, 198], repeat: 4, count: 560, brushLight: "#d9d5b8", brushDark: "#61706d", angle: -0.05 },
+    rubber: { base: "#914943", wash: "#c6644e", shade: "#2d1017", fleck: [225, 137, 110], repeat: 5, count: 560, brushLight: "#e48b68", brushDark: "#642c2b", angle: 0.08 },
+    mulch: { base: "#6b4c31", wash: "#9d7345", shade: "#24150b", fleck: [180, 125, 68], repeat: 6, count: 620, brushLight: "#b9854b", brushDark: "#3c2514", angle: -0.2 },
+    basalt: { base: "#557079", wash: "#879690", shade: "#172b31", fleck: [184, 198, 188], repeat: 4, count: 720, brushLight: "#9eaaa0", brushDark: "#2e4a50", angle: -0.03 },
+    brick: { base: "#a75a45", wash: "#d27352", shade: "#341715", fleck: [232, 151, 113], repeat: 4, count: 560, brushLight: "#df875f", brushDark: "#6f2e29", angle: 0.01 },
+    timber: { base: "#825a3a", wash: "#b17d4b", shade: "#2b170c", fleck: [211, 147, 84], repeat: 4, count: 520, brushLight: "#cc9258", brushDark: "#55331e", angle: 0.04 },
+    court: { base: "#3c7d66", wash: "#60a17d", shade: "#12362f", fleck: [177, 221, 183], repeat: 4, count: 520, brushLight: "#83c79d", brushDark: "#1f5d50", angle: 0.03 }
   } as const;
   const spec = specs[kind];
   const canvas = document.createElement("canvas");
@@ -219,6 +235,7 @@ function createCanvasTexture(kind: TextureKind, rng: RandomSource): THREE.Canvas
   }
 
   drawDryBrush(ctx, rng, spec);
+  drawMelbourneMaterialMarks(ctx, rng, kind);
 
   for (let i = 0; i < spec.count; i += 1) {
     const alpha = rng.range(0.04, 0.16);
@@ -230,9 +247,9 @@ function createCanvasTexture(kind: TextureKind, rng: RandomSource): THREE.Canvas
 
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
-  if (kind === "concrete" || kind === "asphalt" || kind === "basalt" || kind === "brick") {
+  if (kind === "concrete" || kind === "asphalt" || kind === "basalt" || kind === "brick" || kind === "court") {
     ctx.strokeStyle = kind === "brick" ? "rgba(45, 23, 19, 0.18)" : "rgba(218, 230, 216, 0.1)";
-    for (let i = 0; i < 18; i += 1) {
+    for (let i = 0; i < (kind === "court" ? 11 : 18); i += 1) {
       ctx.lineWidth = rng.range(0.7, 2.2);
       ctx.beginPath();
       ctx.moveTo(rng.range(0, 256), rng.range(0, 256));
@@ -241,7 +258,7 @@ function createCanvasTexture(kind: TextureKind, rng: RandomSource): THREE.Canvas
     }
   }
   if (kind === "grass" || kind === "mulch") {
-    drawGumLeafMarks(ctx, rng, kind === "grass" ? 32 : 42);
+    drawGumLeafMarks(ctx, rng, kind === "grass" ? 40 : 48);
   }
   if (kind === "grass") {
     for (let row = -32; row < 288; row += 18) {
@@ -299,6 +316,93 @@ function drawDryBrush(
     ctx.beginPath();
     ctx.moveTo(x, y);
     ctx.bezierCurveTo(x + length * 0.28, y + rng.range(-7, 7), x + length * 0.7, y + rng.range(-9, 9), x + length, y + rng.range(-5, 5));
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawMelbourneMaterialMarks(ctx: CanvasRenderingContext2D, rng: RandomSource, kind: TextureKind): void {
+  if (kind === "basalt" || kind === "gravel" || kind === "concrete") {
+    drawBluestoneChips(ctx, rng, kind === "basalt" ? 54 : 34);
+  }
+  if (kind === "brick") {
+    drawBrickCourses(ctx, rng);
+  }
+  if (kind === "court" || kind === "asphalt") {
+    drawCourtAndBitumenScuffs(ctx, rng, kind === "court");
+  }
+  if (kind === "grass" || kind === "path") {
+    drawDrySeedStrokes(ctx, rng, kind === "grass" ? 24 : 16);
+  }
+}
+
+function drawBluestoneChips(ctx: CanvasRenderingContext2D, rng: RandomSource, count: number): void {
+  ctx.save();
+  for (let i = 0; i < count; i += 1) {
+    const x = rng.range(-10, 266);
+    const y = rng.range(-8, 264);
+    const size = rng.range(2.8, 8.5);
+    ctx.fillStyle = rng.next() > 0.5 ? `rgba(202, 213, 201, ${rng.range(0.06, 0.16)})` : `rgba(29, 55, 61, ${rng.range(0.05, 0.14)})`;
+    ctx.beginPath();
+    ctx.moveTo(x, y - size * 0.46);
+    ctx.lineTo(x + size * 0.66, y - size * 0.08);
+    ctx.lineTo(x + size * 0.36, y + size * 0.58);
+    ctx.lineTo(x - size * 0.56, y + size * 0.34);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawBrickCourses(ctx: CanvasRenderingContext2D, rng: RandomSource): void {
+  ctx.save();
+  ctx.strokeStyle = "rgba(54, 22, 18, 0.16)";
+  ctx.lineWidth = 1.2;
+  for (let y = 18; y < 256; y += 32) {
+    ctx.beginPath();
+    ctx.moveTo(-8, y + rng.range(-1.2, 1.2));
+    ctx.bezierCurveTo(64, y + rng.range(-2.5, 2.5), 176, y + rng.range(-2.5, 2.5), 264, y + rng.range(-1.2, 1.2));
+    ctx.stroke();
+  }
+  ctx.strokeStyle = "rgba(234, 151, 113, 0.08)";
+  for (let x = 0; x < 280; x += 54) {
+    ctx.beginPath();
+    ctx.moveTo(x + rng.range(-3, 3), 0);
+    ctx.lineTo(x + rng.range(-3, 3), 256);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawCourtAndBitumenScuffs(ctx: CanvasRenderingContext2D, rng: RandomSource, court: boolean): void {
+  ctx.save();
+  ctx.lineCap = "round";
+  for (let i = 0; i < (court ? 28 : 18); i += 1) {
+    const x = rng.range(-24, 252);
+    const y = rng.range(0, 256);
+    ctx.strokeStyle = court ? `rgba(222, 234, 190, ${rng.range(0.045, 0.12)})` : `rgba(174, 195, 190, ${rng.range(0.04, 0.1)})`;
+    ctx.lineWidth = rng.range(0.8, court ? 2.4 : 1.6);
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.bezierCurveTo(x + rng.range(24, 68), y + rng.range(-8, 8), x + rng.range(80, 140), y + rng.range(-10, 10), x + rng.range(120, 190), y + rng.range(-7, 7));
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawDrySeedStrokes(ctx: CanvasRenderingContext2D, rng: RandomSource, count: number): void {
+  ctx.save();
+  ctx.lineCap = "round";
+  for (let i = 0; i < count; i += 1) {
+    const x = rng.range(-18, 268);
+    const y = rng.range(-10, 266);
+    const length = rng.range(16, 42);
+    const angle = rng.range(-0.55, 0.25);
+    ctx.strokeStyle = `rgba(221, 194, 111, ${rng.range(0.045, 0.12)})`;
+    ctx.lineWidth = rng.range(0.7, 1.5);
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + Math.cos(angle) * length, y + Math.sin(angle) * length);
     ctx.stroke();
   }
   ctx.restore();

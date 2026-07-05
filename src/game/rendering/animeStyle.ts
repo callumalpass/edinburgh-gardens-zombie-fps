@@ -2,12 +2,17 @@ import * as THREE from "three";
 
 export const MELBOURNE_ANIME_PALETTE = {
   ink: 0x07131a,
-  deepBluegum: 0x20383a,
-  wetBluestone: 0x526c72,
-  eucalyptus: 0x78906a,
+  nightInk: 0x0b1a1e,
+  deepBluegum: 0x1f3b39,
+  wetBluestone: 0x5d747b,
+  stormTeal: 0x21484d,
+  eucalyptus: 0x76906c,
+  silverGum: 0x9aa990,
   dryGrass: 0xb8a46f,
+  couchGrass: 0x8d935d,
   tramOchre: 0xf0c66f,
   brick: 0xb35f4a,
+  terraceCream: 0xd9caa7,
   dawnMauve: 0x7b6874
 } as const;
 
@@ -18,12 +23,13 @@ const STANDARD_HIGHLIGHT_TINT = new THREE.Color(MELBOURNE_ANIME_PALETTE.tramOchr
 
 export function createAnimeToonRamp(): THREE.DataTexture {
   const data = new Uint8Array([
-    32, 45, 45, 255,
-    74, 96, 82, 255,
-    166, 168, 122, 255,
-    246, 214, 151, 255
+    16, 31, 32, 255,
+    37, 70, 68, 255,
+    104, 128, 93, 255,
+    184, 169, 104, 255,
+    246, 218, 158, 255
   ]);
-  const texture = new THREE.DataTexture(data, 4, 1, THREE.RGBAFormat);
+  const texture = new THREE.DataTexture(data, 5, 1, THREE.RGBAFormat);
   texture.minFilter = THREE.NearestFilter;
   texture.magFilter = THREE.NearestFilter;
   texture.colorSpace = THREE.NoColorSpace;
@@ -33,12 +39,12 @@ export function createAnimeToonRamp(): THREE.DataTexture {
 
 export function tuneAnimeStandardMaterial(material: THREE.MeshStandardMaterial): void {
   material.flatShading = true;
-  material.roughness = Math.max(material.roughness, 0.72);
-  material.metalness = Math.min(material.metalness, 0.58);
-  material.color.lerp(STANDARD_HIGHLIGHT_TINT, 0.025);
-  material.color.offsetHSL(-0.008, 0.032, 0.022);
-  material.emissive.lerp(STANDARD_SHADOW_TINT, 0.14).lerp(material.color, 0.08);
-  material.emissiveIntensity = Math.max(material.emissiveIntensity, 0.12);
+  material.roughness = Math.max(material.roughness, 0.78);
+  material.metalness = Math.min(material.metalness, 0.5);
+  material.color.lerp(STANDARD_HIGHLIGHT_TINT, 0.018);
+  material.color.offsetHSL(-0.006, 0.024, 0.018);
+  material.emissive.lerp(STANDARD_SHADOW_TINT, 0.18).lerp(material.color, 0.06);
+  material.emissiveIntensity = Math.max(material.emissiveIntensity, 0.1);
   material.needsUpdate = true;
 }
 
