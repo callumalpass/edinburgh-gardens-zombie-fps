@@ -8,19 +8,19 @@ export type PickupKind = "scrap" | "health" | "ammo";
 export type BikeIssue = "flat-tyres" | "broken-chain";
 
 const ZOMBIE_ACCENT_COLORS: Record<ZombieType, THREE.ColorRepresentation> = {
-  shambler: 0xd0a14f,
-  sprinter: 0xf2d260,
-  bloater: 0xc25d3d,
-  crawler: 0x9ebf75,
-  screamer: 0xffe477
+  shambler: 0xcaa260,
+  sprinter: 0xe6c65d,
+  bloater: 0xb7644f,
+  crawler: 0x9db779,
+  screamer: 0xefcf77
 };
 
 const ZOMBIE_GLOW_COLORS: Record<ZombieType, THREE.ColorRepresentation> = {
-  shambler: 0x826437,
-  sprinter: 0xffcf6b,
-  bloater: 0xb84236,
-  crawler: 0x78a45f,
-  screamer: 0xfff0a2
+  shambler: 0x806944,
+  sprinter: 0xd6af58,
+  bloater: 0xa24c3c,
+  crawler: 0x6f8f61,
+  screamer: 0xe8d28f
 };
 
 const WEAPON_STENCIL: Record<WeaponId, string> = {
@@ -125,6 +125,14 @@ export class MeshFactory {
       if (!firstPerson) {
         this.addArtifactPaintStroke(group, MELBOURNE_ANIME_PALETTE.tramOchre, 0.02, 0.15, -length * 0.22, width * 1.6, 0.014, 0.24, 0, -0.08);
         this.addArtifactPaintStroke(group, MELBOURNE_ANIME_PALETTE.wetBluestone, -width * 0.28, 0.135, -length * 0.54, width * 1.2, 0.012, 0.18, 0, 0.12);
+        this.addArtifactPaintFlecks(
+          group,
+          [MELBOURNE_ANIME_PALETTE.paperGlow, MELBOURNE_ANIME_PALETTE.tramOchre, MELBOURNE_ANIME_PALETTE.wetBluestone],
+          { x: 0.02, y: 0.158, z: -length * 0.42 },
+          { x: width * 0.32, z: length * 0.09 },
+          isMachete ? 0.9 : 0.7
+        );
+        this.addGumLeafCharm(group, -width * 0.46, 0.13, length * 0.08, isMachete ? 0.72 : 0.58, -0.72);
       }
 
       if (firstPerson) {
@@ -247,6 +255,14 @@ export class MeshFactory {
     if (!firstPerson) {
       this.addArtifactPaintStroke(group, MELBOURNE_ANIME_PALETTE.weatheredWhite, -0.02, 0.155, -length * 0.52, 0.26, 0.018, 0.2, 0, -0.03);
       this.addArtifactPaintStroke(group, MELBOURNE_ANIME_PALETTE.eucalyptus, 0.02, 0.125, length * 0.22, 0.22, 0.016, 0.22, 0, 0.08);
+      this.addArtifactPaintFlecks(
+        group,
+        [MELBOURNE_ANIME_PALETTE.tramCream, MELBOURNE_ANIME_PALETTE.eucalyptus, MELBOURNE_ANIME_PALETTE.wetBluestone],
+        { x: 0.02, y: 0.205, z: -length * 0.3 },
+        { x: 0.04, z: 0.12 },
+        0.76
+      );
+      this.addGumLeafCharm(group, -0.13, 0.18, length * 0.38, 0.72, 0.42);
     }
 
     if (firstPerson) {
@@ -415,6 +431,79 @@ export class MeshFactory {
     return stroke;
   }
 
+  private addArtifactPaintFlecks(
+    group: THREE.Group,
+    colors: readonly THREE.ColorRepresentation[],
+    center: { x: number; y: number; z: number },
+    span: { x: number; z: number },
+    scale = 1
+  ): void {
+    colors.forEach((color, index) => {
+      const fleck = new THREE.Mesh(
+        new THREE.BoxGeometry((0.18 + index * 0.035) * scale, 0.012 * scale, (0.025 + (index % 2) * 0.01) * scale),
+        new THREE.MeshBasicMaterial({
+          color,
+          transparent: true,
+          opacity: 0.22 + index * 0.035,
+          depthWrite: false
+        })
+      );
+      const offset = index - (colors.length - 1) / 2;
+      fleck.position.set(
+        center.x + offset * span.x + Math.sin(index * 1.7) * 0.04 * scale,
+        center.y + index * 0.008 * scale,
+        center.z + offset * span.z + Math.cos(index * 1.3) * 0.035 * scale
+      );
+      fleck.rotation.set(0, index * 0.24 - 0.18, -0.18 + index * 0.11);
+      fleck.renderOrder = 3;
+      group.add(fleck);
+    });
+  }
+
+  private addGumLeafCharm(group: THREE.Group, x: number, y: number, z: number, scale = 1, rotationZ = -0.54): void {
+    const leafMaterial = new THREE.MeshBasicMaterial({
+      color: MELBOURNE_ANIME_PALETTE.eucalyptus,
+      transparent: true,
+      opacity: 0.9,
+      depthWrite: false
+    });
+    const shadowMaterial = new THREE.MeshBasicMaterial({
+      color: MELBOURNE_ANIME_PALETTE.eucalyptShadow,
+      transparent: true,
+      opacity: 0.42,
+      depthWrite: false
+    });
+    const stem = new THREE.Mesh(new THREE.BoxGeometry(0.018 * scale, 0.012 * scale, 0.2 * scale), shadowMaterial);
+    stem.position.set(x - 0.018 * scale, y - 0.006 * scale, z + 0.02 * scale);
+    stem.rotation.set(0, 0.16, rotationZ - 0.3);
+    stem.renderOrder = 4;
+    group.add(stem);
+
+    const leaf = new THREE.Mesh(new THREE.CapsuleGeometry(0.038 * scale, 0.22 * scale, 4, 8), leafMaterial);
+    leaf.position.set(x, y, z);
+    leaf.rotation.set(Math.PI / 2, 0.1, rotationZ);
+    leaf.scale.set(0.76, 1, 1);
+    leaf.renderOrder = 4;
+    group.add(leaf);
+  }
+
+  private addStickerTab(
+    group: THREE.Group,
+    text: string,
+    position: { x: number; y: number; z: number },
+    rotation: { x?: number; y?: number; z?: number } = {},
+    size = { width: 0.34, height: 0.034, depth: 0.17 }
+  ): void {
+    const tab = new THREE.Mesh(
+      new THREE.BoxGeometry(size.width, size.height, size.depth),
+      this.artifactLabelMaterial(text, "#263d45", "#efd18a", "#76906c")
+    );
+    tab.position.set(position.x, position.y, position.z);
+    tab.rotation.set(rotation.x ?? 0, rotation.y ?? 0, rotation.z ?? 0);
+    tab.renderOrder = 3;
+    group.add(tab);
+  }
+
   createWeaponDropMesh(weaponId: WeaponId): THREE.Object3D {
     const group = this.createWeaponMesh(weaponId, false);
     group.scale.setScalar(2.0);
@@ -574,6 +663,7 @@ export class MeshFactory {
     gumLeaf.position.set(1.25, 1.05, -0.12);
     gumLeaf.rotation.set(0.18, 0, -0.72);
     group.add(gumLeaf);
+    this.addGumLeafCharm(group, 1.16, 1.03, 0.14, 0.82, -0.38);
 
     const crateTag = new THREE.Mesh(
       new THREE.BoxGeometry(0.26, 0.024, 0.18),
@@ -582,6 +672,14 @@ export class MeshFactory {
     crateTag.position.set(1.02, 0.92, -0.27);
     crateTag.rotation.x = -0.02;
     group.add(crateTag);
+    this.addStickerTab(group, "NTH", { x: -0.76, y: 0.95, z: -0.24 }, { x: -0.04, y: 0.08, z: 0.02 }, { width: 0.3, height: 0.025, depth: 0.16 });
+    this.addArtifactPaintFlecks(
+      group,
+      [MELBOURNE_ANIME_PALETTE.tramOchre, MELBOURNE_ANIME_PALETTE.weatheredWhite, MELBOURNE_ANIME_PALETTE.wetBluestone],
+      { x: -0.18, y: 1.02, z: -0.08 },
+      { x: 0.12, z: 0.035 },
+      0.9
+    );
 
     const rearReflector = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.13, 0.05), reflectorMaterial);
     rearReflector.position.set(-0.94, 0.96, -0.04);
@@ -1016,6 +1114,13 @@ export class MeshFactory {
       accent: accentMaterial,
       glow: glowMaterial
     });
+    this.addArtifactPaintFlecks(
+      group,
+      [ZOMBIE_ACCENT_COLORS[type], MELBOURNE_ANIME_PALETTE.wetBluestone, MELBOURNE_ANIME_PALETTE.tramCream],
+      { x: -0.1 * bodyScale, y: 2.18 * bodyScale, z: -0.72 * bodyScale },
+      { x: 0.12 * bodyScale, z: 0.025 * bodyScale },
+      0.82 * bodyScale
+    );
 
     group.userData.arms = arms;
     group.userData.head = head;
@@ -1193,6 +1298,13 @@ export class MeshFactory {
       accent: accentMaterial,
       glow: glowMaterial
     });
+    this.addArtifactPaintFlecks(
+      group,
+      [ZOMBIE_ACCENT_COLORS.crawler, MELBOURNE_ANIME_PALETTE.wetBluestone, MELBOURNE_ANIME_PALETTE.tramCream],
+      { x: -0.08, y: 0.96, z: -0.52 },
+      { x: 0.1, z: -0.04 },
+      0.72
+    );
 
     group.userData.arms = arms;
     group.userData.head = head;
@@ -1441,6 +1553,14 @@ export class MeshFactory {
       group.add(strap);
       this.addArtifactPaintStroke(group, MELBOURNE_ANIME_PALETTE.weatheredWhite, -0.1, 0.62, -0.52, 0.72, 0.02, 0.2, 0, -0.04);
       this.addArtifactPaintStroke(group, MELBOURNE_ANIME_PALETTE.eucalyptus, 0.18, 0.22, -0.73, 0.58, 0.018, 0.18, 0, 0.06);
+      this.addGumLeafCharm(group, 0.46, 0.64, -0.2, 0.92, -0.38);
+      this.addArtifactPaintFlecks(
+        group,
+        [MELBOURNE_ANIME_PALETTE.tramCream, MELBOURNE_ANIME_PALETTE.eucalyptus, MELBOURNE_ANIME_PALETTE.wetBluestone],
+        { x: -0.16, y: 0.61, z: 0.34 },
+        { x: 0.12, z: 0.04 },
+        0.9
+      );
     } else if (type === "health") {
       const caseMaterial = this.paintedStandardMaterial({
         color: MELBOURNE_ANIME_PALETTE.terraceCream,
@@ -1489,6 +1609,14 @@ export class MeshFactory {
       aidTag.rotation.set(0.06, 0.08, -0.04);
       group.add(aidTag);
       this.addArtifactPaintStroke(group, MELBOURNE_ANIME_PALETTE.eucalyptus, -0.12, 0.58, -0.44, 0.68, 0.02, 0.18, 0, 0.05);
+      this.addGumLeafCharm(group, 0.42, 0.72, -0.2, 0.78, 0.54);
+      this.addArtifactPaintFlecks(
+        group,
+        [MELBOURNE_ANIME_PALETTE.brick, MELBOURNE_ANIME_PALETTE.tramCream, MELBOURNE_ANIME_PALETTE.wetBluestone],
+        { x: 0.04, y: 0.78, z: -0.46 },
+        { x: 0.11, z: 0.025 },
+        0.78
+      );
     } else {
       const scrapMaterial = this.paintedStandardMaterial({ color: 0x8fa693, metalness: 0.24, roughness: 0.62 });
       const darkMaterial = this.paintedStandardMaterial({ color: MELBOURNE_ANIME_PALETTE.wetBluestone, metalness: 0.26, roughness: 0.66 });
@@ -1515,6 +1643,14 @@ export class MeshFactory {
       group.add(ticket);
       this.addArtifactPaintStroke(group, MELBOURNE_ANIME_PALETTE.tramOchre, 0.2, 0.44, -0.3, 0.62, 0.02, 0.18, 0.2, -0.05);
       this.addArtifactPaintStroke(group, MELBOURNE_ANIME_PALETTE.weatheredWhite, -0.24, 0.2, -0.2, 0.46, 0.018, 0.16, -0.16, 0.08);
+      this.addGumLeafCharm(group, 0.32, 0.38, 0.2, 0.74, -0.62);
+      this.addArtifactPaintFlecks(
+        group,
+        [MELBOURNE_ANIME_PALETTE.tramOchre, 0xb46a42, MELBOURNE_ANIME_PALETTE.wetBluestone],
+        { x: 0.04, y: 0.5, z: 0.12 },
+        { x: 0.13, z: -0.04 },
+        0.82
+      );
     }
     this.applyAnimeMeshStyle(group, 1.08);
     return group;
@@ -1529,15 +1665,18 @@ export class MeshFactory {
     transparent?: boolean;
     opacity?: number;
   }): THREE.MeshStandardMaterial {
-    return new THREE.MeshStandardMaterial({
+    const material = new THREE.MeshStandardMaterial({
       color: options.color,
-      emissive: options.emissive ?? 0x000000,
-      emissiveIntensity: options.emissiveIntensity ?? 0,
+      emissive: options.emissive ?? MELBOURNE_ANIME_PALETTE.inkWash,
+      emissiveIntensity: options.emissiveIntensity ?? 0.045,
       roughness: options.roughness ?? 0.84,
       metalness: options.metalness ?? 0.06,
       transparent: options.transparent ?? false,
       opacity: options.opacity ?? 1
     });
+    material.flatShading = true;
+    material.color.offsetHSL(-0.004, 0.014, 0.008);
+    return material;
   }
 
   private artifactLabelMaterial(text: string, background: string, foreground: string, accent: string): THREE.MeshBasicMaterial {
@@ -1553,17 +1692,17 @@ export class MeshFactory {
       ctx.fillRect((i * 47) % canvas.width, (i * 29) % canvas.height, 1 + (i % 3), 1 + (i % 2));
     }
 
-    ctx.globalAlpha = 0.18;
+    ctx.globalAlpha = 0.14;
     ctx.fillStyle = accent;
     ctx.fillRect(0, 0, canvas.width, 18);
     ctx.fillRect(0, canvas.height - 16, canvas.width, 16);
     ctx.globalAlpha = 1;
 
     ctx.lineCap = "round";
-    for (let i = 0; i < 9; i += 1) {
-      const y = 18 + i * 11 + Math.sin(i * 1.7) * 4;
-      ctx.strokeStyle = i % 2 === 0 ? `${foreground}24` : `${accent}28`;
-      ctx.lineWidth = 2 + (i % 3);
+    for (let i = 0; i < 6; i += 1) {
+      const y = 22 + i * 16 + Math.sin(i * 1.7) * 4;
+      ctx.strokeStyle = i % 2 === 0 ? `${foreground}20` : `${accent}24`;
+      ctx.lineWidth = 2 + (i % 2);
       ctx.beginPath();
       ctx.moveTo(-18, y);
       ctx.bezierCurveTo(52, y - 7, 154, y + 9, 274, y - 5);
@@ -1582,11 +1721,18 @@ export class MeshFactory {
     ctx.stroke();
 
     ctx.strokeStyle = foreground;
-    ctx.lineWidth = 6;
-    ctx.strokeRect(10, 10, canvas.width - 20, canvas.height - 20);
+    ctx.lineWidth = 5;
+    ctx.strokeRect(12, 12, canvas.width - 24, canvas.height - 24);
     ctx.strokeStyle = `${background}cc`;
     ctx.lineWidth = 2;
-    ctx.strokeRect(18, 18, canvas.width - 36, canvas.height - 36);
+    ctx.strokeRect(21, 21, canvas.width - 42, canvas.height - 42);
+    ctx.fillStyle = `${accent}4a`;
+    ctx.beginPath();
+    ctx.moveTo(24, 24);
+    ctx.lineTo(64, 24);
+    ctx.lineTo(24, 64);
+    ctx.closePath();
+    ctx.fill();
     ctx.fillStyle = foreground;
     ctx.font = text.length > 3 ? "800 42px system-ui, sans-serif" : "900 52px system-ui, sans-serif";
     ctx.textAlign = "center";
@@ -1707,7 +1853,7 @@ export class MeshFactory {
       color: ANIME_OUTLINE_COLOR,
       side: THREE.BackSide,
       transparent: true,
-      opacity: 0.76,
+      opacity: 0.62,
       depthWrite: false
     });
     const meshes: THREE.Mesh[] = [];

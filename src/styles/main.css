@@ -19,11 +19,11 @@
   --tram: oklch(83% 0.128 75);
   --brick: oklch(61% 0.145 31);
   --blood: oklch(49% 0.17 28);
-  --panel: oklch(16% 0.032 211 / 0.7);
-  --panel-strong: oklch(20% 0.039 201 / 0.78);
+  --panel: oklch(15% 0.032 211 / 0.52);
+  --panel-strong: oklch(19% 0.039 201 / 0.6);
   --panel-warm: oklch(29% 0.061 74 / 0.38);
-  --line: oklch(76% 0.057 177 / 0.26);
-  --paint-edge: oklch(88% 0.068 85 / 0.18);
+  --line: oklch(78% 0.055 177 / 0.2);
+  --paint-edge: oklch(89% 0.065 85 / 0.14);
 }
 
 * {
@@ -42,7 +42,6 @@ body,
 
 body {
   background:
-    radial-gradient(circle at 72% 28%, oklch(54% 0.07 43 / 0.16), transparent 38%),
     linear-gradient(180deg, oklch(17% 0.035 211), var(--night-deep)),
     var(--night);
 }
@@ -111,8 +110,8 @@ body.hit .vignette {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 32px;
-  height: 32px;
+  width: 26px;
+  height: 26px;
   transform: translate(-50%, -50%);
   pointer-events: none;
   transition: opacity 120ms ease-out, transform 120ms ease-out;
@@ -123,11 +122,11 @@ body.hit .vignette {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 7px;
-  height: 7px;
-  border: 1px solid oklch(88% 0.11 76 / 0.72);
+  width: 6px;
+  height: 6px;
+  border: 1px solid oklch(88% 0.1 76 / 0.64);
   border-radius: 50%;
-  box-shadow: 0 0 8px oklch(81% 0.13 75 / 0.24);
+  box-shadow: 0 0 7px oklch(81% 0.13 75 / 0.2);
   transform: translate(-50%, -50%);
 }
 
@@ -135,19 +134,19 @@ body.hit .vignette {
   position: absolute;
   left: 50%;
   top: 50%;
-  background: oklch(87% 0.116 76);
-  box-shadow: 0 0 8px oklch(82% 0.13 75 / 0.28);
+  background: oklch(87% 0.108 76 / 0.86);
+  box-shadow: 0 0 7px oklch(82% 0.13 75 / 0.22);
 }
 
 .crosshair span:first-child {
-  width: 24px;
+  width: 18px;
   height: 2px;
   transform: translate(-50%, -50%);
 }
 
 .crosshair span:last-child {
   width: 2px;
-  height: 24px;
+  height: 18px;
   transform: translate(-50%, -50%);
 }
 
@@ -249,16 +248,16 @@ body.hit .vignette {
   position: relative;
   min-width: 106px;
   overflow: hidden;
-  padding: 8px 10px 9px;
+  padding: 7px 9px 8px;
   border: 1px solid var(--line);
   border-radius: 3px;
   background:
-    linear-gradient(135deg, oklch(24% 0.043 203 / 0.62), var(--panel) 62%, oklch(12% 0.029 220 / 0.66)),
+    linear-gradient(135deg, oklch(24% 0.043 203 / 0.46), var(--panel) 62%, oklch(12% 0.029 220 / 0.48)),
     linear-gradient(180deg, var(--panel-strong), var(--panel));
   box-shadow:
     inset 0 1px 0 var(--paint-edge),
     inset 0 -1px 0 oklch(5% 0.02 224 / 0.2),
-    0 8px 18px oklch(6% 0.018 224 / 0.16);
+    0 7px 16px oklch(6% 0.018 224 / 0.12);
 }
 
 .meter::before {
@@ -282,7 +281,7 @@ body.hit .vignette {
 .meter strong {
   display: block;
   margin-top: 2px;
-  font-size: 1.22rem;
+  font-size: 1.14rem;
   line-height: 1;
   font-variant-numeric: tabular-nums;
   text-shadow: 0 0 12px oklch(88% 0.04 86 / 0.18);
@@ -319,11 +318,11 @@ body.hit .vignette {
   border: 1px solid oklch(82% 0.13 78 / 0.46);
   border-radius: 3px;
   background:
-    linear-gradient(135deg, oklch(24% 0.048 204 / 0.68), oklch(13% 0.032 218 / 0.72)),
+    linear-gradient(135deg, oklch(24% 0.048 204 / 0.52), oklch(13% 0.032 218 / 0.58)),
     var(--panel-strong);
   box-shadow:
     inset 0 1px 0 var(--paint-edge),
-    0 10px 22px oklch(6% 0.018 224 / 0.18);
+    0 8px 18px oklch(6% 0.018 224 / 0.14);
   font-variant-numeric: tabular-nums;
 }
 
@@ -337,7 +336,7 @@ body.hit .vignette {
 }
 
 .ammo strong {
-  font-size: 2.25rem;
+  font-size: 2.05rem;
   line-height: 1;
   color: var(--tram);
 }
@@ -353,7 +352,7 @@ body.hit .vignette {
   border: 1px solid oklch(72% 0.057 181 / 0.28);
   border-radius: 3px;
   background:
-    linear-gradient(180deg, oklch(16% 0.034 212 / 0.62), oklch(12% 0.03 220 / 0.66));
+    linear-gradient(180deg, oklch(16% 0.034 212 / 0.5), oklch(12% 0.03 220 / 0.56));
   color: oklch(85% 0.04 92);
 }
 
@@ -377,7 +376,7 @@ body.hit .vignette {
   border: 1px solid oklch(70% 0.082 156 / 0.36);
   border-radius: 3px;
   background:
-    linear-gradient(180deg, oklch(24% 0.058 156 / 0.56), oklch(14% 0.039 176 / 0.6));
+    linear-gradient(180deg, oklch(24% 0.058 156 / 0.44), oklch(14% 0.039 176 / 0.48));
   color: oklch(81% 0.064 151);
   font-size: 0.72rem;
   font-weight: 700;
@@ -392,10 +391,10 @@ body.hit .vignette {
   border: 1px solid oklch(75% 0.058 183 / 0.42);
   border-radius: 3px;
   background:
-    linear-gradient(180deg, oklch(17% 0.036 211 / 0.66), oklch(10% 0.025 224 / 0.7));
+    linear-gradient(180deg, oklch(17% 0.036 211 / 0.54), oklch(10% 0.025 224 / 0.58));
   box-shadow:
     inset 0 0 0 1px var(--paint-edge),
-    0 10px 24px oklch(6% 0.018 224 / 0.22);
+    0 8px 20px oklch(6% 0.018 224 / 0.16);
 }
 
 .interaction-prompt {
@@ -409,10 +408,10 @@ body.hit .vignette {
   border: 1px solid oklch(82% 0.13 78 / 0.62);
   border-radius: 3px;
   background:
-    linear-gradient(180deg, oklch(17% 0.034 212 / 0.78), oklch(11% 0.03 220 / 0.82));
+    linear-gradient(180deg, oklch(17% 0.034 212 / 0.62), oklch(11% 0.03 220 / 0.68));
   color: var(--tram);
   pointer-events: none;
-  box-shadow: 0 12px 28px oklch(6% 0.018 224 / 0.26);
+  box-shadow: 0 10px 22px oklch(6% 0.018 224 / 0.2);
 }
 
 .interaction-prompt:empty {
@@ -428,22 +427,12 @@ body.hit .vignette {
   overflow: hidden;
   padding: min(8vw, 78px);
   background:
-    linear-gradient(90deg, oklch(8% 0.025 224 / 0.98), oklch(14% 0.036 211 / 0.92) 43%, oklch(21% 0.043 195 / 0.36) 72%, oklch(30% 0.064 148 / 0.1)),
-    linear-gradient(158deg, transparent 0 58%, oklch(80% 0.112 76 / 0.08) 58.4% 59%, transparent 59.4%);
+    linear-gradient(90deg, oklch(8% 0.025 224 / 0.94), oklch(13% 0.034 211 / 0.82) 38%, oklch(18% 0.04 198 / 0.28) 68%, transparent);
   transition: opacity 180ms ease-out, visibility 180ms ease-out;
 }
 
 .start-overlay::before {
-  content: "";
-  position: absolute;
-  inset: -8% -4% -8% 34%;
-  pointer-events: none;
-  background:
-    linear-gradient(72deg, transparent 0 43%, oklch(72% 0.066 190 / 0.18) 43.2% 43.7%, transparent 44%),
-    linear-gradient(121deg, transparent 0 54%, oklch(65% 0.08 151 / 0.13) 54.2% 54.7%, transparent 55%),
-    linear-gradient(101deg, transparent 0 61%, oklch(82% 0.12 75 / 0.11) 61.1% 61.7%, transparent 62%);
-  opacity: 0.62;
-  transform: rotate(-4deg);
+  display: none;
 }
 
 .start-overlay.hidden {
@@ -460,11 +449,11 @@ body.hit .vignette {
 .start-panel::before {
   content: "";
   display: block;
-  width: min(210px, 55vw);
-  height: 3px;
+  width: min(170px, 55vw);
+  height: 2px;
   margin-bottom: 18px;
-  background: linear-gradient(90deg, var(--tram), var(--bluegum), var(--rain), transparent);
-  opacity: 0.86;
+  background: linear-gradient(90deg, var(--tram), var(--bluegum), transparent);
+  opacity: 0.8;
 }
 
 .kicker {
@@ -477,15 +466,15 @@ body.hit .vignette {
 }
 
 h1 {
-  max-width: 11ch;
+  max-width: 12ch;
   margin: 0;
   color: oklch(92% 0.042 87);
-  font-size: 3.05rem;
+  font-size: 2.85rem;
   font-weight: 900;
   line-height: 0.96;
   text-shadow:
     0 3px 0 oklch(8% 0.026 224 / 0.82),
-    0 0 28px oklch(82% 0.13 75 / 0.18);
+    0 0 22px oklch(82% 0.13 75 / 0.14);
 }
 
 .brief {
@@ -514,7 +503,7 @@ h1 {
   border: 1px solid oklch(72% 0.057 181 / 0.28);
   border-radius: 3px;
   background:
-    linear-gradient(180deg, oklch(16% 0.034 212 / 0.58), oklch(11% 0.03 220 / 0.62));
+    linear-gradient(180deg, oklch(16% 0.034 212 / 0.46), oklch(11% 0.03 220 / 0.5));
   color: oklch(78% 0.04 188);
   font-size: 0.78rem;
 }
@@ -524,7 +513,7 @@ h1 {
   padding: 2px 5px;
   border: 1px solid oklch(84% 0.12 78 / 0.46);
   border-radius: 3px;
-  background: oklch(28% 0.058 198 / 0.9);
+  background: oklch(28% 0.058 198 / 0.74);
   color: oklch(91% 0.045 84);
   font: inherit;
   font-weight: 900;
@@ -549,7 +538,7 @@ h1 {
   box-shadow:
     inset 0 1px 0 oklch(94% 0.058 84 / 0.5),
     0 5px 0 oklch(42% 0.091 57),
-    0 16px 34px oklch(6% 0.018 224 / 0.34);
+    0 12px 28px oklch(6% 0.018 224 / 0.26);
 }
 
 .primary-action {
