@@ -9,6 +9,29 @@ npm install
 npm run dev
 ```
 
+## LAN Co-op
+
+Run the browser dev server on the local network and start the WebSocket relay:
+
+```bash
+npm run dev:lan
+npm run multiplayer
+```
+
+On the host machine, open:
+
+```text
+http://HOST_LAN_IP:5480/?lan=host&name=Host
+```
+
+Other players on the same network can join with:
+
+```text
+http://HOST_LAN_IP:5480/?lan=join&server=ws://HOST_LAN_IP:5488&name=Player
+```
+
+The host browser is authoritative for zombies, waves, pickups, weapon drops, damage and loot. Joined browsers send movement/actions to the host and render host snapshots.
+
 ## Controls
 
 - `WASD`: move

@@ -11,12 +11,19 @@ export interface InputControllerActions {
   interact: () => void;
   toggleFlashlight: () => void;
   throwDistraction: () => void;
+  jump: () => void;
   equipSlot: (index: number) => void;
   look: (movementX: number, movementY: number) => void;
+  cancel: () => void;
+}
+
+export interface InputControllerOptions {
+  allowUnlockedLook?: boolean;
 }
 
 const MOVEMENT_KEYS = ["KeyW", "KeyA", "KeyS", "KeyD"] as const;
 const SPRINT_KEYS = ["ShiftLeft", "ShiftRight"] as const;
+const CROUCH_KEYS = ["KeyC", "ControlLeft", "ControlRight"] as const;
 
 export class InputController {
   private readonly keys = new Set<string>();
@@ -26,16 +33,23 @@ export class InputController {
     private readonly canvas: HTMLCanvasElement,
     private readonly actions: InputControllerActions,
     private readonly signal: AbortSignal,
-    private readonly target: Window = window
+    private readonly target: Window = window,
+    private readonly options: InputControllerOptions = {}
   ) {}
 
   install(): void {
-    this.canvas.addEventListener("click", () => {
-      if (document.pointerLockElement !== this.canvas) {
-        this.canvas.requestPointerLock?.();
+    this.canvas.addEventListener("mousedown", (event) => {
+      if (event.button === 0) {
+        if (document.pointerLockElement !== this.canvas) {
+          this.canvas.requestPointerLock?.();
+        }
+        this.actions.unlockAudio();
+        this.actions.shoot();
       }
-      this.actions.unlockAudio();
-      this.actions.shoot();
+
+      if (event.button === 2) {
+        this.aimHeldValue = true;
+      }
     }, { signal: this.signal });
 
     this.canvas.addEventListener("contextmenu", (event) => event.preventDefault(), { signal: this.signal });
@@ -46,7 +60,7 @@ export class InputController {
       if (event.button === 2) this.aimHeldValue = false;
     }, { signal: this.signal });
     this.target.addEventListener("mousemove", (event) => {
-      if (document.pointerLockElement !== this.canvas) return;
+      if (document.pointerLockElement !== this.canvas && !this.options.allowUnlockedLook) return;
       this.actions.look(event.movementX, event.movementY);
     }, { signal: this.signal });
     this.target.addEventListener("keydown", (event) => this.handleKeyDown(event), { signal: this.signal });
@@ -62,7 +76,11 @@ export class InputController {
   }
 
   isSprinting(): boolean {
-    return SPRINT_KEYS.some((code) => this.keys.has(code));
+    return sprintInputFromKeys((code) => this.keys.has(code));
+  }
+
+  isCrouching(): boolean {
+    return crouchInputFromKeys((code) => this.keys.has(code));
   }
 
   get aimHeld(): boolean {
@@ -90,6 +108,11 @@ export class InputController {
     if (event.code === "KeyE") this.actions.interact();
     if (event.code === "KeyF") this.actions.toggleFlashlight();
     if (event.code === "KeyG") this.actions.throwDistraction();
+    if (event.code === "Space") {
+      event.preventDefault();
+      if (!event.repeat) this.actions.jump();
+    }
+    if (event.code === "Escape") this.actions.cancel();
     if (event.code.startsWith("Digit")) {
       this.actions.equipSlot(Number(event.code.slice(5)) - 1);
     }
@@ -114,4 +137,12 @@ export function movementInputFromKeys(isDown: (code: string) => boolean): Moveme
     z: z / length,
     length
   };
+}
+
+export function sprintInputFromKeys(isDown: (code: string) => boolean): boolean {
+  return SPRINT_KEYS.some((code) => isDown(code));
+}
+
+export function crouchInputFromKeys(isDown: (code: string) => boolean): boolean {
+  return CROUCH_KEYS.some((code) => isDown(code));
 }

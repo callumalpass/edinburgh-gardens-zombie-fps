@@ -45,7 +45,7 @@ export interface Landmark {
   source?: string;
 }
 
-export type CollisionSourceKind = "landmark" | "mapped-building" | "sports-fixture" | "tree-collider";
+export type CollisionSourceKind = "landmark" | "mapped-building" | "mapped-fence" | "sports-fixture" | "tree-collider";
 
 export interface CollisionSourceRef {
   sourceObjectId: string;
@@ -65,6 +65,8 @@ interface CollisionObstacleBase extends CollisionSourceRef {
   id: string;
   label: string;
   blocksSight?: boolean;
+  jumpable?: boolean;
+  jumpBypassMinHeight?: number;
 }
 
 export interface CircularObstacle extends CollisionObstacleBase {
@@ -129,7 +131,7 @@ export interface ElevationSample {
   source: "vicmap-contour" | "vicmap-spot";
 }
 
-export type TerrainModifierKind = "path-crown" | "path-shoulder" | "tree-root" | "drainage-swale" | "oval-banking";
+export type TerrainModifierKind = "path-crown" | "path-shoulder" | "tree-root" | "drainage-swale" | "oval-banking" | "skate-bowl";
 
 export interface TerrainLineModifier {
   id: string;
@@ -154,7 +156,34 @@ export interface TerrainRadialModifier {
   source?: string;
 }
 
-export type TerrainModifier = TerrainLineModifier | TerrainRadialModifier;
+export interface TerrainEllipseModifier {
+  id: string;
+  label: string;
+  kind: TerrainModifierKind;
+  shape: "ellipse";
+  center: Vec2;
+  radiusX: number;
+  radiusZ: number;
+  angle: number;
+  delta: number;
+  source?: string;
+}
+
+export type TerrainModifier = TerrainLineModifier | TerrainRadialModifier | TerrainEllipseModifier;
+
+export interface SkateBowlFeature {
+  id: string;
+  label: string;
+  center: Vec2;
+  radiusX: number;
+  radiusZ: number;
+  angle: number;
+  depth: number;
+  exitAngle: number;
+  exitWidth: number;
+  difficulty: "beginner" | "deep";
+  source?: string;
+}
 
 export interface MappedBuilding {
   id: string;
@@ -182,6 +211,18 @@ export interface MappedFence {
   id: string;
   label: string;
   points: Vec2[];
+  height?: number;
+  width?: number;
+  jumpable?: boolean;
+  jumpBypassMinHeight?: number;
+  source?: string;
+  gates?: Array<{
+    id: string;
+    label: string;
+    position: Vec2;
+    radius: number;
+    source?: string;
+  }>;
 }
 
 export interface HardscapeLine {
@@ -269,11 +310,28 @@ export interface InteractableFixture {
   bypassObstacleIds?: string[];
 }
 
+export type AmenityKind =
+  | "bench"
+  | "drinking_water"
+  | "waste_basket"
+  | "bicycle_parking"
+  | "bbq"
+  | "toilets"
+  | "picnic_table"
+  | "table_tennis"
+  | "clubroom"
+  | "changeroom"
+  | "gatehouse"
+  | "maintenance_room"
+  | "community_room";
+
 export interface AmenityPoint {
   id: string;
   label: string;
-  kind: "bench" | "drinking_water" | "waste_basket" | "bicycle_parking" | "bbq" | "toilets" | "picnic_table" | "table_tennis";
+  kind: AmenityKind;
   position: Vec2;
+  linkedStructureId?: string;
+  source?: string;
 }
 
 export interface ParkLifeDetail {
@@ -326,6 +384,7 @@ export interface LevelData {
   elevationMin: number;
   elevationMax: number;
   terrainModifiers: TerrainModifier[];
+  skateBowls: SkateBowlFeature[];
   mappedBuildings: MappedBuilding[];
   mappedFences: MappedFence[];
   hardscapeLines: HardscapeLine[];

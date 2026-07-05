@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:lan": "vite --host 0.0.0.0",
+    "multiplayer": "node server/multiplayer-server.mjs",
     "build": "tsc --noEmit && vite build",
     "test": "vitest",
     "test:run": "vitest run",
@@ -15,7 +17,8 @@
     "perf:bench": "vitest bench --run"
   },
   "dependencies": {
-    "three": "^0.185.1"
+    "three": "^0.185.1",
+    "ws": "^8.21.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",

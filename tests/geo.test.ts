@@ -230,7 +230,7 @@ describe("map geometry", () => {
   it("adds sourceable micro-terrain modifiers over broad elevation", () => {
     const level = createLevelData();
     const modifierKinds = new Set(level.terrainModifiers.map((modifier) => modifier.kind));
-    for (const kind of ["path-crown", "path-shoulder", "tree-root", "drainage-swale", "oval-banking"] as const) {
+    for (const kind of ["path-crown", "path-shoulder", "tree-root", "drainage-swale", "oval-banking", "skate-bowl"] as const) {
       expect(modifierKinds.has(kind)).toBe(true);
     }
     expect(level.terrainModifiers.length).toBeGreaterThan(level.trees.length);
@@ -258,6 +258,30 @@ describe("map geometry", () => {
     expect(sampler.altitudeAt(crown.points[1])).toBeGreaterThanOrEqual(level.elevationMin);
   });
 
+  it("models Fitzy Bowl as lowered enterable bowls instead of an invisible skate blocker", () => {
+    const level = createLevelData();
+    const sampler = new TerrainSampler(level);
+    const obstacleIds = new Set(level.obstacles.map((obstacle) => obstacle.id));
+    const skateLandmark = level.landmarks.find((landmark) => landmark.id === "skate");
+    const bowlModifiers = level.terrainModifiers.filter((modifier) => modifier.kind === "skate-bowl");
+
+    expect(obstacleIds.has("skate")).toBe(false);
+    expect(level.skateBowls).toHaveLength(3);
+    expect(level.skateBowls.filter((bowl) => bowl.difficulty === "deep")).toHaveLength(2);
+    expect(level.skateBowls.some((bowl) => bowl.difficulty === "beginner" && bowl.depth <= 0.4)).toBe(true);
+    expect(bowlModifiers).toHaveLength(level.skateBowls.length);
+    expect(bowlModifiers.every((modifier) => modifier.shape === "ellipse" && modifier.delta < -0.25)).toBe(true);
+
+    if (!skateLandmark?.polygon) {
+      throw new Error("Missing skatepark landmark polygon");
+    }
+    for (const bowl of level.skateBowls) {
+      expect(pointInPolygon(bowl.center, skateLandmark.polygon), `${bowl.id} center outside skatepark`).toBe(true);
+      expect(sampler.microReliefAt(bowl.center), `${bowl.id} is not lowered`).toBeLessThan(-0.25);
+      expect(bowl.exitWidth, `${bowl.id} exit should be narrow enough to be an intentional route`).toBeLessThan(0.6);
+    }
+  });
+
   it("includes OSM-mapped building and fence footprints", () => {
     const level = createLevelData();
     const buildingIds = new Set(level.mappedBuildings.map((building) => building.id));
@@ -272,8 +296,45 @@ describe("map geometry", () => {
     }
     expect(level.mappedBuildings.every((building) => building.source?.includes("OSM way"))).toBe(true);
     expect(level.mappedBuildings.some((building) => building.source?.includes("CMP"))).toBe(true);
-    expect(level.mappedFences.length).toBeGreaterThanOrEqual(1);
+    const fenceIds = new Set(level.mappedFences.map((fence) => fence.id));
+    expect(level.mappedFences.length).toBeGreaterThanOrEqual(3);
+    for (const id of ["south-playground-fence", "oval-fence", "osm-fence-715802680"]) {
+      expect(fenceIds.has(id)).toBe(true);
+    }
+    expect(fenceIds.has("north-playground-fence")).toBe(false);
+    expect(level.mappedFences.every((fence) => fence.source)).toBe(true);
     expect(level.mappedBuildings.filter((building) => pointInPolygon(polygonCentroid(building.polygon), level.boundary)).length).toBe(level.mappedBuildings.length);
+  });
+
+  it("models the south playground fence and gated oval access as mapped blockers", () => {
+    const level = createLevelData();
+    const fences = new Map(level.mappedFences.map((fence) => [fence.id, fence]));
+    const south = fences.get("south-playground-fence");
+    const oval = fences.get("oval-fence");
+    expect(south?.gates?.length).toBe(3);
+    expect(oval?.gates?.length).toBe(3);
+    expect(south?.source).toContain("Melbourne Playgrounds");
+    expect(oval?.source).toContain("OSM connector ways 403753751 and 403753754");
+    expect(oval?.jumpable).toBe(true);
+    expect(oval?.jumpBypassMinHeight).toBeGreaterThan(0.4);
+    expect(level.landmarks.find((landmark) => landmark.id === "north-playground")?.source).toContain("no current public fence source");
+
+    const fenceObstacles = level.obstacles.filter((obstacle) => obstacle.sourceObjectKind === "mapped-fence");
+    expect(fenceObstacles.length).toBeGreaterThanOrEqual(10);
+    expect(fenceObstacles.every((obstacle) => obstacle.blocksSight === false)).toBe(true);
+    expect(fenceObstacles.filter((obstacle) => obstacle.sourceObjectId === "oval-fence").every((obstacle) => obstacle.jumpable === true)).toBe(true);
+    expect(fenceObstacles.filter((obstacle) => obstacle.sourceObjectId === "south-playground-fence").some((obstacle) => obstacle.jumpable)).toBe(false);
+
+    for (const fence of [south, oval]) {
+      if (!fence?.gates) throw new Error(`Missing gates for ${fence?.id ?? "fence"}`);
+      const segments = fenceObstacles.filter((obstacle) => obstacle.sourceObjectId === fence.id);
+      expect(segments.length, `${fence.id} has no blocking segments`).toBeGreaterThan(0);
+      for (const gate of fence.gates) {
+        expect(pointInPolygon(gate.position, level.boundary), `${gate.id} is outside the park`).toBe(true);
+        const blocked = segments.some((segment) => pointInsideObstacle(gate.position, segment, 0.35));
+        expect(blocked, `${gate.id} is blocked by ${fence.id}`).toBe(false);
+      }
+    }
   });
 
   it("keeps facade frontages source-backed for major mapped buildings", () => {
@@ -676,10 +737,11 @@ describe("map geometry", () => {
     expect(level.obstacles.find((obstacle) => obstacle.id === "bowling")?.shape).toBe("polygon");
     expect(obstacleIds.has("south-playground")).toBe(true);
     expect(obstacleIds.has("north-playground")).toBe(true);
-    expect(obstacleIds.has("skate")).toBe(true);
+    expect(obstacleIds.has("skate")).toBe(false);
     expect(level.obstacles.find((obstacle) => obstacle.id === "south-playground")?.blocksSight).toBe(false);
     expect(level.obstacles.find((obstacle) => obstacle.id === "north-playground")?.blocksSight).toBe(false);
-    expect(level.obstacles.find((obstacle) => obstacle.id === "skate")?.blocksSight).toBe(false);
+    expect(level.skateBowls.length).toBe(3);
+    expect(level.terrainModifiers.filter((modifier) => modifier.kind === "skate-bowl").length).toBe(level.skateBowls.length);
     for (const fixture of level.interactables) {
       for (const obstacleId of fixture.bypassObstacleIds ?? []) {
         expect(obstacleIds.has(obstacleId)).toBe(true);

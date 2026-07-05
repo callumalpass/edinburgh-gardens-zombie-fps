@@ -84,7 +84,7 @@ export class TerrainSampler {
     for (const modifier of this.nearbyTerrainModifiers(point)) {
       relief += this.modifierReliefAt(point, modifier);
     }
-    return Math.max(-0.42, Math.min(0.42, relief));
+    return Math.max(-1.8, Math.min(0.42, relief));
   }
 
   private indexTerrainModifiers(): void {
@@ -121,6 +121,15 @@ export class TerrainSampler {
       return modifier.delta * smoothFalloff(1 - modifierDistance / modifier.radius);
     }
 
+    if (modifier.shape === "ellipse") {
+      const local = localPointFromWorld(modifier.center, modifier.angle, point);
+      const normalized = Math.hypot(local.x / modifier.radiusX, local.z / modifier.radiusZ);
+      if (normalized >= 1) {
+        return 0;
+      }
+      return modifier.delta * smoothFalloff(1 - normalized);
+    }
+
     const modifierDistance = distanceToPolyline(point, modifier.points);
     if (modifierDistance > modifier.outerWidth) {
       return 0;
@@ -145,6 +154,19 @@ export class TerrainSampler {
         minZ: modifier.center.z - modifier.radius,
         maxX: modifier.center.x + modifier.radius,
         maxZ: modifier.center.z + modifier.radius
+      };
+    }
+
+    if (modifier.shape === "ellipse") {
+      const cos = Math.cos(modifier.angle);
+      const sin = Math.sin(modifier.angle);
+      const halfX = Math.abs(modifier.radiusX * cos) + Math.abs(modifier.radiusZ * sin);
+      const halfZ = Math.abs(modifier.radiusX * sin) + Math.abs(modifier.radiusZ * cos);
+      return {
+        minX: modifier.center.x - halfX,
+        minZ: modifier.center.z - halfZ,
+        maxX: modifier.center.x + halfX,
+        maxZ: modifier.center.z + halfZ
       };
     }
 
@@ -174,6 +196,17 @@ function boundsForLineModifier(modifier: TerrainLineModifier): { minX: number; m
   const maxX = Math.max(...modifier.points.map((point) => point.x)) + modifier.outerWidth;
   const maxZ = Math.max(...modifier.points.map((point) => point.z)) + modifier.outerWidth;
   return { minX, minZ, maxX, maxZ };
+}
+
+function localPointFromWorld(center: Vec2, angle: number, point: Vec2): Vec2 {
+  const dx = point.x - center.x;
+  const dz = point.z - center.z;
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  return {
+    x: dx * cos + dz * sin,
+    z: -dx * sin + dz * cos
+  };
 }
 
 function smoothFalloff(value: number): number {

@@ -54,6 +54,11 @@ export class WaveDirector {
     return this.intermissionTimerValue;
   }
 
+  get remainingSpawns(): number {
+    if (this.phaseValue !== "active") return 0;
+    return Math.max(0, getWaveConfig(this.waveValue).total - this.spawnedThisWave);
+  }
+
   reset(): void {
     this.waveValue = 1;
     this.phaseValue = "active";

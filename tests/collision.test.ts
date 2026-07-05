@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { resolveObstacle, shouldBypassObstacle } from "../src/game/collision";
-import { distance, polygonCentroid } from "../src/game/geo";
+import { distance, pointInPolygon, polygonCentroid } from "../src/game/geo";
 import { createLevelData } from "../src/game/levelData";
 import type { BoxObstacle } from "../src/game/types";
 
@@ -57,6 +57,7 @@ describe("collision system", () => {
     const level = createLevelData();
     const landmarks = new Set(level.landmarks.map((source) => source.id));
     const mappedBuildings = new Set(level.mappedBuildings.map((source) => source.id));
+    const mappedFences = new Set(level.mappedFences.map((source) => source.id));
     const sportsFixtures = new Set(level.sportsFixtures.map((source) => source.id));
     const treeColliders = new Set(level.treeColliders.map((source) => source.id));
     const fixtureIds = new Set(level.interactables.map((fixture) => fixture.id));
@@ -64,6 +65,7 @@ describe("collision system", () => {
       .filter((obstacle) => {
         if (obstacle.sourceObjectKind === "landmark") return !landmarks.has(obstacle.sourceObjectId);
         if (obstacle.sourceObjectKind === "mapped-building") return !mappedBuildings.has(obstacle.sourceObjectId);
+        if (obstacle.sourceObjectKind === "mapped-fence") return !mappedFences.has(obstacle.sourceObjectId);
         if (obstacle.sourceObjectKind === "sports-fixture") return !sportsFixtures.has(obstacle.sourceObjectId);
         return !treeColliders.has(obstacle.sourceObjectId);
       })
@@ -78,6 +80,29 @@ describe("collision system", () => {
 
     expect(missingSources).toEqual([]);
     expect(missingGapFixtures).toEqual([]);
+  });
+
+  it("keeps structure access interactions source-linked and inside the park", () => {
+    const level = createLevelData();
+    const structureKinds = new Set(["clubroom", "changeroom", "gatehouse", "maintenance_room", "community_room"]);
+    const expectedIds = [
+      "grandstand-changeroom-access",
+      "tennis-clubroom-access",
+      "bowling-clubroom-access",
+      "oval-gatehouse-window",
+      "emely-baker-community-room",
+      "south-amenities-service-room"
+    ];
+    const accessPoints = level.amenities.filter((amenity) => structureKinds.has(amenity.kind));
+    const landmarks = new Set(level.landmarks.map((landmark) => landmark.id));
+    const mappedBuildings = new Set(level.mappedBuildings.map((building) => building.id));
+
+    expect(accessPoints.map((amenity) => amenity.id).sort()).toEqual([...expectedIds].sort());
+    for (const amenity of accessPoints) {
+      expect(pointInPolygon(amenity.position, level.boundary)).toBe(true);
+      expect(amenity.source).toBeTruthy();
+      expect(amenity.linkedStructureId && (landmarks.has(amenity.linkedStructureId) || mappedBuildings.has(amenity.linkedStructureId))).toBe(true);
+    }
   });
 
   it("places grandstand stair access on the oval-facing side of the blocker", () => {

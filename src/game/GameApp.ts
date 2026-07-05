@@ -21,7 +21,15 @@ import { resolveObstacle, shouldBypassObstacle as shouldBypassCollisionObstacle 
 import { clampToPolygon, distance, distanceToSegment, polygonCentroid } from "./geo";
 import { pointInInteractableRaisedFootprint } from "./interactables";
 import { createLevelData } from "./levelData";
-import { chooseZombiePickup, chooseZombieWeaponDrop, lootNoiseMultiplier, lootSearchSecondsMultiplier, searchAmenityLoot, type LootSearchContext } from "./loot";
+import {
+  chooseZombiePickup,
+  chooseZombieWeaponDrop,
+  isStructureAmenityKind,
+  lootNoiseMultiplier,
+  lootSearchSecondsMultiplier,
+  searchAmenityLoot,
+  type LootSearchContext
+} from "./loot";
 import { GameAudio, type NoisePlaybackOptions } from "./audio";
 import { movementNoiseKind, movementNoiseMultiplier, NoiseSystem, type MovementSurface, type NoiseKind } from "./noise";
 import {
@@ -31,7 +39,8 @@ import {
   injuryStatus,
   nextStamina,
   speedMultiplierForCondition,
-  spendStamina
+  spendStamina,
+  type PlayerCondition
 } from "./playerCondition";
 import { SeededRandom } from "./random";
 import { AtmosphereSystem } from "./rendering/AtmosphereSystem";
@@ -44,6 +53,7 @@ import { weatherFromElapsed, type WeatherState } from "./rendering/weather";
 import { freezeStaticScene } from "./rendering/staticScene";
 import type { GameStateName, GameTestApi, HitZone, Pickup, ShellCasing, SmokePuff, Snapshot, Tracer, WavePhase, WeaponDrop, Zombie } from "./state";
 import { installGameTestDriver, uninstallGameTestDriver } from "./testing/GameTestDriver";
+import { InputController } from "./input/InputController";
 import { TerrainSampler } from "./terrain";
 import {
   isLineOfSightBlocked as isLineOfSightBlockedByContext,
@@ -56,11 +66,23 @@ import { MiniMapRenderer } from "./ui/MiniMapRenderer";
 import { playerVisibilityMultiplier, weatherNoiseMaskForKind, zombieFacingThreshold } from "./stealth";
 import { separateCircularAgents } from "./spatial/AgentSeparation";
 import { ObstacleIndex } from "./spatial/ObstacleIndex";
+import { WaveDirector } from "./systems/WaveDirector";
+import { LanMultiplayerClient, multiplayerConfigFromLocation } from "./multiplayer/LanMultiplayerClient";
+import type {
+  NetworkAction,
+  NetworkGameSnapshot,
+  NetworkInputState,
+  NetworkPickupSnapshot,
+  NetworkPlayerSnapshot,
+  NetworkWeaponDropSnapshot,
+  NetworkZombieSnapshot
+} from "./multiplayer/types";
 import type {
   AmenityPoint,
   InteractableFixture,
   LevelData,
   ParkLifeDetail,
+  SkateBowlFeature,
   UpgradeStation,
   Vec2,
   WeaponSpawn
@@ -77,6 +99,9 @@ const INTERMISSION_SECONDS = 24;
 const REST_SECONDS = 5;
 const DISTRACTION_STAMINA_COST = 8;
 const CLIMB_STAMINA_COST = 14;
+const JUMP_STAMINA_COST = 9;
+const JUMP_INITIAL_VELOCITY = 5.1;
+const JUMP_GRAVITY = 13.4;
 const MELEE_STAMINA_COST = 12;
 const MACHETE_STAMINA_COST = 18;
 const ZOMBIE_SEPARATION_GAP = 0.16;
@@ -90,6 +115,8 @@ const BIKE_STRAFE_SPEED = 4.4;
 const BIKE_INTERACTION_RADIUS = 5.6;
 const BIKE_CAMERA_HEIGHT_BONUS = 0.34;
 const BIKE_ALLOWED_WEAPONS = new Set<WeaponId>(["knife", "machete", "carbine", "smg"]);
+const NETWORK_INPUT_HZ = 30;
+const NETWORK_SNAPSHOT_HZ = 18;
 
 interface AmenitySearch {
   amenity: AmenityPoint;
@@ -122,6 +149,52 @@ interface RideableBike {
   mounted: boolean;
 }
 
+interface NetworkRemotePlayer {
+  id: string;
+  name: string;
+  mesh: THREE.Group;
+  weaponIdRendered: WeaponId;
+  position: THREE.Vector3;
+  velocity: THREE.Vector3;
+  yaw: number;
+  pitch: number;
+  health: number;
+  scrap: number;
+  loadout: Loadout;
+  condition: PlayerCondition;
+  input: NetworkInputState;
+  lastInputAt: number;
+  lastShotAt: number;
+  shotBloom: number;
+  movementNoiseTimer: number;
+  isSprinting: boolean;
+  crouching: boolean;
+  crouchAmount: number;
+  height: number;
+  heightTarget: number;
+  jumpHeight: number;
+  jumpVelocity: number;
+  activeFixtureId: string | null;
+}
+
+interface CombatantRef {
+  id: string;
+  isLocal: boolean;
+  remote?: NetworkRemotePlayer;
+  position: THREE.Vector3;
+  velocity: THREE.Vector3;
+  yaw: number;
+  pitch: number;
+  health: number;
+  crouching: boolean;
+  crouchAmount: number;
+  height: number;
+  jumpHeight: number;
+  activeFixtureId: string | null;
+  condition: PlayerCondition;
+  loadout: Loadout;
+}
+
 export class GameApp {
   private readonly root: HTMLElement;
   private readonly level: LevelData;
@@ -129,12 +202,15 @@ export class GameApp {
   private readonly terrain: TerrainSampler;
   private readonly noise = new NoiseSystem();
   private readonly rng = new SeededRandom(0xed1b97);
+  private readonly waveDirector: WaveDirector;
+  private readonly multiplayerConfig = multiplayerConfigFromLocation();
   private readonly smokeMode = new URLSearchParams(window.location.search).has("smoke");
   private readonly audio = new GameAudio({ enabled: !this.smokeMode });
   private renderer!: THREE.WebGLRenderer;
   private scene!: THREE.Scene;
   private camera!: THREE.PerspectiveCamera;
   private canvas!: HTMLCanvasElement;
+  private input: InputController | null = null;
   private hud!: HudController;
   private miniMap!: MiniMapRenderer;
   private meshFactory!: MeshFactory;
@@ -159,23 +235,19 @@ export class GameApp {
     kills: 0,
     height: 0,
     heightTarget: 0,
+    jumpHeight: 0,
+    jumpVelocity: 0,
     crouching: false,
     crouchAmount: 0,
     activeFixtureId: null as string | null
   };
-  private keys = new Set<string>();
   private loadout: Loadout = createInitialLoadout();
   private lastShotAt = 0;
-  private wave = 1;
-  private wavePhase: WavePhase = "active";
-  private intermissionTimer = 0;
   private intermissionThreatTimer = 0;
   private intermissionThreatsSpawned = 0;
   private movementNoiseTimer = 0;
   private elevatedNoiseTimer = 0;
   private testCrouchOverride: boolean | null = null;
-  private spawnQueue: ZombieSpawn[] = [];
-  private spawnTimer = 0;
   private nextZombieId = 1;
   private nextPickupId = 1;
   private zombies: Zombie[] = [];
@@ -209,7 +281,6 @@ export class GameApp {
   private meleeSwing = 0;
   private meleeSwingSide = 1;
   private shotBloom = 0;
-  private aimHeld = false;
   private scopeAmount = 0;
   private muzzleTimer = 0;
   private renderedTreeCount = 0;
@@ -221,12 +292,64 @@ export class GameApp {
   private materials!: GameMaterials;
   private bike: RideableBike | null = null;
   private bikePedalPhase = 0;
+  private multiplayer: LanMultiplayerClient | null = null;
+  private localNetworkId = "local";
+  private networkInputSequence = 0;
+  private networkActionSequence = 0;
+  private networkInputTimer = 0;
+  private networkSnapshotTimer = 0;
+  private networkRemainingSpawns = 0;
+  private networkWave = 1;
+  private networkWavePhase: WavePhase = "active";
+  private networkIntermissionTimer = 0;
+  private readonly networkPlayers = new Map<string, NetworkRemotePlayer>();
+
+  private get aimHeld(): boolean {
+    return this.input?.aimHeld ?? false;
+  }
+
+  private set aimHeld(value: boolean) {
+    this.input?.setAimHeld(value);
+  }
+
+  private get wave(): number {
+    if (this.isNetworkClient) {
+      return this.networkWave;
+    }
+    return this.waveDirector.wave;
+  }
+
+  private get wavePhase(): WavePhase {
+    if (this.isNetworkClient) {
+      return this.networkWavePhase;
+    }
+    return this.waveDirector.phase;
+  }
+
+  private get intermissionTimer(): number {
+    if (this.isNetworkClient) {
+      return this.networkIntermissionTimer;
+    }
+    return this.waveDirector.intermissionTimer;
+  }
+
+  private get isNetworkHost(): boolean {
+    return this.multiplayerConfig.enabled && this.multiplayerConfig.role === "host";
+  }
+
+  private get isNetworkClient(): boolean {
+    return this.multiplayerConfig.enabled && this.multiplayerConfig.role === "client";
+  }
 
   constructor(root: HTMLElement) {
     this.root = root;
     this.level = createLevelData();
     this.obstacleIndex = new ObstacleIndex(this.level.obstacles);
     this.terrain = new TerrainSampler(this.level);
+    this.waveDirector = new WaveDirector(this.level.spawnPoints, this.rng, {
+      intermissionSeconds: INTERMISSION_SECONDS,
+      initialSpawnDelay: 0.4
+    });
     this.player.position.set(START_POSITION.x, this.groundY({ x: START_POSITION.x, z: START_POSITION.z }), START_POSITION.z);
   }
 
@@ -266,7 +389,8 @@ export class GameApp {
     this.spawnInitialWeapons();
     this.bindEvents();
     this.resize();
-    this.startWave(1);
+    this.resetWaves();
+    this.setupMultiplayer();
     this.updateHud();
 
     if (this.smokeMode) {
@@ -316,6 +440,11 @@ export class GameApp {
     if (document.pointerLockElement === this.canvas) {
       document.exitPointerLock?.();
     }
+    this.multiplayer?.close();
+    for (const player of this.networkPlayers.values()) {
+      this.scene.remove(player.mesh);
+    }
+    this.networkPlayers.clear();
     this.audio.dispose();
 
     const geometries = new Set<THREE.BufferGeometry>();
@@ -352,53 +481,29 @@ export class GameApp {
     const { signal } = this.events;
     window.addEventListener("resize", () => this.resize(), { signal });
     document.addEventListener("contextmenu", (event) => event.preventDefault(), { signal });
-    document.addEventListener("keydown", (event) => {
-      this.keys.add(event.code);
-      if (event.code === "KeyR") {
-        this.aimHeld = false;
-        this.loadout = startReload(this.loadout, performance.now() / 1000);
-        if (this.loadout.reloadingUntil > 0) {
-          this.emitNoise("reload", { x: this.player.position.x, z: this.player.position.z }, this.player.crouching ? 0.55 : 1, {
-            weaponId: this.loadout.weaponId
-          });
+    this.input = new InputController(
+      this.canvas,
+      {
+        unlockAudio: () => void this.audio.unlock(),
+        shoot: () => this.handleShootInput(performance.now() / 1000),
+        reload: () => this.handleReloadInput(performance.now() / 1000),
+        interact: () => this.handleInteractInput(),
+        toggleFlashlight: () => this.handleToggleFlashlightInput(),
+        throwDistraction: () => this.handleThrowDistractionInput(),
+        jump: () => this.handleJumpInput(),
+        equipSlot: (index) => this.handleEquipSlotInput(index),
+        look: (movementX, movementY) => this.handleLook(movementX, movementY),
+        cancel: () => {
+          if (this.state === "playing") {
+            document.exitPointerLock?.();
+          }
         }
-      }
-      if (event.code === "KeyE") {
-        this.handleInteract();
-      }
-      if (event.code === "KeyF") {
-        this.toggleFlashlight();
-      }
-      if (event.code === "KeyG") {
-        this.throwDistraction();
-      }
-      if (["Digit1", "Digit2", "Digit3", "Digit4", "Digit5"].includes(event.code)) {
-        const index = Number(event.code.replace("Digit", "")) - 1;
-        const weaponId = this.loadout.inventory[index];
-        if (weaponId) {
-          this.equipWeapon(weaponId);
-        }
-      }
-      if (event.code === "Escape" && this.state === "playing") {
-        document.exitPointerLock();
-      }
-    }, { signal });
-    document.addEventListener("keyup", (event) => this.keys.delete(event.code), { signal });
-    document.addEventListener("mousemove", (event) => this.handleMouseMove(event), { signal });
-    this.canvas.addEventListener("mousedown", (event) => {
-      if (event.button === 2) {
-        this.aimHeld = true;
-        return;
-      }
-      if (event.button === 0) {
-        this.shoot(performance.now() / 1000);
-      }
-    }, { signal });
-    document.addEventListener("mouseup", (event) => {
-      if (event.button === 2) {
-        this.aimHeld = false;
-      }
-    }, { signal });
+      },
+      signal,
+      window,
+      { allowUnlockedLook: this.smokeMode }
+    );
+    this.input.install();
     this.hud.startButton.addEventListener("click", () => {
       this.start();
       this.canvas.requestPointerLock?.();
@@ -409,19 +514,150 @@ export class GameApp {
     }, { signal });
   }
 
+  private setupMultiplayer(): void {
+    if (!this.multiplayerConfig.enabled || this.smokeMode) {
+      return;
+    }
+
+    this.multiplayer = new LanMultiplayerClient(this.multiplayerConfig);
+    this.multiplayer.on("welcome", (message) => {
+      this.localNetworkId = message.playerId;
+      this.flashStatus(message.role === "host" ? "LAN host ready" : "Joined LAN game");
+    });
+    this.multiplayer.on("status", (message) => this.flashStatus(message));
+    this.multiplayer.on("peerJoined", (message) => {
+      if (this.isNetworkHost) {
+        this.addNetworkPlayer(message.playerId, message.name);
+      }
+    });
+    this.multiplayer.on("peerLeft", (message) => this.removeNetworkPlayer(message.playerId));
+    this.multiplayer.on("input", (message) => {
+      if (!this.isNetworkHost) return;
+      const player = this.networkPlayers.get(message.playerId) ?? this.addNetworkPlayer(message.playerId, `Player ${message.playerId}`);
+      player.input = message.input;
+      player.yaw = message.input.yaw;
+      player.pitch = message.input.pitch;
+      player.lastInputAt = performance.now() / 1000;
+    });
+    this.multiplayer.on("action", (message) => {
+      if (this.isNetworkHost) {
+        this.handleNetworkPlayerAction(message.playerId, message.action);
+      }
+    });
+    this.multiplayer.on("snapshot", (message) => {
+      if (this.isNetworkClient) {
+        this.applyNetworkSnapshot(message.snapshot);
+      }
+    });
+
+    if (this.isNetworkClient) {
+      this.clearNetworkAuthoritativeEntities();
+      this.flashStatus("Connecting to LAN host");
+    } else {
+      this.flashStatus("Starting LAN host");
+    }
+    this.multiplayer.connect();
+  }
+
+  private handleShootInput(now: number): void {
+    if (this.sendNetworkAction("shoot")) {
+      return;
+    }
+    this.shoot(now);
+  }
+
+  private handleReloadInput(now: number): void {
+    if (this.sendNetworkAction("reload")) {
+      return;
+    }
+    this.reload(now);
+  }
+
+  private handleInteractInput(): boolean {
+    if (this.sendNetworkAction("interact")) {
+      return true;
+    }
+    return this.handleInteract();
+  }
+
+  private handleToggleFlashlightInput(): boolean {
+    if (this.sendNetworkAction("toggleFlashlight")) {
+      return true;
+    }
+    return this.toggleFlashlight();
+  }
+
+  private handleThrowDistractionInput(): boolean {
+    if (this.sendNetworkAction("throwDistraction")) {
+      return true;
+    }
+    return this.throwDistraction();
+  }
+
+  private handleJumpInput(): boolean {
+    if (this.sendNetworkAction("jump")) {
+      return true;
+    }
+    return this.jump();
+  }
+
+  private handleEquipSlotInput(index: number): void {
+    if (this.sendNetworkAction("equipSlot", index)) {
+      return;
+    }
+    this.equipSlot(index);
+  }
+
+  private sendNetworkAction(type: NetworkAction["type"], slot?: number): boolean {
+    if (!this.isNetworkClient || !this.multiplayer) {
+      return false;
+    }
+    this.multiplayer.sendAction({
+      type,
+      slot,
+      sequence: ++this.networkActionSequence,
+      yaw: this.player.yaw,
+      pitch: this.player.pitch
+    });
+    return true;
+  }
+
   private start(): void {
     this.state = "playing";
     this.hud.hideOverlay();
     void this.audio.unlock();
   }
 
+  private reload(now: number): void {
+    this.aimHeld = false;
+    this.loadout = startReload(this.loadout, now);
+    if (this.loadout.reloadingUntil > 0) {
+      this.emitNoise("reload", { x: this.player.position.x, z: this.player.position.z }, this.player.crouching ? 0.55 : 1, {
+        weaponId: this.loadout.weaponId
+      });
+    }
+  }
+
+  private equipSlot(index: number): void {
+    const weaponId = this.loadout.inventory[index];
+    if (weaponId) {
+      this.equipWeapon(weaponId);
+    }
+  }
+
   private restart(): void {
+    if (this.isNetworkClient) {
+      this.hud.setStatus("Waiting for host restart");
+      return;
+    }
     this.player.position.set(START_POSITION.x, this.groundY({ x: START_POSITION.x, z: START_POSITION.z }), START_POSITION.z);
     this.player.health = 100;
     this.player.scrap = 70;
     this.player.kills = 0;
     this.player.height = 0;
     this.player.heightTarget = 0;
+    this.player.jumpHeight = 0;
+    this.player.jumpVelocity = 0;
     this.player.crouching = false;
     this.player.crouchAmount = 0;
     this.player.activeFixtureId = null;
@@ -429,20 +665,16 @@ export class GameApp {
     this.player.pitch = -0.08;
     this.loadout = createInitialLoadout();
     this.rebuildViewWeapon();
-    this.wave = 1;
-    this.wavePhase = "active";
-    this.intermissionTimer = 0;
-    this.intermissionThreatTimer = 0;
-    this.intermissionThreatsSpawned = 0;
+    this.resetWaves();
     this.movementNoiseTimer = 0;
     this.elevatedNoiseTimer = 0;
+    this.input?.clear();
     this.isSprinting = false;
     this.distractionCooldown = 0;
     this.flashlightNoiseTimer = 0;
     this.condition = createInitialPlayerCondition();
     this.applyFlashlightVisibility();
     this.testCrouchOverride = null;
-    this.spawnQueue = [];
     this.zombies.forEach((zombie) => this.scene.remove(zombie.mesh));
     this.pickups.forEach((pickup) => this.scene.remove(pickup.mesh));
     this.weaponDrops.forEach((drop) => this.scene.remove(drop.mesh));
@@ -478,11 +710,14 @@ export class GameApp {
     this.nearestBike = null;
     this.nearestBrokenBike = null;
     this.resetRideableBike();
+    this.resetNetworkPlayersForHost();
     this.hud.setRestartVisible(false);
     this.state = "playing";
     this.spawnInitialWeapons();
-    this.startWave(1);
     this.updateHud();
+    if (this.isNetworkHost && this.multiplayer?.connected) {
+      this.multiplayer.sendSnapshot(this.buildNetworkSnapshot());
+    }
   }
 
   private tick(time: number): void {
@@ -512,15 +747,21 @@ export class GameApp {
   }
 
   private update(dt: number, now: number): void {
+    if (this.isNetworkClient) {
+      this.updateNetworkClientFrame(dt, now);
+      return;
+    }
+
     this.loadout = finishReloadIfReady(this.loadout, now);
     this.noise.update(dt);
     this.updateCrouch(dt);
+    this.updateJumpState(dt);
     this.updateMovement(dt);
     this.updateVerticalState(dt);
     this.updateElevatedNoise(dt);
     this.updateDistractions(dt);
+    this.updateNetworkHostPlayers(dt, now);
     this.updateWavePacing(dt);
-    this.updateSpawns(dt);
     this.updateZombies(dt, now);
     this.updatePickups(dt);
     this.updateWeaponDrops(dt);
@@ -541,18 +782,1013 @@ export class GameApp {
     this.updateAudio(dt);
     this.updateHud();
     this.updateMiniMap();
+    this.sendNetworkSnapshotFrame(dt);
 
-    if (this.player.health <= 0) {
+    if (this.isNetworkHost) {
+      if (this.combatants().length === 0) {
+        this.gameOver();
+      }
+    } else if (this.player.health <= 0) {
       this.gameOver();
     }
+  }
+
+  private updateNetworkClientFrame(dt: number, now: number): void {
+    this.sendNetworkInputFrame(dt);
+    this.loadout = finishReloadIfReady(this.loadout, now);
+    this.updateCrouch(dt);
+    this.updateJumpState(dt);
+    this.updateMovement(dt);
+    this.updateVerticalState(dt);
+    this.updateWeaponDrops(dt);
+    this.updateNetworkClientBikeTarget();
+    this.updateTracers(dt);
+    this.updateShells(dt);
+    this.updateSmokePuffs(dt);
+    this.updateNearestStation();
+    this.updateNearestAmenity();
+    this.updateNearestBrokenBike();
+    this.updateNearestFixture();
+    this.updateScope(dt, now);
+    this.updateWeaponModel(dt);
+    this.updateCamera();
+    this.updateAudio(dt);
+    this.updateHud();
+    this.updateMiniMap();
+  }
+
+  private updateNetworkClientBikeTarget(): void {
+    if (!this.bike || this.bike.mounted) {
+      this.nearestBike = null;
+      return;
+    }
+    const distanceToBike = this.bike.position.distanceTo(this.player.position);
+    this.nearestBike = distanceToBike < BIKE_INTERACTION_RADIUS ? this.bike : null;
+  }
+
+  private sendNetworkInputFrame(dt: number): void {
+    if (!this.isNetworkClient || !this.multiplayer || this.state !== "playing") {
+      return;
+    }
+    this.networkInputTimer -= dt;
+    if (this.networkInputTimer > 0) {
+      return;
+    }
+    this.multiplayer.sendInput(this.currentNetworkInput());
+    this.networkInputTimer = 1 / NETWORK_INPUT_HZ;
+  }
+
+  private currentNetworkInput(): NetworkInputState {
+    const movement = this.input?.movement() ?? { x: 0, z: 0, length: 0 };
+    return {
+      sequence: ++this.networkInputSequence,
+      moveX: movement.x,
+      moveZ: movement.z,
+      sprint: this.input?.isSprinting() ?? false,
+      crouch: this.input?.isCrouching() ?? false,
+      aim: this.aimHeld,
+      yaw: this.player.yaw,
+      pitch: this.player.pitch
+    };
+  }
+
+  private sendNetworkSnapshotFrame(dt: number): void {
+    if (!this.isNetworkHost || !this.multiplayer || !this.multiplayer.connected) {
+      return;
+    }
+    this.networkSnapshotTimer -= dt;
+    if (this.networkSnapshotTimer > 0) {
+      return;
+    }
+    this.multiplayer.sendSnapshot(this.buildNetworkSnapshot());
+    this.networkSnapshotTimer = 1 / NETWORK_SNAPSHOT_HZ;
+  }
+
+  private buildNetworkSnapshot(): NetworkGameSnapshot {
+    return {
+      frame: this.frame,
+      sentAt: performance.now(),
+      roomId: this.multiplayerConfig.roomId,
+      hostId: this.localNetworkId,
+      state: this.state,
+      wave: this.wave,
+      wavePhase: this.wavePhase,
+      intermissionTimer: this.intermissionTimer,
+      remainingSpawns: this.waveDirector.remainingSpawns,
+      players: [this.localPlayerNetworkSnapshot(), ...[...this.networkPlayers.values()].map((player) => this.remotePlayerNetworkSnapshot(player))],
+      zombies: this.zombies.map((zombie) => this.zombieNetworkSnapshot(zombie)),
+      pickups: this.pickups.map((pickup) => ({
+        id: pickup.id,
+        type: pickup.type,
+        amount: pickup.amount,
+        x: pickup.position.x,
+        y: pickup.position.y,
+        z: pickup.position.z,
+        ttl: pickup.ttl
+      })),
+      weaponDrops: this.weaponDrops.map((drop) => ({
+        id: drop.id,
+        weaponId: drop.weaponId,
+        label: drop.label,
+        x: drop.position.x,
+        y: drop.position.y,
+        z: drop.position.z,
+        ttl: drop.ttl,
+        source: drop.source
+      })),
+      bike: this.bike
+        ? {
+            x: this.bike.position.x,
+            y: this.bike.position.y,
+            z: this.bike.position.z,
+            angle: this.bike.angle,
+            mounted: this.bike.mounted
+          }
+        : null
+    };
+  }
+
+  private localPlayerNetworkSnapshot(): NetworkPlayerSnapshot {
+    return {
+      id: this.localNetworkId,
+      name: this.multiplayerConfig.playerName,
+      x: this.player.position.x,
+      y: this.player.position.y,
+      z: this.player.position.z,
+      yaw: this.player.yaw,
+      pitch: this.player.pitch,
+      health: this.player.health,
+      scrap: this.player.scrap,
+      stamina: this.condition.stamina,
+      bleedTimer: this.condition.bleedTimer,
+      limpTimer: this.condition.limpTimer,
+      blurTimer: this.condition.blurTimer,
+      crouching: this.player.crouching,
+      aim: this.aimHeld,
+      height: this.player.height,
+      jumpHeight: this.player.jumpHeight,
+      activeFixtureId: this.player.activeFixtureId,
+      flashlightOn: this.condition.flashlightOn,
+      throwables: this.condition.throwables,
+      loadout: this.loadout,
+      bikeMounted: this.bike?.mounted === true,
+      alive: this.player.health > 0
+    };
+  }
+
+  private remotePlayerNetworkSnapshot(player: NetworkRemotePlayer): NetworkPlayerSnapshot {
+    return {
+      id: player.id,
+      name: player.name,
+      x: player.position.x,
+      y: player.position.y,
+      z: player.position.z,
+      yaw: player.yaw,
+      pitch: player.pitch,
+      health: player.health,
+      scrap: player.scrap,
+      stamina: player.condition.stamina,
+      bleedTimer: player.condition.bleedTimer,
+      limpTimer: player.condition.limpTimer,
+      blurTimer: player.condition.blurTimer,
+      crouching: player.crouching,
+      aim: player.input.aim,
+      height: player.height,
+      jumpHeight: player.jumpHeight,
+      activeFixtureId: player.activeFixtureId,
+      flashlightOn: player.condition.flashlightOn,
+      throwables: player.condition.throwables,
+      loadout: player.loadout,
+      bikeMounted: false,
+      alive: player.health > 0
+    };
+  }
+
+  private zombieNetworkSnapshot(zombie: Zombie): NetworkZombieSnapshot {
+    return {
+      id: zombie.id,
+      type: zombie.type,
+      x: zombie.position.x,
+      y: zombie.position.y,
+      z: zombie.position.z,
+      rotationY: zombie.mesh.rotation.y,
+      health: zombie.health,
+      maxHealth: zombie.maxHealth,
+      radius: zombie.radius,
+      aiState: zombie.aiState
+    };
+  }
+
+  private updateNetworkHostPlayers(dt: number, now: number): void {
+    if (!this.isNetworkHost) {
+      return;
+    }
+    for (const player of this.networkPlayers.values()) {
+      player.loadout = finishReloadIfReady(player.loadout, now);
+      if (player.health <= 0) {
+        player.velocity.multiplyScalar(0.72);
+        this.updateRemotePlayerMesh(player);
+        continue;
+      }
+      this.updateNetworkPlayerCrouch(player, dt);
+      this.updateNetworkPlayerJumpState(player, dt);
+      this.updateNetworkPlayerMovement(player, dt, now);
+      this.updateNetworkPlayerVerticalState(player, dt);
+      this.updateNetworkPlayerCondition(player, dt);
+      this.updateRemotePlayerMesh(player);
+    }
+  }
+
+  private updateNetworkPlayerCrouch(player: NetworkRemotePlayer, dt: number): void {
+    player.crouching = player.input.crouch;
+    const target = player.crouching ? 1 : 0;
+    const t = 1 - Math.pow(0.0008, dt);
+    player.crouchAmount += (target - player.crouchAmount) * t;
+    if (player.crouchAmount < 0.01) player.crouchAmount = 0;
+  }
+
+  private updateNetworkPlayerMovement(player: NetworkRemotePlayer, dt: number, now: number): void {
+    const stale = now - player.lastInputAt > 1.5;
+    const input = stale ? new THREE.Vector3() : new THREE.Vector3(player.input.moveX, 0, player.input.moveZ);
+    const inputLength = Math.min(1, Math.hypot(input.x, input.z));
+
+    if (inputLength > 0.001) {
+      input.normalize();
+      const sin = Math.sin(player.yaw);
+      const cos = Math.cos(player.yaw);
+      const forward = new THREE.Vector3(sin, 0, cos);
+      const right = new THREE.Vector3(cos, 0, -sin);
+      const wantsSprint = !player.crouching && player.input.sprint;
+      const sprinting = wantsSprint && player.condition.stamina > 8 && player.condition.limpTimer <= 0;
+      player.isSprinting = sprinting;
+      const surface = this.movementSurfaceAt({ x: player.position.x, z: player.position.z });
+      const speed =
+        (player.crouching ? CROUCH_SPEED : sprinting ? SPRINT_SPEED : WALK_SPEED) *
+        this.surfaceSpeedMultiplier(surface) *
+        speedMultiplierForCondition(player.condition);
+      player.velocity.copy(forward.multiplyScalar(input.z).add(right.multiplyScalar(input.x))).multiplyScalar(speed);
+      this.emitNetworkPlayerMovementNoise(player, dt, sprinting);
+    } else {
+      player.isSprinting = false;
+      player.velocity.multiplyScalar(0.78);
+      if (player.velocity.lengthSq() < 0.01) {
+        player.velocity.set(0, 0, 0);
+      }
+    }
+
+    const candidate = player.position.clone().addScaledVector(player.velocity, dt);
+    let next = clampToPolygon({ x: candidate.x, z: candidate.z }, this.level.boundary, 3);
+    for (const obstacle of this.level.obstacles) {
+      if (obstacle.jumpable === true && player.jumpHeight >= (obstacle.jumpBypassMinHeight ?? 0.5)) {
+        continue;
+      }
+      if (this.shouldBypassObstacleForFixture(obstacle.id, next, player.activeFixtureId)) {
+        continue;
+      }
+      next = resolveObstacle(next, PLAYER_RADIUS, obstacle);
+    }
+    next = this.resolveSkateBowlExit({ x: player.position.x, z: player.position.z }, next, player.velocity);
+    player.position.set(next.x, this.groundY(next), next.z);
+  }
+
+  private updateNetworkPlayerCondition(player: NetworkRemotePlayer, dt: number): void {
+    player.condition.bleedTimer = Math.max(0, player.condition.bleedTimer - dt);
+    player.condition.limpTimer = Math.max(0, player.condition.limpTimer - dt);
+    player.condition.blurTimer = Math.max(0, player.condition.blurTimer - dt);
+    const bleedDamage = bleedDamagePerSecond(player.condition.bleedTimer) * dt;
+    if (bleedDamage > 0) {
+      player.health -= bleedDamage;
+    }
+    const scoped = player.input.aim;
+    player.condition.stamina = nextStamina(player.condition.stamina, dt, {
+      sprinting: player.isSprinting,
+      scoped,
+      resting: false,
+      searching: false,
+      crouching: player.crouching,
+      bleeding: player.condition.bleedTimer > 0
+    });
+  }
+
+  private updateNetworkPlayerJumpState(player: NetworkRemotePlayer, dt: number): void {
+    if (player.activeFixtureId || player.height > 0.2) {
+      player.jumpHeight = 0;
+      player.jumpVelocity = 0;
+      return;
+    }
+    if (player.jumpHeight <= 0 && player.jumpVelocity <= 0) {
+      player.jumpHeight = 0;
+      player.jumpVelocity = 0;
+      return;
+    }
+    player.jumpVelocity -= JUMP_GRAVITY * dt;
+    player.jumpHeight += player.jumpVelocity * dt;
+    if (player.jumpHeight <= 0) {
+      player.jumpHeight = 0;
+      player.jumpVelocity = 0;
+    }
+  }
+
+  private updateNetworkPlayerVerticalState(player: NetworkRemotePlayer, dt: number): void {
+    let target = 0;
+    const playerPoint = { x: player.position.x, z: player.position.z };
+    const active = this.level.interactables.find((fixture) => fixture.id === player.activeFixtureId);
+
+    if (active) {
+      if (pointInInteractableRaisedFootprint(playerPoint, active, 1.2)) {
+        target = Math.max(target, active.height);
+      } else {
+        player.activeFixtureId = null;
+      }
+    }
+
+    for (const fixture of this.level.interactables.filter((candidate) => candidate.mode === "auto")) {
+      if (pointInInteractableRaisedFootprint(playerPoint, fixture, 0.8)) {
+        target = Math.max(target, fixture.height);
+      }
+    }
+
+    player.heightTarget = target;
+    const t = 1 - Math.pow(0.001, dt);
+    player.height += (player.heightTarget - player.height) * t;
+    if (Math.abs(player.height) < 0.01) {
+      player.height = 0;
+    }
+  }
+
+  private emitNetworkPlayerMovementNoise(player: NetworkRemotePlayer, dt: number, sprinting: boolean): void {
+    player.movementNoiseTimer -= dt;
+    if (player.movementNoiseTimer > 0) {
+      return;
+    }
+    const kind = movementNoiseKind(player.velocity.length(), player.crouching, sprinting);
+    if (!kind) {
+      return;
+    }
+    const playerPoint = { x: player.position.x, z: player.position.z };
+    const surface = this.movementSurfaceAt(playerPoint);
+    this.emitNoise(kind, playerPoint, movementNoiseMultiplier(player.crouching, surface, this.currentWeather.footstepMask), { surface });
+    player.movementNoiseTimer = player.crouching ? 0.82 : sprinting ? 0.28 : 0.46;
+  }
+
+  private addNetworkPlayer(id: string, name: string): NetworkRemotePlayer {
+    const existing = this.networkPlayers.get(id);
+    if (existing) {
+      existing.name = name;
+      return existing;
+    }
+
+    const offsetIndex = this.networkPlayers.size + 1;
+    const position = new THREE.Vector3(
+      START_POSITION.x + offsetIndex * 3.2,
+      this.groundY({ x: START_POSITION.x + offsetIndex * 3.2, z: START_POSITION.z + offsetIndex * 2.2 }),
+      START_POSITION.z + offsetIndex * 2.2
+    );
+    const loadout = createInitialLoadout();
+    const player: NetworkRemotePlayer = {
+      id,
+      name,
+      mesh: this.createRemotePlayerMesh(loadout.weaponId),
+      weaponIdRendered: loadout.weaponId,
+      position,
+      velocity: new THREE.Vector3(),
+      yaw: -2.45,
+      pitch: -0.08,
+      health: 100,
+      scrap: 70,
+      loadout,
+      condition: createInitialPlayerCondition(),
+      input: {
+        sequence: 0,
+        moveX: 0,
+        moveZ: 0,
+        sprint: false,
+        crouch: false,
+        aim: false,
+        yaw: -2.45,
+        pitch: -0.08
+      },
+      lastInputAt: performance.now() / 1000,
+      lastShotAt: 0,
+      shotBloom: 0,
+      movementNoiseTimer: 0,
+      isSprinting: false,
+      crouching: false,
+      crouchAmount: 0,
+      height: 0,
+      heightTarget: 0,
+      jumpHeight: 0,
+      jumpVelocity: 0,
+      activeFixtureId: null
+    };
+    this.scene.add(player.mesh);
+    this.updateRemotePlayerMesh(player);
+    this.networkPlayers.set(id, player);
+    return player;
+  }
+
+  private removeNetworkPlayer(id: string): void {
+    const player = this.networkPlayers.get(id);
+    if (!player) {
+      return;
+    }
+    this.scene.remove(player.mesh);
+    this.networkPlayers.delete(id);
+  }
+
+  private resetNetworkPlayersForHost(): void {
+    if (!this.isNetworkHost) {
+      return;
+    }
+    let offsetIndex = 1;
+    for (const player of this.networkPlayers.values()) {
+      const x = START_POSITION.x + offsetIndex * 3.2;
+      const z = START_POSITION.z + offsetIndex * 2.2;
+      player.position.set(x, this.groundY({ x, z }), z);
+      player.velocity.set(0, 0, 0);
+      player.yaw = -2.45;
+      player.pitch = -0.08;
+      player.health = 100;
+      player.scrap = 70;
+      player.loadout = createInitialLoadout();
+      player.condition = createInitialPlayerCondition();
+      player.lastShotAt = 0;
+      player.shotBloom = 0;
+      player.movementNoiseTimer = 0;
+      player.isSprinting = false;
+      player.crouching = false;
+      player.crouchAmount = 0;
+      player.height = 0;
+      player.heightTarget = 0;
+      player.jumpHeight = 0;
+      player.jumpVelocity = 0;
+      player.activeFixtureId = null;
+      player.input = {
+        ...player.input,
+        moveX: 0,
+        moveZ: 0,
+        sprint: false,
+        crouch: false,
+        aim: false,
+        yaw: player.yaw,
+        pitch: player.pitch
+      };
+      this.updateRemotePlayerMesh(player);
+      offsetIndex += 1;
+    }
+  }
+
+  private createRemotePlayerMesh(weaponId: WeaponId): THREE.Group {
+    const group = new THREE.Group();
+    group.userData.dynamic = true;
+    const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x6f8f93, roughness: 0.78, metalness: 0.02 });
+    const darkMaterial = new THREE.MeshStandardMaterial({ color: 0x1e282b, roughness: 0.84, metalness: 0.04 });
+    const skinMaterial = new THREE.MeshStandardMaterial({ color: 0xcaa47c, roughness: 0.74 });
+    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.46, 1.08, 4, 9), bodyMaterial);
+    body.position.y = 1.34;
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.28, 12, 10), skinMaterial);
+    head.position.y = 2.18;
+    const leftLeg = new THREE.Mesh(new THREE.CapsuleGeometry(0.15, 0.72, 3, 7), darkMaterial);
+    leftLeg.position.set(-0.19, 0.52, 0);
+    const rightLeg = leftLeg.clone();
+    rightLeg.position.x = 0.19;
+    const leftArm = new THREE.Mesh(new THREE.CapsuleGeometry(0.12, 0.78, 3, 7), bodyMaterial);
+    leftArm.position.set(-0.5, 1.38, -0.1);
+    leftArm.rotation.z = 0.22;
+    const rightArm = leftArm.clone();
+    rightArm.position.x = 0.5;
+    rightArm.rotation.z = -0.22;
+    const weapon = this.meshFactory.createWeaponMesh(weaponId, false);
+    weapon.name = "remote-weapon";
+    weapon.position.set(0.34, 1.25, -0.62);
+    weapon.rotation.set(0.2, Math.PI, -0.08);
+    weapon.scale.setScalar(0.74);
+    group.add(body, head, leftLeg, rightLeg, leftArm, rightArm, weapon);
+    return group;
+  }
+
+  private updateRemotePlayerMesh(player: NetworkRemotePlayer): void {
+    if (player.weaponIdRendered !== player.loadout.weaponId) {
+      this.rebuildRemotePlayerWeapon(player);
+    }
+    player.mesh.position.set(player.position.x, player.position.y + player.height + player.jumpHeight, player.position.z);
+    player.mesh.rotation.y = player.yaw + Math.PI;
+    const crouchScale = 1 - player.crouchAmount * 0.16;
+    player.mesh.scale.set(1, Math.max(0.82, crouchScale), 1);
+    player.mesh.visible = player.health > 0;
+  }
+
+  private rebuildRemotePlayerWeapon(player: NetworkRemotePlayer): void {
+    const previous = player.mesh.getObjectByName("remote-weapon");
+    if (previous) {
+      player.mesh.remove(previous);
+    }
+    const weapon = this.meshFactory.createWeaponMesh(player.loadout.weaponId, false);
+    weapon.name = "remote-weapon";
+    weapon.position.set(0.34, 1.25, -0.62);
+    weapon.rotation.set(0.2, Math.PI, -0.08);
+    weapon.scale.setScalar(0.74);
+    player.mesh.add(weapon);
+    player.weaponIdRendered = player.loadout.weaponId;
+  }
+
+  private handleNetworkPlayerAction(playerId: string, action: NetworkAction): void {
+    const player = this.networkPlayers.get(playerId);
+    if (!player || player.health <= 0 || this.state !== "playing") {
+      return;
+    }
+    player.yaw = action.yaw;
+    player.pitch = action.pitch;
+    player.input = {
+      ...player.input,
+      yaw: action.yaw,
+      pitch: action.pitch,
+      aim: player.input.aim
+    };
+    const now = performance.now() / 1000;
+    if (action.type === "shoot") this.shootNetworkPlayer(player, now);
+    if (action.type === "reload") this.reloadNetworkPlayer(player, now);
+    if (action.type === "interact") this.interactNetworkPlayer(player);
+    if (action.type === "toggleFlashlight") this.toggleNetworkPlayerFlashlight(player);
+    if (action.type === "throwDistraction") this.throwNetworkPlayerDistraction(player);
+    if (action.type === "jump") this.jumpNetworkPlayer(player);
+    if (action.type === "equipSlot" && typeof action.slot === "number") this.equipNetworkPlayerSlot(player, action.slot);
+  }
+
+  private shootNetworkPlayer(player: NetworkRemotePlayer, now: number): void {
+    const stats = getWeaponStats(player.loadout);
+    if (now - player.lastShotAt < stats.fireDelay) {
+      return;
+    }
+    if (stats.kind === "melee") {
+      this.swingNetworkPlayerMelee(player, now, stats);
+      return;
+    }
+    if (player.loadout.reloadingUntil > now) {
+      return;
+    }
+    if (player.loadout.ammoInMagazine <= 0) {
+      player.loadout = startReload(player.loadout, now);
+      return;
+    }
+
+    player.loadout = consumeRound(player.loadout);
+    player.lastShotAt = now;
+    player.shotBloom = Math.min(stats.maxBloom, player.shotBloom + stats.bloomPerShot);
+    this.emitNoise("gunshot", { x: player.position.x, z: player.position.z }, stats.noiseMultiplier * (player.crouching ? 0.96 : 1), {
+      weaponId: player.loadout.weaponId
+    });
+
+    const origin = this.networkPlayerCameraPosition(player);
+    const movementSpread = Math.min(1, player.velocity.length() / 22) * stats.movingSpread;
+    const crouchSpread = player.crouching ? 0.64 : 1;
+    const breathControl = player.input.aim ? (player.condition.stamina > 12 ? 0.86 : 1.18) : 1;
+    const totalSpread = (stats.spread + movementSpread + player.shotBloom) * (player.input.aim ? stats.aimSpreadMultiplier : 1) * crouchSpread * breathControl;
+    for (let pellet = 0; pellet < stats.pellets; pellet += 1) {
+      const direction = this.directionFromYawPitch(player.yaw, player.pitch);
+      direction.x += this.rng.range(-totalSpread, totalSpread);
+      direction.y += this.rng.range(-totalSpread, totalSpread) * 0.55;
+      direction.z += this.rng.range(-totalSpread, totalSpread);
+      direction.normalize();
+      const hits = this.findZombieHits(origin, direction, stats.range, stats.penetration);
+      const endPoint = hits[0]?.point ?? origin.clone().addScaledVector(direction, stats.range);
+      for (const hit of hits) {
+        hit.zombie.health -= damageAtDistance(stats, hit.distance, hit.zone);
+        const profile = zombieProfile(hit.zombie.type);
+        hit.zombie.staggerTimer = Math.max(hit.zombie.staggerTimer, (stats.staggerPower + (hit.zone === "legs" ? 0.22 : 0)) / profile.staggerResistance);
+        hit.zombie.aiState = "chase";
+        hit.zombie.target = { x: player.position.x, z: player.position.z };
+        hit.zombie.lastKnownPlayer = hit.zombie.target;
+        hit.zombie.memoryTimer = this.rng.range(2.6, 4.4);
+        this.createHitSpark(hit.point);
+        if (hit.zombie.health <= 0) {
+          this.killZombie(hit.zombie, player);
+        }
+      }
+      this.addTracer(origin, endPoint);
+    }
+  }
+
+  private swingNetworkPlayerMelee(player: NetworkRemotePlayer, now: number, stats: ReturnType<typeof getWeaponStats>): void {
+    const staminaCost = player.loadout.weaponId === "machete" ? MACHETE_STAMINA_COST : MELEE_STAMINA_COST;
+    const stamina = spendStamina(player.condition.stamina, staminaCost);
+    if (!stamina.spent) {
+      return;
+    }
+    player.condition.stamina = stamina.stamina;
+    player.lastShotAt = now;
+    this.emitNoise("melee", { x: player.position.x, z: player.position.z }, stats.noiseMultiplier * (player.crouching ? 0.7 : 1), {
+      weaponId: player.loadout.weaponId
+    });
+    const direction = this.directionFromYawPitch(player.yaw, player.pitch);
+    const hits = this.findMeleeHitsFor(player.position, direction, stats.range, Math.max(1, stats.penetration), player.crouching, player.loadout.weaponId);
+    for (const hit of hits) {
+      hit.zombie.health -= damageAtDistance(stats, hit.distance, hit.zone);
+      const profile = zombieProfile(hit.zombie.type);
+      hit.zombie.staggerTimer = Math.max(hit.zombie.staggerTimer, (stats.staggerPower + (hit.zone === "head" ? 0.18 : 0)) / profile.staggerResistance);
+      hit.zombie.aiState = "chase";
+      hit.zombie.target = { x: player.position.x, z: player.position.z };
+      hit.zombie.lastKnownPlayer = hit.zombie.target;
+      hit.zombie.memoryTimer = this.rng.range(2, 3.6);
+      this.createHitSpark(hit.point);
+      if (hit.zombie.health <= 0) {
+        this.killZombie(hit.zombie, player);
+      }
+    }
+  }
+
+  private reloadNetworkPlayer(player: NetworkRemotePlayer, now: number): void {
+    player.loadout = startReload(player.loadout, now);
+    if (player.loadout.reloadingUntil > 0) {
+      this.emitNoise("reload", { x: player.position.x, z: player.position.z }, player.crouching ? 0.55 : 1, {
+        weaponId: player.loadout.weaponId
+      });
+    }
+  }
+
+  private jumpNetworkPlayer(player: NetworkRemotePlayer): boolean {
+    if (player.activeFixtureId || player.height > 0.2 || player.jumpHeight > 0.02 || player.crouching) {
+      return false;
+    }
+    const stamina = spendStamina(player.condition.stamina, JUMP_STAMINA_COST);
+    if (!stamina.spent) {
+      return false;
+    }
+    player.condition.stamina = stamina.stamina;
+    player.jumpVelocity = JUMP_INITIAL_VELOCITY;
+    player.jumpHeight = 0.04;
+    this.emitNoise("footstep", { x: player.position.x, z: player.position.z }, 0.46, { volume: 0.38 });
+    return true;
+  }
+
+  private equipNetworkPlayerSlot(player: NetworkRemotePlayer, index: number): void {
+    const weaponId = player.loadout.inventory[index];
+    if (weaponId) {
+      player.loadout = switchWeapon(player.loadout, weaponId);
+    }
+  }
+
+  private toggleNetworkPlayerFlashlight(player: NetworkRemotePlayer): void {
+    player.condition.flashlightOn = !player.condition.flashlightOn;
+    this.emitNoise("flashlight", { x: player.position.x, z: player.position.z }, player.condition.flashlightOn ? 0.82 : 0.44, { volume: 0.5 });
+  }
+
+  private throwNetworkPlayerDistraction(player: NetworkRemotePlayer): boolean {
+    if (player.condition.throwables <= 0) {
+      return false;
+    }
+    const stamina = spendStamina(player.condition.stamina, DISTRACTION_STAMINA_COST);
+    if (!stamina.spent) {
+      return false;
+    }
+    player.condition.stamina = stamina.stamina;
+    player.condition.throwables -= 1;
+    const forward = this.directionFromYawPitch(player.yaw, player.pitch);
+    forward.y = 0;
+    if (forward.lengthSq() < 0.001) {
+      forward.set(Math.sin(player.yaw), 0, Math.cos(player.yaw));
+    }
+    forward.normalize();
+    const range = this.rng.range(22, 31);
+    let target = clampToPolygon(
+      {
+        x: player.position.x + forward.x * range,
+        z: player.position.z + forward.z * range
+      },
+      this.level.boundary,
+      4
+    );
+    for (const obstacle of this.level.obstacles) {
+      target = resolveObstacle(target, 0.5, obstacle);
+    }
+    const mesh = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.16, 0.18, 0.42, 10),
+      new THREE.MeshStandardMaterial({ color: 0x6f8f93, metalness: 0.18, roughness: 0.72 })
+    );
+    mesh.position.set(target.x, this.groundY(target) + 0.21, target.z);
+    mesh.userData.dynamic = true;
+    this.scene.add(mesh);
+    this.distractions.push({ mesh, position: { ...target }, ttl: 7.2, pulseTimer: 1.35 });
+    this.emitNoise("distraction", target, 1.05);
+    return true;
+  }
+
+  private interactNetworkPlayer(player: NetworkRemotePlayer): boolean {
+    const drop = this.nearestWeaponDropForPoint(player.position, 8.2);
+    if (drop) {
+      player.loadout = addWeapon(player.loadout, drop.weaponId);
+      this.scene.remove(drop.mesh);
+      this.weaponDrops = this.weaponDrops.filter((candidate) => candidate !== drop);
+      return true;
+    }
+
+    const station = this.nearestStationForPoint(player.position, 10);
+    if (station) {
+      return this.buyUpgradeForNetworkPlayer(player, station);
+    }
+
+    const amenity = this.nearestAmenityForPoint(player.position);
+    if (amenity) {
+      return this.useAmenityForNetworkPlayer(player, amenity);
+    }
+    return false;
+  }
+
+  private buyUpgradeForNetworkPlayer(player: NetworkRemotePlayer, station: UpgradeStation): boolean {
+    const upgradeId = station.upgradeId;
+    const currentLevel = player.loadout.upgrades[upgradeId];
+    if (!canUpgrade(player.loadout, upgradeId)) {
+      return false;
+    }
+    const cost = upgradeCost(upgradeId, currentLevel);
+    if (player.scrap < cost) {
+      return false;
+    }
+    player.scrap -= cost;
+    player.loadout = applyUpgrade(player.loadout, upgradeId);
+    return true;
+  }
+
+  private useAmenityForNetworkPlayer(player: NetworkRemotePlayer, amenity: AmenityPoint): boolean {
+    if (amenity.kind === "drinking_water") {
+      player.health = Math.min(100, player.health + 24);
+      return true;
+    }
+    if (amenity.kind === "bench" || amenity.kind === "picnic_table") {
+      player.health = Math.min(100, player.health + (amenity.kind === "bench" ? 10 : 12));
+      return true;
+    }
+    if (this.searchedAmenityIds.has(amenity.id)) {
+      return false;
+    }
+    this.searchedAmenityIds.add(amenity.id);
+    const loot = searchAmenityLoot(amenity.kind, this.rng, this.lootSearchContext(amenity));
+    player.scrap += loot.scrap;
+    player.health = Math.min(100, player.health + loot.health);
+    player.loadout = addAmmo(player.loadout, loot.ammo);
+    if (loot.attachment) {
+      if (canUpgrade(player.loadout, loot.attachment)) {
+        player.loadout = applyUpgrade(player.loadout, loot.attachment);
+      } else {
+        player.scrap += 12;
+      }
+    }
+    if (loot.medicine > 0) {
+      player.condition.bleedTimer = Math.max(0, player.condition.bleedTimer - loot.medicine);
+      player.condition.blurTimer = Math.max(0, player.condition.blurTimer - loot.medicine * 0.35);
+      player.condition.limpTimer = Math.max(0, player.condition.limpTimer - loot.medicine * 0.25);
+    }
+    player.condition.throwables = Math.min(MAX_THROWABLES, player.condition.throwables + loot.throwables);
+    this.emitNoise("scavenge", amenity.position, loot.noiseMultiplier * 0.75);
+    return true;
+  }
+
+  private directionFromYawPitch(yaw: number, pitch: number): THREE.Vector3 {
+    return new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(pitch, yaw, 0, "YXZ")).normalize();
+  }
+
+  private networkPlayerCameraPosition(player: NetworkRemotePlayer): THREE.Vector3 {
+    return new THREE.Vector3(
+      player.position.x,
+      player.position.y + PLAYER_HEIGHT + player.height + player.jumpHeight - player.crouchAmount * 0.58,
+      player.position.z
+    );
+  }
+
+  private applyNetworkSnapshot(snapshot: NetworkGameSnapshot): void {
+    if (snapshot.roomId !== this.multiplayerConfig.roomId) {
+      return;
+    }
+    this.state = snapshot.state;
+    this.networkWave = snapshot.wave;
+    this.networkWavePhase = snapshot.wavePhase;
+    this.networkIntermissionTimer = snapshot.intermissionTimer;
+    this.networkRemainingSpawns = snapshot.remainingSpawns;
+
+    const self = snapshot.players.find((player) => player.id === this.localNetworkId);
+    if (self) {
+      this.applyLocalPlayerSnapshot(self);
+    }
+    this.applyRemotePlayerSnapshots(snapshot.players.filter((player) => player.id !== this.localNetworkId));
+    this.applyZombieSnapshots(snapshot.zombies);
+    this.applyPickupSnapshots(snapshot.pickups);
+    this.applyWeaponDropSnapshots(snapshot.weaponDrops);
+    this.applyBikeSnapshot(snapshot.bike);
+    if (snapshot.state === "gameover") {
+      this.hud.setRestartVisible(true);
+      this.hud.setStatus(`Overrun at wave ${snapshot.wave}`);
+    }
+  }
+
+  private applyLocalPlayerSnapshot(snapshot: NetworkPlayerSnapshot): void {
+    const previousWeapon = this.loadout.weaponId;
+    this.player.position.set(snapshot.x, snapshot.y, snapshot.z);
+    this.player.yaw = snapshot.yaw;
+    this.player.pitch = snapshot.pitch;
+    this.player.health = snapshot.health;
+    this.player.scrap = snapshot.scrap;
+    this.player.crouching = snapshot.crouching;
+    this.player.crouchAmount = snapshot.crouching ? Math.max(this.player.crouchAmount, 0.75) : this.player.crouchAmount;
+    this.player.height = snapshot.height;
+    this.player.jumpHeight = snapshot.jumpHeight;
+    this.player.activeFixtureId = snapshot.activeFixtureId;
+    this.loadout = snapshot.loadout;
+    this.condition.stamina = snapshot.stamina;
+    this.condition.bleedTimer = snapshot.bleedTimer;
+    this.condition.limpTimer = snapshot.limpTimer;
+    this.condition.blurTimer = snapshot.blurTimer;
+    this.condition.throwables = snapshot.throwables;
+    this.condition.flashlightOn = snapshot.flashlightOn;
+    this.applyFlashlightVisibility();
+    if (previousWeapon !== this.loadout.weaponId) {
+      this.rebuildViewWeapon();
+    }
+  }
+
+  private applyRemotePlayerSnapshots(snapshots: NetworkPlayerSnapshot[]): void {
+    const seen = new Set<string>();
+    for (const snapshot of snapshots) {
+      seen.add(snapshot.id);
+      const player = this.networkPlayers.get(snapshot.id) ?? this.addNetworkPlayer(snapshot.id, snapshot.name);
+      player.name = snapshot.name;
+      player.position.set(snapshot.x, snapshot.y, snapshot.z);
+      player.yaw = snapshot.yaw;
+      player.pitch = snapshot.pitch;
+      player.health = snapshot.health;
+      player.scrap = snapshot.scrap;
+      player.loadout = snapshot.loadout;
+      player.condition.stamina = snapshot.stamina;
+      player.condition.bleedTimer = snapshot.bleedTimer;
+      player.condition.limpTimer = snapshot.limpTimer;
+      player.condition.blurTimer = snapshot.blurTimer;
+      player.condition.throwables = snapshot.throwables;
+      player.condition.flashlightOn = snapshot.flashlightOn;
+      player.crouching = snapshot.crouching;
+      player.crouchAmount = snapshot.crouching ? 1 : 0;
+      player.height = snapshot.height;
+      player.jumpHeight = snapshot.jumpHeight;
+      player.activeFixtureId = snapshot.activeFixtureId;
+      player.input.aim = snapshot.aim;
+      this.updateRemotePlayerMesh(player);
+    }
+    for (const id of [...this.networkPlayers.keys()]) {
+      if (!seen.has(id)) {
+        this.removeNetworkPlayer(id);
+      }
+    }
+  }
+
+  private applyZombieSnapshots(snapshots: NetworkZombieSnapshot[]): void {
+    const seen = new Set<number>();
+    const byId = new Map(this.zombies.map((zombie) => [zombie.id, zombie]));
+    for (const snapshot of snapshots) {
+      seen.add(snapshot.id);
+      let zombie = byId.get(snapshot.id);
+      if (!zombie) {
+        const mesh = this.meshFactory.createZombieMesh(snapshot.type);
+        mesh.userData.dynamic = true;
+        this.scene.add(mesh);
+        zombie = {
+          id: snapshot.id,
+          type: snapshot.type,
+          mesh,
+          position: new THREE.Vector3(),
+          health: snapshot.health,
+          maxHealth: snapshot.maxHealth,
+          speed: 0,
+          radius: snapshot.radius,
+          reward: 0,
+          attackCooldown: 0,
+          walkOffset: this.rng.range(0, Math.PI * 2),
+          aiState: snapshot.aiState,
+          target: null,
+          lastKnownPlayer: null,
+          wanderTimer: 0,
+          searchTimer: 0,
+          memoryTimer: 0,
+          vocalCooldown: 0,
+          stepCooldown: 0,
+          staggerTimer: 0,
+          screamCooldown: 0
+        };
+        this.zombies.push(zombie);
+      }
+      zombie.position.set(snapshot.x, snapshot.y, snapshot.z);
+      zombie.health = snapshot.health;
+      zombie.maxHealth = snapshot.maxHealth;
+      zombie.radius = snapshot.radius;
+      zombie.aiState = snapshot.aiState;
+      zombie.mesh.position.set(snapshot.x, snapshot.y, snapshot.z);
+      zombie.mesh.rotation.y = snapshot.rotationY;
+    }
+    for (const zombie of [...this.zombies]) {
+      if (!seen.has(zombie.id)) {
+        this.scene.remove(zombie.mesh);
+        this.zombies = this.zombies.filter((candidate) => candidate !== zombie);
+      }
+    }
+  }
+
+  private applyPickupSnapshots(snapshots: NetworkPickupSnapshot[]): void {
+    const seen = new Set<number>();
+    const byId = new Map(this.pickups.map((pickup) => [pickup.id, pickup]));
+    for (const snapshot of snapshots) {
+      seen.add(snapshot.id);
+      let pickup = byId.get(snapshot.id);
+      if (!pickup) {
+        const mesh = this.meshFactory.createPickupMesh(snapshot.type);
+        mesh.userData.dynamic = true;
+        this.scene.add(mesh);
+        pickup = {
+          id: snapshot.id,
+          type: snapshot.type,
+          amount: snapshot.amount,
+          mesh,
+          position: mesh.position,
+          ttl: snapshot.ttl
+        };
+        this.pickups.push(pickup);
+      }
+      pickup.amount = snapshot.amount;
+      pickup.ttl = snapshot.ttl;
+      pickup.position.set(snapshot.x, snapshot.y, snapshot.z);
+      pickup.mesh.position.copy(pickup.position);
+    }
+    for (const pickup of [...this.pickups]) {
+      if (!seen.has(pickup.id)) {
+        this.scene.remove(pickup.mesh);
+        this.pickups = this.pickups.filter((candidate) => candidate !== pickup);
+      }
+    }
+  }
+
+  private applyWeaponDropSnapshots(snapshots: NetworkWeaponDropSnapshot[]): void {
+    const seen = new Set<number>();
+    const byId = new Map(this.weaponDrops.map((drop) => [drop.id, drop]));
+    for (const snapshot of snapshots) {
+      seen.add(snapshot.id);
+      let drop = byId.get(snapshot.id);
+      if (!drop) {
+        const mesh = this.meshFactory.createWeaponDropMesh(snapshot.weaponId);
+        mesh.userData.dynamic = true;
+        this.scene.add(mesh);
+        drop = {
+          id: snapshot.id,
+          weaponId: snapshot.weaponId,
+          label: snapshot.label,
+          mesh,
+          position: mesh.position,
+          ttl: snapshot.ttl,
+          source: snapshot.source
+        };
+        this.weaponDrops.push(drop);
+      }
+      drop.weaponId = snapshot.weaponId;
+      drop.label = snapshot.label;
+      drop.ttl = snapshot.ttl;
+      drop.position.set(snapshot.x, snapshot.y, snapshot.z);
+      drop.mesh.position.copy(drop.position);
+    }
+    for (const drop of [...this.weaponDrops]) {
+      if (!seen.has(drop.id)) {
+        this.scene.remove(drop.mesh);
+        this.weaponDrops = this.weaponDrops.filter((candidate) => candidate !== drop);
+      }
+    }
+    this.nearestWeaponDrop = this.nearestWeaponDropForPoint(this.player.position, 8.2);
+  }
+
+  private applyBikeSnapshot(snapshot: NetworkGameSnapshot["bike"]): void {
+    if (!snapshot || !this.bike) {
+      return;
+    }
+    this.bike.position.set(snapshot.x, snapshot.y, snapshot.z);
+    this.bike.angle = snapshot.angle;
+    this.bike.mounted = snapshot.mounted;
+    this.syncBikeMesh();
+  }
+
+  private clearNetworkAuthoritativeEntities(): void {
+    for (const zombie of this.zombies) this.scene.remove(zombie.mesh);
+    for (const pickup of this.pickups) this.scene.remove(pickup.mesh);
+    for (const drop of this.weaponDrops) this.scene.remove(drop.mesh);
+    for (const tracer of this.tracers) this.scene.remove(tracer.mesh);
+    for (const shell of this.shells) this.scene.remove(shell.mesh);
+    for (const puff of this.smokePuffs) this.scene.remove(puff.mesh);
+    for (const distraction of this.distractions) this.scene.remove(distraction.mesh);
+    this.zombies = [];
+    this.pickups = [];
+    this.weaponDrops = [];
+    this.tracers = [];
+    this.shells = [];
+    this.smokePuffs = [];
+    this.distractions.length = 0;
   }
 
   private updateCrouch(dt: number): void {
     const inputCrouching =
       !this.bike?.mounted &&
-      (this.keys.has("KeyC") ||
-        this.keys.has("ControlLeft") ||
-        this.keys.has("ControlRight"));
+      (this.input?.isCrouching() ?? false);
     this.player.crouching = this.testCrouchOverride ?? inputCrouching;
     const target = this.player.crouching ? 1 : 0;
     const t = 1 - Math.pow(0.0008, dt);
@@ -562,18 +1798,45 @@ export class GameApp {
   }
 
   private updateWavePacing(dt: number): void {
-    if (this.wavePhase === "active") {
-      if (this.zombies.length === 0 && this.spawnQueue.length === 0) {
-        this.startIntermission();
-      }
-      return;
+    const update = this.waveDirector.update(dt, {
+      activeZombies: this.zombies.length,
+      canSpawn: this.state === "playing",
+      spawn: (anchor) => this.spawnWaveZombie(anchor)
+    });
+
+    if (update.startedIntermission) {
+      this.beginIntermissionThreats();
+      this.flashStatus(`Regroup before wave ${this.wave + 1}`);
     }
 
-    this.intermissionTimer = Math.max(0, this.intermissionTimer - dt);
-    this.updateIntermissionThreats(dt);
-    if (this.intermissionTimer <= 0) {
-      this.startWave(this.wave + 1);
+    if (update.startedWave) {
+      this.resetIntermissionThreats();
+      this.flashStatus(`Wave ${this.wave}`);
     }
+
+    if (this.wavePhase === "intermission") {
+      this.updateIntermissionThreats(dt);
+    }
+  }
+
+  private resetWaves(): void {
+    this.waveDirector.reset();
+    this.resetIntermissionThreats();
+    this.flashStatus(`Wave ${this.wave}`);
+  }
+
+  private spawnWaveZombie(anchor?: Vec2): void {
+    this.addZombie(createZombieSpawn(getWaveConfig(this.wave), this.level.spawnPoints, this.rng, anchor));
+  }
+
+  private resetIntermissionThreats(): void {
+    this.intermissionThreatTimer = 0;
+    this.intermissionThreatsSpawned = 0;
+  }
+
+  private beginIntermissionThreats(): void {
+    this.intermissionThreatTimer = this.rng.range(7, 11);
+    this.intermissionThreatsSpawned = 0;
   }
 
   private updateIntermissionThreats(dt: number): void {
@@ -594,15 +1857,12 @@ export class GameApp {
   }
 
   private startIntermission(): boolean {
-    if (this.wavePhase === "intermission") {
-      return true;
+    const started = this.waveDirector.startIntermission();
+    if (started) {
+      this.beginIntermissionThreats();
+      this.flashStatus(`Regroup before wave ${this.wave + 1}`);
     }
-    this.wavePhase = "intermission";
-    this.intermissionTimer = INTERMISSION_SECONDS;
-    this.intermissionThreatTimer = this.rng.range(7, 11);
-    this.intermissionThreatsSpawned = 0;
-    this.flashStatus(`Regroup before wave ${this.wave + 1}`);
-    return true;
+    return this.wavePhase === "intermission";
   }
 
   private updateMovement(dt: number): void {
@@ -612,24 +1872,20 @@ export class GameApp {
       return;
     }
 
-    const input = new THREE.Vector3();
-    if (this.keys.has("KeyW")) input.z -= 1;
-    if (this.keys.has("KeyS")) input.z += 1;
-    if (this.keys.has("KeyA")) input.x -= 1;
-    if (this.keys.has("KeyD")) input.x += 1;
+    const movement = this.input?.movement() ?? { x: 0, z: 0, length: 0 };
+    const input = new THREE.Vector3(movement.x, 0, movement.z);
 
     if (this.bike?.mounted) {
       this.updateBikeMovement(dt, input);
       return;
     }
 
-    if (input.lengthSq() > 0) {
-      input.normalize();
+    if (movement.length > 0) {
       const sin = Math.sin(this.player.yaw);
       const cos = Math.cos(this.player.yaw);
       const forward = new THREE.Vector3(sin, 0, cos);
       const right = new THREE.Vector3(cos, 0, -sin);
-      const wantsSprint = !this.player.crouching && (this.keys.has("ShiftLeft") || this.keys.has("ShiftRight"));
+      const wantsSprint = !this.player.crouching && (this.input?.isSprinting() ?? false);
       const sprinting = wantsSprint && this.condition.stamina > 8 && this.condition.limpTimer <= 0;
       this.isSprinting = sprinting;
       const surface = this.movementSurfaceAt({ x: this.player.position.x, z: this.player.position.z });
@@ -650,19 +1906,47 @@ export class GameApp {
     const candidate = this.player.position.clone().addScaledVector(this.player.velocity, dt);
     let next = clampToPolygon({ x: candidate.x, z: candidate.z }, this.level.boundary, 3);
     for (const obstacle of this.level.obstacles) {
+      if (this.shouldJumpBypassObstacle(obstacle)) {
+        continue;
+      }
       if (this.shouldBypassObstacle(obstacle.id, next)) {
         continue;
       }
       next = resolveObstacle(next, PLAYER_RADIUS, obstacle);
     }
+    next = this.resolveSkateBowlExit({ x: this.player.position.x, z: this.player.position.z }, next, this.player.velocity);
     this.player.position.set(next.x, this.groundY(next), next.z);
+  }
+
+  private jump(): boolean {
+    if (this.state !== "playing" || this.bike?.mounted || this.activeAmenityRest || this.activeAmenitySearch) {
+      return false;
+    }
+    if (this.player.activeFixtureId || this.player.height > 0.2 || this.player.jumpHeight > 0.02) {
+      return false;
+    }
+    if (this.player.crouching || this.testCrouchOverride === true) {
+      return false;
+    }
+    const stamina = spendStamina(this.condition.stamina, JUMP_STAMINA_COST);
+    if (!stamina.spent) {
+      this.flashStatus("Too winded to jump");
+      this.audio.playWorld("deny");
+      return false;
+    }
+    this.condition.stamina = stamina.stamina;
+    this.player.jumpVelocity = JUMP_INITIAL_VELOCITY;
+    this.player.jumpHeight = 0.04;
+    this.flashStatus("Jumped");
+    this.emitNoise("footstep", { x: this.player.position.x, z: this.player.position.z }, 0.46, { volume: 0.38 });
+    return true;
   }
 
   private updateBikeMovement(dt: number, input: THREE.Vector3): void {
     this.player.activeFixtureId = null;
     this.player.heightTarget = 0;
     this.player.crouching = false;
-    const wantsSprint = this.keys.has("ShiftLeft") || this.keys.has("ShiftRight");
+    const wantsSprint = this.input?.isSprinting() ?? false;
     const sprinting = wantsSprint && this.condition.stamina > 8 && this.condition.limpTimer <= 0;
     this.isSprinting = sprinting;
 
@@ -692,6 +1976,7 @@ export class GameApp {
     for (const obstacle of this.level.obstacles) {
       next = resolveObstacle(next, PLAYER_RADIUS + 0.45, obstacle);
     }
+    next = this.resolveSkateBowlExit({ x: this.player.position.x, z: this.player.position.z }, next, this.player.velocity);
     this.player.position.set(next.x, this.groundY(next), next.z);
   }
 
@@ -965,12 +2250,9 @@ export class GameApp {
     return [...uniqueAnchors.values()].slice(0, 140);
   }
 
-  private handleMouseMove(event: MouseEvent): void {
-    if (document.pointerLockElement !== this.canvas && !this.smokeMode) {
-      return;
-    }
-    this.player.yaw -= event.movementX * 0.0022;
-    this.player.pitch -= event.movementY * 0.002;
+  private handleLook(movementX: number, movementY: number): void {
+    this.player.yaw -= movementX * 0.0022;
+    this.player.pitch -= movementY * 0.002;
     this.player.pitch = THREE.MathUtils.clamp(this.player.pitch, -1.18, 1.1);
   }
 
@@ -982,50 +2264,12 @@ export class GameApp {
     }
     this.camera.position.set(
       this.player.position.x,
-      this.player.position.y + PLAYER_HEIGHT + this.player.height + (this.bike?.mounted ? BIKE_CAMERA_HEIGHT_BONUS : 0) - this.player.crouchAmount * 0.58,
+      this.player.position.y + PLAYER_HEIGHT + this.playerElevation() + (this.bike?.mounted ? BIKE_CAMERA_HEIGHT_BONUS : 0) - this.player.crouchAmount * 0.58,
       this.player.position.z
     );
     this.camera.rotation.order = "YXZ";
     this.camera.rotation.y = this.player.yaw + this.recoilYaw * 0.006;
     this.camera.rotation.x = this.player.pitch - this.recoil * 0.012;
-  }
-
-  private startWave(wave: number): void {
-    this.wave = wave;
-    this.wavePhase = "active";
-    this.intermissionTimer = 0;
-    this.intermissionThreatTimer = 0;
-    this.intermissionThreatsSpawned = 0;
-    const config = getWaveConfig(wave);
-    this.spawnQueue = [];
-    while (this.spawnQueue.length < config.total) {
-      const anchor = this.rng.pick(this.level.spawnPoints);
-      const packSize = this.rng.int(config.packMin, config.packMax);
-      for (let index = 0; index < packSize && this.spawnQueue.length < config.total; index += 1) {
-        this.spawnQueue.push(createZombieSpawn(config, this.level.spawnPoints, this.rng, anchor));
-      }
-    }
-    this.spawnTimer = 0.4;
-    this.flashStatus(`Wave ${wave}`);
-  }
-
-  private updateSpawns(dt: number): void {
-    if (this.wavePhase !== "active" || this.spawnQueue.length === 0) {
-      return;
-    }
-    const config = getWaveConfig(this.wave);
-    this.spawnTimer -= dt;
-    if (this.spawnTimer <= 0) {
-      const stragglerPhase = this.spawnQueue.length <= config.stragglerCount;
-      const packSize = stragglerPhase ? 1 : this.rng.int(config.packMin, config.packMax);
-      for (let index = 0; index < packSize; index += 1) {
-        const spawn = this.spawnQueue.shift();
-        if (!spawn) break;
-        this.addZombie(spawn);
-      }
-      const interval = stragglerPhase ? config.stragglerInterval : config.packInterval;
-      this.spawnTimer = interval * this.rng.range(0.82, 1.18);
-    }
   }
 
   private forceSpawnZombie(): void {
@@ -1069,10 +2313,12 @@ export class GameApp {
   private updateZombies(dt: number, now: number): void {
     for (const zombie of this.zombies) {
       const profile = zombieProfile(zombie.type);
-      const playerPoint = { x: this.player.position.x, z: this.player.position.z };
       const zombiePoint = { x: zombie.position.x, z: zombie.position.z };
-      const distanceToPlayer = distance(zombiePoint, playerPoint);
-      const seesPlayer = this.canZombieSeePlayer(zombie, distanceToPlayer);
+      const localPlayerPoint = { x: this.player.position.x, z: this.player.position.z };
+      const localDistance = distance(zombiePoint, localPlayerPoint);
+      const nearestCombatant = this.nearestCombatant(zombiePoint);
+      const visibleCombatant = this.visibleCombatantForZombie(zombie, zombiePoint);
+      const distanceToPlayer = nearestCombatant ? distance(zombiePoint, nearestCombatant.position) : localDistance;
       const heardNoise = this.noise.strongestAt(zombiePoint, profile.hearingMultiplier);
       const previousAiState = zombie.aiState;
 
@@ -1088,11 +2334,12 @@ export class GameApp {
       }
       const targetReached = zombie.target ? distance(zombiePoint, zombie.target) < (zombie.aiState === "wander" ? 3.8 : 2.8) : true;
 
-      if (seesPlayer) {
+      if (visibleCombatant) {
+        const playerPoint = this.combatantPoint(visibleCombatant.combatant);
         zombie.aiState = "chase";
         zombie.lastKnownPlayer = playerPoint;
         zombie.target = playerPoint;
-        zombie.memoryTimer = this.rng.range(4.2, 7.2) + (this.condition.flashlightOn ? 1.2 : 0);
+        zombie.memoryTimer = this.rng.range(4.2, 7.2) + (visibleCombatant.combatant.condition.flashlightOn ? 1.2 : 0);
         zombie.searchTimer = 0;
       } else if (
         heardNoise &&
@@ -1121,7 +2368,7 @@ export class GameApp {
         this.setZombieWanderTarget(zombie, zombiePoint);
       }
 
-      if (this.zombieJustBecameAlerted(previousAiState, zombie.aiState) && distanceToPlayer < 180) {
+      if (this.zombieJustBecameAlerted(previousAiState, zombie.aiState) && localDistance < 180) {
         this.audio.playWorld("zombieGroan", zombiePoint, {
           zombieType: zombie.type,
           aiState: zombie.aiState,
@@ -1168,13 +2415,16 @@ export class GameApp {
         zombie.mesh.rotation.y = Math.atan2(toTarget.x, toTarget.z) + Math.PI;
       }
       this.syncZombieMeshPosition(zombie, now);
-      this.animateZombie(zombie, now, distanceToPlayer);
-      this.updateZombieAudio(zombie, dt, distanceToPlayer, distanceToTarget);
-      if (this.player.height < 1.4 && distanceToPlayer < zombie.radius + PLAYER_RADIUS + 0.8 && zombie.attackCooldown <= 0) {
-        this.applyZombieHit(zombie, profile, now);
+      this.animateZombie(zombie, now, localDistance);
+      this.updateZombieAudio(zombie, dt, localDistance, distanceToTarget);
+      const attackTarget = this.attackableCombatantForZombie(zombie, zombiePoint);
+      if (attackTarget && zombie.attackCooldown <= 0) {
+        this.applyZombieHit(zombie, profile, now, attackTarget);
         zombie.attackCooldown = profile.attackCooldown;
         this.audio.playWorld("zombieAttack", zombiePoint, { zombieType: zombie.type });
-        this.audio.playWorld("playerHit");
+        if (attackTarget.isLocal) {
+          this.audio.playWorld("playerHit");
+        }
       }
     }
     this.resolveZombieCrowding(now);
@@ -1230,19 +2480,27 @@ export class GameApp {
     return zombie.position.y + (Math.sin(now * 7 + zombie.walkOffset) + 1) * 0.035;
   }
 
-  private applyZombieHit(zombie: Zombie, profile: ReturnType<typeof zombieProfile>, now: number): void {
-    this.player.health -= profile.attackDamage;
-    this.lastDamageAt = now;
+  private applyZombieHit(zombie: Zombie, profile: ReturnType<typeof zombieProfile>, now: number, combatant: CombatantRef): void {
+    if (combatant.isLocal) {
+      this.player.health -= profile.attackDamage;
+      this.lastDamageAt = now;
+    } else if (combatant.remote) {
+      combatant.remote.health -= profile.attackDamage;
+    }
     const severity = Math.min(1, profile.attackDamage / 24);
     const roll = this.rng.next();
+    const condition = combatant.condition;
     if (zombie.type === "sprinter" || roll < 0.28 + severity * 0.24) {
-      this.condition.bleedTimer = Math.max(this.condition.bleedTimer, this.rng.range(7, 15) * severity);
+      condition.bleedTimer = Math.max(condition.bleedTimer, this.rng.range(7, 15) * severity);
     }
     if (zombie.type === "bloater" || roll > 0.46) {
-      this.condition.limpTimer = Math.max(this.condition.limpTimer, this.rng.range(4.5, 10) * severity);
+      condition.limpTimer = Math.max(condition.limpTimer, this.rng.range(4.5, 10) * severity);
     }
     if (zombie.type === "screamer" || profile.attackDamage >= 18) {
-      this.condition.blurTimer = Math.max(this.condition.blurTimer, this.rng.range(2.5, 6.5) * severity);
+      condition.blurTimer = Math.max(condition.blurTimer, this.rng.range(2.5, 6.5) * severity);
+    }
+    if (!combatant.isLocal) {
+      return;
     }
     document.body.classList.add("hit");
     window.setTimeout(() => document.body.classList.remove("hit"), 120);
@@ -1285,39 +2543,137 @@ export class GameApp {
     return !wasAlerted && isAlerted;
   }
 
-  private canZombieSeePlayer(zombie: Zombie, distanceToPlayer: number): boolean {
+  private combatants(): CombatantRef[] {
+    const combatants: CombatantRef[] = [];
+    if (this.player.health > 0) {
+      combatants.push({
+        id: this.localNetworkId,
+        isLocal: true,
+        position: this.player.position,
+        velocity: this.player.velocity,
+        yaw: this.player.yaw,
+        pitch: this.player.pitch,
+        health: this.player.health,
+        crouching: this.player.crouching,
+        crouchAmount: this.player.crouchAmount,
+        height: this.player.height,
+        jumpHeight: this.player.jumpHeight,
+        activeFixtureId: this.player.activeFixtureId,
+        condition: this.condition,
+        loadout: this.loadout
+      });
+    }
+    for (const player of this.networkPlayers.values()) {
+      if (player.health <= 0) {
+        continue;
+      }
+      combatants.push({
+        id: player.id,
+        isLocal: false,
+        remote: player,
+        position: player.position,
+        velocity: player.velocity,
+        yaw: player.yaw,
+        pitch: player.pitch,
+        health: player.health,
+        crouching: player.crouching,
+        crouchAmount: player.crouchAmount,
+        height: player.height,
+        jumpHeight: player.jumpHeight,
+        activeFixtureId: player.activeFixtureId,
+        condition: player.condition,
+        loadout: player.loadout
+      });
+    }
+    return combatants;
+  }
+
+  private combatantPoint(combatant: CombatantRef): Vec2 {
+    return { x: combatant.position.x, z: combatant.position.z };
+  }
+
+  private combatantElevation(combatant: CombatantRef): number {
+    return combatant.height + combatant.jumpHeight;
+  }
+
+  private nearestCombatant(point: Vec2): CombatantRef | null {
+    let nearest: CombatantRef | null = null;
+    let nearestDistance = Number.POSITIVE_INFINITY;
+    for (const combatant of this.combatants()) {
+      const combatantDistance = distance(point, this.combatantPoint(combatant));
+      if (combatantDistance < nearestDistance) {
+        nearest = combatant;
+        nearestDistance = combatantDistance;
+      }
+    }
+    return nearest;
+  }
+
+  private visibleCombatantForZombie(zombie: Zombie, zombiePoint: Vec2): { combatant: CombatantRef; distance: number } | null {
+    let visible: { combatant: CombatantRef; distance: number } | null = null;
+    for (const combatant of this.combatants()) {
+      const combatantDistance = distance(zombiePoint, this.combatantPoint(combatant));
+      if (this.canZombieSeeCombatant(zombie, combatant, combatantDistance) && (!visible || combatantDistance < visible.distance)) {
+        visible = { combatant, distance: combatantDistance };
+      }
+    }
+    return visible;
+  }
+
+  private attackableCombatantForZombie(zombie: Zombie, zombiePoint: Vec2): CombatantRef | null {
+    let target: CombatantRef | null = null;
+    let nearestDistance = Number.POSITIVE_INFINITY;
+    for (const combatant of this.combatants()) {
+      const combatantDistance = distance(zombiePoint, this.combatantPoint(combatant));
+      if (
+        this.combatantElevation(combatant) < 1.4 &&
+        combatantDistance < zombie.radius + PLAYER_RADIUS + 0.8 &&
+        combatantDistance < nearestDistance
+      ) {
+        target = combatant;
+        nearestDistance = combatantDistance;
+      }
+    }
+    return target;
+  }
+
+  private canZombieSeeCombatant(zombie: Zombie, combatant: CombatantRef, distanceToPlayer: number): boolean {
     const profile = zombieProfile(zombie.type);
-    const surface = this.movementSurfaceAt({ x: this.player.position.x, z: this.player.position.z });
-    const inCover = this.playerInCover(surface);
+    const playerPoint = this.combatantPoint(combatant);
+    const surface = this.movementSurfaceAt(playerPoint);
+    const inCover = this.playerInCoverForCombatant(combatant, surface);
     const sightRange = profile.sightRange * playerVisibilityMultiplier({
       surface,
-      crouching: this.player.crouching,
+      crouching: combatant.crouching,
       inCover,
-      elevatedHeight: this.player.height,
-      flashlightOn: this.condition.flashlightOn,
+      elevatedHeight: this.combatantElevation(combatant),
+      flashlightOn: combatant.condition.flashlightOn,
       weather: this.currentWeather
     });
     if (distanceToPlayer > sightRange) {
       return false;
     }
     const zombiePoint = { x: zombie.position.x, z: zombie.position.z };
-    const playerPoint = { x: this.player.position.x, z: this.player.position.z };
     if (zombie.aiState === "wander" && distanceToPlayer > 12) {
       const toPlayer = new THREE.Vector3(playerPoint.x - zombiePoint.x, 0, playerPoint.z - zombiePoint.z).normalize();
       const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(zombie.mesh.quaternion);
       forward.y = 0;
-      if (forward.lengthSq() > 0.001 && forward.normalize().dot(toPlayer) < zombieFacingThreshold(this.player.crouching, inCover, this.condition.flashlightOn)) {
+      if (forward.lengthSq() > 0.001 && forward.normalize().dot(toPlayer) < zombieFacingThreshold(combatant.crouching, inCover, combatant.condition.flashlightOn)) {
         return false;
       }
     }
-    return !this.isLineOfSightBlocked(zombiePoint, playerPoint, PLAYER_RADIUS);
+    return !isLineOfSightBlockedByContext(zombiePoint, playerPoint, this.visibilityContextForCombatant(combatant), PLAYER_RADIUS);
   }
 
   private playerInCover(surface = this.movementSurfaceAt({ x: this.player.position.x, z: this.player.position.z })): boolean {
-    if (!this.player.crouching) {
+    return this.playerInCoverForCombatant(this.combatants()[0], surface);
+  }
+
+  private playerInCoverForCombatant(combatant: CombatantRef | undefined, surface: MovementSurface): boolean {
+    if (!combatant?.crouching) {
       return false;
     }
-    const playerPoint = { x: this.player.position.x, z: this.player.position.z };
+    const playerPoint = this.combatantPoint(combatant);
     if (this.isCoverNearPoint(playerPoint, 4.2, 5.8)) {
       return true;
     }
@@ -1565,13 +2921,24 @@ export class GameApp {
   }
 
   private findMeleeHits(direction: THREE.Vector3, range: number, limit: number): Array<{ zombie: Zombie; point: THREE.Vector3; distance: number; zone: HitZone }> {
+    return this.findMeleeHitsFor(this.player.position, direction, range, limit, this.player.crouching, this.loadout.weaponId);
+  }
+
+  private findMeleeHitsFor(
+    originPosition: THREE.Vector3,
+    direction: THREE.Vector3,
+    range: number,
+    limit: number,
+    crouching: boolean,
+    weaponId: WeaponId
+  ): Array<{ zombie: Zombie; point: THREE.Vector3; distance: number; zone: HitZone }> {
     const forward = direction.clone();
     forward.y = 0;
     if (forward.lengthSq() > 0.001) {
       forward.normalize();
     }
-    const origin = { x: this.player.position.x, z: this.player.position.z };
-    const arcCos = Math.cos(this.loadout.weaponId === "machete" ? 0.72 : 0.42);
+    const origin = { x: originPosition.x, z: originPosition.z };
+    const arcCos = Math.cos(weaponId === "machete" ? 0.72 : 0.42);
 
     return this.zombies
       .map((zombie) => {
@@ -1586,7 +2953,7 @@ export class GameApp {
         if (forward.dot(toZombie) < arcCos) {
           return null;
         }
-        const zone: HitZone = this.player.crouching || zombie.type === "crawler" ? "legs" : zombieDistance < range * 0.62 ? "body" : "head";
+        const zone: HitZone = crouching || zombie.type === "crawler" ? "legs" : zombieDistance < range * 0.62 ? "body" : "head";
         const point = zombie.position.clone().add(new THREE.Vector3(0, zone === "head" ? 2.2 : zone === "legs" ? 0.72 : 1.4, 0));
         return { zombie, point, distance: zombieDistance, zone };
       })
@@ -1620,12 +2987,16 @@ export class GameApp {
     };
   }
 
-  private killZombie(zombie: Zombie): void {
+  private killZombie(zombie: Zombie, killer?: NetworkRemotePlayer): void {
     this.audio.playWorld("zombieDeath", { x: zombie.position.x, z: zombie.position.z }, { zombieType: zombie.type });
     this.scene.remove(zombie.mesh);
     this.zombies = this.zombies.filter((candidate) => candidate !== zombie);
-    this.player.kills += 1;
-    this.player.scrap += zombie.reward;
+    if (killer) {
+      killer.scrap += zombie.reward;
+    } else {
+      this.player.kills += 1;
+      this.player.scrap += zombie.reward;
+    }
     const pickup = chooseZombiePickup(zombie.type, this.rng);
     if (pickup) {
       this.addPickup(pickup.type, zombie.position, pickup.amount);
@@ -1656,21 +3027,45 @@ export class GameApp {
       pickup.mesh.rotation.y += dt * 1.6;
       pickup.mesh.position.y = this.groundY({ x: pickup.position.x, z: pickup.position.z }) + 0.75 + Math.sin(this.frame * 0.06 + pickup.id) * 0.12;
       if (pickup.position.distanceTo(this.player.position) < 4.2) {
-        if (pickup.type === "ammo") {
-          this.loadout = addAmmo(this.loadout, pickup.amount);
-        } else if (pickup.type === "health") {
-          this.player.health = Math.min(100, this.player.health + pickup.amount);
-        } else {
-          this.player.scrap += pickup.amount;
-        }
+        this.collectPickupForLocalPlayer(pickup);
+      } else if (this.isNetworkHost && this.collectPickupForNetworkPlayer(pickup)) {
         this.scene.remove(pickup.mesh);
         this.pickups = this.pickups.filter((candidate) => candidate !== pickup);
-        this.audio.playWorld("pickup");
       } else if (pickup.ttl <= 0) {
         this.scene.remove(pickup.mesh);
         this.pickups = this.pickups.filter((candidate) => candidate !== pickup);
       }
     }
+  }
+
+  private collectPickupForLocalPlayer(pickup: Pickup): void {
+    if (pickup.type === "ammo") {
+      this.loadout = addAmmo(this.loadout, pickup.amount);
+    } else if (pickup.type === "health") {
+      this.player.health = Math.min(100, this.player.health + pickup.amount);
+    } else {
+      this.player.scrap += pickup.amount;
+    }
+    this.scene.remove(pickup.mesh);
+    this.pickups = this.pickups.filter((candidate) => candidate !== pickup);
+    this.audio.playWorld("pickup");
+  }
+
+  private collectPickupForNetworkPlayer(pickup: Pickup): boolean {
+    for (const player of this.networkPlayers.values()) {
+      if (player.health <= 0 || pickup.position.distanceTo(player.position) >= 4.2) {
+        continue;
+      }
+      if (pickup.type === "ammo") {
+        player.loadout = addAmmo(player.loadout, pickup.amount);
+      } else if (pickup.type === "health") {
+        player.health = Math.min(100, player.health + pickup.amount);
+      } else {
+        player.scrap += pickup.amount;
+      }
+      return true;
+    }
+    return false;
   }
 
   private spawnInitialWeapons(): void {
@@ -1702,9 +3097,6 @@ export class GameApp {
   }
 
   private updateWeaponDrops(dt: number): void {
-    let nearest: WeaponDrop | null = null;
-    let nearestDistance = Number.POSITIVE_INFINITY;
-
     for (const drop of [...this.weaponDrops]) {
       if (Number.isFinite(drop.ttl)) {
         drop.ttl -= dt;
@@ -1714,20 +3106,26 @@ export class GameApp {
         this.groundY({ x: drop.position.x, z: drop.position.z }) +
         (drop.source === "cache" ? 0.82 : 0.62) +
         Math.sin(this.frame * 0.045 + drop.id) * 0.08;
-
-      const dropDistance = drop.position.distanceTo(this.player.position);
-      if (dropDistance < nearestDistance && dropDistance < 8.2) {
-        nearest = drop;
-        nearestDistance = dropDistance;
-      }
-
       if (drop.ttl <= 0) {
         this.scene.remove(drop.mesh);
         this.weaponDrops = this.weaponDrops.filter((candidate) => candidate !== drop);
       }
     }
 
-    this.nearestWeaponDrop = nearest;
+    this.nearestWeaponDrop = this.nearestWeaponDropForPoint(this.player.position, 8.2);
+  }
+
+  private nearestWeaponDropForPoint(position: THREE.Vector3, reach: number): WeaponDrop | null {
+    let nearest: WeaponDrop | null = null;
+    let nearestDistance = Number.POSITIVE_INFINITY;
+    for (const drop of this.weaponDrops) {
+      const dropDistance = drop.position.distanceTo(position);
+      if (dropDistance < nearestDistance && dropDistance < reach) {
+        nearest = drop;
+        nearestDistance = dropDistance;
+      }
+    }
+    return nearest;
   }
 
   private spawnRideableBike(): void {
@@ -1810,7 +3208,7 @@ export class GameApp {
       return true;
     }
 
-    if (this.player.height > 0.4 || this.player.activeFixtureId) {
+    if (this.playerElevation() > 0.4 || this.player.activeFixtureId) {
       this.flashStatus("Get down before riding");
       this.audio.playWorld("deny");
       return false;
@@ -1822,6 +3220,8 @@ export class GameApp {
     this.player.crouchAmount = 0;
     this.player.height = 0;
     this.player.heightTarget = 0;
+    this.player.jumpHeight = 0;
+    this.player.jumpVelocity = 0;
     this.player.activeFixtureId = null;
     this.aimHeld = false;
     this.scopeAmount = 0;
@@ -1875,18 +3275,22 @@ export class GameApp {
   }
 
   private updateNearestAmenity(): void {
+    this.nearestAmenity = this.nearestAmenityForPoint(this.player.position);
+  }
+
+  private nearestAmenityForPoint(position: THREE.Vector3): AmenityPoint | null {
     let nearest: AmenityPoint | null = null;
     let nearestDistance = Number.POSITIVE_INFINITY;
-    const playerPoint = { x: this.player.position.x, z: this.player.position.z };
+    const playerPoint = { x: position.x, z: position.z };
     for (const amenity of this.level.amenities) {
       const amenityDistance = distance(playerPoint, amenity.position);
-      const reach = amenity.kind === "bench" || amenity.kind === "picnic_table" ? 4.8 : 5.6;
+      const reach = amenity.kind === "bench" || amenity.kind === "picnic_table" ? 4.8 : isStructureAmenityKind(amenity.kind) ? 6.2 : 5.6;
       if (amenityDistance < nearestDistance && amenityDistance < reach) {
         nearest = amenity;
         nearestDistance = amenityDistance;
       }
     }
-    this.nearestAmenity = nearest;
+    return nearest;
   }
 
   private useAmenity(amenity: AmenityPoint, completeImmediately = false): boolean {
@@ -2050,6 +3454,9 @@ export class GameApp {
   }
 
   private amenitySearchDuration(amenity: AmenityPoint): number {
+    if (amenity.kind === "maintenance_room") return 1.85;
+    if (amenity.kind === "clubroom" || amenity.kind === "changeroom" || amenity.kind === "community_room") return 1.7;
+    if (amenity.kind === "gatehouse") return 1.25;
     if (amenity.kind === "bbq") return 1.75;
     if (amenity.kind === "bicycle_parking") return 1.45;
     if (amenity.kind === "toilets") return 1.35;
@@ -2071,6 +3478,9 @@ export class GameApp {
     if (amenity.kind === "waste_basket") return this.searchedAmenityIds.has(amenity.id) ? "Bin searched" : "E: search bin";
     if (amenity.kind === "bicycle_parking") return this.searchedAmenityIds.has(amenity.id) ? "Bike racks searched" : "E: search bike racks";
     if (amenity.kind === "bbq") return this.searchedAmenityIds.has(amenity.id) ? "BBQ searched" : "E: search BBQ";
+    if (isStructureAmenityKind(amenity.kind)) {
+      return this.searchedAmenityIds.has(amenity.id) ? "Structure searched" : `E: search ${amenity.label}`;
+    }
     return this.searchedAmenityIds.has(amenity.id) ? "Shelter used" : "E: shelter";
   }
 
@@ -2201,6 +3611,25 @@ export class GameApp {
     }
   }
 
+  private updateJumpState(dt: number): void {
+    if (this.bike?.mounted || this.player.activeFixtureId || this.player.height > 0.2) {
+      this.player.jumpHeight = 0;
+      this.player.jumpVelocity = 0;
+      return;
+    }
+    if (this.player.jumpHeight <= 0 && this.player.jumpVelocity <= 0) {
+      this.player.jumpHeight = 0;
+      this.player.jumpVelocity = 0;
+      return;
+    }
+    this.player.jumpVelocity -= JUMP_GRAVITY * dt;
+    this.player.jumpHeight += this.player.jumpVelocity * dt;
+    if (this.player.jumpHeight <= 0) {
+      this.player.jumpHeight = 0;
+      this.player.jumpVelocity = 0;
+    }
+  }
+
   private updateElevatedNoise(dt: number): void {
     if (this.player.height <= 1.4) {
       this.elevatedNoiseTimer = 0;
@@ -2216,10 +3645,68 @@ export class GameApp {
   }
 
   private shouldBypassObstacle(obstacleId: string, point: Vec2): boolean {
+    return this.shouldBypassObstacleForFixture(obstacleId, point, this.player.activeFixtureId);
+  }
+
+  private shouldBypassObstacleForFixture(obstacleId: string, point: Vec2, activeFixtureId: string | null): boolean {
     return shouldBypassCollisionObstacle(obstacleId, point, {
-      activeFixtureId: this.player.activeFixtureId,
+      activeFixtureId,
       interactables: this.level.interactables
     });
+  }
+
+  private shouldJumpBypassObstacle(obstacle: LevelData["obstacles"][number]): boolean {
+    return obstacle.jumpable === true && this.player.jumpHeight >= (obstacle.jumpBypassMinHeight ?? 0.5);
+  }
+
+  private resolveSkateBowlExit(current: Vec2, candidate: Vec2, velocity: THREE.Vector3): Vec2 {
+    let next = candidate;
+    for (const bowl of this.level.skateBowls) {
+      const currentLocal = this.skateBowlLocalPoint(bowl, current);
+      const nextLocal = this.skateBowlLocalPoint(bowl, next);
+      const currentNorm = this.skateBowlNorm(bowl, currentLocal);
+      const nextNorm = this.skateBowlNorm(bowl, nextLocal);
+      if (currentNorm < 0.96 && nextNorm >= 1 && !this.isSkateBowlExitGap(bowl, nextLocal)) {
+        const scale = 0.94 / Math.max(nextNorm, 0.001);
+        next = this.skateBowlWorldPoint(bowl, { x: nextLocal.x * scale, z: nextLocal.z * scale });
+        velocity.multiplyScalar(0.28);
+      }
+    }
+    return next;
+  }
+
+  private skateBowlLocalPoint(bowl: SkateBowlFeature, point: Vec2): Vec2 {
+    const dx = point.x - bowl.center.x;
+    const dz = point.z - bowl.center.z;
+    const cos = Math.cos(bowl.angle);
+    const sin = Math.sin(bowl.angle);
+    return {
+      x: dx * cos + dz * sin,
+      z: -dx * sin + dz * cos
+    };
+  }
+
+  private skateBowlWorldPoint(bowl: SkateBowlFeature, point: Vec2): Vec2 {
+    const cos = Math.cos(bowl.angle);
+    const sin = Math.sin(bowl.angle);
+    return {
+      x: bowl.center.x + point.x * cos - point.z * sin,
+      z: bowl.center.z + point.x * sin + point.z * cos
+    };
+  }
+
+  private skateBowlNorm(bowl: SkateBowlFeature, point: Vec2): number {
+    return Math.hypot(point.x / bowl.radiusX, point.z / bowl.radiusZ);
+  }
+
+  private isSkateBowlExitGap(bowl: SkateBowlFeature, point: Vec2): boolean {
+    const angle = Math.atan2(point.z / bowl.radiusZ, point.x / bowl.radiusX);
+    const delta = Math.atan2(Math.sin(angle - bowl.exitAngle), Math.cos(angle - bowl.exitAngle));
+    return Math.abs(delta) <= bowl.exitWidth;
+  }
+
+  private playerElevation(): number {
+    return this.player.height + this.player.jumpHeight;
   }
 
   private equipWeapon(weaponId: WeaponId): boolean {
@@ -2404,26 +3891,29 @@ export class GameApp {
   }
 
   private testStartIntermission(): boolean {
-    this.spawnQueue = [];
     for (const zombie of this.zombies) {
       this.scene.remove(zombie.mesh);
     }
     this.zombies = [];
-    this.wavePhase = "active";
+    this.waveDirector.completeActiveWaveForTest();
     return this.startIntermission();
   }
 
   private updateNearestStation(): void {
+    this.nearestStation = this.nearestStationForPoint(this.player.position, 10);
+  }
+
+  private nearestStationForPoint(position: THREE.Vector3, reach: number): UpgradeStation | null {
     let nearest: UpgradeStation | null = null;
     let nearestDistance = Number.POSITIVE_INFINITY;
     for (const station of this.level.upgradeStations) {
-      const stationDistance = distance({ x: this.player.position.x, z: this.player.position.z }, station.position);
-      if (stationDistance < nearestDistance && stationDistance < 10) {
+      const stationDistance = distance({ x: position.x, z: position.z }, station.position);
+      if (stationDistance < nearestDistance && stationDistance < reach) {
         nearest = station;
         nearestDistance = stationDistance;
       }
     }
-    this.nearestStation = nearest;
+    return nearest;
   }
 
   private buyUpgrade(stationId?: string): boolean {
@@ -2456,6 +3946,9 @@ export class GameApp {
     this.hud.setRestartVisible(true);
     this.hud.setStatus(`Overrun at wave ${this.wave}`);
     document.exitPointerLock?.();
+    if (this.isNetworkHost && this.multiplayer?.connected) {
+      this.multiplayer.sendSnapshot(this.buildNetworkSnapshot());
+    }
   }
 
   private snapshot(): Snapshot {
@@ -2470,7 +3963,8 @@ export class GameApp {
       scrap: this.player.scrap,
       weapon: this.loadout.weaponId,
       weaponDrops: this.weaponDrops.length,
-      elevation: Number(this.player.height.toFixed(2)),
+      elevation: Number(this.playerElevation().toFixed(2)),
+      jumpHeight: Number(this.player.jumpHeight.toFixed(2)),
       renderedTrees: this.renderedTreeCount,
       renderedGrassClumps: this.renderedGrassClumpCount,
       renderedWetPathSheens: this.renderedWetPathSheenCount,
@@ -2527,10 +4021,10 @@ export class GameApp {
       health: this.player.health,
       wave: this.wave,
       scrap: this.player.scrap,
-      zombieCount: this.zombies.length + this.spawnQueue.length,
+      zombieCount: this.zombies.length + (this.isNetworkClient ? this.networkRemainingSpawns : this.waveDirector.remainingSpawns),
       loadout: this.loadout,
       reloadProgress: this.reloadProgress(performance.now() / 1000),
-      playerHeight: this.player.height,
+      playerHeight: this.playerElevation(),
       activeFixtureId: this.player.activeFixtureId,
       nearestWeaponDrop: this.nearestWeaponDrop,
       nearestBike: this.nearestBike,
@@ -2573,14 +4067,33 @@ export class GameApp {
   }
 
   private visibilityContext() {
+    return this.visibilityContextForCombatant({
+      id: this.localNetworkId,
+      isLocal: true,
+      position: this.player.position,
+      velocity: this.player.velocity,
+      yaw: this.player.yaw,
+      pitch: this.player.pitch,
+      health: this.player.health,
+      crouching: this.player.crouching,
+      crouchAmount: this.player.crouchAmount,
+      height: this.player.height,
+      jumpHeight: this.player.jumpHeight,
+      activeFixtureId: this.player.activeFixtureId,
+      condition: this.condition,
+      loadout: this.loadout
+    });
+  }
+
+  private visibilityContextForCombatant(combatant: CombatantRef) {
     return {
-      playerPosition: { x: this.player.position.x, z: this.player.position.z },
-      playerYaw: this.player.yaw,
-      playerHeight: this.player.height,
+      playerPosition: this.combatantPoint(combatant),
+      playerYaw: combatant.yaw,
+      playerHeight: this.combatantElevation(combatant),
       cameraFov: this.camera.fov,
       cameraAspect: this.camera.aspect,
       obstacles: this.level.obstacles,
-      isObstacleBypassed: (obstacleId: string, point: Vec2) => this.shouldBypassObstacle(obstacleId, point)
+      isObstacleBypassed: (obstacleId: string, point: Vec2) => this.shouldBypassObstacleForFixture(obstacleId, point, combatant.activeFixtureId)
     };
   }
 

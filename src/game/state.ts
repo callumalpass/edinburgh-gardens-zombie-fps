@@ -82,6 +82,7 @@ export interface Snapshot {
   weapon: WeaponId;
   weaponDrops: number;
   elevation: number;
+  jumpHeight: number;
   renderedTrees: number;
   renderedGrassClumps: number;
   renderedWetPathSheens: number;

@@ -36,6 +36,7 @@ import type {
   ParkLifeDetail,
   PathSurfacePatch,
   PolygonObstacle,
+  SkateBowlFeature,
   SignificantTreePoint,
   SportsFixture,
   StreetEdge,
@@ -168,6 +169,8 @@ export const RESEARCH_NOTES = [
   "Path surface transition patches now derive feathered edges and compacted junctions from mapped paths, with a small set of researched desire paths through high-use lawns.",
   "A 2026-07-06 realism artifact audit aligned Three.js object-preview building orientation with the restored Three.js runtime, added source-backed facade, current-works, suppressed-tree-stump, wet-weather and night-light details, and tightened zombie/weapon silhouettes while preserving low-poly anime minimalism.",
   "A later 2026-07-06 facade and tennis-works pass added explicit source-backed frontage points for the major mapped buildings and renovation-surface cues on all six existing tennis courts, based on Yarra's 2026-2027 Brunswick Street Oval works page.",
+  "A 2026-07-06 playground and fence pass refreshed current OSM playground footprints, modeled both playgrounds as fenced with inferred safety-gate gaps, added low jumpable oval fence blockers at mapped oval connectors, and added a short player jump.",
+  "A 2026-07-06 Fitzy Bowl pass removed the old invisible full-skatepark blocker, added source-backed depressed skate bowls, and made bowl exits constrained to roll-out gaps so dropping in is easy and climbing out is deliberately awkward.",
   "See docs/edinburgh-gardens-research.md for source URLs, query notes, data licensing notes and implementation decisions."
 ];
 
@@ -443,6 +446,19 @@ const STORMWATER_FILTRATION_GARDEN_GEO = [
   g(-37.7875300, 144.9828100),
   g(-37.7872400, 144.9828500)
 ];
+
+const PLAYGROUND_FENCE_SOURCE =
+  "OSM playground way 24489879; Edinburgh Gardens CMP 2004 section 3.4.22 and current public playground guides confirm the south playground is safety-gated and fully fenced; gate vertices are inferred from current access paths because no public gate nodes were found";
+const SOUTH_PLAYGROUND_LAYOUT_SOURCE =
+  "OSM way 24489879 current playground footprint; Melbourne Playgrounds and Busy City Guide describe the large fenced south playground, all-abilities paths, wooden fort, rope net, sandpits, swings, toddler area, chalk walls and central shelter";
+const NORTH_PLAYGROUND_LAYOUT_SOURCE =
+  "OSM way 543616019 current relocated playground footprint; Yarra 2018 northern precinct plan, Proludic 2018 toddler unit reference, Melbourne Playgrounds and Mama Knows North describe younger-age equipment, natural-play/log elements and nearby BBQ/activity precinct; no current public fence source found for the relocated footprint";
+const OVAL_FENCE_SOURCE =
+  "OSM way 14946934 W.T. Peterson Oval footprint; OSM connector ways 403753751 and 403753754 align with fence-gate gaps; low jumpable fence height and exact gate widths are inferred from existing in-game oval fence treatment because no public barrier=fence way was available";
+const FITZY_BOWL_SOURCE =
+  "Yarra Fitzy Bowl upgrade page: 2022 upgraded Fitzy Bowl doubled the facility, kept the original bowls and added beginner/accessibility features; GOSKATE lists two deep concrete bowls around 1.2m and 1.5m deep plus a shallow 0.3m beginners bowl, roll-over/spine/hip transfer and street section; Time Out and Skater Maps confirm multiple concrete bowls and a beginner double bowl";
+const STRUCTURE_ACCESS_SOURCE =
+  "Yarra Edinburgh Gardens facility listing; OSM building footprints; Edinburgh Gardens CMP 2004 built-feature inventory; Yarra Brunswick Street Oval redevelopment scope for changerooms, accessible public toilets, tennis social/community space, external stairs and secure access gates";
 
 const GARDEN_BED_SOURCE =
   "Edinburgh Gardens CMP 2004 sections 3.4.13 and 4.2.16-4.2.20; Lovell Chen 2021 CMP sections 3.8.1-3.8.3 and Queen Victoria/stormwater filtration garden descriptions; hand-placed where no public GIS vertices were available";
@@ -2345,10 +2361,87 @@ const OSM_BUILDING_FOOTPRINTS_GEO: Array<{
   }
 ];
 
-const OSM_FENCES_GEO: Array<{ id: string; label: string; points: GeoPoint[] }> = [
+const OSM_FENCES_GEO: Array<{
+  id: string;
+  label: string;
+  points: GeoPoint[];
+  height: number;
+  width: number;
+  jumpable?: boolean;
+  jumpBypassMinHeight?: number;
+  source: string;
+  gates?: Array<{ id: string; label: string; point: GeoPoint; radius: number; source?: string }>;
+}> = [
+  {
+    id: "south-playground-fence",
+    label: "South playground steel safety fence",
+    height: 1.38,
+    width: 0.34,
+    source: SOUTH_PLAYGROUND_LAYOUT_SOURCE,
+    gates: [
+      {
+        id: "south-playground-bbq-gate",
+        label: "South playground BBQ-side safety gate",
+        point: g(-37.789105, 144.983545),
+        radius: 4.4,
+        source: `${PLAYGROUND_FENCE_SOURCE}; gate inferred from BBQ/picnic-side approach`
+      },
+      {
+        id: "south-playground-alfred-gate",
+        label: "South playground Alfred Crescent all-abilities gate",
+        point: g(-37.788952, 144.984185),
+        radius: 4.8,
+        source: `${PLAYGROUND_FENCE_SOURCE}; gate inferred from all-abilities path access and Alfred Crescent side`
+      },
+      {
+        id: "south-playground-lawn-gate",
+        label: "South playground lawn-side safety gate",
+        point: g(-37.788855, 144.983735),
+        radius: 3.9,
+        source: `${PLAYGROUND_FENCE_SOURCE}; gate inferred from oval/lawn-side approach`
+      }
+    ],
+    points: SOUTH_PLAYGROUND_GEO
+  },
+  {
+    id: "oval-fence",
+    label: "W.T. Peterson Oval low rail fence",
+    height: 1.25,
+    width: 0.36,
+    jumpable: true,
+    jumpBypassMinHeight: 0.48,
+    source: OVAL_FENCE_SOURCE,
+    gates: [
+      {
+        id: "oval-north-entry-gate",
+        label: "Oval north entry gate",
+        point: g(-37.7894564, 144.9804378),
+        radius: 5.2,
+        source: "OSM way 403753751 oval north entry connector"
+      },
+      {
+        id: "oval-west-connector-gate",
+        label: "Oval west connector gate",
+        point: g(-37.7883864, 144.9808514),
+        radius: 4.8,
+        source: "OSM way 403753754 oval west connector"
+      },
+      {
+        id: "oval-grandstand-gate",
+        label: "Oval grandstand-side gate",
+        point: g(-37.7885941, 144.9819619),
+        radius: 4.8,
+        source: "OSM way 403753756 detailed oval loop and grandstand-side path alignment"
+      }
+    ],
+    points: OVAL_GEO
+  },
   {
     id: "osm-fence-715802680",
     label: "Mapped tennis club fence",
+    height: 1.65,
+    width: 0.34,
+    source: "OSM way 715802680 mapped barrier=fence around the tennis-side storage-tank area",
     points: [
       g(-37.7880337, 144.9817074),
       g(-37.7880906, 144.9816979),
@@ -2585,6 +2678,92 @@ function polygonObstacleFromPolygon(id: string, label: string, polygon: Vec2[], 
     shape: "polygon",
     center: polygonCentroid(polygon),
     polygon
+  };
+}
+
+function fenceObstacles(fence: MappedFence): BoxObstacle[] {
+  const obstacles: BoxObstacle[] = [];
+  const width = fence.width ?? 0.34;
+  const gates = fence.gates ?? [];
+  for (let i = 0; i < fence.points.length - 1; i += 1) {
+    const a = fence.points[i];
+    const b = fence.points[i + 1];
+    const intervals = fenceVisibleIntervals(a, b, gates.map((gate) => ({ position: gate.position, radius: gate.radius })));
+    intervals.forEach((interval, intervalIndex) => {
+      const start = { x: a.x + (b.x - a.x) * interval.start, z: a.z + (b.z - a.z) * interval.start };
+      const end = { x: a.x + (b.x - a.x) * interval.end, z: a.z + (b.z - a.z) * interval.end };
+      const segmentLength = distance(start, end);
+      if (segmentLength < 0.55) {
+        return;
+      }
+      obstacles.push({
+        id: `${fence.id}-segment-${i + 1}-${intervalIndex + 1}`,
+        label: `${fence.label} segment`,
+        sourceObjectId: fence.id,
+        sourceObjectKind: "mapped-fence",
+        shape: "box",
+        center: { x: (start.x + end.x) * 0.5, z: (start.z + end.z) * 0.5 },
+        halfX: segmentLength * 0.5,
+        halfZ: width * 0.5,
+        angle: Math.atan2(end.z - start.z, end.x - start.x),
+        blocksSight: false,
+        jumpable: fence.jumpable,
+        jumpBypassMinHeight: fence.jumpBypassMinHeight
+      });
+    });
+  }
+  return obstacles;
+}
+
+function fenceVisibleIntervals(a: Vec2, b: Vec2, gaps: Array<{ position: Vec2; radius: number }>): Array<{ start: number; end: number }> {
+  let intervals: Array<{ start: number; end: number }> = [{ start: 0, end: 1 }];
+  if (gaps.length === 0) return intervals;
+
+  const dx = b.x - a.x;
+  const dz = b.z - a.z;
+  const segmentLengthSquared = dx * dx + dz * dz;
+  const segmentLength = Math.sqrt(segmentLengthSquared);
+  if (segmentLength < 0.001) return [];
+
+  for (const gap of gaps) {
+    const t = Math.max(0, Math.min(1, ((gap.position.x - a.x) * dx + (gap.position.z - a.z) * dz) / segmentLengthSquared));
+    const closest = { x: a.x + dx * t, z: a.z + dz * t };
+    if (distance(closest, gap.position) > gap.radius) {
+      continue;
+    }
+    const gapStart = Math.max(0, t - gap.radius / segmentLength);
+    const gapEnd = Math.min(1, t + gap.radius / segmentLength);
+    const nextIntervals: Array<{ start: number; end: number }> = [];
+    for (const interval of intervals) {
+      if (gapEnd <= interval.start || gapStart >= interval.end) {
+        nextIntervals.push(interval);
+        continue;
+      }
+      if (gapStart - interval.start > 0.015) {
+        nextIntervals.push({ start: interval.start, end: gapStart });
+      }
+      if (interval.end - gapEnd > 0.015) {
+        nextIntervals.push({ start: gapEnd, end: interval.end });
+      }
+    }
+    intervals = nextIntervals;
+  }
+
+  return intervals;
+}
+
+function skateBowlTerrainModifier(bowl: SkateBowlFeature): TerrainModifier {
+  return {
+    id: `terrain-${bowl.id}`,
+    label: `${bowl.label} depressed concrete bowl`,
+    kind: "skate-bowl",
+    shape: "ellipse",
+    center: bowl.center,
+    radiusX: bowl.radiusX,
+    radiusZ: bowl.radiusZ,
+    angle: bowl.angle,
+    delta: -bowl.depth,
+    source: bowl.source
   };
 }
 
@@ -2921,6 +3100,49 @@ export function createLevelData(): LevelData {
   const southPlaygroundCenter = polygonCentroid(southPlayground);
   const northPlaygroundCenter = polygonCentroid(northPlayground);
   const skateCenter = polygonCentroid(skate);
+  const skateFootprint = footprintFromPolygon(skate);
+  const skateRotation = skateFootprint.angle;
+  const skateBowls: SkateBowlFeature[] = [
+    {
+      id: "fitzy-original-west-deep-bowl",
+      label: "Fitzy Bowl original west deep bowl",
+      center: offsetPoint(skateCenter, skateRotation, -5.3, -6.2),
+      radiusX: 5.8,
+      radiusZ: 7.1,
+      angle: skateRotation + 0.08,
+      depth: 1.5,
+      exitAngle: Math.PI * 0.46,
+      exitWidth: 0.28,
+      difficulty: "deep",
+      source: FITZY_BOWL_SOURCE
+    },
+    {
+      id: "fitzy-original-east-deep-bowl",
+      label: "Fitzy Bowl original east deep bowl",
+      center: offsetPoint(skateCenter, skateRotation, 5.5, -7.2),
+      radiusX: 5.1,
+      radiusZ: 6.3,
+      angle: skateRotation - 0.05,
+      depth: 1.2,
+      exitAngle: Math.PI * 0.38,
+      exitWidth: 0.3,
+      difficulty: "deep",
+      source: FITZY_BOWL_SOURCE
+    },
+    {
+      id: "fitzy-beginner-double-bowl",
+      label: "Fitzy Bowl shallow beginners double bowl",
+      center: offsetPoint(skateCenter, skateRotation, -3.8, 8.7),
+      radiusX: 4.4,
+      radiusZ: 3.2,
+      angle: skateRotation + 0.18,
+      depth: 0.35,
+      exitAngle: -Math.PI * 0.34,
+      exitWidth: 0.54,
+      difficulty: "beginner",
+      source: FITZY_BOWL_SOURCE
+    }
+  ];
   const rotundaLoop: LevelPath = {
     id: "rotunda-approach-loop",
     label: "Fitzroy Memorial Rotunda approach loop",
@@ -3088,6 +3310,25 @@ export function createLevelData(): LevelData {
       "osm-22760900-north-west-short-footway"
     ].includes(path.id)
   );
+  const buildingAccessPosition = (buildingId: string, fallback: GeoPoint, lateralOffset = 0, clearance = 1.2): Vec2 => {
+    const building = OSM_BUILDING_FOOTPRINTS_GEO.find((candidate) => candidate.id === buildingId);
+    if (!building) return geoToWorld(fallback);
+    const polygon = polygonFromGeo(building.points);
+    const center = polygonCentroid(polygon);
+    const footprint = footprintFromPolygon(polygon);
+    const frontage = building.frontagePoint ? geoToWorld(building.frontagePoint) : center;
+    const shiftedFrontage = lateralOffset === 0 ? frontage : offsetPoint(frontage, footprint.angle, lateralOffset, 0);
+    return exteriorPointFromPolygon(shiftedFrontage, polygon, center, clearance);
+  };
+  const clearMappedBuildingFootprint = (point: Vec2, buildingId: string, clearance = 1.2): Vec2 => {
+    const building = OSM_BUILDING_FOOTPRINTS_GEO.find((candidate) => candidate.id === buildingId);
+    if (!building) return point;
+    const polygon = polygonFromGeo(building.points);
+    if (!pointInPolygon(point, polygon)) {
+      return point;
+    }
+    return exteriorPointFromPolygon(point, polygon, polygonCentroid(polygon), clearance);
+  };
   const mappedAmenities: AmenityPoint[] = OSM_AMENITY_GEO.map((amenity) => {
     const position = geoToWorld(amenity.point);
     const visiblePosition =
@@ -3100,7 +3341,8 @@ export function createLevelData(): LevelData {
       id: amenity.id,
       label: amenity.label,
       kind: amenity.kind,
-      position: visiblePosition
+      position: visiblePosition,
+      source: `OpenStreetMap amenity node ${amenity.id.replace("osm-", "")}; Yarra Edinburgh Gardens public facilities listing`
     };
   });
   const featureAmenities: AmenityPoint[] = [
@@ -3110,7 +3352,71 @@ export function createLevelData(): LevelData {
     { id: "south-picnic-table-1", label: "South picnic table", kind: "picnic_table", position: geoToWorld(g(-37.789030, 144.983755)) },
     { id: "south-picnic-table-2", label: "South picnic table", kind: "picnic_table", position: geoToWorld(g(-37.789125, 144.983925)) }
   ];
-  const amenities = [...mappedAmenities, ...featureAmenities].filter((amenity) => pointInPolygon(amenity.position, boundary));
+  const structureAmenities: AmenityPoint[] = [
+    {
+      id: "grandstand-changeroom-access",
+      label: "Grandstand changerooms",
+      kind: "changeroom",
+      position: offsetPoint(grandstandCenter, grandstandRotation, -grandstandFootprint.halfX * 0.64, grandstandFrontSign * (grandstandVisualHalfZ + 1.25)),
+      linkedStructureId: "grandstand",
+      source: `${STRUCTURE_ACCESS_SOURCE}; positioned on the oval-facing external changeroom side so it does not overlap the stair climb fixture`
+    },
+    {
+      id: "tennis-clubroom-access",
+      label: "Tennis clubroom",
+      kind: "clubroom",
+      position: exteriorPointFromPolygon(
+        buildingAccessPosition("osm-building-403753784", g(-37.7880800, 144.9822400), -4.8, 1.3),
+        tennis,
+        polygonCentroid(tennis),
+        1.2
+      ),
+      linkedStructureId: "osm-building-403753784",
+      source: `${STRUCTURE_ACCESS_SOURCE}; Yarra redevelopment source specifically identifies an adjoining tennis social space and upgraded amenities`
+    },
+    {
+      id: "bowling-clubroom-access",
+      label: "Bowling clubroom",
+      kind: "clubroom",
+      position: exteriorPointFromPolygon(
+        clearMappedBuildingFootprint(
+          exteriorPointFromPolygon(geoToWorld(g(-37.7879800, 144.9811650)), bowling, polygonCentroid(bowling), 4.5),
+          "osm-building-1475006769",
+          1.2
+        ),
+        bowling,
+        polygonCentroid(bowling),
+        4.5
+      ),
+      linkedStructureId: "osm-building-543505639",
+      source: "OSM way 543505639; CMP 2004 bowling club entity, clubhouse, memorial-gate and bowling-precinct description; Fitzroy Victoria Bowling & Sports Club active greens/social use"
+    },
+    {
+      id: "oval-gatehouse-window",
+      label: "Gatehouse ticket window",
+      kind: "gatehouse",
+      position: buildingAccessPosition("osm-building-543505638", g(-37.7897200, 144.9801800), 0, 1.15),
+      linkedStructureId: "osm-building-543505638",
+      source: "OSM way 543505638; CMP 2004 Freeman Street gatehouse significance and oval-entry context"
+    },
+    {
+      id: "emely-baker-community-room",
+      label: "Emely Baker community room",
+      kind: "community_room",
+      position: buildingAccessPosition("osm-building-543505702", g(-37.7856400, 144.9824800), 2.8, 1.25),
+      linkedStructureId: "osm-building-543505702",
+      source: "OSM way 543505702; Yarra Emely Baker Centre page for access-friendly community-room venue, gated outdoor area and shade sail"
+    },
+    {
+      id: "south-amenities-service-room",
+      label: "South amenities service room",
+      kind: "maintenance_room",
+      position: buildingAccessPosition("osm-building-242003562", g(-37.7884306, 144.9835333), 6.2, 1.25),
+      linkedStructureId: "osm-building-242003562",
+      source: "OSM way 242003562; Yarra Edinburgh Gardens public-toilet/accessibility listing; CMP 2004 notes toilet blocks as functional service buildings"
+    }
+  ];
+  const amenities = [...mappedAmenities, ...featureAmenities, ...structureAmenities].filter((amenity) => pointInPolygon(amenity.position, boundary));
   const baseParkLifeDetails = ([
     {
       id: "north-lawn-dog-sign",
@@ -3351,7 +3657,19 @@ export function createLevelData(): LevelData {
   const mappedFences: MappedFence[] = OSM_FENCES_GEO.map((fence) => ({
     id: fence.id,
     label: fence.label,
-    points: polygonFromGeo(fence.points)
+    points: polygonFromGeo(fence.points),
+    height: fence.height,
+    width: fence.width,
+    jumpable: fence.jumpable,
+    jumpBypassMinHeight: fence.jumpBypassMinHeight,
+    source: fence.source,
+    gates: fence.gates?.map((gate) => ({
+      id: gate.id,
+      label: gate.label,
+      position: geoToWorld(gate.point),
+      radius: gate.radius,
+      source: gate.source
+    }))
   })).filter((fence) => fence.points.some((point) => pointInPolygon(point, boundary)));
   const hardscapeLines: HardscapeLine[] = HARDSCAPE_LINES_GEO.map((line) => ({
     id: line.id,
@@ -3444,8 +3762,8 @@ export function createLevelData(): LevelData {
       kind: "bowls" as const,
       polygon: polygonFromGeo(green)
     })),
-    { id: "south-playground", label: "South playground", kind: "playground", polygon: southPlayground },
-    { id: "north-playground", label: "North playground", kind: "playground", polygon: northPlayground },
+    { id: "south-playground", label: "South playground", kind: "playground", polygon: southPlayground, source: SOUTH_PLAYGROUND_LAYOUT_SOURCE },
+    { id: "north-playground", label: "North playground", kind: "playground", polygon: northPlayground, source: NORTH_PLAYGROUND_LAYOUT_SOURCE },
     { id: "skate", label: "Fitzroy Skatepark", kind: "skate", polygon: skate },
     { id: "basketball", label: "Basketball court", kind: "basketball", polygon: basketball },
     {
@@ -3671,6 +3989,7 @@ export function createLevelData(): LevelData {
   const terrainModifiers: TerrainModifier[] = [
     ...paths.flatMap(pathTerrainModifiers),
     ...trees.map(treeRootTerrainModifier),
+    ...skateBowls.map(skateBowlTerrainModifier),
     {
       id: "terrain-oval-perimeter-bank",
       label: "W.T. Peterson Oval subtle perimeter banking",
@@ -3754,6 +4073,7 @@ export function createLevelData(): LevelData {
     elevationMin,
     elevationMax,
     terrainModifiers,
+    skateBowls,
     mappedBuildings,
     mappedFences,
     hardscapeLines,
@@ -3791,10 +4111,6 @@ export function createLevelData(): LevelData {
         radius: 3.6,
         blocksSight: false
       },
-      {
-        ...polygonObstacleFromPolygon("skate", "Fitzroy Skatepark ramps", skate, { sourceObjectId: "skate", sourceObjectKind: "landmark" }),
-        blocksSight: false
-      },
       ...mappedBuildings
         .filter((building) => building.collision)
         .map((building) =>
@@ -3803,6 +4119,7 @@ export function createLevelData(): LevelData {
             sourceObjectKind: "mapped-building"
           })
         ),
+      ...mappedFences.flatMap(fenceObstacles),
       ...sportsFixtures.flatMap(sportsFixtureObstacles),
       ...treeColliders.map((tree) => ({
         id: tree.id,
@@ -3967,15 +4284,14 @@ export function createLevelData(): LevelData {
         }),
       {
         id: "skate-ramp",
-        label: "Skate ramp lip",
+        label: "Fitzy Bowl concrete deck",
         kind: "skate",
         position: skateCenter,
         accessKind: "ramp",
-        radius: 13,
-        height: 1.05,
-        prompt: "Walk the skate ramp",
-        mode: "auto",
-        bypassObstacleIds: ["skate"]
+        radius: 16,
+        height: 0.18,
+        prompt: "Walk the skate deck",
+        mode: "auto"
       }
     ],
     amenities,

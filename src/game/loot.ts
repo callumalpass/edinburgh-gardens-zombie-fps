@@ -26,6 +26,11 @@ export interface LootSearchContext {
 }
 
 const ATTACHMENT_POOL: UpgradeId[] = ["damage", "reload", "magazine", "spread", "fireRate"];
+const STRUCTURE_AMENITY_KINDS = new Set<AmenityPoint["kind"]>(["clubroom", "changeroom", "gatehouse", "maintenance_room", "community_room"]);
+
+export function isStructureAmenityKind(kind: AmenityPoint["kind"]): boolean {
+  return STRUCTURE_AMENITY_KINDS.has(kind);
+}
 
 export function lootRiskScore(context: LootSearchContext = {}): number {
   const nearbyPressure = Math.min(0.46, (context.nearbyZombies ?? 0) * 0.115);
@@ -36,7 +41,19 @@ export function lootRiskScore(context: LootSearchContext = {}): number {
 
 export function lootNoiseMultiplier(kind: AmenityPoint["kind"], context: LootSearchContext = {}): number {
   const risk = lootRiskScore(context);
-  return (kind === "bbq" ? 1.05 : kind === "waste_basket" ? 0.8 : 0.92) * (1 + risk * 0.7);
+  const base =
+    kind === "bbq"
+      ? 1.05
+      : kind === "waste_basket"
+        ? 0.8
+        : kind === "gatehouse"
+          ? 0.82
+          : kind === "maintenance_room" || kind === "changeroom"
+            ? 1.02
+            : isStructureAmenityKind(kind)
+              ? 0.94
+              : 0.92;
+  return base * (1 + risk * 0.7);
 }
 
 export function lootSearchSecondsMultiplier(context: LootSearchContext = {}): number {
@@ -111,6 +128,79 @@ export function searchAmenityLoot(kind: AmenityPoint["kind"], rng: RandomSource,
       status: attachment ? "Found maintenance-room attachment" : "Sheltered at toilets"
     });
   }
+  if (kind === "clubroom") {
+    return withLootDefaults({
+      scrap: 10 + rng.int(0, 9) + valueBoost,
+      ammo: 8 + rng.int(0, 8) + Math.floor(valueBoost * 0.55),
+      health: rng.next() < 0.35 ? 4 + rng.int(0, 5) : 0,
+      attachment,
+      throwables,
+      junk: quality === "junk",
+      quality,
+      noiseMultiplier,
+      searchSecondsMultiplier,
+      status: attachment ? "Found clubroom attachment" : quality === "junk" ? "Clubroom mostly empty" : "Recovered clubroom supplies"
+    });
+  }
+  if (kind === "changeroom") {
+    return withLootDefaults({
+      scrap: 7 + rng.int(0, 6) + Math.floor(valueBoost * 0.8),
+      ammo: 6 + rng.int(0, 7) + Math.floor(valueBoost * 0.5),
+      health: 8 + rng.int(0, 10) + Math.floor(valueBoost * 0.4),
+      attachment,
+      medicine: 8 + Math.round(risk * 10),
+      throwables,
+      junk: quality === "junk",
+      quality,
+      noiseMultiplier,
+      searchSecondsMultiplier,
+      status: attachment ? "Found changeroom attachment" : "Restocked from changeroom kit"
+    });
+  }
+  if (kind === "gatehouse") {
+    return withLootDefaults({
+      scrap: 12 + rng.int(0, 9) + valueBoost,
+      ammo: quality === "valuable" || rng.next() < 0.32 + risk * 0.25 ? 5 + Math.floor(valueBoost * 0.45) : 0,
+      health: 0,
+      attachment,
+      throwables: quality === "valuable" && rng.next() < 0.32 ? 1 : 0,
+      junk: quality === "junk",
+      quality,
+      noiseMultiplier,
+      searchSecondsMultiplier,
+      status: attachment ? "Found gatehouse attachment" : "Found gatehouse keys and scrap"
+    });
+  }
+  if (kind === "maintenance_room") {
+    return withLootDefaults({
+      scrap: 13 + rng.int(0, 10) + valueBoost,
+      ammo: 5 + rng.int(0, 7) + Math.floor(valueBoost * 0.45),
+      health: rng.next() < 0.42 ? 6 + rng.int(0, 8) : 0,
+      attachment,
+      medicine: rng.next() < 0.45 ? 5 + Math.round(risk * 9) : 0,
+      throwables: Math.min(2, throwables + (rng.next() < 0.22 + risk * 0.18 ? 1 : 0)),
+      junk: quality === "junk",
+      quality,
+      noiseMultiplier,
+      searchSecondsMultiplier,
+      status: attachment ? "Found service-room attachment" : "Recovered maintenance supplies"
+    });
+  }
+  if (kind === "community_room") {
+    return withLootDefaults({
+      scrap: 5 + rng.int(0, 6) + Math.floor(valueBoost * 0.45),
+      ammo: risk > 0.38 && rng.next() < 0.28 ? 4 + Math.floor(valueBoost * 0.35) : 0,
+      health: 12 + rng.int(0, 10) + Math.floor(valueBoost * 0.4),
+      attachment,
+      medicine: 12 + Math.round(risk * 11),
+      throwables,
+      junk: quality === "junk",
+      quality,
+      noiseMultiplier,
+      searchSecondsMultiplier,
+      status: attachment ? "Found community-room attachment" : "Found community-room first aid"
+    });
+  }
   return withLootDefaults({
     scrap: quality === "valuable" ? 4 + valueBoost : 0,
     ammo: quality === "valuable" ? 3 + Math.floor(valueBoost * 0.5) : 0,
@@ -126,6 +216,11 @@ export function searchAmenityLoot(kind: AmenityPoint["kind"], rng: RandomSource,
 }
 
 function amenityLootBias(kind: AmenityPoint["kind"]): number {
+  if (kind === "clubroom") return 0.1;
+  if (kind === "changeroom") return 0.09;
+  if (kind === "gatehouse") return 0.08;
+  if (kind === "maintenance_room") return 0.11;
+  if (kind === "community_room") return 0.06;
   if (kind === "bbq") return 0.08;
   if (kind === "bicycle_parking") return 0.05;
   if (kind === "toilets") return 0.03;
@@ -146,9 +241,9 @@ export function chooseZombiePickup(type: ZombieType, rng: RandomSource): { type:
     return null;
   }
   const roll = rng.next();
-  if (roll < 0.48) return { type: "ammo", amount: type === "bloater" ? 24 : 10 + rng.int(0, 8) };
-  if (roll < 0.72) return { type: "health", amount: type === "bloater" ? 22 : 10 + rng.int(0, 8) };
-  return { type: "scrap", amount: profile.reward + rng.int(2, 10) };
+  if (roll < 0.5) return { type: "ammo", amount: type === "bloater" ? 28 : 12 + rng.int(0, 9) };
+  if (roll < 0.76) return { type: "health", amount: type === "bloater" ? 24 : 12 + rng.int(0, 8) };
+  return { type: "scrap", amount: profile.reward + rng.int(4, 12) };
 }
 
 export function chooseZombieWeaponDrop(type: ZombieType, wave: number, rng: RandomSource): WeaponId | null {
