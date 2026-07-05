@@ -134,6 +134,8 @@ import type {
 
 const STRUCTURE_FLOODLIGHT_RADIUS = 34;
 const STRUCTURE_LIGHT_EXPOSURE_RADIUS = 28;
+const SCREAMER_RALLY_RADIUS = 94;
+const SCREAMER_RALLY_SEARCH_RADIUS = 28;
 
 interface StructureUtilityEffect {
   root: THREE.Group;
@@ -2213,8 +2215,7 @@ export class GameApp {
       }
 
       if (zombie.type === "screamer" && zombie.aiState === "chase" && zombie.screamCooldown <= 0) {
-        this.emitNoise("scream", zombiePoint);
-        zombie.screamCooldown = 9 + this.rng.range(0, 4);
+        this.triggerScreamerCall(zombie, zombiePoint);
       }
 
       const target = zombie.target;
@@ -2264,6 +2265,79 @@ export class GameApp {
       }
     }
     this.resolveZombieCrowding(now);
+  }
+
+  private triggerScreamerCall(zombie: Zombie, zombiePoint: Vec2): void {
+    const target = zombie.lastKnownPlayer ?? { x: this.player.position.x, z: this.player.position.z };
+    this.emitNoise("scream", zombiePoint, 1.18, { volume: 1.12 });
+    const rallied = this.rallyZombiesFromScream(zombie, zombiePoint, target);
+    const reinforcements = this.waveDirector.rushSpawnPack(
+      zombiePoint,
+      this.zombies.length,
+      (anchor) => this.spawnWaveZombie(anchor)
+    );
+    this.createScreamerPulse(zombiePoint, reinforcements > 0);
+    zombie.screamCooldown = reinforcements > 0 ? this.rng.range(11.5, 15.5) : this.rng.range(8.5, 12);
+
+    if (reinforcements > 0) {
+      this.flashStatus(`Screamer called ${reinforcements} from the park edge`);
+    } else if (rallied > 0) {
+      this.flashStatus(`Screamer rallied ${rallied} nearby`);
+    } else {
+      this.flashStatus("Screamer shrieked");
+    }
+  }
+
+  private rallyZombiesFromScream(screamer: Zombie, origin: Vec2, target: Vec2): number {
+    let rallied = 0;
+    for (const zombie of this.zombies) {
+      if (zombie === screamer || zombie.health <= 0) {
+        continue;
+      }
+      const zombiePoint = { x: zombie.position.x, z: zombie.position.z };
+      const callDistance = distance(origin, zombiePoint);
+      if (callDistance > SCREAMER_RALLY_RADIUS) {
+        continue;
+      }
+
+      const wasIdle = zombie.aiState === "wander" || zombie.aiState === "search";
+      zombie.aiState = zombie.aiState === "chase" ? "chase" : "investigate";
+      zombie.target =
+        callDistance < SCREAMER_RALLY_SEARCH_RADIUS
+          ? this.chooseWanderTarget(target, zombie.radius, 10)
+          : { ...target };
+      zombie.lastKnownPlayer = { ...target };
+      zombie.memoryTimer = Math.max(zombie.memoryTimer, this.rng.range(3.4, 5.8));
+      zombie.searchTimer = Math.max(zombie.searchTimer, this.rng.range(5.8, 8.4));
+      zombie.wanderTimer = Math.min(zombie.wanderTimer, this.rng.range(0.4, 1.1));
+      zombie.vocalCooldown = Math.min(zombie.vocalCooldown, this.rng.range(0.15, 0.7));
+      if (wasIdle) {
+        rallied += 1;
+      }
+    }
+    return rallied;
+  }
+
+  private createScreamerPulse(position: Vec2, reinforced: boolean): void {
+    const pulse = new THREE.Mesh(
+      new THREE.RingGeometry(0.68, reinforced ? 1.18 : 1.02, 30),
+      new THREE.MeshBasicMaterial({
+        color: reinforced ? 0xffd36c : 0xfff0a2,
+        transparent: true,
+        opacity: reinforced ? 0.56 : 0.44,
+        depthWrite: false,
+        side: THREE.DoubleSide
+      })
+    );
+    pulse.position.set(position.x, this.groundY(position) + 0.1, position.z);
+    pulse.rotation.x = -Math.PI / 2;
+    this.scene.add(pulse);
+    this.smokePuffs.push({
+      mesh: pulse,
+      velocity: new THREE.Vector3(0, 0.04, 0),
+      ttl: 0.62,
+      maxTtl: 0.62
+    });
   }
 
   private resolveZombieCrowding(now: number): void {

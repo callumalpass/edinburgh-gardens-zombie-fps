@@ -20,6 +20,9 @@ export interface WaveDirectorUpdate {
 
 const DEFAULT_INTERMISSION_SECONDS = 24;
 const DEFAULT_INITIAL_SPAWN_DELAY = 1.1;
+const RUSH_SPAWN_ACTIVE_CAP_BASE = 13;
+const RUSH_SPAWN_ACTIVE_CAP_PER_WAVE = 0.6;
+const RUSH_SPAWN_MAX_PACK_SIZE = 3;
 
 export class WaveDirector {
   private readonly intermissionSeconds: number;
@@ -107,6 +110,39 @@ export class WaveDirector {
     return true;
   }
 
+  rushSpawnPack(anchor: Vec2, activeZombies: number, spawn: (anchor?: Vec2) => void): number {
+    if (this.phaseValue !== "active" || this.spawnPoints.length === 0) {
+      return 0;
+    }
+
+    const config = getWaveConfig(this.waveValue);
+    const remaining = config.total - this.spawnedThisWave;
+    const activeCapacity = Math.max(
+      0,
+      Math.floor(RUSH_SPAWN_ACTIVE_CAP_BASE + this.waveValue * RUSH_SPAWN_ACTIVE_CAP_PER_WAVE) - activeZombies
+    );
+    const packSize = Math.min(
+      remaining,
+      activeCapacity,
+      RUSH_SPAWN_MAX_PACK_SIZE,
+      1 + Math.floor(this.waveValue / 4)
+    );
+    if (packSize <= 0) {
+      return 0;
+    }
+
+    const spawnAnchor = this.nearestSpawnPoint(anchor);
+    for (let index = 0; index < packSize; index += 1) {
+      spawn(spawnAnchor);
+    }
+
+    this.spawnedThisWave += packSize;
+    this.spawnPackRemaining = 0;
+    this.spawnPackAnchor = null;
+    this.spawnTimer = Math.max(this.spawnTimer, config.spawnInterval * 2.4);
+    return packSize;
+  }
+
   completeActiveWaveForTest(): void {
     this.phaseValue = "active";
     this.spawnedThisWave = getWaveConfig(this.waveValue).total;
@@ -158,5 +194,20 @@ export class WaveDirector {
       this.spawnTimer = remainingAfterSpawn <= config.stragglerCount ? config.stragglerInterval : config.packInterval;
     }
     return 1;
+  }
+
+  private nearestSpawnPoint(anchor: Vec2): Vec2 {
+    let nearest = this.spawnPoints[0];
+    let nearestDistanceSq = Number.POSITIVE_INFINITY;
+    for (const point of this.spawnPoints) {
+      const dx = point.x - anchor.x;
+      const dz = point.z - anchor.z;
+      const distanceSq = dx * dx + dz * dz;
+      if (distanceSq < nearestDistanceSq) {
+        nearest = point;
+        nearestDistanceSq = distanceSq;
+      }
+    }
+    return nearest;
   }
 }
