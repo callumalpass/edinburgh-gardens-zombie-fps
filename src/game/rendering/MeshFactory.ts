@@ -31,6 +31,15 @@ interface ZombieMarkerMaterials {
   glow: THREE.Material;
 }
 
+interface ZombieDetailMaterials extends ZombieMarkerMaterials {
+  pants: THREE.Material;
+  blood: THREE.Material;
+  darkBlood: THREE.Material;
+  bruise: THREE.Material;
+  tornCloth: THREE.Material;
+  shoe: THREE.Material;
+}
+
 export class MeshFactory {
   constructor(private readonly materials: GameMaterials) {}
 
@@ -38,35 +47,50 @@ export class MeshFactory {
     const group = new THREE.Group();
     if (weaponId === "knife" || weaponId === "machete") {
       const isMachete = weaponId === "machete";
-      const bladeMaterial = new THREE.MeshStandardMaterial({ color: isMachete ? 0xb8b4a4 : 0xc4c0b4, metalness: 0.62, roughness: 0.32 });
+      const bladeMaterial = new THREE.MeshStandardMaterial({
+        color: isMachete ? 0xb8b4a4 : 0xd0ccc0,
+        emissive: isMachete ? 0x1f1d18 : 0x39362f,
+        emissiveIntensity: isMachete ? 0.08 : 0.18,
+        metalness: 0.62,
+        roughness: 0.32
+      });
       const edgeMaterial = new THREE.MeshStandardMaterial({ color: 0xe1dccb, metalness: 0.72, roughness: 0.24 });
       const gripMaterial = new THREE.MeshStandardMaterial({ color: 0x30251d, roughness: 0.78 });
       const guardMaterial = new THREE.MeshStandardMaterial({ color: 0x221f1c, metalness: 0.36, roughness: 0.46 });
       const length = isMachete ? 1.28 : 0.72;
       const width = isMachete ? 0.16 : 0.095;
 
-      const blade = new THREE.Mesh(new THREE.BoxGeometry(width, 0.035, length), bladeMaterial);
-      blade.position.set(0, 0.08, -length * 0.36);
+      const bladeGeometry = isMachete
+        ? new THREE.BoxGeometry(width, 0.035, length)
+        : this.createKnifeBladeGeometry(length, width, 0.07);
+      const blade = new THREE.Mesh(bladeGeometry, bladeMaterial);
+      blade.position.set(0, 0.08, isMachete ? -length * 0.36 : 0);
       blade.rotation.x = isMachete ? -0.08 : -0.02;
       blade.castShadow = true;
       group.add(blade);
 
-      const edge = new THREE.Mesh(new THREE.BoxGeometry(width * 0.28, 0.018, length * 0.92), edgeMaterial);
-      edge.position.set(width * 0.42, 0.105, -length * 0.37);
-      edge.rotation.x = blade.rotation.x;
-      group.add(edge);
+      if (isMachete) {
+        const edge = new THREE.Mesh(new THREE.BoxGeometry(width * 0.28, 0.018, length * 0.92), edgeMaterial);
+        edge.position.set(width * 0.42, 0.105, -length * 0.37);
+        edge.rotation.x = blade.rotation.x;
+        group.add(edge);
+      }
 
-      const tip = new THREE.Mesh(new THREE.ConeGeometry(width * 0.52, 0.22, 4), bladeMaterial);
-      tip.rotation.x = -Math.PI / 2 + blade.rotation.x;
-      tip.rotation.z = Math.PI / 4;
-      tip.position.set(0, 0.08, -length * 0.83);
-      tip.castShadow = true;
-      group.add(tip);
+      if (isMachete) {
+        const tip = new THREE.Mesh(new THREE.ConeGeometry(width * 0.52, 0.22, 4), bladeMaterial);
+        tip.rotation.x = -Math.PI / 2 + blade.rotation.x;
+        tip.rotation.z = Math.PI / 4;
+        tip.position.set(0, 0.08, -length * 0.83);
+        tip.castShadow = true;
+        group.add(tip);
+      }
 
-      const spine = new THREE.Mesh(new THREE.BoxGeometry(width * 0.32, 0.02, length * 0.74), edgeMaterial);
-      spine.position.set(-width * 0.28, 0.118, -length * 0.32);
-      spine.rotation.x = blade.rotation.x;
-      group.add(spine);
+      if (isMachete) {
+        const spine = new THREE.Mesh(new THREE.BoxGeometry(width * 0.32, 0.02, length * 0.74), edgeMaterial);
+        spine.position.set(-width * 0.28, 0.118, -length * 0.32);
+        spine.rotation.x = blade.rotation.x;
+        group.add(spine);
+      }
 
       const grip = new THREE.Mesh(new THREE.CapsuleGeometry(width * 0.68, 0.3, 4, 10), gripMaterial);
       grip.position.set(0, -0.02, length * 0.26);
@@ -255,6 +279,45 @@ export class MeshFactory {
     }
   }
 
+  private createKnifeBladeGeometry(length: number, width: number, thickness: number): THREE.BufferGeometry {
+    const halfWidth = width * 0.5;
+    const outline = [
+      { y: -thickness * 0.44, z: length * 0.06 },
+      { y: thickness * 0.52, z: length * 0.04 },
+      { y: thickness * 0.52, z: -length * 0.56 },
+      { y: thickness * 0.12, z: -length * 0.82 },
+      { y: 0, z: -length * 0.98 },
+      { y: -thickness * 0.44, z: -length * 0.6 }
+    ];
+    const positions: number[] = [];
+    const pushPoint = (point: { y: number; z: number }, x: number) => positions.push(x, point.y, point.z);
+
+    for (let index = 1; index < outline.length - 1; index += 1) {
+      pushPoint(outline[0], halfWidth);
+      pushPoint(outline[index], halfWidth);
+      pushPoint(outline[index + 1], halfWidth);
+      pushPoint(outline[0], -halfWidth);
+      pushPoint(outline[index + 1], -halfWidth);
+      pushPoint(outline[index], -halfWidth);
+    }
+
+    for (let index = 0; index < outline.length; index += 1) {
+      const next = outline[(index + 1) % outline.length];
+      const current = outline[index];
+      pushPoint(current, halfWidth);
+      pushPoint(current, -halfWidth);
+      pushPoint(next, -halfWidth);
+      pushPoint(current, halfWidth);
+      pushPoint(next, -halfWidth);
+      pushPoint(next, halfWidth);
+    }
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+    geometry.computeVertexNormals();
+    return geometry;
+  }
+
   createWeaponDropMesh(weaponId: WeaponId): THREE.Object3D {
     const group = this.createWeaponMesh(weaponId, false);
     group.scale.setScalar(2.0);
@@ -270,16 +333,20 @@ export class MeshFactory {
   }
 
   createZombieMesh(type: ZombieType): THREE.Group {
+    if (type === "crawler") {
+      return this.createCrawlerZombieMesh();
+    }
+
     const group = new THREE.Group();
-    const bodyScale = type === "bloater" ? 1.45 : type === "sprinter" ? 0.84 : type === "crawler" ? 0.62 : type === "screamer" ? 1.04 : 1;
-    const lowPosture = type === "crawler";
-    const forwardLean = type === "sprinter" ? -0.16 : type === "screamer" ? -0.08 : type === "crawler" ? 0.52 : type === "bloater" ? 0.06 : -0.04;
+    const bodyScale = type === "bloater" ? 1.45 : type === "sprinter" ? 0.84 : type === "screamer" ? 1.04 : 1;
+    const lowPosture = false;
+    const forwardLean = type === "sprinter" ? -0.16 : type === "screamer" ? -0.08 : type === "bloater" ? 0.06 : -0.04;
     const skinMaterial = new THREE.MeshStandardMaterial({
-      color: type === "bloater" ? 0x71815b : type === "sprinter" ? 0x657556 : type === "crawler" ? 0x566344 : type === "screamer" ? 0x85795e : 0x6f7752,
+      color: type === "bloater" ? 0x71815b : type === "sprinter" ? 0x657556 : type === "screamer" ? 0x85795e : 0x6f7752,
       roughness: 0.94
     });
     const shirtMaterial = new THREE.MeshStandardMaterial({
-      color: type === "sprinter" ? 0x4d5548 : type === "crawler" ? 0x344139 : type === "screamer" ? 0x5a443f : 0x3f4b3b,
+      color: type === "sprinter" ? 0x4d5548 : type === "screamer" ? 0x5a443f : 0x3f4b3b,
       roughness: 0.9
     });
     const pantsMaterial = new THREE.MeshStandardMaterial({ color: 0x282d2b, roughness: 0.88 });
@@ -290,7 +357,7 @@ export class MeshFactory {
     const shoeMaterial = new THREE.MeshStandardMaterial({ color: 0x171b19, roughness: 0.84 });
     const bruiseMaterial = new THREE.MeshStandardMaterial({ color: 0x343225, roughness: 0.96 });
     const tornClothMaterial = new THREE.MeshStandardMaterial({
-      color: type === "screamer" ? 0x3f312f : type === "crawler" ? 0x26302b : 0x29362e,
+      color: type === "screamer" ? 0x3f312f : 0x29362e,
       roughness: 0.94
     });
     const accentMaterial = new THREE.MeshBasicMaterial({
@@ -307,14 +374,45 @@ export class MeshFactory {
       side: THREE.DoubleSide
     });
 
-    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.72 * bodyScale, 1.55 * bodyScale, 5, 12), shirtMaterial);
+    const torsoRadius = type === "bloater" ? 0.72 : type === "sprinter" ? 0.5 : type === "screamer" ? 0.48 : 0.56;
+    const torsoLength = type === "bloater" ? 1.55 : type === "screamer" ? 1.52 : 1.38;
+    const body = new THREE.Mesh(new THREE.CapsuleGeometry(torsoRadius * bodyScale, torsoLength * bodyScale, 5, 12), shirtMaterial);
     body.position.y = 1.48 * bodyScale;
-    body.scale.set(type === "bloater" ? 1.18 : type === "screamer" ? 0.74 : type === "sprinter" ? 0.82 : 0.92, type === "bloater" ? 0.92 : 1.05, type === "bloater" ? 1.08 : 0.78);
+    body.scale.set(type === "bloater" ? 1.18 : type === "screamer" ? 0.84 : type === "sprinter" ? 0.78 : 0.9, type === "bloater" ? 0.92 : 1.05, type === "bloater" ? 1.08 : 0.68);
     body.rotation.x = forwardLean;
     body.rotation.z = type === "screamer" ? -0.08 : type === "shambler" ? 0.06 : 0;
     body.castShadow = true;
     body.name = "body";
     group.add(body);
+
+    const ribcage = new THREE.Mesh(
+      new THREE.BoxGeometry(
+        (type === "bloater" ? 0.9 : type === "screamer" ? 0.56 : type === "sprinter" ? 0.58 : 0.72) * bodyScale,
+        (type === "bloater" ? 0.58 : 0.72) * bodyScale,
+        0.16 * bodyScale
+      ),
+      shirtMaterial
+    );
+    ribcage.position.set(0.02 * bodyScale, 1.72 * bodyScale, -0.55 * bodyScale);
+    ribcage.rotation.set(forwardLean * 0.35, 0, type === "shambler" ? 0.08 : type === "screamer" ? -0.06 : 0);
+    ribcage.castShadow = true;
+    group.add(ribcage);
+
+    const pelvis = new THREE.Mesh(
+      new THREE.BoxGeometry((type === "bloater" ? 0.82 : type === "sprinter" ? 0.52 : 0.66) * bodyScale, 0.28 * bodyScale, 0.32 * bodyScale),
+      pantsMaterial
+    );
+    pelvis.position.set(0, 0.88 * bodyScale, -0.04 * bodyScale);
+    pelvis.rotation.z = type === "shambler" ? -0.06 : type === "sprinter" ? 0.08 : 0;
+    pelvis.castShadow = true;
+    group.add(pelvis);
+
+    for (const x of [-0.22, 0.22]) {
+      const clavicle = new THREE.Mesh(new THREE.BoxGeometry(0.24 * bodyScale, 0.035 * bodyScale, 0.04 * bodyScale), boneMaterial);
+      clavicle.position.set(x * bodyScale, 2.09 * bodyScale, -0.61 * bodyScale);
+      clavicle.rotation.z = x < 0 ? -0.22 : 0.22;
+      group.add(clavicle);
+    }
 
     const shoulders = new THREE.Mesh(new THREE.BoxGeometry(1.34 * bodyScale, 0.22 * bodyScale, 0.36 * bodyScale), shirtMaterial);
     shoulders.position.set(0, 2.18 * bodyScale - (lowPosture ? 0.1 : 0), -0.04 * bodyScale - (lowPosture ? 0.18 : 0));
@@ -331,8 +429,8 @@ export class MeshFactory {
 
     const head = new THREE.Mesh(new THREE.IcosahedronGeometry(0.5 * bodyScale, 2), skinMaterial);
     head.position.set(0.06 * bodyScale, 2.92 * bodyScale - (lowPosture ? 0.18 : 0), lowPosture ? -0.3 : -0.02);
-    head.scale.set(type === "screamer" ? 0.78 : 0.94, type === "screamer" ? 1.18 : 1.06, type === "crawler" ? 1.08 : 0.9);
-    head.rotation.z = type === "sprinter" ? -0.12 : type === "crawler" ? -0.26 : type === "screamer" ? 0.22 : 0.1;
+    head.scale.set(type === "screamer" ? 0.78 : 0.94, type === "screamer" ? 1.18 : 1.06, 0.9);
+    head.rotation.z = type === "sprinter" ? -0.12 : type === "screamer" ? 0.22 : 0.1;
     head.rotation.x = lowPosture ? 0.28 : type === "screamer" ? -0.12 : 0.04;
     head.castShadow = true;
     head.name = "head";
@@ -473,24 +571,71 @@ export class MeshFactory {
       stain.position.set(0.16 * bodyScale, 1.5 * bodyScale, -0.83 * bodyScale);
       stain.rotation.x = -0.08;
       group.add(stain);
+      for (const spot of [
+        { x: -0.18, y: 1.78, z: -0.82, r: 0.055 },
+        { x: 0.34, y: 1.62, z: -0.86, r: 0.044 },
+        { x: -0.36, y: 1.35, z: -0.78, r: 0.05 },
+        { x: 0.08, y: 1.18, z: -0.9, r: 0.04 }
+      ]) {
+        const lesion = new THREE.Mesh(new THREE.SphereGeometry(spot.r * bodyScale, 8, 5), bloodMaterial);
+        lesion.position.set(spot.x * bodyScale, spot.y * bodyScale, spot.z * bodyScale);
+        lesion.scale.z = 0.32;
+        group.add(lesion);
+      }
     }
 
     const arms: THREE.Mesh[] = [];
     for (const side of [-1, 1]) {
       const armLength = (side < 0 && type !== "bloater" ? 1.18 : 1.04) * bodyScale;
       const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.12 * bodyScale, armLength, 4, 8), skinMaterial);
-      arm.position.set(side * 0.76 * bodyScale, 1.68 * bodyScale - (lowPosture ? 0.12 : 0), -0.2 * bodyScale - (lowPosture ? 0.18 : 0));
-      arm.rotation.z = side * (type === "screamer" ? 0.18 : 0.32);
-      arm.rotation.x = lowPosture ? -1.38 : type === "screamer" ? -1.12 : -0.88;
+      const armZ =
+        type === "sprinter" ? (side < 0 ? -0.42 : -0.02) * bodyScale : type === "shambler" ? (side < 0 ? -0.3 : -0.12) * bodyScale : -0.2 * bodyScale;
+      arm.position.set(side * 0.76 * bodyScale, 1.68 * bodyScale - (lowPosture ? 0.12 : 0), armZ - (lowPosture ? 0.18 : 0));
+      arm.rotation.z = side * (type === "screamer" ? 0.18 : type === "bloater" ? 0.22 : 0.32);
+      arm.rotation.x =
+        type === "sprinter"
+          ? side < 0
+            ? -1.16
+            : -0.58
+          : type === "shambler"
+            ? side < 0
+              ? -1.04
+              : -0.72
+            : lowPosture
+              ? -1.38
+              : type === "screamer"
+                ? -1.12
+                : -0.88;
       arm.castShadow = true;
       arms.push(arm);
       group.add(arm);
 
       const hand = new THREE.Mesh(new THREE.BoxGeometry(0.18 * bodyScale, 0.13 * bodyScale, 0.2 * bodyScale), skinMaterial);
-      hand.position.set(side * 0.9 * bodyScale, 1.02 * bodyScale - (lowPosture ? 0.16 : 0), -0.58 * bodyScale - (lowPosture ? 0.2 : 0));
+      const handY = (type === "sprinter" && side > 0 ? 1.2 : 1.02) * bodyScale - (lowPosture ? 0.16 : 0);
+      const handZ =
+        type === "sprinter" ? (side < 0 ? -0.86 : -0.32) * bodyScale : type === "shambler" ? (side < 0 ? -0.72 : -0.46) * bodyScale : -0.58 * bodyScale;
+      hand.position.set(side * 0.9 * bodyScale, handY, handZ - (lowPosture ? 0.2 : 0));
       hand.rotation.set(-0.42, 0, side * 0.18);
       hand.castShadow = true;
       group.add(hand);
+
+      const forearm = new THREE.Mesh(new THREE.CapsuleGeometry(0.09 * bodyScale, 0.54 * bodyScale, 4, 8), skinMaterial);
+      forearm.position.set(side * 0.84 * bodyScale, (arm.position.y + hand.position.y) * 0.5, (arm.position.z + hand.position.z) * 0.5);
+      forearm.rotation.x =
+        type === "sprinter"
+          ? side < 0
+            ? -1.02
+            : -0.48
+          : type === "shambler"
+            ? side < 0
+              ? -0.88
+              : -0.58
+            : type === "screamer"
+              ? -0.98
+              : -0.74;
+      forearm.rotation.z = side * (type === "bloater" ? 0.12 : 0.18);
+      forearm.castShadow = true;
+      group.add(forearm);
 
       for (const finger of [-1, 0, 1]) {
         const claw = new THREE.Mesh(new THREE.BoxGeometry(0.032 * bodyScale, 0.035 * bodyScale, 0.18 * bodyScale), boneMaterial);
@@ -504,20 +649,51 @@ export class MeshFactory {
         group.add(claw);
       }
 
-      const leg = new THREE.Mesh(new THREE.CapsuleGeometry(0.17 * bodyScale, 1.0 * bodyScale, 4, 8), pantsMaterial);
-      leg.position.set(side * 0.25 * bodyScale, 0.68 * bodyScale, side < 0 ? 0.08 * bodyScale : -0.05 * bodyScale);
-      leg.rotation.x = lowPosture ? 0.72 : side < 0 ? 0.1 : -0.08;
-      leg.rotation.z = side * (type === "sprinter" ? 0.08 : 0.04);
+      const legRadius = (type === "bloater" ? 0.2 : type === "sprinter" ? 0.145 : 0.17) * bodyScale;
+      const leg = new THREE.Mesh(new THREE.CapsuleGeometry(legRadius, 1.0 * bodyScale, 4, 8), pantsMaterial);
+      const legZ =
+        type === "sprinter"
+          ? side < 0
+            ? -0.22
+            : 0.18
+          : type === "shambler"
+            ? side < 0
+              ? 0.12
+              : -0.1
+            : side < 0
+              ? 0.08
+              : -0.05;
+      leg.position.set(side * (type === "bloater" ? 0.32 : 0.25) * bodyScale, 0.68 * bodyScale, legZ * bodyScale);
+      leg.rotation.x =
+        type === "sprinter" ? (side < 0 ? -0.26 : 0.34) : type === "shambler" ? (side < 0 ? 0.18 : -0.16) : lowPosture ? 0.72 : side < 0 ? 0.1 : -0.08;
+      leg.rotation.z = side * (type === "sprinter" ? 0.12 : type === "bloater" ? 0.02 : 0.04);
       leg.castShadow = true;
       leg.name = side < 0 ? "leftLeg" : "rightLeg";
       group.add(leg);
 
-      const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.28 * bodyScale, 0.12 * bodyScale, 0.44 * bodyScale), shoeMaterial);
-      shoe.position.set(side * 0.25 * bodyScale, 0.1 * bodyScale, -0.16 * bodyScale);
+      const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.28 * bodyScale, 0.12 * bodyScale, (type === "sprinter" ? 0.52 : 0.44) * bodyScale), shoeMaterial);
+      const shoeZ = type === "sprinter" ? (side < 0 ? -0.56 : 0.08) : type === "shambler" ? (side < 0 ? -0.04 : -0.28) : -0.16;
+      shoe.position.set(side * (type === "bloater" ? 0.32 : 0.25) * bodyScale, 0.1 * bodyScale, shoeZ * bodyScale);
       shoe.rotation.y = side * 0.12;
+      shoe.rotation.x = type === "sprinter" && side < 0 ? -0.12 : 0;
       shoe.castShadow = true;
       group.add(shoe);
     }
+
+    this.addZombieSharedWear(group, type, bodyScale, lowPosture, {
+      skin: skinMaterial,
+      shirt: shirtMaterial,
+      pants: pantsMaterial,
+      blood: bloodMaterial,
+      darkBlood: darkBloodMaterial,
+      bone: boneMaterial,
+      hair: hairMaterial,
+      accent: accentMaterial,
+      glow: glowMaterial,
+      bruise: bruiseMaterial,
+      tornCloth: tornClothMaterial,
+      shoe: shoeMaterial
+    });
 
     const wound = new THREE.Mesh(new THREE.CircleGeometry(0.18 * bodyScale, 12), bloodMaterial);
     wound.position.set(-0.22 * bodyScale, 1.84 * bodyScale - (lowPosture ? 0.12 : 0), -0.68 * bodyScale - (lowPosture ? 0.2 : 0));
@@ -550,15 +726,262 @@ export class MeshFactory {
 
     group.userData.arms = arms;
     group.userData.head = head;
-    group.updateMatrixWorld(true);
-    const bounds = new THREE.Box3().setFromObject(group);
-    if (Number.isFinite(bounds.min.y) && Math.abs(bounds.min.y) > 0.001) {
-      for (const child of group.children) {
-        child.position.y -= bounds.min.y;
-      }
-    }
+    this.groundObject(group);
     this.applyAnimeMeshStyle(group, 1.035);
     return group;
+  }
+
+  private createCrawlerZombieMesh(): THREE.Group {
+    const group = new THREE.Group();
+    const bodyScale = 0.86;
+    const skinMaterial = new THREE.MeshStandardMaterial({ color: 0x556642, roughness: 0.96 });
+    const shirtMaterial = new THREE.MeshStandardMaterial({ color: 0x2f3b34, roughness: 0.94 });
+    const pantsMaterial = new THREE.MeshStandardMaterial({ color: 0x242a27, roughness: 0.9 });
+    const bloodMaterial = new THREE.MeshBasicMaterial({ color: 0x681d17, transparent: true, opacity: 0.9, side: THREE.DoubleSide });
+    const darkBloodMaterial = new THREE.MeshStandardMaterial({ color: 0x26100e, roughness: 0.96 });
+    const boneMaterial = new THREE.MeshStandardMaterial({ color: 0xb9ae8b, roughness: 0.82 });
+    const hairMaterial = new THREE.MeshStandardMaterial({ color: 0x141611, roughness: 0.96 });
+    const bruiseMaterial = new THREE.MeshStandardMaterial({ color: 0x303421, roughness: 0.96 });
+    const tornClothMaterial = new THREE.MeshStandardMaterial({ color: 0x253029, roughness: 0.95 });
+    const accentMaterial = new THREE.MeshBasicMaterial({ color: ZOMBIE_ACCENT_COLORS.crawler, transparent: true, opacity: 0.82, depthWrite: false });
+    const glowMaterial = new THREE.MeshBasicMaterial({
+      color: ZOMBIE_GLOW_COLORS.crawler,
+      transparent: true,
+      opacity: 0.3,
+      depthWrite: false,
+      side: THREE.DoubleSide
+    });
+
+    const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.42 * bodyScale, 1.35 * bodyScale, 5, 12), shirtMaterial);
+    torso.rotation.x = Math.PI / 2 + 0.12;
+    torso.scale.set(1.08, 1, 0.72);
+    torso.position.set(0, 0.62, 0.04);
+    torso.castShadow = true;
+    torso.name = "body";
+    group.add(torso);
+
+    const pelvis = new THREE.Mesh(new THREE.SphereGeometry(0.38 * bodyScale, 10, 8), pantsMaterial);
+    pelvis.scale.set(1.14, 0.66, 0.9);
+    pelvis.position.set(0, 0.42, 0.68);
+    pelvis.castShadow = true;
+    group.add(pelvis);
+
+    const shoulders = new THREE.Mesh(new THREE.BoxGeometry(1.08 * bodyScale, 0.18 * bodyScale, 0.34 * bodyScale), shirtMaterial);
+    shoulders.position.set(0, 0.82, -0.48);
+    shoulders.rotation.x = 0.18;
+    shoulders.castShadow = true;
+    group.add(shoulders);
+
+    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.14 * bodyScale, 0.18 * bodyScale, 0.28 * bodyScale, 10), skinMaterial);
+    neck.rotation.x = Math.PI / 2 + 0.18;
+    neck.position.set(0.02, 0.79, -0.74);
+    neck.castShadow = true;
+    group.add(neck);
+
+    const head = new THREE.Mesh(new THREE.IcosahedronGeometry(0.36 * bodyScale, 2), skinMaterial);
+    head.position.set(0.04, 0.86, -1.02);
+    head.scale.set(0.92, 0.82, 1.12);
+    head.rotation.set(0.38, 0, -0.22);
+    head.castShadow = true;
+    head.name = "head";
+    group.add(head);
+
+    const socketMaterial = new THREE.MeshBasicMaterial({ color: 0x0c0907 });
+    const eyeMaterial = new THREE.MeshBasicMaterial({ color: 0xf36a4f });
+    const mouthMaterial = new THREE.MeshBasicMaterial({ color: 0x170706 });
+    for (const x of [-0.12, 0.12]) {
+      const socket = new THREE.Mesh(new THREE.SphereGeometry(0.078 * bodyScale, 8, 6), socketMaterial);
+      socket.scale.set(1.25, 0.72, 0.24);
+      socket.position.set(x, 0.035, -0.33 * bodyScale);
+      head.add(socket);
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.042 * bodyScale, 8, 6), eyeMaterial);
+      eye.position.set(x, 0.038, -0.365 * bodyScale);
+      head.add(eye);
+    }
+    const jaw = new THREE.Mesh(new THREE.BoxGeometry(0.24 * bodyScale, 0.09 * bodyScale, 0.16 * bodyScale), skinMaterial);
+    jaw.position.set(0.03, -0.19, -0.26);
+    jaw.rotation.x = -0.18;
+    head.add(jaw);
+    const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.24 * bodyScale, 0.055 * bodyScale, 0.035 * bodyScale), mouthMaterial);
+    mouth.position.set(0.04, -0.14, -0.36);
+    head.add(mouth);
+    for (const x of [-0.08, 0, 0.08]) {
+      const tooth = new THREE.Mesh(new THREE.BoxGeometry(0.022 * bodyScale, 0.058 * bodyScale, 0.018 * bodyScale), boneMaterial);
+      tooth.position.set(x, -0.1, -0.385);
+      head.add(tooth);
+    }
+
+    const arms: THREE.Mesh[] = [];
+    for (const side of [-1, 1]) {
+      const upperArm = new THREE.Mesh(new THREE.CapsuleGeometry(0.1 * bodyScale, 0.78 * bodyScale, 4, 8), skinMaterial);
+      upperArm.position.set(side * 0.42, 0.5, -0.66);
+      upperArm.rotation.set(-1.28, side * 0.08, side * 0.32);
+      upperArm.castShadow = true;
+      arms.push(upperArm);
+      group.add(upperArm);
+
+      const forearm = new THREE.Mesh(new THREE.CapsuleGeometry(0.092 * bodyScale, 0.68 * bodyScale, 4, 8), skinMaterial);
+      forearm.position.set(side * 0.62, 0.27, -1.03);
+      forearm.rotation.set(-1.18, side * 0.08, side * 0.16);
+      forearm.castShadow = true;
+      group.add(forearm);
+
+      const hand = new THREE.Mesh(new THREE.BoxGeometry(0.16 * bodyScale, 0.09 * bodyScale, 0.22 * bodyScale), skinMaterial);
+      hand.position.set(side * 0.74, 0.13, -1.38);
+      hand.rotation.set(-0.32, side * 0.12, side * 0.08);
+      hand.castShadow = true;
+      group.add(hand);
+
+      for (const finger of [-1, 0, 1]) {
+        const claw = new THREE.Mesh(new THREE.BoxGeometry(0.028 * bodyScale, 0.035 * bodyScale, 0.2 * bodyScale), boneMaterial);
+        claw.position.set(side * 0.74 + finger * 0.04, 0.1, -1.54);
+        claw.rotation.set(-0.26, side * 0.08, finger * 0.08);
+        claw.castShadow = true;
+        group.add(claw);
+      }
+
+      const thigh = new THREE.Mesh(new THREE.CapsuleGeometry(0.13 * bodyScale, 0.64 * bodyScale, 4, 8), pantsMaterial);
+      thigh.position.set(side * 0.28, 0.3, 0.7);
+      thigh.rotation.set(1.12, side * 0.08, side * 0.24);
+      thigh.castShadow = true;
+      group.add(thigh);
+
+      const shin = new THREE.Mesh(new THREE.CapsuleGeometry(0.1 * bodyScale, 0.58 * bodyScale, 4, 8), pantsMaterial);
+      shin.position.set(side * 0.43, 0.18, 1.13);
+      shin.rotation.set(Math.PI / 2, side * 0.08, side * -0.18);
+      shin.castShadow = true;
+      group.add(shin);
+
+      const foot = new THREE.Mesh(new THREE.BoxGeometry(0.22 * bodyScale, 0.09 * bodyScale, 0.36 * bodyScale), darkBloodMaterial);
+      foot.position.set(side * 0.48, 0.08, 1.46);
+      foot.rotation.y = side * 0.08;
+      foot.castShadow = true;
+      group.add(foot);
+    }
+
+    for (let ridge = 0; ridge < 5; ridge += 1) {
+      const spine = new THREE.Mesh(new THREE.BoxGeometry((0.22 - ridge * 0.016) * bodyScale, 0.055 * bodyScale, 0.1 * bodyScale), boneMaterial);
+      spine.position.set(0, 0.98 - ridge * 0.06, -0.3 + ridge * 0.2);
+      spine.rotation.x = 0.28;
+      spine.castShadow = true;
+      group.add(spine);
+    }
+
+    for (const x of [-0.22, 0.02, 0.26]) {
+      const rib = new THREE.Mesh(new THREE.BoxGeometry(0.18 * bodyScale, 0.024 * bodyScale, 0.035 * bodyScale), boneMaterial);
+      rib.position.set(x, 0.54, -0.48);
+      rib.rotation.set(0.22, 0, x * 0.6);
+      group.add(rib);
+    }
+
+    const wound = new THREE.Mesh(new THREE.CircleGeometry(0.16 * bodyScale, 12), bloodMaterial);
+    wound.position.set(-0.18, 0.55, -0.73);
+    wound.rotation.x = -0.14;
+    group.add(wound);
+
+    for (let tear = 0; tear < 4; tear += 1) {
+      const cloth = new THREE.Mesh(new THREE.BoxGeometry((0.16 + tear * 0.02) * bodyScale, 0.34 * bodyScale, 0.035 * bodyScale), tornClothMaterial);
+      cloth.position.set((-0.34 + tear * 0.22) * bodyScale, 0.52 - tear * 0.02, -0.78);
+      cloth.rotation.set(0.32, 0, -0.28 + tear * 0.16);
+      cloth.castShadow = true;
+      group.add(cloth);
+    }
+
+    const glowRidge = new THREE.Mesh(new THREE.BoxGeometry(0.76 * bodyScale, 0.035 * bodyScale, 0.045 * bodyScale), accentMaterial);
+    glowRidge.position.set(0, 0.92, -0.1);
+    glowRidge.rotation.x = 0.16;
+    group.add(glowRidge);
+
+    this.addZombieSilhouetteMarkers(group, "crawler", bodyScale, true, {
+      skin: skinMaterial,
+      shirt: shirtMaterial,
+      bone: boneMaterial,
+      hair: hairMaterial,
+      accent: accentMaterial,
+      glow: glowMaterial
+    });
+
+    group.userData.arms = arms;
+    group.userData.head = head;
+    this.groundObject(group);
+    this.applyAnimeMeshStyle(group, 1.035);
+    return group;
+  }
+
+  private addZombieSharedWear(
+    group: THREE.Group,
+    type: Exclude<ZombieType, "crawler">,
+    bodyScale: number,
+    lowPosture: boolean,
+    materials: ZombieDetailMaterials
+  ): void {
+    const frontZ = -0.68 * bodyScale - (lowPosture ? 0.18 : 0);
+    const beltY = 1.12 * bodyScale - (lowPosture ? 0.1 : 0);
+    const belt = new THREE.Mesh(new THREE.BoxGeometry(0.92 * bodyScale, 0.075 * bodyScale, 0.045 * bodyScale), materials.darkBlood);
+    belt.position.set(0.02 * bodyScale, beltY, frontZ);
+    belt.rotation.z = type === "shambler" ? 0.08 : type === "sprinter" ? -0.07 : 0.02;
+    group.add(belt);
+
+    const buckle = new THREE.Mesh(new THREE.BoxGeometry(0.15 * bodyScale, 0.11 * bodyScale, 0.05 * bodyScale), materials.bone);
+    buckle.position.set(0.05 * bodyScale, beltY + 0.01 * bodyScale, frontZ - 0.025 * bodyScale);
+    group.add(buckle);
+
+    for (let tear = 0; tear < 5; tear += 1) {
+      const cloth = new THREE.Mesh(new THREE.BoxGeometry((0.1 + tear * 0.012) * bodyScale, (0.2 + (tear % 2) * 0.08) * bodyScale, 0.036 * bodyScale), materials.tornCloth);
+      cloth.position.set((-0.36 + tear * 0.18) * bodyScale, (1.03 - tear * 0.018) * bodyScale, frontZ - 0.015 * bodyScale);
+      cloth.rotation.z = -0.22 + tear * 0.12;
+      cloth.castShadow = true;
+      group.add(cloth);
+    }
+
+    for (const side of [-1, 1]) {
+      const sleeve = new THREE.Mesh(new THREE.BoxGeometry(0.24 * bodyScale, 0.26 * bodyScale, 0.2 * bodyScale), materials.shirt);
+      sleeve.position.set(side * 0.72 * bodyScale, 1.96 * bodyScale, -0.28 * bodyScale);
+      sleeve.rotation.set(-0.52, 0, side * 0.24);
+      sleeve.castShadow = true;
+      group.add(sleeve);
+
+      const wristBone = new THREE.Mesh(new THREE.BoxGeometry(0.07 * bodyScale, 0.07 * bodyScale, 0.16 * bodyScale), materials.bone);
+      wristBone.position.set(side * 0.85 * bodyScale, 0.88 * bodyScale, -0.7 * bodyScale);
+      wristBone.rotation.set(-0.38, side * 0.08, side * 0.12);
+      wristBone.castShadow = true;
+      group.add(wristBone);
+
+      const kneeTear = new THREE.Mesh(new THREE.BoxGeometry(0.16 * bodyScale, 0.09 * bodyScale, 0.045 * bodyScale), materials.bruise);
+      kneeTear.position.set(side * 0.25 * bodyScale, 0.72 * bodyScale, -0.36 * bodyScale);
+      kneeTear.rotation.z = side * 0.08;
+      group.add(kneeTear);
+
+      const toeCap = new THREE.Mesh(new THREE.BoxGeometry(0.22 * bodyScale, 0.035 * bodyScale, 0.06 * bodyScale), materials.bone);
+      toeCap.position.set(side * 0.25 * bodyScale, 0.15 * bodyScale, -0.39 * bodyScale);
+      toeCap.rotation.y = side * 0.12;
+      group.add(toeCap);
+    }
+
+    if (type === "sprinter") {
+      for (const side of [-1, 1]) {
+        const calfWrap = new THREE.Mesh(new THREE.BoxGeometry(0.11 * bodyScale, 0.38 * bodyScale, 0.04 * bodyScale), materials.accent);
+        calfWrap.position.set(side * 0.3 * bodyScale, 0.42 * bodyScale, -0.38 * bodyScale);
+        calfWrap.rotation.z = side * 0.1;
+        group.add(calfWrap);
+      }
+    } else if (type === "bloater") {
+      for (const spot of [
+        { x: -0.28, y: 1.72, z: -0.86, r: 0.09 },
+        { x: 0.34, y: 1.38, z: -0.9, r: 0.075 },
+        { x: 0.12, y: 2.05, z: -0.78, r: 0.07 }
+      ]) {
+        const blister = new THREE.Mesh(new THREE.SphereGeometry(spot.r * bodyScale, 8, 6), materials.glow);
+        blister.position.set(spot.x * bodyScale, spot.y * bodyScale, spot.z * bodyScale);
+        blister.scale.z = 0.35;
+        group.add(blister);
+      }
+    } else if (type === "screamer") {
+      const sternum = new THREE.Mesh(new THREE.BoxGeometry(0.12 * bodyScale, 0.58 * bodyScale, 0.035 * bodyScale), materials.bone);
+      sternum.position.set(0.02 * bodyScale, 1.74 * bodyScale, frontZ - 0.02 * bodyScale);
+      sternum.rotation.z = -0.05;
+      group.add(sternum);
+    }
   }
 
   private addZombieSilhouetteMarkers(group: THREE.Group, type: ZombieType, bodyScale: number, lowPosture: boolean, materials: ZombieMarkerMaterials): void {
@@ -723,6 +1146,16 @@ export class MeshFactory {
     }
     this.applyAnimeMeshStyle(group, 1.08);
     return group;
+  }
+
+  private groundObject(group: THREE.Group): void {
+    group.updateMatrixWorld(true);
+    const bounds = new THREE.Box3().setFromObject(group);
+    if (Number.isFinite(bounds.min.y) && Math.abs(bounds.min.y) > 0.001) {
+      for (const child of group.children) {
+        child.position.y -= bounds.min.y;
+      }
+    }
   }
 
   private applyAnimeMeshStyle(root: THREE.Object3D, outlineScale: number): void {
