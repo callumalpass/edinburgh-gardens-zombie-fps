@@ -72,6 +72,9 @@ Purpose: track the building-by-building realism pass for every structure current
 - `grandstand` / Kevin Murray Stand:
   - Corrected the stand frontage so seating, front posts and stairs face W. T. Peterson Oval instead of inheriting a fixed side from the OSM polygon point order.
   - Source basis: OSM grandstand footprint and W. T. Peterson Oval geometry; Yarra Brunswick Street Oval works context for the stand's external stairs and oval-facing sports use.
+- `osm-building-1475006767` / Bowling club outbuilding:
+  - Added guttering, a roller-door slat, metal service crate and hose reel to read as a small greenkeeper/plant outbuilding attached to the bowling club service edge.
+  - Source basis: OSM way `1475006767` for footprint; bowling precinct context from CMP and the current mapped cluster of club support sheds.
 
 ## Implementation Notes
 

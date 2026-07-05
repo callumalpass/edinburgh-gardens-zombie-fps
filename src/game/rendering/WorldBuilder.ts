@@ -1155,6 +1155,12 @@ export class WorldBuilder {
     if (building.detailProfile === "bowling-shed") {
       this.addBuildingAwning(center, rotation, 0, 0, footprint.halfX * 2.18, footprint.halfZ * 2.28, building.height + 0.1, this.materials.metal, 0.22);
       this.addBuildingDoor(center, rotation, 0, frontZ + 0.02, footprint.halfX * 0.95, 1.15, 0.74);
+      if (building.id === "osm-building-1475006767") {
+        this.addBuildingGutter(center, rotation, 0, frontZ + 0.02, footprint.halfX * 1.72, building.height);
+        this.addLocalBox(center, rotation, 0, frontZ + 0.075, footprint.halfX * 0.82, 0.08, 0.06, this.materials.metal, 1.18, false);
+        this.addLocalBox(center, rotation, -footprint.halfX * 0.62, frontZ + 0.52, 0.42, 0.62, 0.38, this.materials.metal, 0.36);
+        this.addLocalCylinder(center, rotation, footprint.halfX * 0.58, frontZ + 0.46, 0.2, 0.2, 0.08, this.materials.metal, 0.34);
+      }
     }
   }
 
