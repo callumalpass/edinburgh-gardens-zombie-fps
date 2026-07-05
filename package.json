@@ -13,6 +13,8 @@
     "test:e2e": "node scripts/run-e2e.mjs"
   },
   "dependencies": {
+    "@babylonjs/core": "^9.15.0",
+    "earcut": "^3.2.3",
     "three": "^0.185.1"
   },
   "devDependencies": {
