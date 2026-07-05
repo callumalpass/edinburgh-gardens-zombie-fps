@@ -1,7 +1,17 @@
 import { distance } from "./geo";
 import type { Vec2 } from "./types";
 
-export type NoiseKind = "footstep" | "sprint" | "gunshot" | "melee" | "reload" | "climb" | "scream";
+export type NoiseKind =
+  | "footstep"
+  | "sprint"
+  | "gunshot"
+  | "melee"
+  | "reload"
+  | "climb"
+  | "scream"
+  | "distraction"
+  | "scavenge"
+  | "flashlight";
 export type MovementSurface = "grass" | "dirt" | "gravel" | "asphalt" | "concrete" | "rail";
 
 export interface NoiseEvent {
@@ -26,7 +36,10 @@ export const NOISE_PROFILES: Record<NoiseKind, NoiseProfile> = {
   melee: { radius: 9, intensity: 0.2, ttl: 0.9 },
   reload: { radius: 18, intensity: 0.3, ttl: 1.5 },
   climb: { radius: 44, intensity: 0.68, ttl: 2.2 },
-  scream: { radius: 98, intensity: 0.95, ttl: 3.4 }
+  scream: { radius: 98, intensity: 0.95, ttl: 3.4 },
+  distraction: { radius: 74, intensity: 0.9, ttl: 5.4 },
+  scavenge: { radius: 29, intensity: 0.42, ttl: 2.2 },
+  flashlight: { radius: 36, intensity: 0.34, ttl: 1.6 }
 };
 
 export class NoiseSystem {

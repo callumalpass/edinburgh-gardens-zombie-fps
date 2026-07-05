@@ -72,7 +72,10 @@ export const NOISE_SOUND_PROFILES: Record<NoiseKind, NoiseSoundProfile> = {
   melee: { audibleScale: 1.2, baseGain: 0.24, duration: 0.16 },
   reload: { audibleScale: 1.15, baseGain: 0.2, duration: 0.34 },
   climb: { audibleScale: 1.05, baseGain: 0.28, duration: 0.42 },
-  scream: { audibleScale: 1.2, baseGain: 0.52, duration: 0.92 }
+  scream: { audibleScale: 1.2, baseGain: 0.52, duration: 0.92 },
+  distraction: { audibleScale: 1.14, baseGain: 0.32, duration: 0.34 },
+  scavenge: { audibleScale: 1.12, baseGain: 0.2, duration: 0.28 },
+  flashlight: { audibleScale: 1.08, baseGain: 0.12, duration: 0.08 }
 };
 
 export const SURFACE_FOOTSTEP_PROFILES: Record<MovementSurface, FootstepSoundProfile> = {
@@ -109,6 +112,51 @@ export function soundPanForSource(listener: AudioListenerState, source: Vec2): n
   const sourceAngle = Math.atan2(dx, dz);
   const relative = normalizeAngle(sourceAngle - listener.yaw);
   return Math.max(-1, Math.min(1, Math.sin(relative)));
+}
+
+export function worldSoundAudibleRadius(kind: WorldSoundKind, options: WorldSoundOptions = {}): number {
+  if (kind === "zombieGroan") {
+    const alertRadius = options.aiState === "chase" ? 150 : options.aiState === "investigate" || options.aiState === "search" ? 124 : 96;
+    if (options.zombieType === "screamer") return alertRadius * 1.18;
+    if (options.zombieType === "crawler") return alertRadius * 0.78;
+    return alertRadius;
+  }
+  if (kind === "zombieStep") {
+    if (options.zombieType === "bloater") return 58;
+    if (options.zombieType === "sprinter") return 48;
+    if (options.zombieType === "crawler") return 34;
+    return 42;
+  }
+  if (kind === "zombieDeath") return 72;
+  if (kind === "zombieAttack") return 42;
+  if (kind === "bulletHit") return 36;
+  if (kind === "meleeHit") return 32;
+  if (kind === "shell") return 10;
+  return 18;
+}
+
+export function worldSoundBaseGain(kind: WorldSoundKind, options: WorldSoundOptions = {}): number {
+  if (kind === "playerHit") return 0.62;
+  if (kind === "zombieGroan") {
+    if (options.zombieType === "screamer") return 0.72;
+    if (options.zombieType === "bloater") return 0.56;
+    if (options.zombieType === "sprinter") return 0.48;
+    if (options.zombieType === "crawler") return 0.42;
+    return 0.46;
+  }
+  if (kind === "zombieStep") {
+    if (options.zombieType === "bloater") return 0.3;
+    if (options.zombieType === "sprinter") return 0.22;
+    if (options.zombieType === "crawler") return 0.18;
+    return 0.2;
+  }
+  if (kind === "zombieDeath") return 0.38;
+  if (kind === "zombieAttack") return 0.34;
+  if (kind === "bulletHit") return 0.26;
+  if (kind === "meleeHit") return 0.34;
+  if (kind === "shell") return 0.12;
+  if (kind === "deny") return 0.24;
+  return 0.22;
 }
 
 export class GameAudio {
@@ -217,14 +265,25 @@ export class GameAudio {
       case "scream":
         this.playScream(bus);
         break;
+      case "distraction":
+        this.playClick(bus, 1180, 0.05, 0.28);
+        this.playNoiseBurst(bus, 0.12, 0.24, 2200, "bandpass", 0.04);
+        break;
+      case "scavenge":
+        this.playNoiseBurst(bus, 0.16, 0.2, 1700, "bandpass");
+        this.playClick(bus, 360, 0.04, 0.18, 0.08);
+        break;
+      case "flashlight":
+        this.playClick(bus, 880, 0.025, 0.18);
+        break;
     }
   }
 
   playWorld(kind: WorldSoundKind, position?: Vec2, options: WorldSoundOptions = {}): void {
     const local = !position;
-    const radius = this.worldSoundRadius(kind, options);
+    const radius = worldSoundAudibleRadius(kind, options);
     const source = position ?? this.listener.position;
-    const volume = this.worldSoundGain(kind, options) * (options.volume ?? 1);
+    const volume = worldSoundBaseGain(kind, options) * (options.volume ?? 1);
     const gain = local ? volume : volume * soundGainAtDistance(this.distanceToListener(source), radius, 1);
     const bus = this.createSpatialBus(source, radius, gain, this.worldSoundDuration(kind), local);
     if (!bus) {
@@ -585,32 +644,8 @@ export class GameAudio {
     return buffer;
   }
 
-  private worldSoundRadius(kind: WorldSoundKind, options: WorldSoundOptions): number {
-    if (kind === "zombieGroan") return options.aiState === "chase" ? 58 : 42;
-    if (kind === "zombieStep") return options.zombieType === "bloater" ? 34 : 22;
-    if (kind === "zombieDeath") return 64;
-    if (kind === "zombieAttack") return 34;
-    if (kind === "bulletHit") return 36;
-    if (kind === "meleeHit") return 32;
-    if (kind === "shell") return 10;
-    return 18;
-  }
-
-  private worldSoundGain(kind: WorldSoundKind, options: WorldSoundOptions): number {
-    if (kind === "playerHit") return 0.62;
-    if (kind === "zombieGroan") return options.zombieType === "screamer" ? 0.34 : options.zombieType === "bloater" ? 0.31 : 0.24;
-    if (kind === "zombieStep") return options.zombieType === "bloater" ? 0.16 : 0.1;
-    if (kind === "zombieDeath") return 0.32;
-    if (kind === "zombieAttack") return 0.28;
-    if (kind === "bulletHit") return 0.26;
-    if (kind === "meleeHit") return 0.34;
-    if (kind === "shell") return 0.12;
-    if (kind === "deny") return 0.24;
-    return 0.22;
-  }
-
   private worldSoundDuration(kind: WorldSoundKind): number {
-    if (kind === "zombieGroan") return 0.72;
+    if (kind === "zombieGroan") return 0.95;
     if (kind === "zombieDeath") return 0.58;
     if (kind === "playerHit") return 0.18;
     if (kind === "drink") return 0.32;

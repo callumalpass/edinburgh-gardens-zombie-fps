@@ -21,9 +21,18 @@ import { resolveObstacle, shouldBypassObstacle as shouldBypassCollisionObstacle 
 import { clampToPolygon, distance, distanceToSegment, polygonCentroid } from "./geo";
 import { pointInInteractableRaisedFootprint } from "./interactables";
 import { createLevelData } from "./levelData";
-import { chooseZombiePickup, chooseZombieWeaponDrop, searchAmenityLoot } from "./loot";
+import { chooseZombiePickup, chooseZombieWeaponDrop, lootNoiseMultiplier, lootSearchSecondsMultiplier, searchAmenityLoot, type LootSearchContext } from "./loot";
 import { GameAudio, type NoisePlaybackOptions } from "./audio";
 import { movementNoiseKind, movementNoiseMultiplier, NoiseSystem, type MovementSurface, type NoiseKind } from "./noise";
+import {
+  MAX_THROWABLES,
+  bleedDamagePerSecond,
+  createInitialPlayerCondition,
+  injuryStatus,
+  nextStamina,
+  speedMultiplierForCondition,
+  spendStamina
+} from "./playerCondition";
 import { SeededRandom } from "./random";
 import { AtmosphereSystem } from "./rendering/AtmosphereSystem";
 import { MeshFactory } from "./rendering/MeshFactory";
@@ -44,6 +53,7 @@ import { createZombieSpawn, getWaveConfig, type ZombieSpawn, type ZombieType } f
 import { zombieProfile } from "./zombieProfiles";
 import { HudController } from "./ui/HudController";
 import { MiniMapRenderer } from "./ui/MiniMapRenderer";
+import { playerVisibilityMultiplier, weatherNoiseMaskForKind, zombieFacingThreshold } from "./stealth";
 import type {
   AmenityPoint,
   InteractableFixture,
@@ -61,11 +71,32 @@ const WALK_SPEED = 7.6;
 const SPRINT_SPEED = 11.4;
 const CROUCH_SPEED = 3.9;
 const INTERMISSION_SECONDS = 24;
+const REST_SECONDS = 5;
+const DISTRACTION_STAMINA_COST = 8;
+const CLIMB_STAMINA_COST = 14;
+const MELEE_STAMINA_COST = 12;
+const MACHETE_STAMINA_COST = 18;
 
 interface AmenitySearch {
   amenity: AmenityPoint;
   remaining: number;
   duration: number;
+  noiseTimer: number;
+  noiseMultiplier: number;
+}
+
+interface AmenityRest {
+  amenity: AmenityPoint;
+  remaining: number;
+  duration: number;
+  healthGain: number;
+}
+
+interface ThrownDistraction {
+  mesh: THREE.Mesh;
+  position: Vec2;
+  ttl: number;
+  pulseTimer: number;
 }
 
 export class GameApp {
@@ -136,6 +167,13 @@ export class GameApp {
   private nearestWeaponDrop: WeaponDrop | null = null;
   private searchedAmenityIds = new Set<string>();
   private activeAmenitySearch: AmenitySearch | null = null;
+  private activeAmenityRest: AmenityRest | null = null;
+  private condition = createInitialPlayerCondition();
+  private isSprinting = false;
+  private distractionCooldown = 0;
+  private flashlightNoiseTimer = 0;
+  private playerTorch: THREE.SpotLight | null = null;
+  private readonly distractions: ThrownDistraction[] = [];
   private scratchVector = new THREE.Vector3();
   private weaponModel = new THREE.Group();
   private muzzleFlash: THREE.Object3D | null = null;
@@ -215,6 +253,8 @@ export class GameApp {
       testScope: (weaponId?: WeaponId) => this.testScope(weaponId),
       testInteract: (fixtureId?: string) => this.testInteract(fixtureId),
       testUseAmenity: (kind?: AmenityPoint["kind"]) => this.testUseAmenity(kind),
+      testThrowDistraction: () => this.throwDistraction(),
+      testToggleFlashlight: () => this.toggleFlashlight(),
       testMiniMapVisibility: () => this.testMiniMapVisibility(),
       testGrounding: () => this.testGrounding(),
       testZombieStates: () => this.testZombieStates(),
@@ -295,6 +335,12 @@ export class GameApp {
       if (event.code === "KeyE") {
         this.handleInteract();
       }
+      if (event.code === "KeyF") {
+        this.toggleFlashlight();
+      }
+      if (event.code === "KeyG") {
+        this.throwDistraction();
+      }
       if (["Digit1", "Digit2", "Digit3", "Digit4", "Digit5"].includes(event.code)) {
         const index = Number(event.code.replace("Digit", "")) - 1;
         const weaponId = this.loadout.inventory[index];
@@ -359,6 +405,11 @@ export class GameApp {
     this.intermissionThreatsSpawned = 0;
     this.movementNoiseTimer = 0;
     this.elevatedNoiseTimer = 0;
+    this.isSprinting = false;
+    this.distractionCooldown = 0;
+    this.flashlightNoiseTimer = 0;
+    this.condition = createInitialPlayerCondition();
+    this.applyFlashlightVisibility();
     this.testCrouchOverride = null;
     this.spawnQueue = [];
     this.zombies.forEach((zombie) => this.scene.remove(zombie.mesh));
@@ -367,12 +418,14 @@ export class GameApp {
     this.tracers.forEach((tracer) => this.scene.remove(tracer.mesh));
     this.shells.forEach((shell) => this.scene.remove(shell.mesh));
     this.smokePuffs.forEach((puff) => this.scene.remove(puff.mesh));
+    this.distractions.forEach((distraction) => this.scene.remove(distraction.mesh));
     this.zombies = [];
     this.pickups = [];
     this.weaponDrops = [];
     this.tracers = [];
     this.shells = [];
     this.smokePuffs = [];
+    this.distractions.length = 0;
     this.recoil = 0;
     this.recoilYaw = 0;
     this.meleeSwing = 0;
@@ -383,8 +436,13 @@ export class GameApp {
     this.lastHitZone = null;
     this.root.classList.remove("is-scoped");
     this.root.classList.remove("is-crouched");
+    this.root.classList.remove("is-bleeding");
+    this.root.classList.remove("is-limping");
+    this.root.classList.remove("is-blurred");
+    document.body.classList.remove("is-bleeding", "is-limping", "is-blurred");
     this.noise.clear();
     this.activeAmenitySearch = null;
+    this.activeAmenityRest = null;
     this.searchedAmenityIds.clear();
     this.hud.setRestartVisible(false);
     this.state = "playing";
@@ -426,11 +484,13 @@ export class GameApp {
     this.updateMovement(dt);
     this.updateVerticalState(dt);
     this.updateElevatedNoise(dt);
+    this.updateDistractions(dt);
     this.updateWavePacing(dt);
     this.updateSpawns(dt);
     this.updateZombies(dt, now);
     this.updatePickups(dt);
     this.updateWeaponDrops(dt);
+    this.updateAmenityRest(dt);
     this.updateAmenitySearch(dt);
     this.updateTracers(dt);
     this.updateShells(dt);
@@ -439,6 +499,7 @@ export class GameApp {
     this.updateNearestAmenity();
     this.updateNearestFixture();
     this.updateScope(dt, now);
+    this.updatePlayerCondition(dt);
     this.updateWeaponModel(dt);
     this.updateCamera();
     this.updateAudio(dt);
@@ -508,6 +569,12 @@ export class GameApp {
   }
 
   private updateMovement(dt: number): void {
+    if (this.activeAmenityRest) {
+      this.player.velocity.set(0, 0, 0);
+      this.isSprinting = false;
+      return;
+    }
+
     const input = new THREE.Vector3();
     if (this.keys.has("KeyW")) input.z -= 1;
     if (this.keys.has("KeyS")) input.z += 1;
@@ -520,12 +587,18 @@ export class GameApp {
       const cos = Math.cos(this.player.yaw);
       const forward = new THREE.Vector3(sin, 0, cos);
       const right = new THREE.Vector3(cos, 0, -sin);
-      const sprinting = !this.player.crouching && (this.keys.has("ShiftLeft") || this.keys.has("ShiftRight"));
+      const wantsSprint = !this.player.crouching && (this.keys.has("ShiftLeft") || this.keys.has("ShiftRight"));
+      const sprinting = wantsSprint && this.condition.stamina > 8 && this.condition.limpTimer <= 0;
+      this.isSprinting = sprinting;
       const surface = this.movementSurfaceAt({ x: this.player.position.x, z: this.player.position.z });
-      const speed = (this.player.crouching ? CROUCH_SPEED : sprinting ? SPRINT_SPEED : WALK_SPEED) * this.surfaceSpeedMultiplier(surface);
+      const speed =
+        (this.player.crouching ? CROUCH_SPEED : sprinting ? SPRINT_SPEED : WALK_SPEED) *
+        this.surfaceSpeedMultiplier(surface) *
+        speedMultiplierForCondition(this.condition);
       this.player.velocity.copy(forward.multiplyScalar(input.z).add(right.multiplyScalar(input.x))).multiplyScalar(speed);
       this.emitMovementNoise(dt, sprinting);
     } else {
+      this.isSprinting = false;
       this.player.velocity.multiplyScalar(0.78);
       if (this.player.velocity.lengthSq() < 0.01) {
         this.player.velocity.set(0, 0, 0);
@@ -541,6 +614,150 @@ export class GameApp {
       next = resolveObstacle(next, PLAYER_RADIUS, obstacle);
     }
     this.player.position.set(next.x, this.groundY(next), next.z);
+  }
+
+  private updatePlayerCondition(dt: number): void {
+    this.condition.bleedTimer = Math.max(0, this.condition.bleedTimer - dt);
+    this.condition.limpTimer = Math.max(0, this.condition.limpTimer - dt);
+    this.condition.blurTimer = Math.max(0, this.condition.blurTimer - dt);
+    this.distractionCooldown = Math.max(0, this.distractionCooldown - dt);
+
+    const bleedDamage = bleedDamagePerSecond(this.condition.bleedTimer) * dt;
+    if (bleedDamage > 0) {
+      this.player.health -= bleedDamage;
+    }
+
+    const scoped = this.scopeAmount > 0.58 && this.aimHeld;
+    this.condition.stamina = nextStamina(this.condition.stamina, dt, {
+      sprinting: this.isSprinting,
+      scoped,
+      resting: Boolean(this.activeAmenityRest),
+      searching: Boolean(this.activeAmenitySearch),
+      crouching: this.player.crouching,
+      bleeding: this.condition.bleedTimer > 0
+    });
+    if (scoped && this.condition.stamina <= 1) {
+      this.aimHeld = false;
+      this.flashStatus("Too winded to hold breath");
+    }
+
+    if (this.condition.flashlightOn) {
+      this.flashlightNoiseTimer -= dt;
+      if (this.flashlightNoiseTimer <= 0) {
+        const cloudRisk = 0.55 + this.currentWeather.cloudCover * 0.35 + this.currentWeather.fog * 0.2;
+        this.emitNoise("flashlight", { x: this.player.position.x, z: this.player.position.z }, cloudRisk, { volume: 0.25 });
+        this.flashlightNoiseTimer = 2.6;
+      }
+    }
+
+    const bleeding = this.condition.bleedTimer > 0;
+    const limping = this.condition.limpTimer > 0;
+    const blurred = this.condition.blurTimer > 0;
+    this.root.classList.toggle("is-bleeding", bleeding);
+    this.root.classList.toggle("is-limping", limping);
+    this.root.classList.toggle("is-blurred", blurred);
+    document.body.classList.toggle("is-bleeding", bleeding);
+    document.body.classList.toggle("is-limping", limping);
+    document.body.classList.toggle("is-blurred", blurred);
+  }
+
+  private throwDistraction(): boolean {
+    if (this.state !== "playing") {
+      return false;
+    }
+    if (this.condition.throwables <= 0) {
+      this.flashStatus("No distractions left");
+      this.audio.playWorld("deny");
+      return false;
+    }
+    if (this.distractionCooldown > 0) {
+      return false;
+    }
+    const stamina = spendStamina(this.condition.stamina, DISTRACTION_STAMINA_COST);
+    if (!stamina.spent) {
+      this.flashStatus("Too winded to throw");
+      this.audio.playWorld("deny");
+      return false;
+    }
+    this.condition.stamina = stamina.stamina;
+    this.condition.throwables -= 1;
+    this.distractionCooldown = 1.1;
+
+    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion);
+    forward.y = 0;
+    if (forward.lengthSq() < 0.001) {
+      forward.set(Math.sin(this.player.yaw), 0, Math.cos(this.player.yaw));
+    }
+    forward.normalize();
+    const range = this.rng.range(22, 31);
+    let target = clampToPolygon(
+      {
+        x: this.player.position.x + forward.x * range,
+        z: this.player.position.z + forward.z * range
+      },
+      this.level.boundary,
+      4
+    );
+    for (const obstacle of this.level.obstacles) {
+      target = resolveObstacle(target, 0.5, obstacle);
+    }
+
+    const mesh = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.16, 0.18, 0.42, 10),
+      new THREE.MeshStandardMaterial({ color: 0x6f8f93, metalness: 0.18, roughness: 0.72 })
+    );
+    mesh.position.set(target.x, this.groundY(target) + 0.21, target.z);
+    mesh.rotation.set(this.rng.range(-0.4, 0.4), this.rng.range(0, Math.PI), this.rng.range(-0.8, 0.8));
+    mesh.userData.dynamic = true;
+    this.scene.add(mesh);
+    this.distractions.push({
+      mesh,
+      position: { ...target },
+      ttl: 7.2,
+      pulseTimer: 1.35
+    });
+    this.emitNoise("distraction", target, 1.05);
+    this.flashStatus("Threw distraction");
+    return true;
+  }
+
+  private updateDistractions(dt: number): void {
+    for (const distraction of [...this.distractions]) {
+      distraction.ttl -= dt;
+      distraction.pulseTimer -= dt;
+      distraction.mesh.rotation.y += dt * 2.6;
+      distraction.mesh.position.y = this.groundY(distraction.position) + 0.21 + Math.sin(this.frame * 0.16) * 0.035;
+      if (distraction.pulseTimer <= 0 && distraction.ttl > 0.8) {
+        this.emitNoise("distraction", distraction.position, 0.52, { volume: 0.45 });
+        distraction.pulseTimer = this.rng.range(1.2, 1.85);
+      }
+      if (distraction.ttl <= 0) {
+        this.scene.remove(distraction.mesh);
+        const index = this.distractions.indexOf(distraction);
+        if (index >= 0) {
+          this.distractions.splice(index, 1);
+        }
+      }
+    }
+  }
+
+  private toggleFlashlight(): boolean {
+    if (this.state !== "playing") {
+      return false;
+    }
+    this.condition.flashlightOn = !this.condition.flashlightOn;
+    this.applyFlashlightVisibility();
+    this.flashlightNoiseTimer = this.condition.flashlightOn ? 0 : 2.6;
+    this.emitNoise("flashlight", { x: this.player.position.x, z: this.player.position.z }, this.condition.flashlightOn ? 0.82 : 0.44, { volume: 0.5 });
+    this.flashStatus(this.condition.flashlightOn ? "Flashlight on" : "Flashlight off");
+    return this.condition.flashlightOn;
+  }
+
+  private applyFlashlightVisibility(): void {
+    if (this.playerTorch) {
+      this.playerTorch.visible = this.condition.flashlightOn;
+      this.playerTorch.intensity = this.condition.flashlightOn ? (this.smokeMode ? 1.15 : 1.7) : 0;
+    }
   }
 
   private emitMovementNoise(dt: number, sprinting: boolean): void {
@@ -562,7 +779,8 @@ export class GameApp {
   }
 
   private emitNoise(kind: NoiseKind, position: Vec2, multiplier = 1, audioOptions: NoisePlaybackOptions = {}) {
-    const event = this.noise.emit(kind, position, multiplier);
+    const weatherMask = kind === "footstep" || kind === "sprint" ? 1 : weatherNoiseMaskForKind(kind, this.currentWeather);
+    const event = this.noise.emit(kind, position, multiplier * weatherMask);
     this.audio.playNoise(event, audioOptions);
     return event;
   }
@@ -767,6 +985,7 @@ export class GameApp {
       const distanceToPlayer = distance(zombiePoint, playerPoint);
       const seesPlayer = this.canZombieSeePlayer(zombie, distanceToPlayer);
       const heardNoise = this.noise.strongestAt(zombiePoint, profile.hearingMultiplier);
+      const previousAiState = zombie.aiState;
 
       zombie.attackCooldown -= dt;
       zombie.staggerTimer = Math.max(0, zombie.staggerTimer - dt);
@@ -784,15 +1003,19 @@ export class GameApp {
         zombie.aiState = "chase";
         zombie.lastKnownPlayer = playerPoint;
         zombie.target = playerPoint;
-        zombie.memoryTimer = this.rng.range(2.4, 4.2);
+        zombie.memoryTimer = this.rng.range(4.2, 7.2) + (this.condition.flashlightOn ? 1.2 : 0);
         zombie.searchTimer = 0;
-      } else if (heardNoise && (zombie.aiState !== "chase" || heardNoise.kind === "gunshot" || heardNoise.kind === "scream")) {
+      } else if (
+        heardNoise &&
+        (zombie.aiState !== "chase" || heardNoise.kind === "gunshot" || heardNoise.kind === "scream" || heardNoise.kind === "distraction")
+      ) {
         const wasChasing = zombie.aiState === "chase";
+        const distraction = heardNoise.kind === "distraction";
         zombie.aiState = "investigate";
         zombie.target = { ...heardNoise.position };
-        zombie.lastKnownPlayer = wasChasing ? zombie.lastKnownPlayer : null;
+        zombie.lastKnownPlayer = wasChasing && !distraction ? zombie.lastKnownPlayer : { ...heardNoise.position };
         zombie.memoryTimer = 0;
-        zombie.searchTimer = this.rng.range(3.2, 5.6);
+        zombie.searchTimer = distraction ? this.rng.range(6.2, 9.4) : this.rng.range(4.4, 7.2);
       } else if (zombie.aiState === "chase" && zombie.lastKnownPlayer && zombie.memoryTimer > 0) {
         zombie.target = zombie.lastKnownPlayer;
       } else if (zombie.aiState === "chase" && zombie.lastKnownPlayer) {
@@ -807,6 +1030,15 @@ export class GameApp {
         this.setZombieWanderTarget(zombie, zombiePoint);
       } else if (!zombie.target) {
         this.setZombieWanderTarget(zombie, zombiePoint);
+      }
+
+      if (this.zombieJustBecameAlerted(previousAiState, zombie.aiState) && distanceToPlayer < 180) {
+        this.audio.playWorld("zombieGroan", zombiePoint, {
+          zombieType: zombie.type,
+          aiState: zombie.aiState,
+          volume: zombie.aiState === "chase" ? 1.45 : 1.18
+        });
+        zombie.vocalCooldown = this.rng.range(1.8, 3.6);
       }
 
       if (zombie.type === "screamer" && zombie.aiState === "chase" && zombie.screamCooldown <= 0) {
@@ -850,24 +1082,39 @@ export class GameApp {
       this.animateZombie(zombie, now, distanceToPlayer);
       this.updateZombieAudio(zombie, dt, distanceToPlayer, distanceToTarget);
       if (this.player.height < 1.4 && distanceToPlayer < zombie.radius + PLAYER_RADIUS + 0.8 && zombie.attackCooldown <= 0) {
-        this.player.health -= profile.attackDamage;
+        this.applyZombieHit(zombie, profile, now);
         zombie.attackCooldown = profile.attackCooldown;
-        this.lastDamageAt = now;
-        document.body.classList.add("hit");
-        window.setTimeout(() => document.body.classList.remove("hit"), 120);
         this.audio.playWorld("zombieAttack", zombiePoint, { zombieType: zombie.type });
         this.audio.playWorld("playerHit");
       }
     }
   }
 
+  private applyZombieHit(zombie: Zombie, profile: ReturnType<typeof zombieProfile>, now: number): void {
+    this.player.health -= profile.attackDamage;
+    this.lastDamageAt = now;
+    const severity = Math.min(1, profile.attackDamage / 24);
+    const roll = this.rng.next();
+    if (zombie.type === "sprinter" || roll < 0.28 + severity * 0.24) {
+      this.condition.bleedTimer = Math.max(this.condition.bleedTimer, this.rng.range(7, 15) * severity);
+    }
+    if (zombie.type === "bloater" || roll > 0.46) {
+      this.condition.limpTimer = Math.max(this.condition.limpTimer, this.rng.range(4.5, 10) * severity);
+    }
+    if (zombie.type === "screamer" || profile.attackDamage >= 18) {
+      this.condition.blurTimer = Math.max(this.condition.blurTimer, this.rng.range(2.5, 6.5) * severity);
+    }
+    document.body.classList.add("hit");
+    window.setTimeout(() => document.body.classList.remove("hit"), 120);
+  }
+
   private updateZombieAudio(zombie: Zombie, _dt: number, distanceToPlayer: number, distanceToTarget: number): void {
     const zombiePoint = { x: zombie.position.x, z: zombie.position.z };
-    if (distanceToTarget > 0.3 && distanceToPlayer < 70 && zombie.stepCooldown <= 0) {
+    if (distanceToTarget > 0.3 && distanceToPlayer < 105 && zombie.stepCooldown <= 0) {
       this.audio.playWorld("zombieStep", zombiePoint, {
         zombieType: zombie.type,
         aiState: zombie.aiState,
-        volume: zombie.aiState === "wander" ? 0.75 : 1
+        volume: zombie.aiState === "wander" ? 0.95 : 1.2
       });
       zombie.stepCooldown =
         zombie.type === "sprinter"
@@ -881,24 +1128,35 @@ export class GameApp {
                 : this.rng.range(0.42, 0.68);
     }
 
-    if (distanceToPlayer < 115 && zombie.vocalCooldown <= 0) {
+    if (distanceToPlayer < 160 && zombie.vocalCooldown <= 0) {
       const alerted = zombie.aiState === "chase" || zombie.aiState === "investigate";
       this.audio.playWorld("zombieGroan", zombiePoint, {
         zombieType: zombie.type,
         aiState: zombie.aiState,
-        volume: alerted ? 1 : 0.72
+        volume: alerted ? 1.28 : distanceToPlayer < 60 ? 1 : 0.78
       });
-      zombie.vocalCooldown = alerted ? this.rng.range(2.4, 5.2) : this.rng.range(6.5, 13);
+      zombie.vocalCooldown = alerted ? this.rng.range(1.9, 4.2) : this.rng.range(4.5, 8.5);
     }
+  }
+
+  private zombieJustBecameAlerted(previous: Zombie["aiState"], current: Zombie["aiState"]): boolean {
+    const wasAlerted = previous === "chase" || previous === "investigate";
+    const isAlerted = current === "chase" || current === "investigate";
+    return !wasAlerted && isAlerted;
   }
 
   private canZombieSeePlayer(zombie: Zombie, distanceToPlayer: number): boolean {
     const profile = zombieProfile(zombie.type);
     const surface = this.movementSurfaceAt({ x: this.player.position.x, z: this.player.position.z });
-    const coverPenalty = surface === "grass" || surface === "dirt" ? 0.88 : surface === "rail" || surface === "asphalt" ? 1.08 : 1;
-    const crouchPenalty = this.player.crouching ? 0.46 : 1;
-    const heightBonus = this.player.height > 1.4 ? 1.35 : 1;
-    const sightRange = profile.sightRange * crouchPenalty * heightBonus * coverPenalty;
+    const inCover = this.playerInCover(surface);
+    const sightRange = profile.sightRange * playerVisibilityMultiplier({
+      surface,
+      crouching: this.player.crouching,
+      inCover,
+      elevatedHeight: this.player.height,
+      flashlightOn: this.condition.flashlightOn,
+      weather: this.currentWeather
+    });
     if (distanceToPlayer > sightRange) {
       return false;
     }
@@ -908,11 +1166,43 @@ export class GameApp {
       const toPlayer = new THREE.Vector3(playerPoint.x - zombiePoint.x, 0, playerPoint.z - zombiePoint.z).normalize();
       const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(zombie.mesh.quaternion);
       forward.y = 0;
-      if (forward.lengthSq() > 0.001 && forward.normalize().dot(toPlayer) < (this.player.crouching ? -0.1 : -0.32)) {
+      if (forward.lengthSq() > 0.001 && forward.normalize().dot(toPlayer) < zombieFacingThreshold(this.player.crouching, inCover, this.condition.flashlightOn)) {
         return false;
       }
     }
     return !this.isLineOfSightBlocked(zombiePoint, playerPoint, PLAYER_RADIUS);
+  }
+
+  private playerInCover(surface = this.movementSurfaceAt({ x: this.player.position.x, z: this.player.position.z })): boolean {
+    if (!this.player.crouching) {
+      return false;
+    }
+    const playerPoint = { x: this.player.position.x, z: this.player.position.z };
+    if (this.isCoverNearPoint(playerPoint, 4.2, 5.8)) {
+      return true;
+    }
+    return surface === "dirt" && this.currentWeather.fog > 0.25;
+  }
+
+  private isCoverNearPoint(point: Vec2, obstaclePadding = 4.2, treePadding = 5.8): boolean {
+    for (const obstacle of this.level.obstacles) {
+      const radius = this.obstacleCoverRadius(obstacle);
+      const coverPadding = obstacle.sourceObjectKind === "tree-collider" ? treePadding : obstaclePadding;
+      if (distance(point, obstacle.center) <= radius + coverPadding) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private obstacleCoverRadius(obstacle: LevelData["obstacles"][number]): number {
+    if (obstacle.shape === "box") {
+      return Math.hypot(obstacle.halfX, obstacle.halfZ);
+    }
+    if (obstacle.shape === "polygon") {
+      return obstacle.polygon.length > 0 ? Math.max(...obstacle.polygon.map((point) => distance(obstacle.center, point))) : 0;
+    }
+    return obstacle.radius;
   }
 
   private setZombieWanderTarget(zombie: Zombie, origin: Vec2): void {
@@ -928,7 +1218,7 @@ export class GameApp {
     zombie.aiState = "search";
     zombie.lastKnownPlayer = { ...origin };
     zombie.memoryTimer = 0;
-    zombie.searchTimer = this.rng.range(3.8, 6.4);
+    zombie.searchTimer = this.rng.range(5.2, 8.6);
     zombie.target = this.chooseWanderTarget(origin, zombie.radius, 24);
   }
 
@@ -1012,7 +1302,8 @@ export class GameApp {
 
     const movementSpread = Math.min(1, this.player.velocity.length() / 22) * stats.movingSpread;
     const crouchSpread = this.player.crouching ? 0.64 : 1;
-    const totalSpread = (stats.spread + movementSpread + this.shotBloom) * THREE.MathUtils.lerp(1, stats.aimSpreadMultiplier, this.scopeAmount) * crouchSpread;
+    const breathControl = this.scopeAmount > 0.55 && this.aimHeld ? (this.condition.stamina > 12 ? 0.86 : 1.18) : 1;
+    const totalSpread = (stats.spread + movementSpread + this.shotBloom) * THREE.MathUtils.lerp(1, stats.aimSpreadMultiplier, this.scopeAmount) * crouchSpread * breathControl;
     let registeredHit = false;
     let playedImpact = false;
     for (let pellet = 0; pellet < stats.pellets; pellet += 1) {
@@ -1053,6 +1344,14 @@ export class GameApp {
   }
 
   private swingMelee(now: number, stats: ReturnType<typeof getWeaponStats>): void {
+    const staminaCost = this.loadout.weaponId === "machete" ? MACHETE_STAMINA_COST : MELEE_STAMINA_COST;
+    const stamina = spendStamina(this.condition.stamina, staminaCost);
+    if (!stamina.spent) {
+      this.flashStatus("Too winded to swing");
+      this.audio.playWorld("deny");
+      return;
+    }
+    this.condition.stamina = stamina.stamina;
     this.lastShotAt = now;
     this.aimHeld = false;
     this.meleeSwing = 1;
@@ -1330,18 +1629,10 @@ export class GameApp {
       return true;
     }
     if (amenity.kind === "bench") {
-      this.player.health = Math.min(100, this.player.health + 10);
-      this.player.velocity.multiplyScalar(0.25);
-      this.flashStatus("Caught breath at bench");
-      this.audio.playWorld("rest", amenity.position);
-      return true;
+      return completeImmediately ? this.completeAmenityRest(amenity, 10) : this.startAmenityRest(amenity, 10);
     }
     if (amenity.kind === "picnic_table") {
-      this.player.health = Math.min(100, this.player.health + 12);
-      this.player.velocity.multiplyScalar(0.2);
-      this.flashStatus("Rested at picnic table");
-      this.audio.playWorld("rest", amenity.position);
-      return true;
+      return completeImmediately ? this.completeAmenityRest(amenity, 12) : this.startAmenityRest(amenity, 12);
     }
     if (amenity.kind === "table_tennis") {
       this.shotBloom *= 0.35;
@@ -1357,19 +1648,72 @@ export class GameApp {
     }
 
     if (!completeImmediately) {
+      const lootContext = this.lootSearchContext(amenity);
+      const duration = this.amenitySearchDuration(amenity) * lootSearchSecondsMultiplier(lootContext);
+      const noiseMultiplier = lootNoiseMultiplier(amenity.kind, lootContext);
       this.activeAmenitySearch = {
         amenity,
-        duration: this.amenitySearchDuration(amenity),
-        remaining: this.amenitySearchDuration(amenity)
+        duration,
+        remaining: duration,
+        noiseTimer: 0.85,
+        noiseMultiplier
       };
       this.player.velocity.multiplyScalar(0.2);
-      this.emitNoise("reload", amenity.position, amenity.kind === "bbq" ? 1.05 : 0.72);
+      this.emitNoise("scavenge", amenity.position, noiseMultiplier * 0.72);
       this.flashStatus(`Searching ${amenity.label}`);
       this.audio.playWorld("searchStart", amenity.position);
       return true;
     }
 
     return this.completeAmenitySearch(amenity);
+  }
+
+  private startAmenityRest(amenity: AmenityPoint, healthGain: number): boolean {
+    if (this.activeAmenityRest) {
+      this.flashStatus("Already resting");
+      this.audio.playWorld("deny");
+      return false;
+    }
+    if (this.player.health >= 100) {
+      this.flashStatus("Already steady");
+      this.audio.playWorld("deny");
+      return false;
+    }
+
+    this.activeAmenitySearch = null;
+    this.activeAmenityRest = {
+      amenity,
+      duration: REST_SECONDS,
+      remaining: REST_SECONDS,
+      healthGain
+    };
+    this.player.velocity.set(0, 0, 0);
+    this.emitNoise("reload", amenity.position, 0.34, { volume: 0.55 });
+    this.audio.playWorld("rest", amenity.position);
+    this.flashStatus(`Resting at ${amenity.label}`);
+    return true;
+  }
+
+  private updateAmenityRest(dt: number): void {
+    if (!this.activeAmenityRest) {
+      return;
+    }
+
+    this.player.velocity.set(0, 0, 0);
+    this.activeAmenityRest.remaining -= dt;
+    if (this.activeAmenityRest.remaining <= 0) {
+      const rest = this.activeAmenityRest;
+      this.activeAmenityRest = null;
+      this.completeAmenityRest(rest.amenity, rest.healthGain);
+    }
+  }
+
+  private completeAmenityRest(amenity: AmenityPoint, healthGain: number): boolean {
+    this.player.health = Math.min(100, this.player.health + healthGain);
+    this.player.velocity.set(0, 0, 0);
+    this.flashStatus(amenity.kind === "picnic_table" ? "Rested at picnic table" : "Caught breath at bench");
+    this.audio.playWorld("rest", amenity.position);
+    return true;
   }
 
   private updateAmenitySearch(dt: number): void {
@@ -1388,6 +1732,11 @@ export class GameApp {
 
     this.player.velocity.multiplyScalar(0.82);
     search.remaining -= dt;
+    search.noiseTimer -= dt;
+    if (search.noiseTimer <= 0) {
+      this.emitNoise("scavenge", search.amenity.position, search.noiseMultiplier, { volume: 0.72 });
+      search.noiseTimer = this.rng.range(0.85, 1.25);
+    }
     if (search.remaining <= 0) {
       this.activeAmenitySearch = null;
       this.completeAmenitySearch(search.amenity);
@@ -1396,14 +1745,39 @@ export class GameApp {
 
   private completeAmenitySearch(amenity: AmenityPoint): boolean {
     this.searchedAmenityIds.add(amenity.id);
-    const loot = searchAmenityLoot(amenity.kind, this.rng);
+    const loot = searchAmenityLoot(amenity.kind, this.rng, this.lootSearchContext(amenity));
     this.player.scrap += loot.scrap;
     this.player.health = Math.min(100, this.player.health + loot.health);
     this.loadout = addAmmo(this.loadout, loot.ammo);
-    this.emitNoise("reload", amenity.position, amenity.kind === "bbq" ? 0.85 : 0.55);
+    if (loot.attachment) {
+      if (canUpgrade(this.loadout, loot.attachment)) {
+        this.loadout = applyUpgrade(this.loadout, loot.attachment);
+      } else {
+        this.player.scrap += 12;
+      }
+    }
+    if (loot.medicine > 0) {
+      this.condition.bleedTimer = Math.max(0, this.condition.bleedTimer - loot.medicine);
+      this.condition.blurTimer = Math.max(0, this.condition.blurTimer - loot.medicine * 0.35);
+      this.condition.limpTimer = Math.max(0, this.condition.limpTimer - loot.medicine * 0.25);
+    }
+    this.condition.throwables = Math.min(MAX_THROWABLES, this.condition.throwables + loot.throwables);
+    this.emitNoise("scavenge", amenity.position, loot.noiseMultiplier * 0.75);
     this.flashStatus(loot.status);
     this.audio.playWorld("searchComplete", amenity.position);
     return true;
+  }
+
+  private lootSearchContext(amenity: AmenityPoint): LootSearchContext {
+    const nearbyZombies = this.zombies.filter((zombie) => distance({ x: zombie.position.x, z: zombie.position.z }, amenity.position) < 56).length;
+    const surface = this.movementSurfaceAt(amenity.position);
+    const exposedSurface = surface === "asphalt" || surface === "concrete" || surface === "rail" || surface === "gravel";
+    const exposed = nearbyZombies >= 2 || exposedSurface || !this.isCoverNearPoint(amenity.position, 8, 9);
+    return {
+      nearbyZombies,
+      exposed,
+      wave: this.wave
+    };
   }
 
   private amenitySearchDuration(amenity: AmenityPoint): number {
@@ -1415,12 +1789,15 @@ export class GameApp {
   }
 
   private amenityPrompt(amenity: AmenityPoint): string {
+    if (this.activeAmenityRest?.amenity.id === amenity.id) {
+      return `Resting ${Math.ceil(this.activeAmenityRest.remaining)}s`;
+    }
     if (this.activeAmenitySearch?.amenity.id === amenity.id) {
       return `Searching ${Math.ceil(this.activeAmenitySearch.remaining)}s`;
     }
     if (amenity.kind === "drinking_water") return "E: drink";
-    if (amenity.kind === "bench") return "E: rest";
-    if (amenity.kind === "picnic_table") return "E: rest";
+    if (amenity.kind === "bench") return `E: rest ${REST_SECONDS}s`;
+    if (amenity.kind === "picnic_table") return `E: rest ${REST_SECONDS}s`;
     if (amenity.kind === "table_tennis") return "E: play";
     if (amenity.kind === "waste_basket") return this.searchedAmenityIds.has(amenity.id) ? "Bin searched" : "E: search bin";
     if (amenity.kind === "bicycle_parking") return this.searchedAmenityIds.has(amenity.id) ? "Bike racks searched" : "E: search bike racks";
@@ -1463,6 +1840,13 @@ export class GameApp {
       this.flashStatus(`Dropped from ${fixture.label}`);
       this.emitNoise("climb", exit ?? fixture.position, 0.72);
     } else {
+      const stamina = spendStamina(this.condition.stamina, CLIMB_STAMINA_COST);
+      if (!stamina.spent) {
+        this.flashStatus("Too winded to climb");
+        this.audio.playWorld("deny");
+        return false;
+      }
+      this.condition.stamina = stamina.stamina;
       this.player.activeFixtureId = fixture.id;
       this.player.heightTarget = fixture.height;
       const landing = fixture.landingPosition ?? fixture.position;
@@ -1590,6 +1974,10 @@ export class GameApp {
       return false;
     }
     this.player.position.set(amenity.position.x, this.groundY(amenity.position), amenity.position.z);
+    if (amenity.kind === "bench" || amenity.kind === "picnic_table") {
+      this.player.health = Math.min(this.player.health, 70);
+      return this.useAmenity(amenity);
+    }
     return this.useAmenity(amenity, true);
   }
 
@@ -1775,7 +2163,16 @@ export class GameApp {
       miniMapVisibleZombies: this.miniMapVisibleZombieCount,
       crouching: this.player.crouching,
       wavePhase: this.wavePhase,
-      intermissionTimer: Number(this.intermissionTimer.toFixed(2))
+      intermissionTimer: Number(this.intermissionTimer.toFixed(2)),
+      amenityAction: this.activeAmenityRest ? "rest" : this.activeAmenitySearch ? "search" : null,
+      amenityActionRemaining: Number((this.activeAmenityRest?.remaining ?? this.activeAmenitySearch?.remaining ?? 0).toFixed(2)),
+      stamina: Number(this.condition.stamina.toFixed(1)),
+      bleeding: this.condition.bleedTimer > 0,
+      limp: this.condition.limpTimer > 0,
+      blur: this.condition.blurTimer > 0,
+      throwables: this.condition.throwables,
+      flashlightOn: this.condition.flashlightOn,
+      activeDistractions: this.distractions.length
     };
   }
 
@@ -1812,6 +2209,10 @@ export class GameApp {
       wavePhase: this.wavePhase,
       intermissionTimer: this.intermissionTimer,
       isCrouching: this.player.crouching,
+      stamina: this.condition.stamina,
+      throwables: this.condition.throwables,
+      flashlightOn: this.condition.flashlightOn,
+      injuryStatus: injuryStatus(this.condition),
       amenityPrompt: (amenity) => this.amenityPrompt(amenity)
     });
   }
@@ -1876,6 +2277,8 @@ export class GameApp {
     torch.target = target;
     this.camera.add(torch);
     this.camera.add(target);
+    this.playerTorch = torch;
+    this.applyFlashlightVisibility();
   }
 
   private rebuildViewWeapon(): void {
@@ -1912,7 +2315,7 @@ export class GameApp {
 
   private updateScope(dt: number, now: number): void {
     const stats = getWeaponStats(this.loadout);
-    const wantsScope = this.state === "playing" && this.aimHeld && stats.scopeZoom > 1.05 && this.loadout.reloadingUntil <= now;
+    const wantsScope = this.state === "playing" && this.aimHeld && stats.scopeZoom > 1.05 && this.loadout.reloadingUntil <= now && this.condition.stamina > 0.5;
     const target = wantsScope ? 1 : 0;
     const t = 1 - Math.pow(0.0008, dt);
     this.scopeAmount += (target - this.scopeAmount) * t;

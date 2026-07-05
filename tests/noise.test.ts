@@ -37,4 +37,12 @@ describe("noise system", () => {
     expect(noise.strongestAt({ x: 8, z: 0 })?.kind).toBe("melee");
     expect(noise.strongestAt({ x: 20, z: 0 })).toBeNull();
   });
+
+  it("lets thrown distractions pull attention at park scale", () => {
+    const noise = new NoiseSystem();
+    noise.emit("distraction", { x: 0, z: 0 });
+
+    expect(noise.strongestAt({ x: 42, z: 0 })?.kind).toBe("distraction");
+    expect(noise.strongestAt({ x: 86, z: 0 })).toBeNull();
+  });
 });

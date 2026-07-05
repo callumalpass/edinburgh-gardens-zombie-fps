@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chooseZombiePickup, chooseZombieWeaponDrop, searchAmenityLoot } from "../src/game/loot";
+import { chooseZombiePickup, chooseZombieWeaponDrop, lootRiskScore, searchAmenityLoot } from "../src/game/loot";
 import { SeededRandom } from "../src/game/random";
 
 describe("location and zombie loot", () => {
@@ -11,6 +11,16 @@ describe("location and zombie loot", () => {
     expect(bbq.ammo).toBeGreaterThan(bin.ammo);
     expect(bbq.health).toBeGreaterThan(0);
     expect(rack.scrap).toBeGreaterThan(bin.scrap);
+  });
+
+  it("raises loot quality, noise, and search time in exposed zombie-dense areas", () => {
+    const sheltered = searchAmenityLoot("bbq", new SeededRandom(22), { exposed: false, nearbyZombies: 0, wave: 1 });
+    const exposed = searchAmenityLoot("bbq", new SeededRandom(22), { exposed: true, nearbyZombies: 4, wave: 7 });
+
+    expect(lootRiskScore({ exposed: true, nearbyZombies: 4, wave: 7 })).toBeGreaterThan(lootRiskScore({ exposed: false, nearbyZombies: 0, wave: 1 }));
+    expect(exposed.searchSecondsMultiplier).toBeGreaterThan(sheltered.searchSecondsMultiplier);
+    expect(exposed.noiseMultiplier).toBeGreaterThan(sheltered.noiseMultiplier);
+    expect(exposed.scrap + exposed.ammo + exposed.health).toBeGreaterThanOrEqual(sheltered.scrap + sheltered.ammo + sheltered.health);
   });
 
   it("uses zombie role profiles to shape pickup drops", () => {

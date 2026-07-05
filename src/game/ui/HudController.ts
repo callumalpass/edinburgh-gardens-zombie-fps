@@ -16,6 +16,8 @@ interface HudRefs {
   wave: HTMLElement;
   scrap: HTMLElement;
   zombies: HTMLElement;
+  stamina: HTMLElement;
+  tools: HTMLElement;
   prompt: HTMLElement;
   upgrades: HTMLElement;
   status: HTMLElement;
@@ -46,6 +48,10 @@ export interface HudUpdate {
   wavePhase: WavePhase;
   intermissionTimer: number;
   isCrouching: boolean;
+  stamina: number;
+  throwables: number;
+  flashlightOn: boolean;
+  injuryStatus: string | null;
   amenityPrompt: (amenity: AmenityPoint) => string;
 }
 
@@ -93,6 +99,8 @@ export class HudController {
     this.refs.wave.textContent = `${view.wave}`;
     this.refs.scrap.textContent = `${view.scrap}`;
     this.refs.zombies.textContent = `${view.zombieCount}`;
+    this.refs.stamina.textContent = `${Math.round(view.stamina)}`;
+    this.refs.tools.textContent = `${view.throwables} / ${view.flashlightOn ? "on" : "off"}`;
 
     if (stats.kind !== "melee" && view.loadout.reloadingUntil > performance.now() / 1000) {
       const percent = Math.round(view.reloadProgress * 100);
@@ -123,7 +131,9 @@ export class HudController {
       this.refs.prompt.textContent = "";
       const optic = stats.scopeZoom > 1.05 ? `, ${stats.scopeZoom.toFixed(1)}x optic` : "";
       const stance = view.isCrouching ? ", crouched" : "";
-      this.refs.status.textContent = `${stats.name}${optic}${stance}${view.playerHeight > 0.4 ? `, height ${view.playerHeight.toFixed(1)}m` : ""}`;
+      const injury = view.injuryStatus ? `, ${view.injuryStatus.toLowerCase()}` : "";
+      const light = view.flashlightOn ? ", light on" : ", light off";
+      this.refs.status.textContent = `${stats.name}${optic}${stance}${injury}${light}${view.playerHeight > 0.4 ? `, height ${view.playerHeight.toFixed(1)}m` : ""}`;
     }
 
     const weapons = view.loadout.inventory
@@ -157,6 +167,8 @@ function createMarkup(): string {
         <div class="meter"><span>Wave</span><strong data-hud="wave">1</strong></div>
         <div class="meter"><span>Scrap</span><strong data-hud="scrap">70</strong></div>
         <div class="meter"><span>Zombies</span><strong data-hud="zombies">0</strong></div>
+        <div class="meter stamina-meter"><span>Stamina</span><strong data-hud="stamina">100</strong></div>
+        <div class="meter tools-meter"><span>Tools</span><strong data-hud="tools">2 / on</strong></div>
       </section>
       <section class="hud weapon-hud" aria-label="Weapon status">
         <div class="ammo"><strong data-hud="ammo">12</strong><span>/</span><span data-hud="reserve">72</span></div>
@@ -179,6 +191,8 @@ function createMarkup(): string {
             <span>E interact</span>
             <span>Shift sprint</span>
             <span>C crouch</span>
+            <span>F light</span>
+            <span>G throw</span>
             <span>1-5 weapons</span>
           </div>
           <button class="primary-action" data-action="start">Enter the gardens</button>
@@ -205,6 +219,8 @@ function findHudRefs(root: HTMLElement): HudRefs {
     wave: find('[data-hud="wave"]'),
     scrap: find('[data-hud="scrap"]'),
     zombies: find('[data-hud="zombies"]'),
+    stamina: find('[data-hud="stamina"]'),
+    tools: find('[data-hud="tools"]'),
     prompt: find('[data-hud="prompt"]'),
     upgrades: find('[data-hud="upgrades"]'),
     status: find('[data-hud="status"]'),

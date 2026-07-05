@@ -69,6 +69,16 @@ body.hit .vignette {
     linear-gradient(180deg, rgba(188, 60, 51, 0.22), transparent 52%, rgba(188, 60, 51, 0.28));
 }
 
+.is-bleeding .vignette {
+  background:
+    radial-gradient(circle at 50% 48%, transparent 32%, rgba(122, 25, 30, 0.36) 78%, rgba(24, 7, 10, 0.82) 100%),
+    linear-gradient(180deg, rgba(188, 60, 51, 0.16), transparent 44%, rgba(188, 60, 51, 0.24));
+}
+
+.is-blurred .game-canvas {
+  filter: blur(1.2px) saturate(0.88);
+}
+
 .crosshair {
   position: absolute;
   left: 50%;
@@ -169,6 +179,10 @@ body.hit .vignette {
   transform: translate(-50%, -50%) scale(0.78);
 }
 
+.is-limping .crosshair {
+  transform: translate(-50%, calc(-50% + 5px)) rotate(2deg);
+}
+
 .is-scoped.is-crouched .crosshair {
   opacity: 0;
 }
@@ -215,6 +229,14 @@ body.hit .vignette {
 
 .health-meter strong {
   color: oklch(68% 0.17 29);
+}
+
+.stamina-meter strong {
+  color: oklch(78% 0.12 150);
+}
+
+.tools-meter strong {
+  color: oklch(79% 0.087 201);
 }
 
 .weapon-hud {
@@ -412,7 +434,7 @@ h1 {
 @media (max-width: 760px) {
   .top-hud {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 5px;
   }
 
@@ -444,7 +466,7 @@ h1 {
   }
 
   .mini-map {
-    top: 78px;
+    top: 118px;
     right: 10px;
     bottom: auto;
     width: 118px;

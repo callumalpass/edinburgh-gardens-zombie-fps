@@ -104,6 +104,15 @@ export interface Snapshot {
   crouching: boolean;
   wavePhase: WavePhase;
   intermissionTimer: number;
+  amenityAction: "rest" | "search" | null;
+  amenityActionRemaining: number;
+  stamina: number;
+  bleeding: boolean;
+  limp: boolean;
+  blur: boolean;
+  throwables: number;
+  flashlightOn: boolean;
+  activeDistractions: number;
 }
 
 export interface GameTestApi {
@@ -116,6 +125,8 @@ export interface GameTestApi {
   testScope: (weaponId?: WeaponId) => boolean;
   testInteract: (fixtureId?: string) => boolean;
   testUseAmenity: (kind?: AmenityPoint["kind"]) => boolean;
+  testThrowDistraction: () => boolean;
+  testToggleFlashlight: () => boolean;
   testMiniMapVisibility: () => { front: boolean; behind: boolean; occluded: boolean };
   testGrounding: () => {
     playerGroundDelta: number;

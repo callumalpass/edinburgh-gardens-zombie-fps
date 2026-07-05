@@ -67,6 +67,13 @@ test("game loop advances and gameplay helpers mutate state", async ({ page }) =>
   expect(first.weatherFog).toBeLessThanOrEqual(1);
   expect(first.weatherWind).toBeGreaterThanOrEqual(0);
   expect(first.weatherWind).toBeLessThanOrEqual(1);
+  expect(first.stamina).toBe(100);
+  expect(first.throwables).toBe(2);
+  expect(first.flashlightOn).toBe(true);
+  expect(first.activeDistractions).toBe(0);
+  expect(first.bleeding).toBe(false);
+  expect(first.limp).toBe(false);
+  expect(first.blur).toBe(false);
   expect(first.weapon).toBe("knife");
   await page.waitForFunction((frame) => window.__EGAME__!.snapshot().frame > frame, first.frame);
   const second = await page.evaluate(() => window.__EGAME__!.snapshot());
@@ -97,6 +104,16 @@ test("game loop advances and gameplay helpers mutate state", async ({ page }) =>
   expect(grounding.maxZombieGroundDelta).toBeLessThan(0.01);
   expect(grounding.maxZombieFootPenetration).toBeLessThan(0.085);
   expect(grounding.maxZombieFootGap).toBeLessThan(0.18);
+  const threwDistraction = await page.evaluate(() => window.__EGAME__!.testThrowDistraction());
+  expect(threwDistraction).toBe(true);
+  const afterDistraction = await page.evaluate(() => window.__EGAME__!.snapshot());
+  expect(afterDistraction.throwables).toBe(1);
+  expect(afterDistraction.activeDistractions).toBeGreaterThan(0);
+  expect(afterDistraction.stamina).toBeLessThan(first.stamina);
+  const flashlightOn = await page.evaluate(() => window.__EGAME__!.testToggleFlashlight());
+  expect(flashlightOn).toBe(false);
+  const afterFlashlight = await page.evaluate(() => window.__EGAME__!.snapshot());
+  expect(afterFlashlight.flashlightOn).toBe(false);
   const afterKnife = await page.evaluate(() => {
     window.__EGAME__!.testShoot();
     return window.__EGAME__!.snapshot();
@@ -104,6 +121,7 @@ test("game loop advances and gameplay helpers mutate state", async ({ page }) =>
   expect(afterKnife.weapon).toBe("knife");
   expect(afterKnife.ammo).toBe(0);
   expect(afterKnife.meleeSwing).toBeGreaterThan(0.6);
+  expect(afterKnife.stamina).toBeLessThan(afterDistraction.stamina);
   expect(await page.evaluate(() => window.__EGAME__!.testPickupWeapon("carbine"))).toBe(true);
   const beforeShot = await page.evaluate(() => window.__EGAME__!.snapshot());
   expect(beforeShot.weapon).toBe("carbine");
@@ -141,6 +159,12 @@ test("game loop advances and gameplay helpers mutate state", async ({ page }) =>
   expect(usedAmenity).toBe(true);
   const afterAmenity = await page.evaluate(() => window.__EGAME__!.snapshot());
   expect(afterAmenity.scrap).toBeGreaterThan(beforeAmenity.scrap);
+  const startedRest = await page.evaluate(() => window.__EGAME__!.testUseAmenity("bench"));
+  expect(startedRest).toBe(true);
+  const duringRest = await page.evaluate(() => window.__EGAME__!.snapshot());
+  expect(duringRest.amenityAction).toBe("rest");
+  expect(duringRest.amenityActionRemaining).toBeGreaterThan(4);
+  expect(duringRest.health).toBeLessThanOrEqual(70);
 });
 
 test("desktop and mobile layouts keep controls visible", async ({ page, viewport }) => {
