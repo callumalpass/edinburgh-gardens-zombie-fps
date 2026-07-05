@@ -34,6 +34,15 @@ interface TreeMaterialSet {
   paleBark: THREE.Material;
 }
 
+interface ParkEntrance {
+  position: Vec2;
+  angle: number;
+  width: number;
+  sign: boolean;
+  name: string;
+  transit: "tram" | "rail-trail" | "neighbourhood";
+}
+
 export interface GameMaterials {
   grass: StyledSurfaceMaterial;
   grassBlade: StyledSurfaceMaterial;
@@ -117,6 +126,7 @@ export class WorldBuilder {
     this.addParkLifeDetails();
     this.addPathLights();
     this.addParkEntranceDetails();
+    this.addMelbourneMarkers();
     this.addBoundaryFence();
     this.addUnderCanopyGroundWear();
     this.addTrees();
@@ -1631,6 +1641,32 @@ export class WorldBuilder {
     return material as THREE.MeshBasicMaterial;
   }
 
+  private canvasSignMaterial(key: string, text: string, background: string, foreground: string): THREE.MeshBasicMaterial {
+    const cacheKey = `canvas-sign:${key}:${text}:${background}:${foreground}`;
+    let material = this.detailMaterialCache.get(cacheKey);
+    if (!material) {
+      const canvas = document.createElement("canvas");
+      canvas.width = 256;
+      canvas.height = 128;
+      const ctx = canvas.getContext("2d")!;
+      ctx.fillStyle = background;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = foreground;
+      ctx.font = text.length > 4 ? "700 44px system-ui, sans-serif" : "800 52px system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(text, canvas.width / 2, canvas.height / 2 + 2);
+      ctx.strokeStyle = foreground;
+      ctx.lineWidth = 6;
+      ctx.strokeRect(10, 10, canvas.width - 20, canvas.height - 20);
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      material = new THREE.MeshBasicMaterial({ map: texture });
+      this.detailMaterialCache.set(cacheKey, material);
+    }
+    return material as THREE.MeshBasicMaterial;
+  }
+
   private standardDetailMaterial(
     key: string,
     color: number,
@@ -3104,12 +3140,12 @@ export class WorldBuilder {
     this.addFenceAround(this.level.boundary, 1.4, 0x657264, gaps);
   }
 
-  private parkEntrances(): Array<{ position: Vec2; angle: number; width: number; sign: boolean }> {
+  private parkEntrances(): ParkEntrance[] {
     return [
-      { position: geoToWorld({ lat: -37.78956, lon: 144.98011 }), angle: -0.22, width: 5.2, sign: false },
-      { position: geoToWorld({ lat: -37.78735, lon: 144.98554 }), angle: 2.55, width: 4.8, sign: true },
-      { position: geoToWorld({ lat: -37.78572, lon: 144.98228 }), angle: 0.32, width: 4.8, sign: false },
-      { position: geoToWorld({ lat: -37.78855, lon: 144.98505 }), angle: 2.3, width: 4.6, sign: false }
+      { position: geoToWorld({ lat: -37.78956, lon: 144.98011 }), angle: -0.22, width: 5.2, sign: false, name: "Freeman Street", transit: "neighbourhood" },
+      { position: geoToWorld({ lat: -37.78735, lon: 144.98554 }), angle: 2.55, width: 4.8, sign: true, name: "Brunswick Street", transit: "tram" },
+      { position: geoToWorld({ lat: -37.78572, lon: 144.98228 }), angle: 0.32, width: 4.8, sign: false, name: "St Georges Road", transit: "tram" },
+      { position: geoToWorld({ lat: -37.78855, lon: 144.98505 }), angle: 2.3, width: 4.6, sign: false, name: "Alfred Crescent", transit: "rail-trail" }
     ];
   }
 
@@ -3156,6 +3192,99 @@ export class WorldBuilder {
       }
       this.addEntranceCrossing(entrance);
     }
+  }
+
+  private addMelbourneMarkers(): void {
+    const entrances = this.parkEntrances();
+    entrances
+      .filter((entrance) => entrance.transit === "tram")
+      .forEach((entrance, index) => this.addTramStopTotem(entrance, index % 2 === 0 ? 1 : -1));
+
+    entrances
+      .filter((entrance) => entrance.transit === "rail-trail")
+      .forEach((entrance) => this.addBikeHoopCluster(entrance));
+  }
+
+  private addTramStopTotem(entrance: ParkEntrance, side: number): void {
+    const tangent = new THREE.Vector3(Math.cos(entrance.angle), 0, Math.sin(entrance.angle));
+    const normal = new THREE.Vector3(-Math.sin(entrance.angle), 0, Math.cos(entrance.angle));
+    const base = new THREE.Vector3(entrance.position.x, 0, entrance.position.z)
+      .addScaledVector(tangent, side * (entrance.width + 1.15))
+      .addScaledVector(normal, -2.85);
+    const point = { x: base.x, z: base.z };
+    const groundY = this.groundY(point);
+    const group = new THREE.Group();
+    group.name = `${entrance.name} tram marker`;
+    group.position.set(point.x, groundY, point.z);
+    group.rotation.y = -entrance.angle;
+
+    const poleMaterial = this.standardDetailMaterial("melbourne-tram-pole", 0x283833, 0.55, 0.34);
+    const yellowMaterial = this.basicDetailMaterial("melbourne-tram-yellow", 0xf0c84d);
+    const greenMaterial = this.basicDetailMaterial("melbourne-tram-green", 0x1f6f52);
+    const mykiMaterial = this.canvasSignMaterial("myki-reader", "myki", "#1d5d93", "#f2e6a8");
+    const tramTextMaterial = this.canvasSignMaterial("tram-stop", "TRAM", "#1f6f52", "#f5d45c");
+
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.07, 2.45, 10), poleMaterial);
+    pole.position.y = 1.22;
+    pole.castShadow = true;
+    group.add(pole);
+
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.72, 0.08), greenMaterial);
+    blade.position.set(0, 2.42, 0);
+    blade.castShadow = true;
+    group.add(blade);
+
+    const cap = new THREE.Mesh(new THREE.BoxGeometry(0.78, 0.1, 0.09), yellowMaterial);
+    cap.position.set(0, 2.82, 0);
+    group.add(cap);
+
+    const tramLabel = new THREE.Mesh(new THREE.BoxGeometry(0.64, 0.28, 0.086), tramTextMaterial);
+    tramLabel.position.set(0, 2.42, -0.046);
+    group.add(tramLabel);
+
+    const reader = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.5, 0.1), mykiMaterial);
+    reader.position.set(0.33, 1.08, -0.035);
+    reader.castShadow = true;
+    group.add(reader);
+
+    const basePlate = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.26, 0.08, 12), this.materials.metal);
+    basePlate.position.y = 0.04;
+    basePlate.castShadow = true;
+    group.add(basePlate);
+
+    this.scene.add(group);
+  }
+
+  private addBikeHoopCluster(entrance: ParkEntrance): void {
+    const tangent = new THREE.Vector3(Math.cos(entrance.angle), 0, Math.sin(entrance.angle));
+    const normal = new THREE.Vector3(-Math.sin(entrance.angle), 0, Math.cos(entrance.angle));
+    const center = new THREE.Vector3(entrance.position.x, 0, entrance.position.z)
+      .addScaledVector(tangent, -entrance.width - 1.2)
+      .addScaledVector(normal, -2.3);
+    const metal = this.standardDetailMaterial("melbourne-bike-hoop-metal", 0x9aa8a1, 0.34, 0.38);
+    const blue = this.basicDetailMaterial("melbourne-bike-wayfinding-blue", 0x276f9f);
+
+    for (const offset of [-0.78, 0, 0.78]) {
+      const point = { x: center.x + tangent.x * offset, z: center.z + tangent.z * offset };
+      const hoop = new THREE.Mesh(new THREE.TorusGeometry(0.36, 0.032, 8, 24), metal);
+      hoop.position.set(point.x, this.groundY(point) + 0.58, point.z);
+      hoop.rotation.y = -entrance.angle;
+      hoop.scale.y = 1.18;
+      hoop.castShadow = true;
+      this.scene.add(hoop);
+    }
+
+    const signPoint = { x: center.x + tangent.x * 1.22, z: center.z + tangent.z * 1.22 };
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.055, 1.35, 8), metal);
+    pole.position.set(signPoint.x, this.groundY(signPoint) + 0.68, signPoint.z);
+    pole.castShadow = true;
+    this.scene.add(pole);
+
+    const sign = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.42, 0.07), blue);
+    sign.position.set(signPoint.x, this.groundY(signPoint) + 1.42, signPoint.z);
+    sign.rotation.y = -entrance.angle;
+    sign.castShadow = true;
+    this.scene.add(sign);
   }
 
   private addStreetEdges(): void {
