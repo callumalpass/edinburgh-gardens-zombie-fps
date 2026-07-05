@@ -16,8 +16,22 @@ import type {
   Vec2
 } from "../types";
 import { createAnimeToonRamp } from "./animeStyle";
+import {
+  createTerrainOverlayDiscGeometry,
+  createTerrainOverlayEllipseGeometry,
+  createTerrainOverlayRectGeometry
+} from "./terrainOverlay";
 
 const COLLISION_Y = 0.04;
+const PATH_SHOULDER_SURFACE_Y = COLLISION_Y;
+const PATH_SURFACE_Y = COLLISION_Y + 0.033;
+const PATH_CAP_SURFACE_Y = COLLISION_Y + 0.038;
+const PATH_MARKING_SURFACE_Y = COLLISION_Y + 0.101;
+const PATH_STRIPE_SURFACE_Y = COLLISION_Y + 0.097;
+const PATH_TREAD_SURFACE_Y = COLLISION_Y + 0.108;
+const PATH_PATCH_SURFACE_Y = COLLISION_Y + 0.103;
+const PATH_JUNCTION_PATCH_SURFACE_Y = COLLISION_Y + 0.123;
+const WET_PATH_SHEEN_SURFACE_Y = COLLISION_Y + 0.135;
 const TERRAIN_GRID_STEP = 7.5;
 const TERRAIN_EDGE_PAD = 9;
 const TREE_SCALE_MULTIPLIER = 1.22;
@@ -343,10 +357,14 @@ export class WorldBuilder {
         return;
       }
       const radius = index % 5 === 0 ? this.rng.range(1.8, 3.8) : this.rng.range(0.7, 1.7);
-      const puddle = new THREE.Mesh(new THREE.CircleGeometry(radius, 18), this.materials.puddle);
-      puddle.position.set(center.x, this.groundY(center) + 0.154, center.z);
-      puddle.rotation.set(-Math.PI / 2, 0, this.rng.range(0, Math.PI));
-      puddle.scale.set(this.rng.range(1.4, 2.7), this.rng.range(0.28, 0.74), 1);
+      const puddle = this.createTerrainOverlayEllipse(
+        center,
+        this.rng.range(0, Math.PI),
+        radius * this.rng.range(1.4, 2.7),
+        radius * this.rng.range(0.28, 0.74),
+        0.154,
+        this.materials.puddle
+      );
       puddle.receiveShadow = true;
       this.scene.add(puddle);
     });
@@ -390,7 +408,14 @@ export class WorldBuilder {
           if (!pointInPolygon(center, this.level.boundary)) continue;
           const length = THREE.MathUtils.lerp(4.4, Math.min(17, segmentLength * 0.38), this.stableNoise(seedX, seedZ, 33));
           const width = THREE.MathUtils.lerp(path.width * 0.18, path.width * 0.46, this.stableNoise(seedX, seedZ, 34));
-          const mesh = this.createTerrainRect(center, angle + this.stableNoise(seedX, seedZ, 35) * 0.16 - 0.08, length, width, 0.172, 0.006, sheenMaterial);
+          const mesh = this.createTerrainOverlayRect(
+            center,
+            angle + this.stableNoise(seedX, seedZ, 35) * 0.16 - 0.08,
+            length,
+            width,
+            WET_PATH_SHEEN_SURFACE_Y,
+            sheenMaterial
+          );
           mesh.receiveShadow = false;
           mesh.userData.kind = "wet-path-sheen";
           this.scene.add(mesh);
@@ -513,43 +538,41 @@ export class WorldBuilder {
       for (let i = 0; i < path.points.length - 1; i += 1) {
         const a = path.points[i];
         const b = path.points[i + 1];
-        this.addPathSegment(a, b, shoulderWidth, this.materials.dirt, COLLISION_Y - 0.014, 0.028);
-        this.addPathSegment(a, b, path.width, material, COLLISION_Y + 0.008, 0.05);
+        this.addPathSegment(a, b, shoulderWidth, this.materials.dirt, PATH_SHOULDER_SURFACE_Y);
+        this.addPathSegment(a, b, path.width, material, PATH_SURFACE_Y);
       }
       for (const point of path.points) {
-        this.addPathCap(point, shoulderWidth * 0.52, this.materials.dirt, COLLISION_Y - 0.014, 0.028);
-        this.addPathCap(point, path.width * 0.52, material, COLLISION_Y + 0.01, 0.055);
+        this.addPathCap(point, shoulderWidth * 0.52, this.materials.dirt, PATH_SHOULDER_SURFACE_Y);
+        this.addPathCap(point, path.width * 0.52, material, PATH_CAP_SURFACE_Y);
       }
       this.addPathMarkings(path);
     }
   }
 
-  private addPathSegment(a: Vec2, b: Vec2, width: number, material: THREE.Material, y: number, height: number): void {
+  private addPathSegment(a: Vec2, b: Vec2, width: number, material: THREE.Material, yOffset: number): void {
     const length = distance(a, b);
     if (length < 0.05) return;
     const angle = Math.atan2(b.z - a.z, b.x - a.x);
     const center = { x: (a.x + b.x) * 0.5, z: (a.z + b.z) * 0.5 };
-    const mesh = this.createTerrainRect(center, angle, length, width, y, height, material);
+    const mesh = this.createTerrainOverlayRect(center, angle, length, width, yOffset, material);
     mesh.receiveShadow = true;
     this.scene.add(mesh);
   }
 
-  private addPathCap(point: Vec2, radius: number, material: THREE.Material, y: number, height: number): void {
-    const cap = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, height, 18), material);
-    cap.position.set(point.x, this.groundY(point) + y, point.z);
+  private addPathCap(point: Vec2, radius: number, material: THREE.Material, yOffset: number): void {
+    const cap = this.createTerrainOverlayDisc(point, radius, yOffset, material);
     cap.receiveShadow = true;
     this.scene.add(cap);
   }
 
   private addPathSurfacePatches(): void {
     for (const patch of this.level.pathSurfacePatches) {
-      const mesh = this.createTerrainRect(
+      const mesh = this.createTerrainOverlayRect(
         patch.position,
         patch.angle,
         patch.length,
         patch.width,
-        patch.kind === "path-junction-wear" ? 0.156 : 0.136,
-        0.014,
+        patch.kind === "path-junction-wear" ? PATH_JUNCTION_PATCH_SURFACE_Y : PATH_PATCH_SURFACE_Y,
         this.pathSurfacePatchMaterial(patch)
       );
       mesh.receiveShadow = true;
@@ -593,7 +616,7 @@ export class WorldBuilder {
         for (let step = 1; step <= count; step += 1) {
           const t = step / (count + 1);
           const point = { x: a.x + dx * t, z: a.z + dz * t };
-          const mesh = this.createTerrainRect(point, angle + Math.PI / 2, path.width * 0.82, 0.035, 0.142, 0.012, treadMaterial);
+          const mesh = this.createTerrainOverlayRect(point, angle + Math.PI / 2, path.width * 0.82, 0.035, PATH_TREAD_SURFACE_Y, treadMaterial);
           this.scene.add(mesh);
         }
       }
@@ -622,7 +645,7 @@ export class WorldBuilder {
         const actualLength = Math.min(dashLength, segmentLength - along + dashLength * 0.5);
         const t = along / segmentLength;
         const point = { x: a.x + dx * t + nx * offset, z: a.z + dz * t + nz * offset };
-        const mesh = this.createTerrainRect(point, angle, actualLength, width, 0.132, 0.018, material);
+        const mesh = this.createTerrainOverlayRect(point, angle, actualLength, width, PATH_MARKING_SURFACE_Y, material);
         this.scene.add(mesh);
       }
     }
@@ -639,7 +662,7 @@ export class WorldBuilder {
       const nx = -dz / segmentLength;
       const nz = dx / segmentLength;
       const center = { x: (a.x + b.x) / 2 + nx * offset, z: (a.z + b.z) / 2 + nz * offset };
-      const mesh = this.createTerrainRect(center, Math.atan2(dz, dx), segmentLength, width, 0.13, 0.014, material);
+      const mesh = this.createTerrainOverlayRect(center, Math.atan2(dz, dx), segmentLength, width, PATH_STRIPE_SURFACE_Y, material);
       this.scene.add(mesh);
     }
   }
@@ -1387,6 +1410,45 @@ export class WorldBuilder {
       seat.castShadow = true;
       this.scene.add(seat);
     }
+  }
+
+  private createTerrainOverlayRect(center: Vec2, angle: number, length: number, width: number, yOffset: number, material: THREE.Material): THREE.Mesh {
+    return new THREE.Mesh(
+      createTerrainOverlayRectGeometry({
+        center,
+        angle,
+        length,
+        width,
+        yOffset,
+        groundYAt: (point) => this.groundY(point)
+      }),
+      material
+    );
+  }
+
+  private createTerrainOverlayDisc(center: Vec2, radius: number, yOffset: number, material: THREE.Material): THREE.Mesh {
+    return new THREE.Mesh(createTerrainOverlayDiscGeometry(center, radius, yOffset, (point) => this.groundY(point)), material);
+  }
+
+  private createTerrainOverlayEllipse(
+    center: Vec2,
+    angle: number,
+    radiusX: number,
+    radiusZ: number,
+    yOffset: number,
+    material: THREE.Material
+  ): THREE.Mesh {
+    return new THREE.Mesh(
+      createTerrainOverlayEllipseGeometry({
+        center,
+        angle,
+        radiusX,
+        radiusZ,
+        yOffset,
+        groundYAt: (point) => this.groundY(point)
+      }),
+      material
+    );
   }
 
   private createTerrainRect(
