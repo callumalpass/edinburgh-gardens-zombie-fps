@@ -77,6 +77,27 @@ export interface SignificantTreePoint {
   position: Vec2;
 }
 
+export interface ElevationSample {
+  position: Vec2;
+  altitude: number;
+  source: "vicmap-contour" | "vicmap-spot";
+}
+
+export interface MappedBuilding {
+  id: string;
+  label: string;
+  polygon: Vec2[];
+  height: number;
+  material: "brick" | "timber" | "utility";
+  collision: boolean;
+}
+
+export interface MappedFence {
+  id: string;
+  label: string;
+  points: Vec2[];
+}
+
 export interface UpgradeStation {
   id: string;
   label: string;
@@ -93,6 +114,7 @@ export interface InteractableFixture {
   height: number;
   prompt: string;
   mode: "toggle" | "auto";
+  bypassObstacleIds?: string[];
 }
 
 export interface AmenityPoint {
@@ -116,6 +138,11 @@ export interface LevelData {
   treeLines: Vec2[][];
   treePoints: Vec2[];
   significantTrees: SignificantTreePoint[];
+  elevationSamples: ElevationSample[];
+  elevationMin: number;
+  elevationMax: number;
+  mappedBuildings: MappedBuilding[];
+  mappedFences: MappedFence[];
   obstacles: CollisionObstacle[];
   spawnPoints: Vec2[];
   pickupPoints: Vec2[];

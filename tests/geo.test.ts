@@ -29,6 +29,31 @@ describe("map geometry", () => {
     expect(level.significantTrees.filter((tree) => pointInPolygon(tree.position, level.boundary)).length).toBe(level.significantTrees.length);
   });
 
+  it("keeps the real-map scale expanded but close to measured metres", () => {
+    expect(WORLD_SCALE).toBeGreaterThan(1);
+    expect(WORLD_SCALE).toBeLessThan(1.35);
+  });
+
+  it("includes Vicmap-derived elevation samples for broad terrain", () => {
+    const level = createLevelData();
+    expect(level.elevationSamples.length).toBeGreaterThanOrEqual(90);
+    expect(level.elevationMin).toBeGreaterThanOrEqual(26);
+    expect(level.elevationMax).toBeLessThanOrEqual(33);
+    expect(level.elevationMax - level.elevationMin).toBeGreaterThan(4);
+    expect(level.elevationSamples.some((sample) => sample.source === "vicmap-spot")).toBe(true);
+    expect(level.elevationSamples.filter((sample) => pointInPolygon(sample.position, level.boundary)).length).toBe(level.elevationSamples.length);
+  });
+
+  it("includes OSM-mapped building and fence footprints", () => {
+    const level = createLevelData();
+    const buildingIds = new Set(level.mappedBuildings.map((building) => building.id));
+    expect(level.mappedBuildings.length).toBeGreaterThanOrEqual(12);
+    expect(buildingIds.has("osm-building-543505702")).toBe(true);
+    expect(buildingIds.has("osm-building-242003562")).toBe(true);
+    expect(level.mappedFences.length).toBeGreaterThanOrEqual(1);
+    expect(level.mappedBuildings.filter((building) => pointInPolygon(polygonCentroid(building.polygon), level.boundary)).length).toBe(level.mappedBuildings.length);
+  });
+
   it("includes the major memorial and plinth landmarks", () => {
     const level = createLevelData();
     const landmarkIds = new Set(level.landmarks.map((landmark) => landmark.id));

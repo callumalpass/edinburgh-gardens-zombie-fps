@@ -8,7 +8,7 @@ export const MAP_CENTER: GeoPoint = {
 const METERS_PER_DEGREE_LAT = 111_320;
 const METERS_PER_DEGREE_LON = METERS_PER_DEGREE_LAT * Math.cos((MAP_CENTER.lat * Math.PI) / 180);
 
-export const WORLD_SCALE = 1.65;
+export const WORLD_SCALE = 1.28;
 
 export function geoToWorld(point: GeoPoint, scale = WORLD_SCALE): Vec2 {
   return {

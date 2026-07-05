@@ -21,8 +21,11 @@ npm run dev
 
 ## Current Mechanics
 
-- Larger playable scale using the full OSM park boundary at a less compressed world scale.
+- Larger playable scale using the full OSM park boundary at a 1.28x expanded map scale.
+- Vicmap-derived elevation samples shape a terrain grid, so the lawns, paths and fixtures follow broad real-world rise/fall instead of a flat plane.
+- Faster park traversal tuned for the larger playable gardens: brisk walk plus sprint without returning to the old arcade-scale speed.
 - Denser OSM-derived internal path network, including the rail trail, oval loop, crescent paths, playground connectors, perimeter walks and smaller garden loops.
+- OSM-mapped building footprints add the Emely Baker Centre, south amenities/service building, bowling club rooms, tennis club rooms, oval gatehouse, smaller sheds and a mapped fence segment.
 - Exact mapped tree placement from 126 current OpenStreetMap `natural=tree` nodes inside Edinburgh Gardens, with no procedural filler trees or coordinate jitter.
 - City of Yarra significant-tree records add exact-coordinate species/scale detail for notable Dutch elms, gums and oaks.
 - More varied tree models with tapered trunks, branch cylinders, species-specific bark/leaf colour and overlapping broad canopies.
@@ -40,5 +43,8 @@ The level layout is grounded in:
 - City of Yarra significant trees dataset for species, height and diameter data on notable park trees.
 - The 3068 Group's heritage review archive for elm avenues, nineteenth-century path structure, the former railway/shared path, W.T. Peterson Oval and rotunda significance.
 - Melbourne Playgrounds for a facility cross-check, including rotunda, BBQs, courts, bowls, skate park, playgrounds, table tennis and sports fields.
+- Vicmap Elevation metro 1-5 m contour and ground-surface point data for broad terrain height.
 
-The game is not a survey-grade model. It compresses the gardens to a playable scale while preserving the recognizable crescent boundary, west-side oval and sporting cluster, former rail trail, north/south playgrounds, eastern open lawn and mature avenue structure.
+See [docs/edinburgh-gardens-research.md](docs/edinburgh-gardens-research.md) for source URLs, query notes, data licensing notes and implementation decisions.
+
+The game is not a survey-grade model. It expands the gardens to a playable scale while preserving the recognizable crescent boundary, west-side oval and sporting cluster, former rail trail, north/south playgrounds, eastern open lawn, broad terrain profile and mature avenue structure.

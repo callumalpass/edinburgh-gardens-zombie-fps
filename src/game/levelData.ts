@@ -15,6 +15,8 @@ import type {
   Landmark,
   LevelData,
   LevelPath,
+  MappedBuilding,
+  MappedFence,
   PolygonObstacle,
   SignificantTreePoint,
   Vec2
@@ -28,7 +30,9 @@ export const RESEARCH_NOTES = [
   "Yarra's northern precinct material identifies the relocated table tennis table, BBQ/picnic tables, skate/BMX activity area and basketball half-court as a linked activity precinct.",
   "The OSM park boundary is way 13815924. Key OSM features used here include W. T. Peterson Oval, Fitzroy Tennis Club, Fitzroy Victoria Bowling & Sports Club, Inner Circle Rail Trail, basketball court, skate area, playgrounds, toilets and Kevin Murray Stand.",
   "Heritage material emphasizes mature elm avenues, nineteenth-century formal path structure, W.T. Peterson Oval, the former railway/shared path and the rotunda.",
-  "Yarra public-art records identify the Queen Victoria statue plinth in a circular garden bed, the Sportsman's War Memorial behind the bowls club, and the rotating Plinth Program work currently represented as Zone Red."
+  "Yarra public-art records identify the Queen Victoria statue plinth in a circular garden bed, the Sportsman's War Memorial behind the bowls club, and the rotating Plinth Program work currently represented as Zone Red.",
+  "Vicmap Elevation open metro contour/ground-point services show sampled park elevations from roughly 27m to 32m AHD inside the mapped boundary; those samples drive the terrain interpolation.",
+  "See docs/edinburgh-gardens-research.md for source URLs, query notes, data licensing notes and implementation decisions."
 ];
 
 export const PARK_BOUNDARY_GEO: GeoPoint[] = [
@@ -687,6 +691,104 @@ const YARRA_SIGNIFICANT_TREE_GEO: Array<{
   }
 ];
 
+const VICMAP_ELEVATION_GEO: Array<{ point: GeoPoint; altitude: number; source: "contour" | "spot" }> = [
+  { point: g(-37.7898216, 144.9815629), altitude: 27, source: "contour" },
+  { point: g(-37.7897703, 144.9809658), altitude: 27, source: "contour" },
+  { point: g(-37.7897515, 144.98205), altitude: 27, source: "contour" },
+  { point: g(-37.7895272, 144.9828217), altitude: 27, source: "contour" },
+  { point: g(-37.7894279, 144.9820278), altitude: 27, source: "contour" },
+  { point: g(-37.7894119, 144.9833594), altitude: 27, source: "contour" },
+  { point: g(-37.7890504, 144.9820306), altitude: 27, source: "contour" },
+  { point: g(-37.7889814, 144.9808313), altitude: 27.8, source: "spot" },
+  { point: g(-37.7897291, 144.9813931), altitude: 28, source: "contour" },
+  { point: g(-37.7896585, 144.980864), altitude: 28, source: "contour" },
+  { point: g(-37.7896429, 144.9818831), altitude: 28, source: "contour" },
+  { point: g(-37.7894534, 144.9804106), altitude: 28, source: "contour" },
+  { point: g(-37.789266, 144.9820917), altitude: 28, source: "contour" },
+  { point: g(-37.7892416, 144.983857), altitude: 28, source: "contour" },
+  { point: g(-37.7890755, 144.9803068), altitude: 28, source: "contour" },
+  { point: g(-37.7890311, 144.9842635), altitude: 28, source: "contour" },
+  { point: g(-37.7889611, 144.9835068), altitude: 28, source: "contour" },
+  { point: g(-37.7888646, 144.9821222), altitude: 28, source: "contour" },
+  { point: g(-37.7888148, 144.98), altitude: 28, source: "contour" },
+  { point: g(-37.7885626, 144.9834577), altitude: 28, source: "contour" },
+  { point: g(-37.7885251, 144.981835), altitude: 28, source: "contour" },
+  { point: g(-37.7884102, 144.9807959), altitude: 28, source: "contour" },
+  { point: g(-37.7883978, 144.9813272), altitude: 28, source: "contour" },
+  { point: g(-37.7883912, 144.9832148), altitude: 28, source: "contour" },
+  { point: g(-37.7883848, 144.9823335), altitude: 28, source: "contour" },
+  { point: g(-37.7882633, 144.9803988), altitude: 28, source: "contour" },
+  { point: g(-37.7882281, 144.9828723), altitude: 28, source: "contour" },
+  { point: g(-37.7881771, 144.9809646), altitude: 28, source: "contour" },
+  { point: g(-37.7897705, 144.9813125), altitude: 29, source: "contour" },
+  { point: g(-37.7897477, 144.9818225), altitude: 29, source: "contour" },
+  { point: g(-37.7896679, 144.9806596), altitude: 29, source: "contour" },
+  { point: g(-37.7894671, 144.9821442), altitude: 29, source: "contour" },
+  { point: g(-37.7893958, 144.9803002), altitude: 29, source: "contour" },
+  { point: g(-37.789069, 144.9821963), altitude: 29, source: "contour" },
+  { point: g(-37.7887395, 144.9803103), altitude: 29, source: "contour" },
+  { point: g(-37.7886852, 144.9820836), altitude: 29, source: "contour" },
+  { point: g(-37.7886251, 144.9845289), altitude: 29, source: "contour" },
+  { point: g(-37.788526, 144.9850065), altitude: 29, source: "contour" },
+  { point: g(-37.7884231, 144.9817221), altitude: 29, source: "contour" },
+  { point: g(-37.788399, 144.980639), altitude: 29, source: "contour" },
+  { point: g(-37.7883847, 144.9840963), altitude: 29, source: "contour" },
+  { point: g(-37.7883401, 144.9812059), altitude: 29, source: "contour" },
+  { point: g(-37.7879779, 144.9840621), altitude: 29, source: "contour" },
+  { point: g(-37.7879195, 144.98104), altitude: 29, source: "contour" },
+  { point: g(-37.7877897, 144.9804691), altitude: 29, source: "contour" },
+  { point: g(-37.7877459, 144.9815088), altitude: 29, source: "contour" },
+  { point: g(-37.7877383, 144.9819876), altitude: 29, source: "contour" },
+  { point: g(-37.7876682, 144.9837595), altitude: 29, source: "contour" },
+  { point: g(-37.7875979, 144.9834109), altitude: 29, source: "contour" },
+  { point: g(-37.7875394, 144.9828255), altitude: 29, source: "contour" },
+  { point: g(-37.7874724, 144.9823342), altitude: 29, source: "contour" },
+  { point: g(-37.7880942, 144.9844219), altitude: 29.6, source: "spot" },
+  { point: g(-37.7887246, 144.9822957), altitude: 30, source: "contour" },
+  { point: g(-37.7885039, 144.980331), altitude: 30, source: "contour" },
+  { point: g(-37.7884459, 144.9819689), altitude: 30, source: "contour" },
+  { point: g(-37.7883122, 144.9807497), altitude: 30, source: "contour" },
+  { point: g(-37.7882936, 144.9812541), altitude: 30, source: "contour" },
+  { point: g(-37.7880782, 144.9851701), altitude: 30, source: "contour" },
+  { point: g(-37.7877378, 144.9849135), altitude: 30, source: "contour" },
+  { point: g(-37.7875527, 144.9811653), altitude: 30, source: "contour" },
+  { point: g(-37.7874699, 144.980669), altitude: 30, source: "contour" },
+  { point: g(-37.7874283, 144.9846273), altitude: 30, source: "contour" },
+  { point: g(-37.7873991, 144.9837467), altitude: 30, source: "contour" },
+  { point: g(-37.7871838, 144.9842075), altitude: 30, source: "contour" },
+  { point: g(-37.7871815, 144.9814569), altitude: 30, source: "contour" },
+  { point: g(-37.7871276, 144.9833385), altitude: 30, source: "contour" },
+  { point: g(-37.7870912, 144.9807713), altitude: 30, source: "contour" },
+  { point: g(-37.7870724, 144.9819402), altitude: 30, source: "contour" },
+  { point: g(-37.7870438, 144.9824449), altitude: 30, source: "contour" },
+  { point: g(-37.787028, 144.9829456), altitude: 30, source: "contour" },
+  { point: g(-37.7867244, 144.983257), altitude: 30, source: "contour" },
+  { point: g(-37.7869403, 144.9835927), altitude: 30.2, source: "spot" },
+  { point: g(-37.7884756, 144.9820349), altitude: 31, source: "contour" },
+  { point: g(-37.7884246, 144.9802952), altitude: 31, source: "contour" },
+  { point: g(-37.7871792, 144.9853708), altitude: 31, source: "contour" },
+  { point: g(-37.7869243, 144.9850127), altitude: 31, source: "contour" },
+  { point: g(-37.7868688, 144.9814886), altitude: 31, source: "contour" },
+  { point: g(-37.7866889, 144.981925), altitude: 31, source: "contour" },
+  { point: g(-37.7866565, 144.9846549), altitude: 31, source: "contour" },
+  { point: g(-37.7865954, 144.9811328), altitude: 31, source: "contour" },
+  { point: g(-37.786553, 144.9828498), altitude: 31, source: "contour" },
+  { point: g(-37.7865282, 144.983329), altitude: 31, source: "contour" },
+  { point: g(-37.7865232, 144.9823611), altitude: 31, source: "contour" },
+  { point: g(-37.786414, 144.9842712), altitude: 31, source: "contour" },
+  { point: g(-37.7862318, 144.9837288), altitude: 31, source: "contour" },
+  { point: g(-37.7885084, 144.9821172), altitude: 32, source: "contour" },
+  { point: g(-37.7869776, 144.9856254), altitude: 32, source: "contour" },
+  { point: g(-37.7865919, 144.9854856), altitude: 32, source: "contour" },
+  { point: g(-37.7863972, 144.981931), altitude: 32, source: "contour" },
+  { point: g(-37.7862073, 144.9828715), altitude: 32, source: "contour" },
+  { point: g(-37.7861898, 144.9833614), altitude: 32, source: "contour" },
+  { point: g(-37.7861831, 144.9823755), altitude: 32, source: "contour" },
+  { point: g(-37.7861433, 144.9815439), altitude: 32, source: "contour" },
+  { point: g(-37.7859148, 144.9838401), altitude: 32, source: "contour" },
+  { point: g(-37.7855496, 144.9838967), altitude: 32, source: "contour" }
+];
+
 const OSM_EXTRA_PATHS_GEO: Array<{
   id: string;
   label: string;
@@ -1037,6 +1139,256 @@ const OSM_AMENITY_GEO: Array<{
   { id: "osm-13228778695", kind: "bench", label: "Bench", point: g(-37.7866700, 144.9816652) }
 ];
 
+const OSM_BUILDING_FOOTPRINTS_GEO: Array<{
+  id: string;
+  label: string;
+  height: number;
+  material: MappedBuilding["material"];
+  collision: boolean;
+  points: GeoPoint[];
+}> = [
+  {
+    id: "osm-building-242003562",
+    label: "South service and amenities building",
+    height: 3.4,
+    material: "utility",
+    collision: true,
+    points: [
+      g(-37.7884009, 144.9834542),
+      g(-37.7882354, 144.9834842),
+      g(-37.7882332, 144.9834649),
+      g(-37.7881778, 144.983475),
+      g(-37.7881848, 144.9835367),
+      g(-37.7881542, 144.9835422),
+      g(-37.7881656, 144.9836436),
+      g(-37.7883264, 144.9836145),
+      g(-37.7883273, 144.9836225),
+      g(-37.788393, 144.9836106),
+      g(-37.7883921, 144.9836026),
+      g(-37.7884361, 144.9835946),
+      g(-37.7884337, 144.9835736),
+      g(-37.7884641, 144.9835681),
+      g(-37.788455, 144.9834877),
+      g(-37.7884057, 144.9834966),
+      g(-37.7884009, 144.9834542)
+    ]
+  },
+  {
+    id: "osm-building-403753784",
+    label: "Fitzroy Tennis Club rooms",
+    height: 3.8,
+    material: "utility",
+    collision: false,
+    points: [
+      g(-37.7882091, 144.9819287),
+      g(-37.7883259, 144.9819091),
+      g(-37.7883235, 144.981886),
+      g(-37.7883656, 144.9818789),
+      g(-37.7883614, 144.981839),
+      g(-37.7883262, 144.9818449),
+      g(-37.78831, 144.9816897),
+      g(-37.7881943, 144.9817091),
+      g(-37.7882105, 144.9818642),
+      g(-37.7882025, 144.9818656),
+      g(-37.7882, 144.981842),
+      g(-37.7881376, 144.9818524),
+      g(-37.7881476, 144.9819485),
+      g(-37.7882101, 144.981938),
+      g(-37.7882091, 144.9819287)
+    ]
+  },
+  {
+    id: "osm-building-543505638",
+    label: "Oval gatehouse",
+    height: 2.7,
+    material: "brick",
+    collision: true,
+    points: [
+      g(-37.7896325, 144.9801426),
+      g(-37.7896621, 144.9801369),
+      g(-37.7896863, 144.9803408),
+      g(-37.7896567, 144.9803465),
+      g(-37.7896325, 144.9801426)
+    ]
+  },
+  {
+    id: "osm-building-543505639",
+    label: "Fitzroy Victoria Bowling Club rooms",
+    height: 4.2,
+    material: "brick",
+    collision: false,
+    points: [
+      g(-37.7879856, 144.9809226),
+      g(-37.7879754, 144.9809242),
+      g(-37.7879795, 144.9809661),
+      g(-37.7880133, 144.9809609),
+      g(-37.7880313, 144.9809581),
+      g(-37.788083, 144.9803435),
+      g(-37.787906, 144.9803958),
+      g(-37.7879388, 144.9807351),
+      g(-37.7879481, 144.9807337),
+      g(-37.7879627, 144.980884),
+      g(-37.788013, 144.9808762),
+      g(-37.7880152, 144.9808856),
+      g(-37.7879826, 144.9808907),
+      g(-37.7879856, 144.9809226)
+    ]
+  },
+  {
+    id: "osm-building-543505640",
+    label: "Round pavilion building",
+    height: 3.1,
+    material: "timber",
+    collision: true,
+    points: [
+      g(-37.7867751, 144.9815512),
+      g(-37.7867862, 144.9815638),
+      g(-37.7867911, 144.9815816),
+      g(-37.7867889, 144.9816002),
+      g(-37.7867799, 144.9816152),
+      g(-37.7867659, 144.9816231),
+      g(-37.7867506, 144.9816214),
+      g(-37.786738, 144.9816104),
+      g(-37.7867311, 144.9815931),
+      g(-37.7867324, 144.9815716),
+      g(-37.7867426, 144.9815544),
+      g(-37.7867585, 144.9815468),
+      g(-37.7867751, 144.9815512)
+    ]
+  },
+  {
+    id: "osm-building-543505702",
+    label: "Emely Baker Centre",
+    height: 4.2,
+    material: "brick",
+    collision: true,
+    points: [
+      g(-37.7857727, 144.982404),
+      g(-37.7857168, 144.9823708),
+      g(-37.785658, 144.9825295),
+      g(-37.785714, 144.9825627),
+      g(-37.7857009, 144.9825979),
+      g(-37.7857614, 144.9826338),
+      g(-37.7858474, 144.9824014),
+      g(-37.7857869, 144.9823656),
+      g(-37.7857727, 144.982404)
+    ]
+  },
+  {
+    id: "osm-building-1475006767",
+    label: "Bowling club outbuilding",
+    height: 2.9,
+    material: "utility",
+    collision: false,
+    points: [
+      g(-37.7880133, 144.9809609),
+      g(-37.7879795, 144.9809661),
+      g(-37.7879632, 144.9809686),
+      g(-37.7879692, 144.9810314),
+      g(-37.7880193, 144.9810236),
+      g(-37.7880133, 144.9809609)
+    ]
+  },
+  {
+    id: "osm-building-1475006768",
+    label: "Bowling club shed",
+    height: 2.6,
+    material: "utility",
+    collision: false,
+    points: [
+      g(-37.7881042, 144.9806922),
+      g(-37.7880689, 144.9806874),
+      g(-37.7880638, 144.9807482),
+      g(-37.7880991, 144.9807529),
+      g(-37.7881042, 144.9806922)
+    ]
+  },
+  {
+    id: "osm-building-1475006769",
+    label: "Bowling club outbuilding",
+    height: 2.8,
+    material: "utility",
+    collision: false,
+    points: [
+      g(-37.787959, 144.9811502),
+      g(-37.7880467, 144.9812417),
+      g(-37.7880717, 144.9812033),
+      g(-37.787984, 144.9811117),
+      g(-37.787959, 144.9811502)
+    ]
+  },
+  {
+    id: "osm-building-1475006770",
+    label: "Bowling green shed",
+    height: 2.4,
+    material: "timber",
+    collision: false,
+    points: [
+      g(-37.7875114, 144.9811606),
+      g(-37.7875199, 144.9812476),
+      g(-37.7875949, 144.981236),
+      g(-37.7875865, 144.9811489),
+      g(-37.7875114, 144.9811606)
+    ]
+  },
+  {
+    id: "osm-building-1475006771",
+    label: "Bowling green shed",
+    height: 2.3,
+    material: "timber",
+    collision: false,
+    points: [
+      g(-37.787481, 144.9805718),
+      g(-37.7874869, 144.9806325),
+      g(-37.7875411, 144.9806241),
+      g(-37.7875352, 144.9805634),
+      g(-37.787481, 144.9805718)
+    ]
+  },
+  {
+    id: "osm-building-1475006772",
+    label: "Bowling green shed",
+    height: 2.3,
+    material: "timber",
+    collision: false,
+    points: [
+      g(-37.7877459, 144.9804572),
+      g(-37.7877508, 144.9805076),
+      g(-37.7878185, 144.9804971),
+      g(-37.7878137, 144.9804467),
+      g(-37.7877459, 144.9804572)
+    ]
+  },
+  {
+    id: "osm-building-1475006773",
+    label: "Bowling green shed",
+    height: 2.3,
+    material: "timber",
+    collision: false,
+    points: [
+      g(-37.7878326, 144.9811639),
+      g(-37.7877033, 144.9812283),
+      g(-37.7877159, 144.9812689),
+      g(-37.7878452, 144.9812045),
+      g(-37.7878326, 144.9811639)
+    ]
+  }
+];
+
+const OSM_FENCES_GEO: Array<{ id: string; label: string; points: GeoPoint[] }> = [
+  {
+    id: "osm-fence-715802680",
+    label: "Mapped tennis club fence",
+    points: [
+      g(-37.7880337, 144.9817074),
+      g(-37.7880906, 144.9816979),
+      g(-37.7880832, 144.9816273),
+      g(-37.7880263, 144.9816368),
+      g(-37.7880337, 144.9817074)
+    ]
+  }
+];
+
 function obstacleFromPolygon(id: string, label: string, polygon: Vec2[], padding: number): CircularObstacle {
   const center = polygonCentroid(polygon);
   return {
@@ -1188,6 +1540,26 @@ export function createLevelData(): LevelData {
     dbh: tree.dbh,
     position: geoToWorld(tree.point)
   }));
+  const elevationSamples = VICMAP_ELEVATION_GEO.map((sample) => ({
+    position: geoToWorld(sample.point),
+    altitude: sample.altitude,
+    source: sample.source === "spot" ? ("vicmap-spot" as const) : ("vicmap-contour" as const)
+  })).filter((sample) => pointInPolygon(sample.position, boundary));
+  const elevationMin = Math.min(...elevationSamples.map((sample) => sample.altitude));
+  const elevationMax = Math.max(...elevationSamples.map((sample) => sample.altitude));
+  const mappedBuildings: MappedBuilding[] = OSM_BUILDING_FOOTPRINTS_GEO.map((building) => ({
+    id: building.id,
+    label: building.label,
+    polygon: polygonFromGeo(building.points),
+    height: building.height,
+    material: building.material,
+    collision: building.collision
+  })).filter((building) => pointInPolygon(polygonCentroid(building.polygon), boundary));
+  const mappedFences: MappedFence[] = OSM_FENCES_GEO.map((fence) => ({
+    id: fence.id,
+    label: fence.label,
+    points: polygonFromGeo(fence.points)
+  })).filter((fence) => fence.points.some((point) => pointInPolygon(point, boundary)));
 
   const landmarks: Landmark[] = [
     { id: "park", label: "Edinburgh Gardens", kind: "park", polygon: boundary },
@@ -1287,13 +1659,21 @@ export function createLevelData(): LevelData {
     treeLines,
     treePoints: polygonFromGeo(OSM_TREE_GEO).filter((point) => pointInPolygon(point, boundary)),
     significantTrees,
+    elevationSamples,
+    elevationMin,
+    elevationMax,
+    mappedBuildings,
+    mappedFences,
     obstacles: [
       boxObstacleFromPolygon("grandstand", "Kevin Murray Stand", grandstand, 1.0, 0.45),
       polygonObstacleFromPolygon("tennis", "Fitzroy Tennis Club", tennis),
       polygonObstacleFromPolygon("bowling", "Fitzroy Victoria Bowling & Sports Club", bowling),
       boxObstacleFromPolygon("north-toilets", "North toilets", northToilets, 0.6, 0.6),
       { id: "south-toilets", label: "South toilets", center: southToilets, radius: 3.2 },
-      { id: "rotunda-core", label: "Fitzroy Memorial Rotunda centre", center: rotundaCenter, radius: 1.6 }
+      { id: "rotunda-core", label: "Fitzroy Memorial Rotunda centre", center: rotundaCenter, radius: 1.6 },
+      ...mappedBuildings
+        .filter((building) => building.collision)
+        .map((building) => polygonObstacleFromPolygon(building.id, building.label, building.polygon))
     ],
     spawnPoints: [
       geoToWorld(g(-37.78948, 144.98045)),
@@ -1328,7 +1708,8 @@ export function createLevelData(): LevelData {
         radius: 13,
         height: 5.25,
         prompt: "E: climb the rotunda",
-        mode: "toggle"
+        mode: "toggle",
+        bypassObstacleIds: ["rotunda-core"]
       },
       {
         id: "grandstand-seats",
@@ -1338,7 +1719,8 @@ export function createLevelData(): LevelData {
         radius: 12,
         height: 3.15,
         prompt: "E: climb the stand",
-        mode: "toggle"
+        mode: "toggle",
+        bypassObstacleIds: ["grandstand"]
       },
       {
         id: "north-playground-tower",
@@ -1348,7 +1730,8 @@ export function createLevelData(): LevelData {
         radius: 9,
         height: 2.35,
         prompt: "E: climb the playground tower",
-        mode: "toggle"
+        mode: "toggle",
+        bypassObstacleIds: ["north-playground"]
       },
       {
         id: "south-playground-tower",
@@ -1358,7 +1741,8 @@ export function createLevelData(): LevelData {
         radius: 9,
         height: 2.35,
         prompt: "E: climb the playground tower",
-        mode: "toggle"
+        mode: "toggle",
+        bypassObstacleIds: ["south-playground"]
       },
       {
         id: "south-toilets-roof",
@@ -1368,7 +1752,8 @@ export function createLevelData(): LevelData {
         radius: 8,
         height: 3.25,
         prompt: "E: climb the toilet block roof",
-        mode: "toggle"
+        mode: "toggle",
+        bypassObstacleIds: ["south-toilets"]
       },
       {
         id: "north-toilets-roof",
@@ -1378,7 +1763,8 @@ export function createLevelData(): LevelData {
         radius: 8,
         height: 3.25,
         prompt: "E: climb the toilet block roof",
-        mode: "toggle"
+        mode: "toggle",
+        bypassObstacleIds: ["north-toilets"]
       },
       {
         id: "basketball-hoop",
@@ -1398,7 +1784,8 @@ export function createLevelData(): LevelData {
         radius: 13,
         height: 1.05,
         prompt: "Walk the skate ramp",
-        mode: "auto"
+        mode: "auto",
+        bypassObstacleIds: ["skate"]
       }
     ],
     amenities,
