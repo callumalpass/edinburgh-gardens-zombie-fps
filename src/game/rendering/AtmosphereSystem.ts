@@ -1,10 +1,24 @@
 import * as THREE from "three";
-import type { RandomSource } from "../types";
+import type { RandomSource, Vec2 } from "../types";
 
 const SKY_RADIUS = 920;
-const RAIN_RADIUS = 82;
+const RAIN_ANCHOR_RADIUS = 42;
 const RAIN_MIN_Y = 5;
 const RAIN_MAX_Y = 62;
+const DEFAULT_WEATHER_ANCHORS: Vec2[] = [
+  { x: 35, z: 42 },
+  { x: 5, z: -8 },
+  { x: -58, z: 48 },
+  { x: 88, z: -28 },
+  { x: 118, z: 48 },
+  { x: -118, z: -36 },
+  { x: 18, z: -112 },
+  { x: -82, z: 86 },
+  { x: 126, z: -112 },
+  { x: -34, z: -74 },
+  { x: 66, z: 82 },
+  { x: -132, z: 12 }
+];
 
 interface RainDrop {
   x: number;
@@ -17,12 +31,14 @@ interface RainDrop {
 
 export class AtmosphereSystem {
   readonly root = new THREE.Group();
+  readonly worldWeatherRoot = new THREE.Group();
 
   private readonly rainDrops: RainDrop[] = [];
   private readonly rainPositions: Float32Array;
   private readonly rainGeometry: THREE.BufferGeometry;
   private readonly cloudLayers: THREE.Mesh[] = [];
   private readonly groundMistLayers: THREE.Mesh[] = [];
+  private readonly groundMistBanks: THREE.Sprite[] = [];
   private readonly lightning = new THREE.PointLight(0x9fb8ff, 0, 520);
   private nextLightningAt = 9.5;
   private lightningTimer = 0;
@@ -30,14 +46,18 @@ export class AtmosphereSystem {
   constructor(
     private readonly scene: THREE.Scene,
     private readonly rng: RandomSource,
-    private readonly smokeMode: boolean
+    private readonly smokeMode: boolean,
+    private readonly weatherAnchors: readonly Vec2[] = DEFAULT_WEATHER_ANCHORS
   ) {
-    this.root.name = "Atmosphere";
+    this.root.name = "Sky atmosphere";
     this.root.userData.dynamic = true;
     this.root.frustumCulled = false;
+    this.worldWeatherRoot.name = "Fixed world weather";
+    this.worldWeatherRoot.userData.dynamic = true;
+    this.worldWeatherRoot.frustumCulled = false;
 
-    this.scene.background = new THREE.Color(0x0d1112);
-    this.scene.fog = new THREE.FogExp2(0x151815, smokeMode ? 0.00145 : 0.00195);
+    this.scene.background = new THREE.Color(0x101823);
+    this.scene.fog = new THREE.FogExp2(0x16262c, smokeMode ? 0.00135 : 0.00175);
 
     this.addSkyDome();
     this.addStars();
@@ -45,7 +65,7 @@ export class AtmosphereSystem {
     this.addCloudLayers();
     this.addGroundMistLayers();
 
-    const rainCount = smokeMode ? 150 : 420;
+    const rainCount = smokeMode ? 360 : 1200;
     this.rainPositions = new Float32Array(rainCount * 2 * 3);
     this.rainGeometry = new THREE.BufferGeometry();
     this.createRain(rainCount);
@@ -53,6 +73,7 @@ export class AtmosphereSystem {
     this.lightning.position.set(-90, 105, -135);
     this.root.add(this.lightning);
     this.scene.add(this.root);
+    this.scene.add(this.worldWeatherRoot);
   }
 
   update(dt: number, cameraPosition: THREE.Vector3, now: number): void {
@@ -64,9 +85,22 @@ export class AtmosphereSystem {
       layer.position.z = Math.cos(now * 0.014 + index * 1.7) * 22;
     });
     this.groundMistLayers.forEach((layer, index) => {
+      const baseX = (layer.userData.baseX as number) ?? 0;
+      const baseZ = (layer.userData.baseZ as number) ?? 0;
+      const drift = (layer.userData.drift as number) ?? 1;
       layer.rotation.z += dt * (index === 0 ? 0.0022 : -0.0015);
-      layer.position.x = Math.sin(now * 0.022 + index * 1.4) * 14;
-      layer.position.z = Math.cos(now * 0.017 + index * 1.9) * 16;
+      layer.position.x = baseX + Math.sin(now * 0.022 + index * 1.4) * drift;
+      layer.position.z = baseZ + Math.cos(now * 0.017 + index * 1.9) * drift;
+    });
+    this.groundMistBanks.forEach((bank, index) => {
+      const baseX = bank.userData.baseX as number;
+      const baseZ = bank.userData.baseZ as number;
+      const drift = bank.userData.drift as number;
+      const opacity = bank.userData.opacity as number;
+      bank.position.x = baseX + Math.sin(now * 0.16 + index * 1.9) * drift;
+      bank.position.z = baseZ + Math.cos(now * 0.12 + index * 1.3) * drift;
+      bank.position.y = (bank.userData.baseY as number) + Math.sin(now * 0.2 + index) * 0.08;
+      (bank.material as THREE.SpriteMaterial).opacity = opacity * (0.86 + Math.sin(now * 0.34 + index * 0.7) * 0.14);
     });
 
     if (this.lightningTimer > 0) {
@@ -80,6 +114,18 @@ export class AtmosphereSystem {
     this.updateRain(dt);
   }
 
+  getGroundMistBankCount(): number {
+    return this.groundMistBanks.length;
+  }
+
+  getRainDropCount(): number {
+    return this.rainDrops.length;
+  }
+
+  getWeatherAnchorCount(): number {
+    return this.anchors().length;
+  }
+
   private addSkyDome(): void {
     const geometry = new THREE.SphereGeometry(SKY_RADIUS, 48, 24);
     const material = new THREE.ShaderMaterial({
@@ -87,10 +133,10 @@ export class AtmosphereSystem {
       depthWrite: false,
       fog: false,
       uniforms: {
-        topColor: { value: new THREE.Color(0x1f2e3a) },
-        midColor: { value: new THREE.Color(0x151d1d) },
-        horizonColor: { value: new THREE.Color(0x3c392f) },
-        bottomColor: { value: new THREE.Color(0x0b0f0e) }
+        topColor: { value: new THREE.Color(0x274563) },
+        midColor: { value: new THREE.Color(0x132936) },
+        horizonColor: { value: new THREE.Color(0x614936) },
+        bottomColor: { value: new THREE.Color(0x081116) }
       },
       vertexShader: `
         varying vec3 vDirection;
@@ -182,8 +228,8 @@ export class AtmosphereSystem {
     const textureA = this.createCloudTexture(0.42);
     const textureB = this.createCloudTexture(0.28);
     const layers = [
-      { texture: textureA, y: 138, scale: 620, opacity: 0.38, color: 0x7d8278 },
-      { texture: textureB, y: 92, scale: 470, opacity: 0.28, color: 0x5c665f }
+      { texture: textureA, y: 138, scale: 620, opacity: 0.34, color: 0x8ca3a2 },
+      { texture: textureB, y: 92, scale: 470, opacity: 0.25, color: 0x617c84 }
     ];
 
     for (const layer of layers) {
@@ -212,9 +258,11 @@ export class AtmosphereSystem {
   private addGroundMistLayers(): void {
     const textureA = this.createCloudTexture(0.3);
     const textureB = this.createCloudTexture(0.22);
+    const bankTexture = this.createMistTexture();
+    const center = this.mistCenter();
     const layers = [
-      { texture: textureA, y: 0.42, scale: 230, opacity: this.smokeMode ? 0.08 : 0.13, color: 0x9a9987 },
-      { texture: textureB, y: 1.05, scale: 175, opacity: this.smokeMode ? 0.055 : 0.09, color: 0x747b70 }
+      { texture: textureA, y: 0.42, scale: 250, opacity: this.smokeMode ? 0.1 : 0.18, color: 0xa5aaa0, drift: 9 },
+      { texture: textureB, y: 1.05, scale: 190, opacity: this.smokeMode ? 0.07 : 0.12, color: 0x6f8584, drift: 7 }
     ];
 
     for (const layer of layers) {
@@ -231,13 +279,61 @@ export class AtmosphereSystem {
       );
       mist.name = "Low wet-ground mist";
       mist.rotation.x = -Math.PI / 2;
-      mist.position.y = layer.y;
+      mist.position.set(center.x, layer.y, center.z);
       mist.scale.set(layer.scale, layer.scale, 1);
       mist.frustumCulled = false;
       mist.renderOrder = 4;
+      mist.userData.baseX = center.x;
+      mist.userData.baseZ = center.z;
+      mist.userData.drift = layer.drift;
       this.groundMistLayers.push(mist);
-      this.root.add(mist);
+      this.worldWeatherRoot.add(mist);
     }
+
+    const anchors = this.anchors();
+    const bankCount = Math.min(anchors.length, this.smokeMode ? 32 : 72);
+    for (let index = 0; index < bankCount; index += 1) {
+      const anchor = anchors[Math.floor((index / bankCount) * anchors.length) % anchors.length];
+      const baseX = anchor.x + this.rng.range(-9, 9);
+      const baseZ = anchor.z + this.rng.range(-9, 9);
+      const baseY = this.rng.range(0.75, 1.45);
+      const material = new THREE.SpriteMaterial({
+        map: bankTexture,
+        color: index % 2 === 0 ? 0xc2c4ad : 0x96a9a4,
+        transparent: true,
+        opacity: this.smokeMode ? 0.46 : 0.38,
+        depthWrite: false,
+        depthTest: true,
+        fog: false
+      });
+      const bank = new THREE.Sprite(material);
+      bank.name = "Visible low mist bank";
+      bank.position.set(baseX, baseY, baseZ);
+      bank.scale.set(this.rng.range(14, 34), this.rng.range(2.1, 4.6), 1);
+      bank.renderOrder = 8;
+      bank.userData.baseX = baseX;
+      bank.userData.baseY = baseY;
+      bank.userData.baseZ = baseZ;
+      bank.userData.drift = this.rng.range(0.8, 2.2);
+      bank.userData.opacity = material.opacity;
+      this.groundMistBanks.push(bank);
+      this.worldWeatherRoot.add(bank);
+    }
+  }
+
+  private mistCenter(): Vec2 {
+    const anchors = this.anchors();
+    return anchors.reduce(
+      (center, anchor) => ({
+        x: center.x + anchor.x / anchors.length,
+        z: center.z + anchor.z / anchors.length
+      }),
+      { x: 0, z: 0 }
+    );
+  }
+
+  private anchors(): readonly Vec2[] {
+    return this.weatherAnchors.length > 0 ? this.weatherAnchors : DEFAULT_WEATHER_ANCHORS;
   }
 
   private createRain(count: number): void {
@@ -246,7 +342,7 @@ export class AtmosphereSystem {
     }
     this.rainGeometry.setAttribute("position", new THREE.BufferAttribute(this.rainPositions, 3));
     const material = new THREE.LineBasicMaterial({
-      color: 0x9fb2ae,
+      color: 0xaad4df,
       transparent: true,
       opacity: this.smokeMode ? 0.22 : 0.34,
       depthWrite: false,
@@ -256,7 +352,8 @@ export class AtmosphereSystem {
     rain.name = "Wind-blown rain";
     rain.frustumCulled = false;
     rain.renderOrder = 30;
-    this.root.add(rain);
+    rain.userData.kind = "world-rain";
+    this.worldWeatherRoot.add(rain);
     this.writeRainPositions();
   }
 
@@ -273,10 +370,6 @@ export class AtmosphereSystem {
         drop.speed = next.speed;
         drop.drift = next.drift;
         drop.length = next.length;
-      } else if (drop.x > RAIN_RADIUS) {
-        drop.x = -RAIN_RADIUS;
-      } else if (drop.x < -RAIN_RADIUS) {
-        drop.x = RAIN_RADIUS;
       }
     }
     this.writeRainPositions();
@@ -297,10 +390,12 @@ export class AtmosphereSystem {
   }
 
   private randomRainDrop(): RainDrop {
+    const anchors = this.anchors();
+    const anchor = anchors[this.rng.int(0, anchors.length - 1)];
     return {
-      x: this.rng.range(-RAIN_RADIUS, RAIN_RADIUS),
+      x: anchor.x + this.rng.range(-RAIN_ANCHOR_RADIUS, RAIN_ANCHOR_RADIUS),
       y: this.rng.range(RAIN_MIN_Y, RAIN_MAX_Y),
-      z: this.rng.range(-RAIN_RADIUS, RAIN_RADIUS),
+      z: anchor.z + this.rng.range(-RAIN_ANCHOR_RADIUS, RAIN_ANCHOR_RADIUS),
       speed: this.rng.range(38, 58),
       drift: this.rng.range(8, 15),
       length: this.rng.range(1.25, 2.15)
@@ -313,10 +408,10 @@ export class AtmosphereSystem {
     canvas.height = 256;
     const ctx = canvas.getContext("2d")!;
     const glow = ctx.createRadialGradient(128, 128, 5, 128, 128, 128);
-    glow.addColorStop(0, "rgba(238, 234, 205, 1)");
-    glow.addColorStop(0.18, "rgba(225, 224, 196, 0.86)");
-    glow.addColorStop(0.42, "rgba(156, 177, 167, 0.26)");
-    glow.addColorStop(1, "rgba(156, 177, 167, 0)");
+    glow.addColorStop(0, "rgba(245, 235, 198, 1)");
+    glow.addColorStop(0.18, "rgba(235, 228, 188, 0.9)");
+    glow.addColorStop(0.42, "rgba(151, 194, 206, 0.3)");
+    glow.addColorStop(1, "rgba(151, 194, 206, 0)");
     ctx.fillStyle = glow;
     ctx.fillRect(0, 0, 256, 256);
     const texture = new THREE.CanvasTexture(canvas);
@@ -336,8 +431,8 @@ export class AtmosphereSystem {
       const radiusX = this.rng.range(28, 120);
       const radiusY = this.rng.range(12, 58);
       const gradient = ctx.createRadialGradient(x, y, 0, x, y, radiusX);
-      gradient.addColorStop(0, `rgba(220, 226, 204, ${this.rng.range(0.04, 0.14) * alphaScale})`);
-      gradient.addColorStop(1, "rgba(220, 226, 204, 0)");
+      gradient.addColorStop(0, `rgba(196, 220, 218, ${this.rng.range(0.04, 0.14) * alphaScale})`);
+      gradient.addColorStop(1, "rgba(196, 220, 218, 0)");
       ctx.fillStyle = gradient;
       ctx.beginPath();
       ctx.ellipse(x, y, radiusX, radiusY, this.rng.range(0, Math.PI), 0, Math.PI * 2);
@@ -347,6 +442,41 @@ export class AtmosphereSystem {
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.RepeatWrapping;
     texture.repeat.set(1.2, 1.2);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    return texture;
+  }
+
+  private createMistTexture(): THREE.CanvasTexture {
+    const canvas = document.createElement("canvas");
+    canvas.width = 512;
+    canvas.height = 256;
+    const ctx = canvas.getContext("2d")!;
+    ctx.clearRect(0, 0, 512, 256);
+
+    const floorFade = ctx.createLinearGradient(0, 0, 0, 256);
+    floorFade.addColorStop(0, "rgba(214, 222, 204, 0)");
+    floorFade.addColorStop(0.32, "rgba(214, 222, 204, 0.14)");
+    floorFade.addColorStop(0.72, "rgba(214, 222, 204, 0.3)");
+    floorFade.addColorStop(1, "rgba(214, 222, 204, 0)");
+    ctx.fillStyle = floorFade;
+    ctx.fillRect(0, 0, 512, 256);
+
+    for (let i = 0; i < 72; i += 1) {
+      const x = this.rng.range(-40, 552);
+      const y = this.rng.range(64, 226);
+      const radiusX = this.rng.range(36, 126);
+      const radiusY = this.rng.range(8, 32);
+      const gradient = ctx.createRadialGradient(x, y, 0, x, y, radiusX);
+      gradient.addColorStop(0, `rgba(234, 232, 205, ${this.rng.range(0.2, 0.44)})`);
+      gradient.addColorStop(0.45, `rgba(198, 220, 213, ${this.rng.range(0.08, 0.18)})`);
+      gradient.addColorStop(1, "rgba(198, 220, 213, 0)");
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.ellipse(x, y, radiusX, radiusY, this.rng.range(-0.24, 0.24), 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    const texture = new THREE.CanvasTexture(canvas);
     texture.colorSpace = THREE.SRGBColorSpace;
     return texture;
   }

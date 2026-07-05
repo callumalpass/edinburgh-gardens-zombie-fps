@@ -21,6 +21,7 @@ Purpose: track the building-by-building realism pass for every structure current
 - Fitzroy Victoria Bowling Club modelling uses current Yarra public-art and news references.
   - The building at 578 Brunswick Street carries a Makatron mural, with blue/maroon club-colour cues and a lion mascot theme.
   - Recent works include replacement zincalume roof sheeting, stronger roof structure and upgraded gutters.
+  - The official club site confirms current greens-for-hire, BBQ and social bowling use, supporting visible greenkeeper/service cues around the smaller bowling sheds.
 
 ## Building Inventory
 
@@ -75,6 +76,9 @@ Purpose: track the building-by-building realism pass for every structure current
 - `osm-building-1475006767` / Bowling club outbuilding:
   - Added guttering, a roller-door slat, metal service crate and hose reel to read as a small greenkeeper/plant outbuilding attached to the bowling club service edge.
   - Source basis: OSM way `1475006767` for footprint; bowling precinct context from CMP and the current mapped cluster of club support sheds.
+- `osm-building-1475006768` / Bowling club shed:
+  - Added a front gutter, small roof vent, hose-reel puck and paired service bins so the compact shed reads as active bowling-green support rather than an anonymous block.
+  - Source basis: OSM way `1475006768` for footprint; Fitzroy Bowls official site for active greens/BBQ operation; bowling-club precinct context from CMP.
 
 ## Implementation Notes
 

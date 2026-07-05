@@ -11,6 +11,7 @@ import {
   distanceToSegment,
   geoToWorld,
   makeCircle,
+  nearestPointOnPolygon,
   pointInPolygon,
   polygonCentroid,
   polygonFromGeo,
@@ -70,6 +71,14 @@ const footprintFromPolygon = (polygon: readonly Vec2[]): { center: Vec2; halfX: 
 
   return { center, halfX, halfZ, angle };
 };
+
+const polygonEdgePointFromLocal = (
+  polygon: readonly Vec2[],
+  center: Vec2,
+  angle: number,
+  localX: number,
+  localZ: number
+): Vec2 => nearestPointOnPolygon(offsetPoint(center, angle, localX, localZ), polygon);
 
 export const RESEARCH_NOTES = [
   "Yarra City Council describes Edinburgh Gardens as a 24 hectare park with open lawns, specimen trees, shaded areas and an extensive path network.",
@@ -2479,6 +2488,14 @@ function treeProfileFromGenus(genus: string): TreeProfile {
 
 type MappedTreeInput = Omit<MappedTree, "canopyRadius" | "canopyDensity" | "canopyGroup"> & Partial<Pick<MappedTree, "canopyRadius" | "canopyDensity" | "canopyGroup">>;
 
+type TreeExclusionZone = {
+  id: string;
+  polygon?: readonly Vec2[];
+  center?: Vec2;
+  radius?: number;
+  padding: number;
+};
+
 function completeMappedTree(tree: MappedTreeInput): MappedTree {
   const canopyGroup = tree.canopyGroup ?? treeCanopyGroup(tree);
   return {
@@ -2546,7 +2563,20 @@ function inferMappedTreeProfile(point: Vec2, index: number, heritageLines: Herit
   return index % 5 === 0 ? "elm" : "generic";
 }
 
-function appendMappedTree(trees: MappedTree[], tree: MappedTreeInput, minSpacing: number): void {
+function pointInTreeExclusionZone(point: Vec2, zone: TreeExclusionZone): boolean {
+  if (zone.polygon) {
+    return pointInPolygon(point, zone.polygon) || distance(point, nearestPointOnPolygon(point, zone.polygon)) < zone.padding;
+  }
+  if (zone.center && zone.radius !== undefined) {
+    return distance(point, zone.center) < zone.radius + zone.padding;
+  }
+  return false;
+}
+
+function appendMappedTree(trees: MappedTree[], tree: MappedTreeInput, minSpacing: number, exclusionZones: readonly TreeExclusionZone[] = []): void {
+  if (exclusionZones.some((zone) => pointInTreeExclusionZone(tree.position, zone))) {
+    return;
+  }
   const completedTree = completeMappedTree(tree);
   if (trees.some((existing) => distance(existing.position, tree.position) < minSpacing)) {
     return;
@@ -2746,6 +2776,20 @@ export function createLevelData(): LevelData {
   const grandstand = polygonFromGeo(GRANDSTAND_GEO);
   const tennis = polygonFromGeo(TENNIS_GEO);
   const bowling = polygonFromGeo(BOWLS_GEO);
+  const southAmenitiesBuildingSource = OSM_BUILDING_FOOTPRINTS_GEO.find((building) => building.id === "osm-building-242003562");
+  if (!southAmenitiesBuildingSource) {
+    throw new Error("Missing south amenities building footprint");
+  }
+  const rotundaBuildingSource = OSM_BUILDING_FOOTPRINTS_GEO.find((building) => building.id === "osm-building-543505640");
+  if (!rotundaBuildingSource) {
+    throw new Error("Missing rotunda building footprint");
+  }
+  const southAmenitiesBuilding = polygonFromGeo(southAmenitiesBuildingSource.points);
+  const southAmenitiesFootprint = footprintFromPolygon(southAmenitiesBuilding);
+  const southAmenitiesRotation = -southAmenitiesFootprint.angle;
+  const rotundaBuilding = polygonFromGeo(rotundaBuildingSource.points);
+  const rotundaCenter = polygonCentroid(rotundaBuilding);
+  const rotundaRadius = Math.max(5.8, boundingRadius(rotundaBuilding, rotundaCenter) + 2.25);
   const southPlayground = polygonFromGeo(SOUTH_PLAYGROUND_GEO);
   const northPlayground = polygonFromGeo(NORTH_PLAYGROUND_GEO);
   const skate = polygonFromGeo(SKATE_GEO);
@@ -2753,28 +2797,44 @@ export function createLevelData(): LevelData {
   const northToilets = polygonFromGeo(NORTH_TOILETS_GEO);
   const basketballCenter = polygonCentroid(basketball);
   const northToiletsCenter = polygonCentroid(northToilets);
+  const northToiletsFootprint = footprintFromPolygon(northToilets);
+  const northToiletsRotation = -northToiletsFootprint.angle;
   const grandstandCenter = polygonCentroid(grandstand);
   const southPlaygroundCenter = polygonCentroid(southPlayground);
   const northPlaygroundCenter = polygonCentroid(northPlayground);
   const skateCenter = polygonCentroid(skate);
-  const rotundaCenter = geoToWorld(g(-37.787235, 144.981825));
   const rotundaLoop: LevelPath = {
     id: "rotunda-approach-loop",
     label: "Fitzroy Memorial Rotunda approach loop",
     kind: "footway",
     points: makeCircle(rotundaCenter, 12.2, 36),
-    width: 2.45
+    width: 2.45,
+    source: "OSM way 543505640 rotunda footprint centroid; CMP rotunda path context"
   };
   const queenVictoriaPlinth = geoToWorld(g(-37.7872762, 144.9837025));
   const cookMemorial = geoToWorld(g(-37.7873520, 144.9855420));
   const sportsmansMemorial = geoToWorld(g(-37.78754, 144.98066));
-  const southToilets = geoToWorld(g(-37.788485, 144.983585));
+  const southToilets = southAmenitiesFootprint.center;
+  const southToiletsRoofRadius = Math.max(8, boundingRadius(southAmenitiesBuilding, southToilets) + 1.2);
+  const northToiletsRoofRadius = Math.max(8, boundingRadius(northToilets, northToiletsCenter) + 1.2);
   const rotundaStairAccess = offsetPoint(rotundaCenter, -0.34, 0, -7.25);
   const rotundaStairLanding = offsetPoint(rotundaCenter, -0.34, 0, -3.45);
   const grandstandStairAccess = offsetPoint(grandstandCenter, 0.11, 6.8, -7.2);
   const grandstandStairLanding = offsetPoint(grandstandCenter, 0.11, 5.8, -3.6);
-  const southToiletsLadderAccess = geoToWorld(g(-37.788476, 144.983624));
-  const northToiletsLadderAccess = geoToWorld(g(-37.785993, 144.982941));
+  const southToiletsLadderAccess = polygonEdgePointFromLocal(
+    southAmenitiesBuilding,
+    southAmenitiesFootprint.center,
+    southAmenitiesRotation,
+    southAmenitiesFootprint.halfX * 0.86,
+    -southAmenitiesFootprint.halfZ - 0.11
+  );
+  const northToiletsLadderAccess = polygonEdgePointFromLocal(
+    northToilets,
+    northToiletsCenter,
+    northToiletsRotation,
+    northToiletsFootprint.halfX * 0.78,
+    northToiletsFootprint.halfZ + 0.1
+  );
   const southBbq = geoToWorld(g(-37.7890776, 144.9835871));
   const northBbq = geoToWorld(g(-37.7859107, 144.9831484));
   const northTableTennis = geoToWorld(g(-37.786470, 144.983075));
@@ -3182,13 +3242,38 @@ export function createLevelData(): LevelData {
       polygon: polygonFromGeo(RAINGARDEN_RESERVOIR_GEO)
     },
     { id: "north-toilets", label: "North toilets", kind: "toilets", polygon: northToilets },
-    { id: "south-toilets", label: "South toilets", kind: "toilets", position: southToilets, radius: 4.5 },
     { id: "south-bbq", label: "South BBQ", kind: "bbq", position: southBbq, radius: 3.5 },
     { id: "north-bbq", label: "North BBQ", kind: "bbq", position: northBbq, radius: 3.5 },
-    { id: "rotunda", label: "Fitzroy Memorial Rotunda", kind: "rotunda", position: rotundaCenter, radius: 9 },
+    { id: "rotunda", label: "Fitzroy Memorial Rotunda", kind: "rotunda", position: rotundaCenter, radius: rotundaRadius },
     { id: "queen-victoria-plinth", label: "Queen Victoria plinth / Plinth Program", kind: "memorial", position: queenVictoriaPlinth, radius: 5.8 },
     { id: "sportsmans-war-memorial", label: "Sportsman's War Memorial", kind: "memorial", position: sportsmansMemorial, radius: 4.5 },
     { id: "cook-memorial-site", label: "Captain James Cook memorial site", kind: "memorial", position: cookMemorial, radius: 4 }
+  ];
+  const structuralTreeExclusionKinds = new Set<Landmark["kind"]>(["basketball", "bowls", "court", "grandstand", "playground", "rotunda", "skate", "tennis", "toilets"]);
+  const treeExclusionZones: TreeExclusionZone[] = [
+    ...mappedBuildings.map((building) => ({
+      id: building.id,
+      polygon: building.polygon,
+      padding: building.detailProfile === "rotunda-pavilion" ? 2.8 : building.collision ? 1.45 : 0.75
+    })),
+    ...landmarks.flatMap((landmark): TreeExclusionZone[] => {
+      if (!structuralTreeExclusionKinds.has(landmark.kind)) {
+        return [];
+      }
+      if (landmark.polygon) {
+        return [
+          {
+            id: landmark.id,
+            polygon: landmark.polygon,
+            padding: landmark.kind === "playground" || landmark.kind === "skate" ? 0.9 : 1.25
+          }
+        ];
+      }
+      if (landmark.position && landmark.radius) {
+        return [{ id: landmark.id, center: landmark.position, radius: landmark.radius, padding: 0.35 }];
+      }
+      return [];
+    })
   ];
 
   const treeLines = [
@@ -3213,7 +3298,8 @@ export function createLevelData(): LevelData {
         dbh: tree.dbh,
         source: "Yarra significant trees dataset"
       },
-      1.8
+      1.8,
+      treeExclusionZones
     );
   });
   const heritageTreeLines = {
@@ -3238,7 +3324,8 @@ export function createLevelData(): LevelData {
         canopyGroup,
         source: `Vicmap Vegetation Tree Urban OBJECTID ${tree.objectId}`
       },
-      5 * WORLD_SCALE
+      5 * WORLD_SCALE,
+      treeExclusionZones
     );
   });
   osmTreeRecords.forEach((tree, index) => {
@@ -3252,7 +3339,8 @@ export function createLevelData(): LevelData {
         profile,
         source: `OpenStreetMap natural=tree node ${tree.osmId}`
       },
-      10 * WORLD_SCALE
+      10 * WORLD_SCALE,
+      treeExclusionZones
     );
   });
   const treePoints = trees.filter((tree) => !tree.source?.includes("Yarra significant trees")).map((tree) => tree.position);
@@ -3361,8 +3449,6 @@ export function createLevelData(): LevelData {
       polygonObstacleFromPolygon("tennis", "Fitzroy Tennis Club", tennis),
       polygonObstacleFromPolygon("bowling", "Fitzroy Victoria Bowling & Sports Club", bowling),
       boxObstacleFromPolygon("north-toilets", "North toilets", northToilets, 0.6, 0.6),
-      { id: "south-toilets", label: "South toilets", center: southToilets, radius: 3.2 },
-      { id: "rotunda-core", label: "Fitzroy Memorial Rotunda centre", center: rotundaCenter, radius: 1.6 },
       { id: "north-playground", label: "North playground tower", center: northPlaygroundCenter, radius: 3.6, blocksSight: false },
       { id: "south-playground", label: "South playground tower", center: southPlaygroundCenter, radius: 3.6, blocksSight: false },
       { ...polygonObstacleFromPolygon("skate", "Fitzroy Skatepark ramps", skate), blocksSight: false },
@@ -3418,7 +3504,7 @@ export function createLevelData(): LevelData {
         height: 1.95,
         prompt: "E: climb rotunda stairs",
         mode: "toggle",
-        bypassObstacleIds: ["rotunda-core"]
+        bypassObstacleIds: ["osm-building-543505640"]
       },
       {
         id: "grandstand-seats",
@@ -3471,11 +3557,11 @@ export function createLevelData(): LevelData {
         exitPosition: southToiletsLadderAccess,
         accessRadius: 4.2,
         accessKind: "ladder",
-        radius: 8,
+        radius: southToiletsRoofRadius,
         height: 3.25,
         prompt: "E: climb service ladder",
         mode: "toggle",
-        bypassObstacleIds: ["south-toilets"]
+        bypassObstacleIds: ["osm-building-242003562"]
       },
       {
         id: "north-toilets-roof",
@@ -3487,7 +3573,7 @@ export function createLevelData(): LevelData {
         exitPosition: northToiletsLadderAccess,
         accessRadius: 4.2,
         accessKind: "ladder",
-        radius: 8,
+        radius: northToiletsRoofRadius,
         height: 3.25,
         prompt: "E: climb service ladder",
         mode: "toggle",

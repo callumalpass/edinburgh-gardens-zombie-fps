@@ -60,6 +60,7 @@ export class MeshFactory {
         group.add(hand);
       }
 
+      this.applyAnimeMeshStyle(group, firstPerson ? 1.025 : 1.04);
       return group;
     }
 
@@ -137,6 +138,7 @@ export class MeshFactory {
       }
     }
 
+    this.applyAnimeMeshStyle(group, firstPerson ? 1.025 : 1.04);
     return group;
   }
 
@@ -408,6 +410,7 @@ export class MeshFactory {
         child.position.y -= bounds.min.y;
       }
     }
+    this.applyAnimeMeshStyle(group, 1.035);
     return group;
   }
 
@@ -415,7 +418,57 @@ export class MeshFactory {
     const color = type === "ammo" ? 0xd4aa4c : type === "health" ? 0xc84138 : 0x9ebf86;
     const geometry =
       type === "ammo" ? new THREE.BoxGeometry(1.1, 0.7, 1.6) : type === "health" ? new THREE.OctahedronGeometry(0.9) : new THREE.DodecahedronGeometry(0.75);
-    return new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.12, roughness: 0.55 }));
+    const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.18, roughness: 0.64, flatShading: true }));
+    this.applyAnimeMeshStyle(mesh, 1.08);
+    return mesh;
   }
 
+  private applyAnimeMeshStyle(root: THREE.Object3D, outlineScale: number): void {
+    const outlineMaterial = new THREE.MeshBasicMaterial({
+      color: 0x07131a,
+      side: THREE.BackSide,
+      transparent: true,
+      opacity: 0.76,
+      depthWrite: false
+    });
+    const meshes: THREE.Mesh[] = [];
+    root.traverse((object) => {
+      if (!(object instanceof THREE.Mesh) || object.userData.animeOutline) {
+        return;
+      }
+      this.tuneAnimeMaterial(object.material);
+      if (this.shouldOutline(object)) {
+        meshes.push(object);
+      }
+    });
+
+    for (const mesh of meshes) {
+      const outline = new THREE.Mesh(mesh.geometry, outlineMaterial);
+      outline.position.copy(mesh.position);
+      outline.quaternion.copy(mesh.quaternion);
+      outline.scale.copy(mesh.scale).multiplyScalar(outlineScale);
+      outline.renderOrder = -1;
+      outline.userData.animeOutline = true;
+      mesh.parent?.add(outline);
+    }
+  }
+
+  private shouldOutline(mesh: THREE.Mesh): boolean {
+    const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    return materials.every((material) => !(material instanceof THREE.MeshBasicMaterial) && (!material.transparent || material.opacity >= 0.9));
+  }
+
+  private tuneAnimeMaterial(material: THREE.Material | THREE.Material[]): void {
+    const materials = Array.isArray(material) ? material : [material];
+    for (const entry of materials) {
+      if (entry instanceof THREE.MeshStandardMaterial) {
+        entry.flatShading = true;
+        entry.roughness = Math.max(entry.roughness, 0.72);
+        entry.color.offsetHSL(0, 0.025, 0.02);
+        entry.emissive.lerp(entry.color, 0.12);
+        entry.emissiveIntensity = Math.max(entry.emissiveIntensity, 0.1);
+        entry.needsUpdate = true;
+      }
+    }
+  }
 }

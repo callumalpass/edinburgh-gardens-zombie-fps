@@ -18,7 +18,7 @@ import {
   type WeaponId
 } from "./weapons";
 import { resolveObstacle, shouldBypassObstacle as shouldBypassCollisionObstacle } from "./collision";
-import { clampToPolygon, distance, distanceToSegment } from "./geo";
+import { clampToPolygon, distance, distanceToSegment, polygonCentroid } from "./geo";
 import { createLevelData } from "./levelData";
 import { chooseZombiePickup, chooseZombieWeaponDrop, searchAmenityLoot } from "./loot";
 import { movementNoiseKind, movementNoiseMultiplier, NoiseSystem } from "./noise";
@@ -146,6 +146,8 @@ export class GameApp {
   private muzzleTimer = 0;
   private renderedTreeCount = 0;
   private renderedGrassClumpCount = 0;
+  private renderedWetPathSheenCount = 0;
+  private renderedLampSpillCount = 0;
   private miniMapVisibleZombieCount = 0;
   private lastHitZone: HitZone | null = null;
   private materials!: GameMaterials;
@@ -170,15 +172,15 @@ export class GameApp {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, this.smokeMode ? 1 : 1.5));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.08;
+    this.renderer.toneMappingExposure = 1.18;
     this.renderer.shadowMap.enabled = !this.smokeMode;
-    this.renderer.shadowMap.type = THREE.PCFShadowMap;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
     this.camera = new THREE.PerspectiveCamera(BASE_CAMERA_FOV, 1, 0.1, 1800);
     this.camera.userData.dynamic = true;
     this.weaponModel.userData.dynamic = true;
     this.scene = new THREE.Scene();
-    this.atmosphere = new AtmosphereSystem(this.scene, this.rng, this.smokeMode);
+    this.atmosphere = new AtmosphereSystem(this.scene, this.rng, this.smokeMode, this.weatherAnchors());
     this.materials = createGameMaterials(this.rng);
     this.meshFactory = new MeshFactory(this.materials);
     this.miniMap = new MiniMapRenderer(this.hud.miniMap, this.level);
@@ -188,7 +190,7 @@ export class GameApp {
     this.rebuildViewWeapon();
     this.createWorld();
     this.world.createUpgradeStations();
-    freezeStaticScene(this.scene, [this.camera, this.atmosphere.root]);
+    freezeStaticScene(this.scene, [this.camera, this.atmosphere.root, this.atmosphere.worldWeatherRoot]);
     this.spawnInitialWeapons();
     this.bindEvents();
     this.resize();
@@ -573,6 +575,43 @@ export class GameApp {
 
   private averageGroundY(points: readonly Vec2[]): number {
     return this.terrain.averageGroundY(points);
+  }
+
+  private weatherAnchors(): Vec2[] {
+    const anchors: Vec2[] = [{ x: START_POSITION.x, z: START_POSITION.z }];
+    const addAnchor = (point: Vec2 | undefined) => {
+      if (point) {
+        anchors.push({ x: point.x, z: point.z });
+      }
+    };
+
+    this.level.upgradeStations.forEach((station) => addAnchor(station.position));
+    this.level.weaponSpawns.forEach((spawn) => addAnchor(spawn.position));
+    this.level.landmarks.forEach((landmark) => addAnchor(landmark.position ?? (landmark.polygon ? polygonCentroid(landmark.polygon) : undefined)));
+    this.level.amenities.forEach((amenity, index) => {
+      if (index % 8 === 0) {
+        addAnchor(amenity.position);
+      }
+    });
+
+    this.level.paths.forEach((path) => {
+      if (path.points.length === 0) {
+        return;
+      }
+      addAnchor(path.points[0]);
+      addAnchor(path.points[Math.floor(path.points.length * 0.5)]);
+      addAnchor(path.points[path.points.length - 1]);
+    });
+
+    const uniqueAnchors = new Map<string, Vec2>();
+    anchors.forEach((anchor) => {
+      const key = `${Math.round(anchor.x / 8)}:${Math.round(anchor.z / 8)}`;
+      if (!uniqueAnchors.has(key)) {
+        uniqueAnchors.set(key, anchor);
+      }
+    });
+
+    return [...uniqueAnchors.values()].slice(0, 140);
   }
 
   private handleMouseMove(event: MouseEvent): void {
@@ -1484,6 +1523,11 @@ export class GameApp {
       elevation: Number(this.player.height.toFixed(2)),
       renderedTrees: this.renderedTreeCount,
       renderedGrassClumps: this.renderedGrassClumpCount,
+      renderedWetPathSheens: this.renderedWetPathSheenCount,
+      renderedLampSpills: this.renderedLampSpillCount,
+      renderedMistBanks: this.atmosphere.getGroundMistBankCount(),
+      renderedRainDrops: this.atmosphere.getRainDropCount(),
+      renderedWeatherAnchors: this.atmosphere.getWeatherAnchorCount(),
       lastHitZone: this.lastHitZone,
       meleeSwing: Number(this.meleeSwing.toFixed(3)),
       shotBloom: Number(this.shotBloom.toFixed(4)),
@@ -1588,10 +1632,12 @@ export class GameApp {
     this.world.createWorld();
     this.renderedTreeCount = this.world.getRenderedTreeCount();
     this.renderedGrassClumpCount = this.world.getRenderedGrassClumpCount();
+    this.renderedWetPathSheenCount = this.world.getRenderedWetPathSheenCount();
+    this.renderedLampSpillCount = this.world.getRenderedLampSpillCount();
   }
 
   private addPlayerTorch(): void {
-    const torch = new THREE.SpotLight(0xf0e2bd, this.smokeMode ? 1.1 : 1.55, 46, 0.62, 0.78, 1.25);
+    const torch = new THREE.SpotLight(0xffd27d, this.smokeMode ? 1.15 : 1.7, 48, 0.58, 0.82, 1.25);
     torch.position.set(0.1, -0.18, 0.08);
     torch.castShadow = false;
     const target = new THREE.Object3D();
@@ -1618,7 +1664,7 @@ export class GameApp {
 
     const flash = new THREE.Mesh(
       new THREE.ConeGeometry(0.18, 0.55, 9),
-      new THREE.MeshBasicMaterial({ color: 0xf2c86a, transparent: true, opacity: 0.9 })
+      new THREE.MeshBasicMaterial({ color: 0xffc35f, transparent: true, opacity: 0.92 })
     );
     flash.position.set(0.5, -0.3, -1.28);
     flash.rotation.x = -Math.PI / 2;
@@ -1626,7 +1672,7 @@ export class GameApp {
     this.weaponModel.add(flash);
     this.muzzleFlash = flash;
 
-    const light = new THREE.PointLight(0xf2b85b, 2.6, 10);
+    const light = new THREE.PointLight(0xffb45d, 2.8, 10);
     light.position.set(0.5, -0.3, -1.12);
     light.visible = false;
     this.weaponModel.add(light);

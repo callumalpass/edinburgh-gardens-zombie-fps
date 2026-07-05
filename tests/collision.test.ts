@@ -23,10 +23,10 @@ describe("collision system", () => {
   it("uses fixture metadata to bypass active obstacles", () => {
     const level = createLevelData();
     const fixture = level.interactables.find((candidate) => candidate.id === "rotunda-deck");
-    expect(fixture?.bypassObstacleIds).toContain("rotunda-core");
+    expect(fixture?.bypassObstacleIds).toContain("osm-building-543505640");
 
     expect(
-      shouldBypassObstacle("rotunda-core", fixture!.position, {
+      shouldBypassObstacle("osm-building-543505640", fixture!.position, {
         activeFixtureId: fixture!.id,
         interactables: level.interactables
       })

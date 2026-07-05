@@ -118,6 +118,11 @@
       "url": "https://www.yarracity.vic.gov.au/things-to-do/arts/gallery/public-art/fitzroy-bowls-150-years-memorial-wall"
     },
     {
+      "id": "fitzroy-bowls-official",
+      "label": "Fitzroy Victoria Bowling & Sports Club official website",
+      "url": "https://www.barefootbowling.com.au/"
+    },
+    {
       "id": "yarra-news-bowling-roof",
       "label": "Yarra News April-May 2025 Fitzroy Bowls roof upgrade",
       "url": "https://www.yarracity.vic.gov.au/sites/default/files/2025-04/yarranews_aprmay25_fa_web_nicholls_ward.pdf"
@@ -347,6 +352,7 @@
         "yarra-emely-baker-centre",
         "yarra-edinburgh-gardens-rotunda",
         "yarra-fitzroy-bowls-mural",
+        "fitzroy-bowls-official",
         "yarra-news-bowling-roof",
         "brisbane-lions-brunswick-oval-upgrade"
       ]

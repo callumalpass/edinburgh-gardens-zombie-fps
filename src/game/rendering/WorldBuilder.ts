@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { distance, distanceToSegment, geoToWorld, makeCircle, pointInPolygon, polygonCentroid } from "../geo";
+import { distance, distanceToSegment, geoToWorld, makeCircle, nearestPointOnPolygon, pointInPolygon, polygonCentroid } from "../geo";
 import { AUSTRALIAN_RULES_BEHIND_POST_HEIGHT_METRES, footballPostLocalOffsets } from "../sportsFixtures";
 import type {
   HardscapeLine,
@@ -23,41 +23,46 @@ const TREE_SCALE_MULTIPLIER = 1.22;
 const GRASS_SAMPLE_STEP = 5.2;
 const GRASS_CLUSTER_LIMIT = 5600;
 const GRASS_PATH_CLEARANCE = 1.25;
+const WORLD_TOON_RAMP = createWorldToonRamp();
+
+type StyledSurfaceMaterial = THREE.MeshStandardMaterial | THREE.MeshToonMaterial;
 
 interface TreeMaterialSet {
-  trunk: THREE.MeshStandardMaterial;
-  leaf: THREE.MeshStandardMaterial;
-  paleBark: THREE.MeshStandardMaterial;
+  trunk: THREE.Material;
+  leaf: THREE.Material;
+  paleBark: THREE.Material;
 }
 
 export interface GameMaterials {
-  grass: THREE.MeshStandardMaterial;
-  grassBlade: THREE.MeshStandardMaterial;
-  path: THREE.MeshStandardMaterial;
-  gravel: THREE.MeshStandardMaterial;
-  asphalt: THREE.MeshStandardMaterial;
-  concrete: THREE.MeshStandardMaterial;
-  court: THREE.MeshStandardMaterial;
-  rubber: THREE.MeshStandardMaterial;
-  mulch: THREE.MeshStandardMaterial;
-  dirt: THREE.MeshStandardMaterial;
-  leafLitter: THREE.MeshStandardMaterial;
-  wornGrass: THREE.MeshStandardMaterial;
+  grass: StyledSurfaceMaterial;
+  grassBlade: StyledSurfaceMaterial;
+  path: StyledSurfaceMaterial;
+  gravel: StyledSurfaceMaterial;
+  asphalt: StyledSurfaceMaterial;
+  concrete: StyledSurfaceMaterial;
+  court: StyledSurfaceMaterial;
+  rubber: StyledSurfaceMaterial;
+  mulch: StyledSurfaceMaterial;
+  dirt: StyledSurfaceMaterial;
+  leafLitter: StyledSurfaceMaterial;
+  wornGrass: StyledSurfaceMaterial;
   puddle: THREE.MeshStandardMaterial;
-  hedge: THREE.MeshStandardMaterial;
+  hedge: StyledSurfaceMaterial;
   line: THREE.MeshBasicMaterial;
-  timber: THREE.MeshStandardMaterial;
+  timber: StyledSurfaceMaterial;
   metal: THREE.MeshStandardMaterial;
-  brick: THREE.MeshStandardMaterial;
-  basalt: THREE.MeshStandardMaterial;
+  brick: StyledSurfaceMaterial;
+  basalt: StyledSurfaceMaterial;
   darkOpening: THREE.MeshBasicMaterial;
-  zombie: THREE.MeshStandardMaterial;
-  zombieDark: THREE.MeshStandardMaterial;
+  zombie: StyledSurfaceMaterial;
+  zombieDark: StyledSurfaceMaterial;
 }
 
 export class WorldBuilder {
   private renderedTreeCount = 0;
   private renderedGrassClumpCount = 0;
+  private renderedWetPathSheenCount = 0;
+  private renderedLampSpillCount = 0;
   private readonly detailMaterialCache = new Map<string, THREE.Material>();
   private readonly treeMaterialCache = new Map<string, TreeMaterialSet>();
   private readonly treeTrunkGeometry = new THREE.CylinderGeometry(0.72, 1, 1, 8);
@@ -76,8 +81,8 @@ export class WorldBuilder {
   ) {}
 
   createWorld(): void {
-    this.scene.add(new THREE.HemisphereLight(0xd4d8ce, 0x2b261f, 1.82));
-    const moon = new THREE.DirectionalLight(0xdce3d2, 2.35);
+    this.scene.add(new THREE.HemisphereLight(0xb9d4e8, 0x28222a, 1.38));
+    const moon = new THREE.DirectionalLight(0xc9ddff, 2.95);
     moon.position.set(-150, 205, 75);
     moon.castShadow = true;
     moon.shadow.camera.left = -360;
@@ -87,7 +92,7 @@ export class WorldBuilder {
     moon.shadow.mapSize.set(2048, 2048);
     this.scene.add(moon);
 
-    const emergency = new THREE.PointLight(0xc64d38, 4.8, 145);
+    const emergency = new THREE.PointLight(0xe34b43, 5.2, 145);
     emergency.position.set(22, 7, 48);
     this.scene.add(emergency);
 
@@ -137,6 +142,14 @@ export class WorldBuilder {
 
   getRenderedGrassClumpCount(): number {
     return this.renderedGrassClumpCount;
+  }
+
+  getRenderedWetPathSheenCount(): number {
+    return this.renderedWetPathSheenCount;
+  }
+
+  getRenderedLampSpillCount(): number {
+    return this.renderedLampSpillCount;
   }
 
   private groundY(point: Vec2): number {
@@ -287,28 +300,30 @@ export class WorldBuilder {
     const sheenMaterial = new THREE.MeshStandardMaterial({
       color: 0xaeb3a5,
       metalness: 0.08,
-      roughness: 0.16,
+      roughness: 0.13,
       transparent: true,
-      opacity: 0.16,
+      opacity: 0.24,
       depthWrite: false
     });
+    this.renderedWetPathSheenCount = 0;
     let placed = 0;
+    const limit = 96;
 
     for (const path of this.level.paths.filter((candidate) => candidate.kind !== "rail")) {
-      if (placed >= 58) break;
+      if (placed >= limit) break;
       for (let i = 0; i < path.points.length - 1; i += 1) {
-        if (placed >= 58) break;
+        if (placed >= limit) break;
         const a = path.points[i];
         const b = path.points[i + 1];
         const segmentLength = distance(a, b);
         if (segmentLength < 9) continue;
         const angle = Math.atan2(b.z - a.z, b.x - a.x);
-        const count = Math.min(2, Math.max(1, Math.floor(segmentLength / 72)));
+        const count = Math.min(3, Math.max(1, Math.floor(segmentLength / 58)));
 
         for (let step = 0; step < count; step += 1) {
           const seedX = (a.x + b.x) * 0.5 + step * 13.7;
           const seedZ = (a.z + b.z) * 0.5 - step * 9.1;
-          if (this.stableNoise(seedX, seedZ, 31) < 0.46) continue;
+          if (this.stableNoise(seedX, seedZ, 31) < 0.25) continue;
           const t = (step + 1) / (count + 1);
           const point = { x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t };
           const offset = (this.stableNoise(seedX, seedZ, 32) - 0.5) * path.width * 0.42;
@@ -317,13 +332,15 @@ export class WorldBuilder {
             z: point.z + Math.sin(angle + Math.PI / 2) * offset
           };
           if (!pointInPolygon(center, this.level.boundary)) continue;
-          const length = THREE.MathUtils.lerp(3.6, Math.min(13, segmentLength * 0.32), this.stableNoise(seedX, seedZ, 33));
-          const width = THREE.MathUtils.lerp(path.width * 0.12, path.width * 0.34, this.stableNoise(seedX, seedZ, 34));
+          const length = THREE.MathUtils.lerp(4.4, Math.min(17, segmentLength * 0.38), this.stableNoise(seedX, seedZ, 33));
+          const width = THREE.MathUtils.lerp(path.width * 0.18, path.width * 0.46, this.stableNoise(seedX, seedZ, 34));
           const mesh = this.createTerrainRect(center, angle + this.stableNoise(seedX, seedZ, 35) * 0.16 - 0.08, length, width, 0.172, 0.006, sheenMaterial);
           mesh.receiveShadow = false;
+          mesh.userData.kind = "wet-path-sheen";
           this.scene.add(mesh);
           placed += 1;
-          if (placed >= 58) break;
+          this.renderedWetPathSheenCount = placed;
+          if (placed >= limit) break;
         }
       }
     }
@@ -927,6 +944,10 @@ export class WorldBuilder {
   }
 
   private addMappedBuilding(building: MappedBuilding): void {
+    if (building.detailProfile === "rotunda-pavilion") {
+      return;
+    }
+
     if (building.id === "osm-man-made-715802679") {
       this.addMappedStorageTank(building);
       return;
@@ -1144,7 +1165,8 @@ export class WorldBuilder {
         for (const x of [-0.44, 0.18, 0.68]) {
           this.addBuildingRoofVent(center, rotation, x * footprint.halfX, -footprint.halfZ * 0.32, building.height, 0.5, 0.34);
         }
-        this.addBuildingServiceLadder(center, rotation, footprint.halfX * 0.86, rearZ - 0.03, 2.15, 1.28);
+        const ladderLocal = this.localPointOnPolygonEdge(center, rotation, building.polygon, footprint.halfX * 0.86, rearZ - 0.03);
+        this.addBuildingServiceLadder(center, rotation, ladderLocal.x, ladderLocal.z, 2.15, 1.28);
         for (const x of [-0.58, 0.58]) {
           this.addLocalCylinder(center, rotation, x * footprint.halfX, frontZ + 0.78, 0.09, 0.1, 0.82, this.materials.metal);
         }
@@ -1160,6 +1182,14 @@ export class WorldBuilder {
         this.addLocalBox(center, rotation, 0, frontZ + 0.075, footprint.halfX * 0.82, 0.08, 0.06, this.materials.metal, 1.18, false);
         this.addLocalBox(center, rotation, -footprint.halfX * 0.62, frontZ + 0.52, 0.42, 0.62, 0.38, this.materials.metal, 0.36);
         this.addLocalCylinder(center, rotation, footprint.halfX * 0.58, frontZ + 0.46, 0.2, 0.2, 0.08, this.materials.metal, 0.34);
+      }
+      if (building.id === "osm-building-1475006768") {
+        this.addBuildingGutter(center, rotation, 0, frontZ + 0.02, footprint.halfX * 1.58, building.height);
+        this.addBuildingRoofVent(center, rotation, footprint.halfX * 0.32, -footprint.halfZ * 0.18, building.height, 0.36, 0.28);
+        this.addLocalCylinder(center, rotation, -footprint.halfX * 0.56, frontZ + 0.42, 0.16, 0.16, 0.08, this.materials.metal, 0.34);
+        for (const x of [0.42, 0.66]) {
+          this.addLocalBox(center, rotation, x * footprint.halfX, frontZ + 0.58, 0.26, 0.54, 0.3, this.materials.metal, 0.34);
+        }
       }
     }
   }
@@ -1339,6 +1369,21 @@ export class WorldBuilder {
       x: center.x + localX * cos - localZ * sin,
       z: center.z + localX * sin + localZ * cos
     };
+  }
+
+  private worldToLocal(center: Vec2, rotation: number, point: Vec2): Vec2 {
+    const dx = point.x - center.x;
+    const dz = point.z - center.z;
+    const cos = Math.cos(rotation);
+    const sin = Math.sin(rotation);
+    return {
+      x: dx * cos + dz * sin,
+      z: -dx * sin + dz * cos
+    };
+  }
+
+  private localPointOnPolygonEdge(center: Vec2, rotation: number, polygon: Vec2[], localX: number, localZ: number): Vec2 {
+    return this.worldToLocal(center, rotation, nearestPointOnPolygon(this.localPoint(center, rotation, localX, localZ), polygon));
   }
 
   private isGrassEligible(point: Vec2): boolean {
@@ -2172,33 +2217,28 @@ export class WorldBuilder {
   private addToilets(landmark: Landmark): void {
     const center = landmark.polygon ? polygonCentroid(landmark.polygon) : landmark.position;
     if (!center) return;
-    const groundY = this.boxSupportY(center, 0, 3.55, 3.1);
-    const pad = new THREE.Mesh(new THREE.BoxGeometry(7.1, 0.08, 6.2), this.materials.concrete);
-    pad.position.set(center.x, groundY + 0.07, center.z);
-    pad.receiveShadow = true;
-    this.scene.add(pad);
-    const building = new THREE.Mesh(new THREE.BoxGeometry(6, 3.2, 5), new THREE.MeshStandardMaterial({ color: 0xb8a072, roughness: 0.82 }));
-    building.position.set(center.x, groundY + 1.6, center.z);
-    building.castShadow = true;
-    building.receiveShadow = true;
-    this.scene.add(building);
-    const roof = new THREE.Mesh(new THREE.BoxGeometry(6.7, 0.34, 5.7), new THREE.MeshStandardMaterial({ color: 0x6f7567, roughness: 0.8 }));
-    roof.position.set(center.x, groundY + 3.38, center.z);
-    roof.castShadow = true;
-    this.scene.add(roof);
+    const footprint = landmark.polygon ? this.fitBoxFromPolygon(landmark.polygon, 0.12, 0.12) : { center, halfX: 3, halfZ: 2.5, angle: 0 };
+    const rotation = landmark.polygon ? -footprint.angle : 0;
+    const width = Math.max(5.4, footprint.halfX * 2);
+    const depth = Math.max(4.6, footprint.halfZ * 2);
+    const wallMaterial = this.standardDetailMaterial("toilet-block-wall", 0xb8a072, 0.82, 0);
+    const roofMaterial = this.standardDetailMaterial("toilet-block-roof", 0x6f7567, 0.8, 0.02);
+
+    this.addLocalBox(center, rotation, 0, 0, width + 1.1, 0.08, depth + 1.2, this.materials.concrete, 0.07, false);
+    this.addLocalBox(center, rotation, 0, 0, width, 3.2, depth, wallMaterial, 1.6);
+    this.addLocalBox(center, rotation, 0, 0, width + 0.7, 0.34, depth + 0.7, roofMaterial, 3.38);
+    const frontZ = -depth * 0.5 - 0.045;
     for (const x of [-1.65, 0, 1.65]) {
-      const door = new THREE.Mesh(new THREE.BoxGeometry(0.84, 1.72, 0.08), this.materials.darkOpening);
-      door.position.set(center.x + x, groundY + 1.08, center.z - 2.54);
-      this.scene.add(door);
+      this.addLocalBox(center, rotation, x, frontZ, 0.84, 1.72, 0.08, this.materials.darkOpening, 1.08, false);
     }
     for (const x of [-2.15, 2.15]) {
-      const vent = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.18, 0.1), this.materials.metal);
-      vent.position.set(center.x + x, groundY + 2.62, center.z - 2.56);
-      this.scene.add(vent);
+      this.addLocalBox(center, rotation, x, frontZ - 0.02, 0.75, 0.18, 0.1, this.materials.metal, 2.62, false);
     }
-    const sign = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.7, 0.1), new THREE.MeshBasicMaterial({ color: 0x2e6c79 }));
-    sign.position.set(center.x, groundY + 2.7, center.z - 2.56);
-    this.scene.add(sign);
+    this.addLocalBox(center, rotation, 0, frontZ - 0.02, 2.2, 0.7, 0.1, this.basicDetailMaterial("toilet-sign", 0x2e6c79), 2.7, false);
+    if (landmark.polygon) {
+      const ladderLocal = this.localPointOnPolygonEdge(center, rotation, landmark.polygon, footprint.halfX * 0.78, footprint.halfZ + 0.1);
+      this.addBuildingServiceLadder(center, rotation, ladderLocal.x, ladderLocal.z, 2.05, 1.2);
+    }
   }
 
   private addBbq(position: Vec2): void {
@@ -2478,6 +2518,7 @@ export class WorldBuilder {
   private addPathLights(): void {
     const used = new Set<string>();
     let placed = 0;
+    this.renderedLampSpillCount = 0;
     for (const path of this.level.paths.filter((candidate) => candidate.kind !== "footway" && candidate.kind !== "steps" && candidate.kind !== "service")) {
       if (placed >= 34) break;
       for (let i = 0; i < path.points.length - 1; i += 1) {
@@ -2500,7 +2541,7 @@ export class WorldBuilder {
           const key = `${Math.round(x / 16)}:${Math.round(z / 16)}`;
           if (used.has(key) || !pointInPolygon({ x, z }, this.level.boundary)) continue;
           used.add(key);
-          this.addLampPost({ x, z }, Math.atan2(dz, dx), placed % 3 === 0);
+          this.addLampPost({ x, z }, Math.atan2(dz, dx), true);
           placed += 1;
           if (placed >= 34) break;
         }
@@ -2522,23 +2563,25 @@ export class WorldBuilder {
     lamp.position.set(0, 3.32, -0.9);
     group.add(lamp);
     if (activeLight) {
-      const glow = new THREE.PointLight(0xf0c96a, 0.55, 18);
+      const glow = new THREE.PointLight(0xf0c96a, 0.72, 22);
       glow.position.set(0, 3.25, -0.9);
       group.add(glow);
 
       const spill = new THREE.Mesh(
-        new THREE.CircleGeometry(4.6, 24),
+        new THREE.CircleGeometry(6.2, 28),
         new THREE.MeshBasicMaterial({
           color: 0xc49a55,
           transparent: true,
-          opacity: 0.1,
+          opacity: 0.16,
           depthWrite: false,
           blending: THREE.AdditiveBlending
         })
       );
       spill.position.set(0, 0.045, -0.9);
       spill.rotation.x = -Math.PI / 2;
+      spill.userData.kind = "lamp-ground-spill";
       group.add(spill);
+      this.renderedLampSpillCount += 1;
     }
     group.position.set(position.x, this.groundY(position), position.z);
     group.rotation.y = -angle;
@@ -3225,21 +3268,30 @@ export class WorldBuilder {
     const cached = this.treeMaterialCache.get(key);
     if (cached) return cached;
 
-    const baseTrunkColor = profile === "gum" ? 0x746a58 : profile === "oak" ? 0x4b3829 : 0x58432e;
-    const baseLeafColor = profile === "gum" ? 0x667066 : profile === "oak" ? 0x334434 : profile === "elm" ? 0x405238 : 0x46563c;
+    const baseTrunkColor = profile === "gum" ? 0x8c806a : profile === "oak" ? 0x56402e : 0x684d34;
+    const baseLeafColor = profile === "gum" ? 0x6f8078 : profile === "oak" ? 0x38543c : profile === "elm" ? 0x4a6741 : 0x526940;
     const hueOffset = (variant - 3.5) * 0.004;
     const saturationOffset = ((variant % 3) - 1) * 0.02;
     const lightOffset = ((variant % 5) - 2) * 0.018;
     const materials = {
-      trunk: new THREE.MeshStandardMaterial({
+      trunk: new THREE.MeshToonMaterial({
         color: new THREE.Color(baseTrunkColor).offsetHSL(hueOffset, saturationOffset, lightOffset),
-        roughness: 0.92
+        emissive: 0x160f0a,
+        emissiveIntensity: 0.12,
+        gradientMap: WORLD_TOON_RAMP
       }),
-      leaf: new THREE.MeshStandardMaterial({
+      leaf: new THREE.MeshToonMaterial({
         color: new THREE.Color(baseLeafColor).offsetHSL(hueOffset * 1.4, saturationOffset, lightOffset),
-        roughness: 0.96
+        emissive: 0x0d2019,
+        emissiveIntensity: 0.16,
+        gradientMap: WORLD_TOON_RAMP
       }),
-      paleBark: new THREE.MeshStandardMaterial({ color: 0xb9aa8e, roughness: 0.9 })
+      paleBark: new THREE.MeshToonMaterial({
+        color: 0xcdbf9f,
+        emissive: 0x21170e,
+        emissiveIntensity: 0.1,
+        gradientMap: WORLD_TOON_RAMP
+      })
     };
     this.treeMaterialCache.set(key, materials);
     return materials;
@@ -3250,11 +3302,11 @@ export class WorldBuilder {
     canvas.width = 512;
     canvas.height = 128;
     const ctx = canvas.getContext("2d")!;
-    ctx.fillStyle = "rgba(7, 12, 9, 0.72)";
+    ctx.fillStyle = "rgba(7, 17, 25, 0.78)";
     ctx.fillRect(0, 24, 512, 76);
-    ctx.strokeStyle = "rgba(214, 185, 111, 0.8)";
+    ctx.strokeStyle = "rgba(245, 184, 88, 0.82)";
     ctx.strokeRect(8, 30, 496, 64);
-    ctx.fillStyle = "#e2d4aa";
+    ctx.fillStyle = "#ede0aa";
     ctx.font = "600 34px system-ui, sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -3265,6 +3317,21 @@ export class WorldBuilder {
     sprite.scale.set(18, 4.5, 1);
     this.scene.add(sprite);
   }
+}
+
+function createWorldToonRamp(): THREE.DataTexture {
+  const data = new Uint8Array([
+    48, 48, 48, 255,
+    112, 112, 112, 255,
+    196, 196, 196, 255,
+    255, 255, 255, 255
+  ]);
+  const texture = new THREE.DataTexture(data, 4, 1, THREE.RGBAFormat);
+  texture.minFilter = THREE.NearestFilter;
+  texture.magFilter = THREE.NearestFilter;
+  texture.colorSpace = THREE.NoColorSpace;
+  texture.needsUpdate = true;
+  return texture;
 }
 
 function createGrassClumpGeometry(): THREE.BufferGeometry {

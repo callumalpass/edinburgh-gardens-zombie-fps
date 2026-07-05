@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clampToPolygon, distance, geoToWorld, pointInPolygon, polygonArea, polygonCentroid, WORLD_SCALE } from "../src/game/geo";
+import { clampToPolygon, distance, distanceToSegment, geoToWorld, pointInPolygon, polygonArea, polygonCentroid, WORLD_SCALE } from "../src/game/geo";
 import { createLevelData, PARK_BOUNDARY_GEO } from "../src/game/levelData";
 import {
   AUSTRALIAN_RULES_FULL_GOAL_WIDTH_METRES,
@@ -9,6 +9,35 @@ import {
 } from "../src/game/sportsFixtures";
 import { TerrainSampler } from "../src/game/terrain";
 import type { MappedBuilding } from "../src/game/types";
+
+function distanceToPolygonEdge(point: { x: number; z: number }, polygon: readonly { x: number; z: number }[]): number {
+  let closest = Number.POSITIVE_INFINITY;
+  for (let index = 0; index < polygon.length; index += 1) {
+    closest = Math.min(closest, distanceToSegment(point, polygon[index], polygon[(index + 1) % polygon.length]));
+  }
+  return closest;
+}
+
+function distanceToObstacleBoundary(point: { x: number; z: number }, obstacle: ReturnType<typeof createLevelData>["obstacles"][number]): number {
+  if (obstacle.shape === "polygon") {
+    return distanceToPolygonEdge(point, obstacle.polygon);
+  }
+  if (obstacle.shape === "box") {
+    const dx = point.x - obstacle.center.x;
+    const dz = point.z - obstacle.center.z;
+    const cos = Math.cos(obstacle.angle);
+    const sin = Math.sin(obstacle.angle);
+    const localX = dx * cos + dz * sin;
+    const localZ = -dx * sin + dz * cos;
+    const outsideX = Math.max(Math.abs(localX) - obstacle.halfX, 0);
+    const outsideZ = Math.max(Math.abs(localZ) - obstacle.halfZ, 0);
+    if (outsideX > 0 || outsideZ > 0) {
+      return Math.hypot(outsideX, outsideZ);
+    }
+    return Math.min(obstacle.halfX - Math.abs(localX), obstacle.halfZ - Math.abs(localZ));
+  }
+  return Math.abs(distance(point, obstacle.center) - obstacle.radius);
+}
 
 describe("map geometry", () => {
   it("converts the OSM boundary into a playable non-degenerate park polygon", () => {
@@ -30,10 +59,10 @@ describe("map geometry", () => {
 
   it("uses mapped tree points inside the park for more accurate placement", () => {
     const level = createLevelData();
-    expect(level.treePoints.length).toBe(365);
+    expect(level.treePoints.length).toBeGreaterThanOrEqual(340);
     expect(level.treeLines.length).toBeGreaterThanOrEqual(5);
     expect(level.significantTrees.length).toBe(19);
-    expect(level.trees.length).toBe(384);
+    expect(level.trees.length).toBeGreaterThanOrEqual(365);
     expect(level.trees.length).toBe(level.treeColliders.length);
     expect(level.treePoints.filter((tree) => pointInPolygon(tree, level.boundary)).length).toBe(level.treePoints.length);
     expect(level.significantTrees.filter((tree) => pointInPolygon(tree.position, level.boundary)).length).toBe(level.significantTrees.length);
@@ -48,7 +77,7 @@ describe("map geometry", () => {
     }
     expect(level.trees.every((tree) => tree.canopyRadius >= 3 && tree.canopyRadius <= 13)).toBe(true);
     expect(level.trees.every((tree) => tree.canopyDensity >= 0.42 && tree.canopyDensity <= 0.95)).toBe(true);
-    expect(level.trees.filter((tree) => tree.canopyGroup === "specimen").length).toBeGreaterThanOrEqual(level.significantTrees.length - 1);
+    expect(level.trees.filter((tree) => tree.canopyGroup === "specimen").length).toBeGreaterThanOrEqual(level.significantTrees.length - 2);
     expect(level.trees.some((tree) => tree.source?.includes("Yarra significant trees") && tree.height && tree.dbh)).toBe(true);
     expect(level.trees.some((tree) => tree.source?.includes("Vicmap Vegetation Tree Urban") && tree.height && tree.canopyRadius)).toBe(true);
     expect(level.trees.some((tree) => tree.id.startsWith("tree-row-") || tree.source?.includes("tree avenue sample"))).toBe(false);
@@ -67,7 +96,8 @@ describe("map geometry", () => {
   it("derives solid trunk colliders from mapped and researched trees", () => {
     const level = createLevelData();
     const obstacleIds = new Set(level.obstacles.map((obstacle) => obstacle.id));
-    expect(level.treeColliders.length).toBe(384);
+    expect(level.treeColliders.length).toBe(level.trees.length);
+    expect(level.treeColliders.length).toBeGreaterThanOrEqual(365);
     expect(level.treeColliders.every((tree) => pointInPolygon(tree.position, level.boundary))).toBe(true);
     expect(level.treeColliders.every((tree) => tree.radius >= 0.34 && tree.radius <= 1.05)).toBe(true);
     expect(level.treeColliders.some((tree) => tree.source?.includes("Yarra significant trees"))).toBe(true);
@@ -232,8 +262,11 @@ describe("map geometry", () => {
   it("uses realistic access points for climbable building fixtures", () => {
     const level = createLevelData();
     const rotunda = level.interactables.find((fixture) => fixture.id === "rotunda-deck");
+    const rotundaBuilding = level.mappedBuildings.find((building) => building.id === "osm-building-543505640");
     expect(rotunda?.accessPosition).toBeTruthy();
     expect(rotunda?.landingPosition).toBeTruthy();
+    expect(rotundaBuilding).toBeTruthy();
+    expect(rotunda?.bypassObstacleIds).toContain("osm-building-543505640");
     expect(rotunda?.accessKind).toBe("stairs");
     expect(rotunda?.exitPosition).toEqual(rotunda?.accessPosition);
     expect(rotunda?.prompt).toContain("stairs");
@@ -242,6 +275,7 @@ describe("map geometry", () => {
     expect(distance(rotunda!.position, rotunda!.accessPosition!)).toBeGreaterThan(6);
     expect(distance(rotunda!.accessPosition!, rotunda!.landingPosition!)).toBeGreaterThan(3);
     expect(distance(rotunda!.position, rotunda!.landingPosition!)).toBeLessThan(rotunda!.radius);
+    expect(distance(rotunda!.position, polygonCentroid(rotundaBuilding!.polygon))).toBeLessThan(0.01);
     expect(pointInPolygon(rotunda!.accessPosition!, level.boundary)).toBe(true);
 
     const grandstand = level.interactables.find((fixture) => fixture.id === "grandstand-seats");
@@ -255,6 +289,20 @@ describe("map geometry", () => {
     const roofFixtures = level.interactables.filter((fixture) => fixture.kind === "toilets" && fixture.id.endsWith("-roof"));
     expect(roofFixtures.length).toBeGreaterThanOrEqual(2);
     expect(roofFixtures.every((fixture) => fixture.accessPosition && fixture.landingPosition && fixture.accessKind === "ladder" && fixture.prompt.includes("ladder"))).toBe(true);
+    const southRoof = roofFixtures.find((fixture) => fixture.id === "south-toilets-roof");
+    const southAmenitiesBuilding = level.mappedBuildings.find((building) => building.id === "osm-building-242003562");
+    expect(southRoof).toBeTruthy();
+    expect(southAmenitiesBuilding).toBeTruthy();
+    expect(southRoof?.bypassObstacleIds).toContain("osm-building-242003562");
+    expect(level.landmarks.some((landmark) => landmark.id === "south-toilets")).toBe(false);
+    expect(distance(southRoof!.position, polygonCentroid(southAmenitiesBuilding!.polygon))).toBeLessThan(0.01);
+    expect(distanceToPolygonEdge(southRoof!.accessPosition!, southAmenitiesBuilding!.polygon)).toBeLessThan(0.85);
+
+    const northRoof = roofFixtures.find((fixture) => fixture.id === "north-toilets-roof");
+    const northToilets = level.landmarks.find((landmark) => landmark.id === "north-toilets");
+    expect(northRoof).toBeTruthy();
+    expect(northToilets?.polygon).toBeTruthy();
+    expect(distanceToPolygonEdge(northRoof!.accessPosition!, northToilets!.polygon!)).toBeLessThan(1.5);
 
     const basketballFrames = level.interactables.filter((fixture) => fixture.kind === "basketball" && fixture.id.endsWith("-frame"));
     const basketballHoops = level.sportsFixtures.filter((fixture) => fixture.kind === "basketball-hoop");
@@ -391,12 +439,98 @@ describe("map geometry", () => {
         expect(obstacleIds.has(obstacleId)).toBe(true);
       }
     }
-    const rotundaCore = level.obstacles.find((obstacle) => obstacle.id === "rotunda-core");
-    expect(rotundaCore?.shape ?? "circle").toBe("circle");
-    if (rotundaCore?.shape === "box" || rotundaCore?.shape === "polygon") {
-      throw new Error("Expected small circular rotunda core");
+    const rotundaObstacle = level.obstacles.find((obstacle) => obstacle.id === "osm-building-543505640");
+    expect(rotundaObstacle?.shape).toBe("polygon");
+    expect(level.obstacles.some((obstacle) => obstacle.id === "rotunda-core")).toBe(false);
+    expect(level.interactables.find((fixture) => fixture.id === "rotunda-deck")?.bypassObstacleIds).toContain("osm-building-543505640");
+  });
+
+  it("keeps all placed object families spatially coherent", () => {
+    const level = createLevelData();
+    const obstacleIds = new Map(level.obstacles.map((obstacle) => [obstacle.id, obstacle]));
+
+    for (const landmark of level.landmarks) {
+      const anchor = landmark.position ?? (landmark.polygon ? polygonCentroid(landmark.polygon) : null);
+      expect(anchor, `missing landmark anchor for ${landmark.id}`).toBeTruthy();
+      expect(pointInPolygon(anchor!, level.boundary), `landmark ${landmark.id} outside boundary`).toBe(true);
     }
-    expect(rotundaCore?.radius).toBeLessThan(2);
+
+    for (const obstacle of level.obstacles) {
+      const anchor = obstacle.shape === "polygon" ? polygonCentroid(obstacle.polygon) : obstacle.center;
+      expect(pointInPolygon(anchor, level.boundary), `obstacle ${obstacle.id} outside boundary`).toBe(true);
+    }
+    for (const building of level.mappedBuildings) {
+      expect(pointInPolygon(polygonCentroid(building.polygon), level.boundary), `mapped building ${building.id} outside boundary`).toBe(true);
+      if (building.collision) {
+        expect(obstacleIds.has(building.id), `colliding mapped building ${building.id} has no obstacle`).toBe(true);
+      }
+    }
+    for (const fence of level.mappedFences) {
+      expect(fence.points.some((point) => pointInPolygon(point, level.boundary)), `mapped fence ${fence.id} has no in-boundary point`).toBe(true);
+    }
+    const structuralLandmarkKinds = new Set(["basketball", "bowls", "court", "grandstand", "playground", "rotunda", "skate", "tennis", "toilets"]);
+    const structuralPolygons = [
+      ...level.mappedBuildings.map((building) => ({ id: building.id, polygon: building.polygon })),
+      ...level.landmarks
+        .filter((landmark) => landmark.polygon && structuralLandmarkKinds.has(landmark.kind))
+        .map((landmark) => ({ id: landmark.id, polygon: landmark.polygon! }))
+    ];
+    const rotundaLandmark = level.landmarks.find((landmark) => landmark.id === "rotunda");
+
+    for (const fixture of level.interactables) {
+      expect(pointInPolygon(fixture.position, level.boundary), `interactable ${fixture.id} outside boundary`).toBe(true);
+      for (const point of [fixture.accessPosition, fixture.landingPosition, fixture.exitPosition].filter(Boolean)) {
+        expect(pointInPolygon(point!, level.boundary), `interactable ${fixture.id} has off-map access/landing point`).toBe(true);
+      }
+      if (fixture.accessPosition) {
+        expect(distance(fixture.position, fixture.accessPosition), `interactable ${fixture.id} access point is detached from fixture`).toBeLessThan(fixture.radius + 8);
+      }
+      for (const obstacleId of fixture.bypassObstacleIds ?? []) {
+        const obstacle = obstacleIds.get(obstacleId);
+        expect(obstacle, `interactable ${fixture.id} bypasses missing obstacle ${obstacleId}`).toBeTruthy();
+        if (fixture.accessKind === "ladder" || fixture.accessKind === "frame") {
+          expect(distanceToObstacleBoundary(fixture.accessPosition ?? fixture.position, obstacle!), `${fixture.id} access is detached from ${obstacleId}`).toBeLessThan(1.8);
+        }
+      }
+    }
+
+    for (const amenity of level.amenities) {
+      expect(pointInPolygon(amenity.position, level.boundary), `amenity ${amenity.id} outside boundary`).toBe(true);
+    }
+    for (const station of level.upgradeStations) {
+      expect(pointInPolygon(station.position, level.boundary), `upgrade station ${station.id} outside boundary`).toBe(true);
+    }
+    for (const spawn of level.spawnPoints) {
+      expect(pointInPolygon(spawn, level.boundary), "spawn point outside boundary").toBe(true);
+    }
+    for (const pickup of level.pickupPoints) {
+      expect(pointInPolygon(pickup, level.boundary), "pickup point outside boundary").toBe(true);
+    }
+    for (const detail of level.parkLifeDetails) {
+      expect(pointInPolygon(detail.position, level.boundary), `park-life detail ${detail.id} outside boundary`).toBe(true);
+    }
+    for (const patch of level.pathSurfacePatches) {
+      expect(pointInPolygon(patch.position, level.boundary), `path surface patch ${patch.id} outside boundary`).toBe(true);
+    }
+    for (const tree of level.trees) {
+      expect(pointInPolygon(tree.position, level.boundary), `tree ${tree.id} outside boundary`).toBe(true);
+      for (const zone of structuralPolygons) {
+        expect(pointInPolygon(tree.position, zone.polygon), `tree ${tree.id} is inside structural footprint ${zone.id}`).toBe(false);
+      }
+      if (rotundaLandmark?.position && rotundaLandmark.radius) {
+        expect(distance(tree.position, rotundaLandmark.position), `tree ${tree.id} is inside the rotunda footprint`).toBeGreaterThan(rotundaLandmark.radius);
+      }
+    }
+    for (const tree of level.treeColliders) {
+      expect(pointInPolygon(tree.position, level.boundary), `tree collider ${tree.id} outside boundary`).toBe(true);
+      expect(obstacleIds.has(tree.id), `tree collider ${tree.id} has no matching obstacle`).toBe(true);
+    }
+    for (const fixture of level.sportsFixtures) {
+      expect(pointInPolygon(fixture.position, level.boundary), `sports fixture ${fixture.id} outside boundary`).toBe(true);
+    }
+    for (const line of level.hardscapeLines) {
+      expect(line.points.some((point) => pointInPolygon(point, level.boundary)), `hardscape line ${line.id} has no in-boundary point`).toBe(true);
+    }
   });
 
   it("clamps external points back into the park", () => {

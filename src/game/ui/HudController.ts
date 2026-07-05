@@ -173,9 +173,9 @@ function createMarkup(): string {
       <div class="interaction-prompt" data-hud="prompt"></div>
       <section class="start-overlay" data-hud="overlay">
         <div class="start-panel">
-          <p class="kicker">Fitzroy North quarantine zone</p>
+          <p class="kicker">Fitzroy North, blue-hour cordon</p>
           <h1>Edinburgh Gardens: Last Light</h1>
-          <p class="brief">Hold the oval, cut through the rail trail, and use the park fixtures as upgrade points before the next wave finds you.</p>
+          <p class="brief">Hold the oval under rainlight, cut through the rail trail, and use the park fixtures before the next wave finds you.</p>
           <div class="controls-grid" aria-label="Controls">
             <span>WASD move</span>
             <span>Mouse look</span>

@@ -80,6 +80,11 @@ export interface Snapshot {
   elevation: number;
   renderedTrees: number;
   renderedGrassClumps: number;
+  renderedWetPathSheens: number;
+  renderedLampSpills: number;
+  renderedMistBanks: number;
+  renderedRainDrops: number;
+  renderedWeatherAnchors: number;
   lastHitZone: HitZone | null;
   meleeSwing: number;
   shotBloom: number;
