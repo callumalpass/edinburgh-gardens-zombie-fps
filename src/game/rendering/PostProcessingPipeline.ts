@@ -27,7 +27,7 @@ const ANIME_GRADE_SHADER = {
     uniform float strength;
     varying vec2 vUv;
 
-    float luminance(vec3 color) {
+    float animeLuminance(vec3 color) {
       return dot(color, vec3(0.299, 0.587, 0.114));
     }
 
@@ -40,11 +40,11 @@ const ANIME_GRADE_SHADER = {
       vec4 base = texture2D(tDiffuse, vUv);
       vec3 color = base.rgb;
 
-      float center = luminance(color);
-      float right = luminance(texture2D(tDiffuse, vUv + vec2(pixel.x, 0.0)).rgb);
-      float left = luminance(texture2D(tDiffuse, vUv - vec2(pixel.x, 0.0)).rgb);
-      float up = luminance(texture2D(tDiffuse, vUv + vec2(0.0, pixel.y)).rgb);
-      float down = luminance(texture2D(tDiffuse, vUv - vec2(0.0, pixel.y)).rgb);
+      float center = animeLuminance(color);
+      float right = animeLuminance(texture2D(tDiffuse, vUv + vec2(pixel.x, 0.0)).rgb);
+      float left = animeLuminance(texture2D(tDiffuse, vUv - vec2(pixel.x, 0.0)).rgb);
+      float up = animeLuminance(texture2D(tDiffuse, vUv + vec2(0.0, pixel.y)).rgb);
+      float down = animeLuminance(texture2D(tDiffuse, vUv - vec2(0.0, pixel.y)).rgb);
       float edge = smoothstep(0.12, 0.32, abs(center - right) + abs(center - left) + abs(center - up) + abs(center - down));
 
       vec3 shadows = vec3(0.045, 0.075, 0.105);
