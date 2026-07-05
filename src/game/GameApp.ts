@@ -34,6 +34,7 @@ import { PostProcessingPipeline } from "./rendering/PostProcessingPipeline";
 import { SeededRandom } from "./random";
 import { AtmosphereSystem } from "./rendering/AtmosphereSystem";
 import { MeshFactory } from "./rendering/MeshFactory";
+import { SceneDecals } from "./rendering/SceneDecals";
 import { WorldBuilder, type GameMaterials } from "./rendering/WorldBuilder";
 import { createGameMaterials } from "./rendering/materials";
 import { freezeStaticScene } from "./rendering/staticScene";
@@ -1639,6 +1640,7 @@ export class GameApp {
     this.renderedGrassClumpCount = this.world.getRenderedGrassClumpCount();
     this.renderedWetPathSheenCount = this.world.getRenderedWetPathSheenCount();
     this.renderedLampSpillCount = this.world.getRenderedLampSpillCount();
+    new SceneDecals(this.scene, this.level, this.rng, (point) => this.groundY(point)).addWorldDecals();
   }
 
   private addPlayerTorch(): void {
