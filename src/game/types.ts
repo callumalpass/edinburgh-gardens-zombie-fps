@@ -108,6 +108,33 @@ export interface ElevationSample {
   source: "vicmap-contour" | "vicmap-spot";
 }
 
+export type TerrainModifierKind = "path-crown" | "path-shoulder" | "tree-root" | "drainage-swale" | "oval-banking";
+
+export interface TerrainLineModifier {
+  id: string;
+  label: string;
+  kind: TerrainModifierKind;
+  shape: "line";
+  points: Vec2[];
+  innerWidth: number;
+  outerWidth: number;
+  delta: number;
+  source?: string;
+}
+
+export interface TerrainRadialModifier {
+  id: string;
+  label: string;
+  kind: TerrainModifierKind;
+  shape: "radial";
+  center: Vec2;
+  radius: number;
+  delta: number;
+  source?: string;
+}
+
+export type TerrainModifier = TerrainLineModifier | TerrainRadialModifier;
+
 export interface MappedBuilding {
   id: string;
   label: string;
@@ -222,6 +249,7 @@ export interface LevelData {
   elevationSamples: ElevationSample[];
   elevationMin: number;
   elevationMax: number;
+  terrainModifiers: TerrainModifier[];
   mappedBuildings: MappedBuilding[];
   mappedFences: MappedFence[];
   hardscapeLines: HardscapeLine[];

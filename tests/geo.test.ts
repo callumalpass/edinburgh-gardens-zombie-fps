@@ -7,6 +7,7 @@ import {
   BASKETBALL_RIM_HEIGHT_METRES,
   footballPostLocalOffsets
 } from "../src/game/sportsFixtures";
+import { TerrainSampler } from "../src/game/terrain";
 import type { MappedBuilding } from "../src/game/types";
 
 describe("map geometry", () => {
@@ -114,6 +115,37 @@ describe("map geometry", () => {
     expect(level.elevationMax - level.elevationMin).toBeGreaterThan(4);
     expect(level.elevationSamples.some((sample) => sample.source === "vicmap-spot")).toBe(true);
     expect(level.elevationSamples.filter((sample) => pointInPolygon(sample.position, level.boundary)).length).toBe(level.elevationSamples.length);
+  });
+
+  it("adds sourceable micro-terrain modifiers over broad elevation", () => {
+    const level = createLevelData();
+    const modifierKinds = new Set(level.terrainModifiers.map((modifier) => modifier.kind));
+    for (const kind of ["path-crown", "path-shoulder", "tree-root", "drainage-swale", "oval-banking"] as const) {
+      expect(modifierKinds.has(kind)).toBe(true);
+    }
+    expect(level.terrainModifiers.length).toBeGreaterThan(level.trees.length);
+    expect(level.terrainModifiers.every((modifier) => modifier.source && modifier.delta !== 0)).toBe(true);
+    expect(level.terrainModifiers.filter((modifier) => modifier.kind === "tree-root").length).toBe(level.trees.length);
+  });
+
+  it("samples local micro-relief without replacing Vicmap broad slope", () => {
+    const level = createLevelData();
+    const sampler = new TerrainSampler(level);
+    const crown = level.terrainModifiers.find((modifier) => modifier.kind === "path-crown" && modifier.shape === "line");
+    const treeRoot = level.terrainModifiers.find((modifier) => modifier.kind === "tree-root" && modifier.shape === "radial");
+    const swale = level.terrainModifiers.find((modifier) => modifier.kind === "drainage-swale" && modifier.shape === "line");
+
+    expect(crown).toBeTruthy();
+    expect(treeRoot).toBeTruthy();
+    expect(swale).toBeTruthy();
+    if (!crown || crown.shape !== "line" || !treeRoot || treeRoot.shape !== "radial" || !swale || swale.shape !== "line") {
+      throw new Error("Expected terrain modifier shapes");
+    }
+
+    expect(sampler.microReliefAt(crown.points[1])).toBeGreaterThan(0.02);
+    expect(sampler.microReliefAt(treeRoot.center)).toBeGreaterThan(0.04);
+    expect(sampler.microReliefAt(swale.points[1])).toBeLessThan(0);
+    expect(sampler.altitudeAt(crown.points[1])).toBeGreaterThanOrEqual(level.elevationMin);
   });
 
   it("includes OSM-mapped building and fence footprints", () => {

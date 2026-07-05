@@ -34,6 +34,7 @@ import type {
   SignificantTreePoint,
   SportsFixture,
   StreetEdge,
+  TerrainModifier,
   TreeCollider,
   TreeProfile,
   Vec2
@@ -83,6 +84,7 @@ export const RESEARCH_NOTES = [
   "Tree rendering now uses a single mapped-tree data model with species/profile inference from Yarra significant trees, OSM tree points and CMP heritage avenue context.",
   "Street edges now use a bounded OSM road query for Alfred Crescent, Freeman Street, Brunswick Street and St Georges Road, including trunk-road tram cues.",
   "Small park-life details are stored as sourceable level data so picnic, dog-area, cycling and sports-use cues remain separate from collision and amenity loot data.",
+  "Micro-terrain modifiers now layer path crowns, worn shoulders, root mounds, oval banking and drainage swales over the broad Vicmap elevation interpolation.",
   "See docs/edinburgh-gardens-research.md for source URLs, query notes, data licensing notes and implementation decisions."
 ];
 
@@ -1922,6 +1924,54 @@ function treeColliderRadius(tree: MappedTree): number {
   return Math.max(0.34, Math.min(1.05, ((tree.dbh ?? fallbackDbh) / 200) * WORLD_SCALE));
 }
 
+function pathTerrainModifiers(path: LevelPath): TerrainModifier[] {
+  const broadSource = path.source ?? "mapped Edinburgh Gardens path geometry";
+  const crownDelta = path.kind === "service" ? 0.028 : path.kind === "rail" ? 0.042 : 0.055;
+  const shoulderDelta = path.kind === "service" ? -0.022 : path.kind === "rail" ? -0.03 : -0.038;
+  const halfWidth = path.width * 0.5;
+  return [
+    {
+      id: `terrain-${path.id}-crown`,
+      label: `${path.label} slight crown`,
+      kind: "path-crown",
+      shape: "line",
+      points: path.points,
+      innerWidth: 0,
+      outerWidth: Math.max(0.72, halfWidth * 0.82),
+      delta: crownDelta,
+      source: `${broadSource}; path crown inferred from pedestrian-path drainage practice`
+    },
+    {
+      id: `terrain-${path.id}-shoulder`,
+      label: `${path.label} worn shoulder`,
+      kind: "path-shoulder",
+      shape: "line",
+      points: path.points,
+      innerWidth: Math.max(0.7, halfWidth * 0.88),
+      outerWidth: Math.max(1.6, halfWidth + 1.45),
+      delta: shoulderDelta,
+      source: `${broadSource}; worn grass and compacted shoulder inferred from CMP asphalt-path and edge notes`
+    }
+  ];
+}
+
+function treeRootTerrainModifier(tree: MappedTree, index: number): TerrainModifier {
+  const baseRadius = tree.profile === "oak" ? 4.9 : tree.profile === "elm" ? 4.25 : tree.profile === "gum" ? 3.6 : 3.2;
+  const heightFactor = Math.min(0.055, ((tree.height ?? 11) / 30) * 0.04);
+  const dbhFactor = Math.min(0.045, ((tree.dbh ?? 58) / 180) * 0.045);
+  const variation = ((index % 7) - 3) * 0.006;
+  return {
+    id: `terrain-root-${tree.id}`,
+    label: `${tree.label} root mound`,
+    kind: "tree-root",
+    shape: "radial",
+    center: tree.position,
+    radius: baseRadius + ((index % 5) - 2) * 0.18,
+    delta: 0.046 + heightFactor + dbhFactor + variation,
+    source: `${tree.source ?? "mapped tree"}; root flare and worn under-canopy ground inferred from significant-tree DBH/height context`
+  };
+}
+
 function sportsFixtureObstacles(fixture: SportsFixture): CircularObstacle[] {
   if (fixture.kind === "basketball-hoop") {
     return [
@@ -2377,10 +2427,39 @@ export function createLevelData(): LevelData {
     radius: treeColliderRadius(tree),
     source: tree.source
   }));
+  const paths = [railTrail, formalNorthSouth, crescentPath, ovalPath, rotundaLoop, ...osmPaths];
+  const terrainModifiers: TerrainModifier[] = [
+    ...paths.flatMap(pathTerrainModifiers),
+    ...trees.map(treeRootTerrainModifier),
+    {
+      id: "terrain-oval-perimeter-bank",
+      label: "W.T. Peterson Oval subtle perimeter banking",
+      kind: "oval-banking",
+      shape: "line",
+      points: oval,
+      innerWidth: 2.8,
+      outerWidth: 8.6,
+      delta: 0.11,
+      source: "W.T. Peterson Oval OSM geometry; Vicmap broad slope context; oval banking inferred as playable micro-terrain"
+    },
+    ...hardscapeLines
+      .filter((line) => line.kind === "bluestone-drain")
+      .map((line) => ({
+        id: `terrain-${line.id}-swale`,
+        label: `${line.label} shallow swale`,
+        kind: "drainage-swale" as const,
+        shape: "line" as const,
+        points: line.points,
+        innerWidth: 0,
+        outerWidth: Math.max(1.7, line.width * 2.4),
+        delta: -0.09,
+        source: `${line.source ?? "CMP hardscape line"}; local drainage depression inferred from bluestone-pitcher drain`
+      }))
+  ];
 
   return {
     boundary,
-    paths: [railTrail, formalNorthSouth, crescentPath, ovalPath, rotundaLoop, ...osmPaths],
+    paths,
     landmarks,
     treeLines,
     treePoints,
@@ -2390,6 +2469,7 @@ export function createLevelData(): LevelData {
     elevationSamples,
     elevationMin,
     elevationMax,
+    terrainModifiers,
     mappedBuildings,
     mappedFences,
     hardscapeLines,
