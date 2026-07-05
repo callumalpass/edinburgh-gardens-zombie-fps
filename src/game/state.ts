@@ -120,4 +120,5 @@ export interface GameTestApi {
   testZombieFacing: () => Array<{ id: number; faceAlignment: number; targetDistance: number }>;
   testSetCrouching: (crouching: boolean) => boolean;
   testStartIntermission: () => ActiveObjective | null;
+  dispose: () => void;
 }

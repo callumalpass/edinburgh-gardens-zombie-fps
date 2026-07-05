@@ -9,3 +9,4 @@ if (!root) {
 
 const game = new GameApp(root);
 game.init();
+window.addEventListener("beforeunload", () => game.dispose(), { once: true });

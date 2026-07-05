@@ -1,5 +1,12 @@
 import { expect, test } from "@playwright/test";
 
+test.afterEach(async ({ page }) => {
+  if (page.isClosed()) {
+    return;
+  }
+  await page.evaluate(() => window.__EGAME__?.dispose()).catch(() => {});
+});
+
 async function readCanvasSignal(page: import("@playwright/test").Page) {
   return page.evaluate(() => {
     const canvas = document.querySelector("canvas.game-canvas") as HTMLCanvasElement | null;

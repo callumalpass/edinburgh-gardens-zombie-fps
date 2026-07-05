@@ -214,7 +214,8 @@ export class GameApp {
       testZombieStates: () => this.testZombieStates(),
       testZombieFacing: () => this.testZombieFacing(),
       testSetCrouching: (crouching: boolean) => this.testSetCrouching(crouching),
-      testStartIntermission: () => this.testStartIntermission()
+      testStartIntermission: () => this.testStartIntermission(),
+      dispose: () => this.dispose()
     };
     installGameTestDriver(this.testApi);
 
