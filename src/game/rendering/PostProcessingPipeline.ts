@@ -52,14 +52,14 @@ const ANIME_GRADE_SHADER = {
       vec3 highlights = vec3(1.03, 0.93, 0.68);
       color = mix(color * shadows, color * mids, smoothstep(0.08, 0.62, center));
       color = mix(color, color * highlights, smoothstep(0.58, 0.98, center) * 0.22);
-      color = mix(color, floor(color * 10.0) / 10.0, 0.18 * strength);
-      color = mix(color, vec3(0.025, 0.055, 0.075), edge * 0.34 * strength);
+      color = mix(color, floor(color * 12.0) / 12.0, 0.08 * strength);
+      color = mix(color, vec3(0.025, 0.055, 0.075), edge * 0.26 * strength);
 
       float vignette = smoothstep(0.82, 0.22, distance(vUv, vec2(0.5)));
       color *= mix(0.76, 1.05, vignette);
 
       float grain = hash(vUv * resolution + time * 41.0) - 0.5;
-      color += grain * 0.025 * strength;
+      color += grain * 0.012 * strength;
 
       gl_FragColor = vec4(color, base.a);
     }
@@ -79,9 +79,10 @@ export class PostProcessingPipeline {
   ) {
     this.enabled = !smokeMode;
     this.composer = new EffectComposer(renderer);
+    this.composer.setPixelRatio(renderer.getPixelRatio());
     this.composer.addPass(new RenderPass(scene, camera));
 
-    const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), smokeMode ? 0.08 : 0.18, 0.42, 0.78);
+    const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), smokeMode ? 0.04 : 0.08, 0.26, 0.84);
     this.composer.addPass(bloom);
 
     this.gradePass = new ShaderPass(ANIME_GRADE_SHADER);
