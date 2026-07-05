@@ -26,7 +26,15 @@ export interface LootSearchContext {
 }
 
 const ATTACHMENT_POOL: UpgradeId[] = ["damage", "reload", "magazine", "spread", "fireRate"];
-const STRUCTURE_AMENITY_KINDS = new Set<AmenityPoint["kind"]>(["clubroom", "changeroom", "gatehouse", "maintenance_room", "community_room"]);
+const STRUCTURE_AMENITY_KINDS = new Set<AmenityPoint["kind"]>([
+  "clubroom",
+  "changeroom",
+  "umpire_room",
+  "gatehouse",
+  "maintenance_room",
+  "community_room",
+  "kitchenette"
+]);
 
 export function isStructureAmenityKind(kind: AmenityPoint["kind"]): boolean {
   return STRUCTURE_AMENITY_KINDS.has(kind);
@@ -48,6 +56,10 @@ export function lootNoiseMultiplier(kind: AmenityPoint["kind"], context: LootSea
         ? 0.8
         : kind === "gatehouse"
           ? 0.82
+          : kind === "umpire_room"
+            ? 0.9
+            : kind === "kitchenette"
+              ? 0.96
           : kind === "maintenance_room" || kind === "changeroom"
             ? 1.02
             : isStructureAmenityKind(kind)
@@ -157,6 +169,21 @@ export function searchAmenityLoot(kind: AmenityPoint["kind"], rng: RandomSource,
       status: attachment ? "Found changeroom attachment" : "Restocked from changeroom kit"
     });
   }
+  if (kind === "umpire_room") {
+    return withLootDefaults({
+      scrap: 9 + rng.int(0, 8) + valueBoost,
+      ammo: 7 + rng.int(0, 8) + Math.floor(valueBoost * 0.55),
+      health: rng.next() < 0.38 ? 5 + rng.int(0, 7) : 0,
+      attachment,
+      medicine: rng.next() < 0.42 ? 6 + Math.round(risk * 8) : 0,
+      throwables,
+      junk: quality === "junk",
+      quality,
+      noiseMultiplier,
+      searchSecondsMultiplier,
+      status: attachment ? "Found umpire-room attachment" : "Recovered umpire-room supplies"
+    });
+  }
   if (kind === "gatehouse") {
     return withLootDefaults({
       scrap: 12 + rng.int(0, 9) + valueBoost,
@@ -201,6 +228,21 @@ export function searchAmenityLoot(kind: AmenityPoint["kind"], rng: RandomSource,
       status: attachment ? "Found community-room attachment" : "Found community-room first aid"
     });
   }
+  if (kind === "kitchenette") {
+    return withLootDefaults({
+      scrap: 4 + rng.int(0, 5) + Math.floor(valueBoost * 0.35),
+      ammo: risk > 0.42 && rng.next() < 0.22 ? 3 + Math.floor(valueBoost * 0.3) : 0,
+      health: 14 + rng.int(0, 12) + Math.floor(valueBoost * 0.35),
+      attachment,
+      medicine: 8 + Math.round(risk * 8),
+      throwables: Math.min(2, throwables + (quality === "valuable" && rng.next() < 0.24 ? 1 : 0)),
+      junk: quality === "junk",
+      quality,
+      noiseMultiplier,
+      searchSecondsMultiplier,
+      status: attachment ? "Found kitchenette attachment" : "Found kitchenette food and first aid"
+    });
+  }
   return withLootDefaults({
     scrap: quality === "valuable" ? 4 + valueBoost : 0,
     ammo: quality === "valuable" ? 3 + Math.floor(valueBoost * 0.5) : 0,
@@ -218,9 +260,11 @@ export function searchAmenityLoot(kind: AmenityPoint["kind"], rng: RandomSource,
 function amenityLootBias(kind: AmenityPoint["kind"]): number {
   if (kind === "clubroom") return 0.1;
   if (kind === "changeroom") return 0.09;
+  if (kind === "umpire_room") return 0.08;
   if (kind === "gatehouse") return 0.08;
   if (kind === "maintenance_room") return 0.11;
   if (kind === "community_room") return 0.06;
+  if (kind === "kitchenette") return 0.06;
   if (kind === "bbq") return 0.08;
   if (kind === "bicycle_parking") return 0.05;
   if (kind === "toilets") return 0.03;

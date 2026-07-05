@@ -84,14 +84,28 @@ describe("collision system", () => {
 
   it("keeps structure access interactions source-linked and inside the park", () => {
     const level = createLevelData();
-    const structureKinds = new Set(["clubroom", "changeroom", "gatehouse", "maintenance_room", "community_room"]);
+    const structureKinds = new Set([
+      "clubroom",
+      "changeroom",
+      "umpire_room",
+      "gatehouse",
+      "maintenance_room",
+      "community_room",
+      "kitchenette",
+      "memorial_plaque"
+    ]);
     const expectedIds = [
       "grandstand-changeroom-access",
+      "grandstand-umpire-room-access",
       "tennis-clubroom-access",
       "bowling-clubroom-access",
+      "bowling-green-service-locker",
       "oval-gatehouse-window",
       "emely-baker-community-room",
-      "south-amenities-service-room"
+      "emely-baker-kitchenette",
+      "south-amenities-service-room",
+      "north-toilets-service-room",
+      "rotunda-memorial-plaque"
     ];
     const accessPoints = level.amenities.filter((amenity) => structureKinds.has(amenity.kind));
     const landmarks = new Set(level.landmarks.map((landmark) => landmark.id));

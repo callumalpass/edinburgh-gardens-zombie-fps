@@ -172,6 +172,7 @@ export const RESEARCH_NOTES = [
   "A 2026-07-06 playground and fence pass refreshed current OSM playground footprints, modeled both playgrounds as fenced with inferred safety-gate gaps, added low jumpable oval fence blockers at mapped oval connectors, and added a short player jump.",
   "A 2026-07-06 Fitzy Bowl pass removed the old invisible full-skatepark blocker, added source-backed depressed skate bowls, and made bowl exits constrained to roll-out gaps so dropping in is easy and climbing out is deliberately awkward.",
   "A 2026-07-06 public-use pass added source-backed rule signs for dog-leash edges, alcohol hours, access-friendly venue cues and the rotunda stair/no-power constraint so the park reads like the current public Edinburgh Gardens rather than a generic arena.",
+  "A 2026-07-06 structure-depth pass added additional source-backed building affordances: grandstand umpire access, Emely Baker kitchenette/service cues, bowling-green shed supplies, north toilet service access and an interactable rotunda memorial plaque.",
   "See docs/edinburgh-gardens-research.md for source URLs, query notes, data licensing notes and implementation decisions."
 ];
 
@@ -3363,6 +3364,19 @@ export function createLevelData(): LevelData {
       source: `${STRUCTURE_ACCESS_SOURCE}; positioned on the oval-facing external changeroom side so it does not overlap the stair climb fixture`
     },
     {
+      id: "grandstand-umpire-room-access",
+      label: "Grandstand umpire room",
+      kind: "umpire_room",
+      position: exteriorPointFromPolygon(
+        offsetPoint(grandstandCenter, grandstandRotation, grandstandFootprint.halfX * 0.64, grandstandFrontSign * (grandstandVisualHalfZ + 1.8)),
+        grandstand,
+        grandstandCenter,
+        1.4
+      ),
+      linkedStructureId: "grandstand",
+      source: `${STRUCTURE_ACCESS_SOURCE}; Yarra redevelopment source identifies refreshed umpire areas and secure access gates at the heritage grandstand`
+    },
+    {
       id: "tennis-clubroom-access",
       label: "Tennis clubroom",
       kind: "clubroom",
@@ -3393,6 +3407,23 @@ export function createLevelData(): LevelData {
       source: "OSM way 543505639; CMP 2004 bowling club entity, clubhouse, memorial-gate and bowling-precinct description; Fitzroy Victoria Bowling & Sports Club active greens/social use"
     },
     {
+      id: "bowling-green-service-locker",
+      label: "Bowling green service locker",
+      kind: "maintenance_room",
+      position: exteriorPointFromPolygon(
+        clearMappedBuildingFootprint(
+          exteriorPointFromPolygon(geoToWorld(g(-37.7875400, 144.9812450)), bowling, polygonCentroid(bowling), 4.5),
+          "osm-building-1475006770",
+          1.2
+        ),
+        bowling,
+        polygonCentroid(bowling),
+        4.5
+      ),
+      linkedStructureId: "osm-building-1475006770",
+      source: "OSM way 1475006770 bowling green shed; CMP 2004 bowling-club ancillary-building context; Fitzroy Victoria Bowling & Sports Club active green/social use"
+    },
+    {
       id: "oval-gatehouse-window",
       label: "Gatehouse ticket window",
       kind: "gatehouse",
@@ -3409,12 +3440,36 @@ export function createLevelData(): LevelData {
       source: "OSM way 543505702; Yarra Emely Baker Centre page for access-friendly community-room venue, gated outdoor area and shade sail"
     },
     {
+      id: "emely-baker-kitchenette",
+      label: "Emely Baker kitchenette",
+      kind: "kitchenette",
+      position: buildingAccessPosition("osm-building-543505702", g(-37.7856400, 144.9824800), -2.8, 1.25),
+      linkedStructureId: "osm-building-543505702",
+      source: "OSM way 543505702; Yarra Emely Baker Centre page lists kitchenette, small refrigerator, microwave, trestle tables and chairs"
+    },
+    {
       id: "south-amenities-service-room",
       label: "South amenities service room",
       kind: "maintenance_room",
       position: buildingAccessPosition("osm-building-242003562", g(-37.7884306, 144.9835333), 6.2, 1.25),
       linkedStructureId: "osm-building-242003562",
       source: "OSM way 242003562; Yarra Edinburgh Gardens public-toilet/accessibility listing; CMP 2004 notes toilet blocks as functional service buildings"
+    },
+    {
+      id: "north-toilets-service-room",
+      label: "North toilets service room",
+      kind: "maintenance_room",
+      position: exteriorPointFromPolygon(northToiletsLadderAccess, northToilets, northToiletsCenter, 1.25),
+      linkedStructureId: "north-toilets",
+      source: "Yarra Edinburgh Gardens public-toilet/accessibility listing; CMP 2004 describes the north-east toilet block as a utilitarian service building with flat concrete roof and tan brick walls"
+    },
+    {
+      id: "rotunda-memorial-plaque",
+      label: "Rotunda memorial plaque",
+      kind: "memorial_plaque",
+      position: exteriorPointFromPolygon(offsetPoint(rotundaCenter, -0.34, -2.3, -4.95), rotundaBuilding, rotundaCenter, 1.15),
+      linkedStructureId: "osm-building-543505640",
+      source: "OSM way 543505640; CMP 2004 rotunda description records World War memorial plaques, steps, raised platform and copper-domed Classical Revival fabric"
     }
   ];
   const amenities = [...mappedAmenities, ...featureAmenities, ...structureAmenities].filter((amenity) => pointInPolygon(amenity.position, boundary));

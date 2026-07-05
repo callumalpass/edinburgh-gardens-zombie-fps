@@ -15,13 +15,17 @@ describe("location and zombie loot", () => {
 
   it("gives source-backed structure access points distinct utility profiles", () => {
     const changeroom = searchAmenityLoot("changeroom", new SeededRandom(31));
+    const umpireRoom = searchAmenityLoot("umpire_room", new SeededRandom(31));
     const gatehouse = searchAmenityLoot("gatehouse", new SeededRandom(31));
     const maintenance = searchAmenityLoot("maintenance_room", new SeededRandom(31));
     const communityRoom = searchAmenityLoot("community_room", new SeededRandom(31));
+    const kitchenette = searchAmenityLoot("kitchenette", new SeededRandom(31));
 
     expect(changeroom.health + changeroom.medicine).toBeGreaterThan(gatehouse.health + gatehouse.medicine);
+    expect(umpireRoom.ammo + umpireRoom.scrap).toBeGreaterThan(communityRoom.ammo + communityRoom.scrap);
     expect(maintenance.scrap).toBeGreaterThan(gatehouse.scrap - 3);
     expect(communityRoom.health + communityRoom.medicine).toBeGreaterThan(maintenance.health);
+    expect(kitchenette.health + kitchenette.medicine).toBeGreaterThan(gatehouse.health + gatehouse.medicine);
     expect(gatehouse.noiseMultiplier).toBeLessThan(maintenance.noiseMultiplier);
   });
 

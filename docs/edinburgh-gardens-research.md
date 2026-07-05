@@ -122,6 +122,7 @@ These notes record the real-world sources and implementation decisions used to s
 - The 2026-07-06 Fitzy Bowl correction removes the invisible full-footprint skatepark blocker and rebuilds the skatepark with lowered enterable bowls, visible coping gaps, ledges, rail, banks, quarter-pipe and seating.
 - The 2026-07-06 building access pass adds source-linked searchable structure access points at the grandstand changerooms, tennis clubroom, bowling club gate, Freeman Street gatehouse, Emely Baker Centre and south amenities service room, with distinct loot profiles and visible access hardware.
 - The 2026-07-06 public-use/weather pass adds source-backed non-colliding rule signs for dog-leash edges, picnic alcohol hours, Emely Baker access-friendly status and the rotunda stair/no-power constraint, plus a modest rain/wind/wetness firearm-spread modifier shared by local and LAN players.
+- The 2026-07-06 structure-depth pass adds source-backed grandstand umpire-room, Emely Baker kitchenette, bowling shed service-locker, north toilet service-room and rotunda memorial-plaque interactions, plus richer building details for tennis social-space, Emely Baker venue use, grandstand secure gates, toilet service hardware and rotunda memorial setting.
 - Tree placement refresh research is stored in `docs/research/tree-placement-refresh-2026-07-05.md`.
 - Detailed OSM path/service research is stored in `docs/research/osm-path-service-inventory-2026-07-05.md`.
 - Hardscape and terrain-edge research is stored in `docs/research/hardscape-terrain-edges-2026-07-05.md`.
@@ -147,6 +148,7 @@ These notes record the real-world sources and implementation decisions used to s
 - Skatepark bowl and north-playground correction research is stored in `docs/research/skatepark-bowls-and-north-playground-correction-2026-07-06.md`.
 - Building access interaction research is stored in `docs/research/building-access-interactions-2026-07-06.md`.
 - Public-use and weather realism research is stored in `docs/research/public-use-weather-realism-2026-07-06.md`.
+- Structure depth research is stored in `docs/research/structure-depth-pass-2026-07-06.md`.
 - Local raw research asset guidance is stored in `docs/research/raw-assets.md`.
 - Research/data pipeline automation is stored in `docs/research/data-pipeline-automation-2026-07-05.md` and `docs/research/research-manifest.json`.
 

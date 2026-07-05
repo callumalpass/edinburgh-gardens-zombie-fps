@@ -321,9 +321,12 @@ export type AmenityKind =
   | "table_tennis"
   | "clubroom"
   | "changeroom"
+  | "umpire_room"
   | "gatehouse"
   | "maintenance_room"
-  | "community_room";
+  | "community_room"
+  | "kitchenette"
+  | "memorial_plaque";
 
 export interface AmenityPoint {
   id: string;

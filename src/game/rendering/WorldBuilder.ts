@@ -421,6 +421,9 @@ export class WorldBuilder {
     } else if (amenity.kind === "toilets") {
       this.addToiletSign(amenity.position, angle);
       this.addAmenityHalo(amenity.position, 0x61a8d3, 0.52);
+    } else if (amenity.kind === "memorial_plaque") {
+      this.addMemorialPlaqueCue(amenity.position, angle);
+      this.addAmenityHalo(amenity.position, 0xd0a343, 0.52);
     } else if (this.isStructureAmenity(amenity)) {
       this.addStructureAccessCue(amenity, angle);
       this.addAmenityHalo(amenity.position, 0xe3a84a, 0.58);
@@ -1700,6 +1703,8 @@ export class WorldBuilder {
       this.addBuildingWallLight(center, rotation, -footprint.halfX * 0.72, frontZ + 0.06, 2.32);
       this.addBuildingSign(center, rotation, -footprint.halfX * 0.28, frontZ + 0.04, footprint.halfX * 0.36, 0.34, 2.28, 0x2f735c);
       this.addBuildingTextSign(center, rotation, footprint.halfX * 0.28, frontZ + 0.055, footprint.halfX * 0.54, 0.38, 2.34, "TENNIS", "#2f735c", "#f4e7b8");
+      this.addBuildingTextSign(center, rotation, -footprint.halfX * 0.7, frontZ + 0.055, footprint.halfX * 0.34, 0.3, 1.56, "SOCIAL", "#315d67", "#f2e6a8", 0.065);
+      this.addBuildingDoor(center, rotation, -footprint.halfX * 0.7, frontZ + 0.035, footprint.halfX * 0.32, 1.08, 0.86, 0.06);
       this.addBuildingTextSign(center, rotation, footprint.halfX * 0.68, frontZ + 1.62, footprint.halfX * 0.34, 0.34, 1.58, "WORKS", "#e36e2f", "#18110b");
       this.addLocalBox(center, rotation, -footprint.halfX * 0.62, frontZ + 1.42, footprint.halfX * 0.58, 0.07, 1.12, this.materials.concrete, 0.16, false);
       for (const side of [-1, 1]) {
@@ -1803,6 +1808,9 @@ export class WorldBuilder {
       }
       this.addBuildingSign(center, rotation, -footprint.halfX * 0.24, frontZ + 0.04, footprint.halfX * 0.52, 0.34, 2.42, 0x315d67);
       this.addBuildingTextSign(center, rotation, footprint.halfX * 0.36, frontZ + 0.055, footprint.halfX * 0.58, 0.34, 2.5, "EMELY", "#315d67", "#f2e6a8");
+      this.addBuildingTextSign(center, rotation, -footprint.halfX * 0.76, frontZ + 0.055, footprint.halfX * 0.26, 0.28, 2.04, "30", "#315d67", "#f2e6a8", 0.06);
+      this.addLocalBox(center, rotation, footprint.halfX + 0.04, -footprint.halfZ * 0.1, 0.08, 0.78, 0.54, this.materials.metal, 1.78, false);
+      this.addLocalBox(center, rotation, footprint.halfX + 0.055, -footprint.halfZ * 0.1, 0.085, 0.08, 0.38, this.materials.darkOpening, 2.1, false);
       this.addLocalBox(center, rotation, -footprint.halfX * 0.62, frontZ + 1.04, footprint.halfX * 0.48, 0.07, 1.1, this.materials.concrete, 0.16, false);
       for (const side of [-1, 1]) {
         this.addLocalBox(center, rotation, -footprint.halfX * 0.62 + side * footprint.halfX * 0.28, frontZ + 1.04, 0.055, 0.7, 1.05, this.materials.metal, 0.52);
@@ -1829,6 +1837,7 @@ export class WorldBuilder {
       );
       this.addBuildingRoofVent(center, rotation, footprint.halfX * 0.48, -footprint.halfZ * 0.22, building.height, 0.46, 0.32);
       this.addEmelyBakerGateDetails(center, rotation, courtyardZ, footprint);
+      this.addEmelyOutdoorFurniture(center, rotation, courtyardZ, footprint);
       this.addLabel("Emely Baker Centre", center, building.height + 1.35);
       return;
     }
@@ -1856,6 +1865,10 @@ export class WorldBuilder {
         for (const x of [-0.58, 0.58]) {
           this.addLocalCylinder(center, rotation, x * footprint.halfX, frontZ + 0.78, 0.09, 0.1, 0.82, this.materials.metal);
         }
+        for (const x of [-0.64, -0.2, 0.24, 0.68]) {
+          this.addLocalBox(center, rotation, x * footprint.halfX, rearZ - 0.03, footprint.halfX * 0.18, 0.18, 0.07, this.materials.darkOpening, 2.22, false);
+        }
+        this.addLocalBox(center, rotation, -footprint.halfX - 0.04, -footprint.halfZ * 0.24, 0.08, 1.05, 0.6, this.standardDetailMaterial("amenities-external-service-panel", 0x5b6665, 0.76, 0.08), 0.72);
       }
       return;
     }
@@ -2619,6 +2632,23 @@ export class WorldBuilder {
     this.addBuildingTextSign(center, rotation, -footprint.halfX * 0.76, courtyardZ - 1.22, footprint.halfX * 0.42, 0.28, 1.36, "BOOKED", "#315d67", "#f2e6a8", 0.065);
   }
 
+  private addEmelyOutdoorFurniture(
+    center: Vec2,
+    rotation: number,
+    courtyardZ: number,
+    footprint: { halfX: number; halfZ: number }
+  ): void {
+    const tableMaterial = this.standardDetailMaterial("emely-trestle-table-stack", 0xbca46f, 0.72, 0.02);
+    const chairMaterial = this.standardDetailMaterial("emely-chair-stack", 0x4f5e56, 0.58, 0.18);
+    for (const y of [0.26, 0.38, 0.5]) {
+      this.addLocalBox(center, rotation, -footprint.halfX * 0.3, courtyardZ + 0.26, 1.25, 0.06, 0.42, tableMaterial, y);
+    }
+    for (const index of [0, 1, 2, 3]) {
+      this.addLocalBox(center, rotation, footprint.halfX * 0.36 + index * 0.12, courtyardZ - 0.34, 0.08, 0.48, 0.42, chairMaterial, 0.36 + index * 0.035);
+    }
+    this.addLocalBox(center, rotation, footprint.halfX * 0.58, courtyardZ + 0.42, 0.46, 0.54, 0.32, this.materials.metal, 0.38);
+  }
+
   private addLocalShadeSail(
     center: Vec2,
     rotation: number,
@@ -2668,6 +2698,13 @@ export class WorldBuilder {
     }
     this.addBuildingTextSign(center, rotation, -footprint.halfX * 0.54, frontOut(0.08), footprint.halfX * 0.36, 0.3, 2.72, "CHANGE", "#5b4632", "#f2e6a8", 0.06);
     this.addBuildingTextSign(center, rotation, footprint.halfX * 0.54, frontOut(0.08), footprint.halfX * 0.32, 0.3, 2.72, "UMPIRE", "#5b4632", "#f2e6a8", 0.06);
+    const gateMaterial = this.standardDetailMaterial("grandstand-secure-access-gates", 0x2f3b38, 0.54, 0.34);
+    for (const x of [-0.68, 0.68]) {
+      this.addLocalBox(center, rotation, x * footprint.halfX, frontOut(0.2), footprint.halfX * 0.42, 1.05, 0.06, gateMaterial, 0.72, false);
+      for (const bar of [-0.24, 0, 0.24]) {
+        this.addLocalBox(center, rotation, x * footprint.halfX + bar * footprint.halfX, frontOut(0.24), 0.035, 0.96, 0.06, gateMaterial, 0.72, false);
+      }
+    }
     for (const y of [1.16, 2.34]) {
       this.addLocalBox(center, rotation, 0, frontOut(0.02), footprint.halfX * 1.42, 0.08, 0.08, this.materials.metal, y, false);
     }
@@ -3625,6 +3662,9 @@ export class WorldBuilder {
       } else if (amenity.kind === "toilets") {
         this.addToiletSign(amenity.position, angle);
         this.addAmenityHalo(amenity.position, 0x61a8d3, 0.52);
+      } else if (amenity.kind === "memorial_plaque") {
+        this.addMemorialPlaqueCue(amenity.position, angle);
+        this.addAmenityHalo(amenity.position, 0xd0a343, 0.52);
       } else if (this.isStructureAmenity(amenity)) {
         this.addStructureAccessCue(amenity, angle);
         this.addAmenityHalo(amenity.position, 0xe3a84a, 0.58);
@@ -4345,9 +4385,11 @@ export class WorldBuilder {
     return (
       amenity.kind === "clubroom" ||
       amenity.kind === "changeroom" ||
+      amenity.kind === "umpire_room" ||
       amenity.kind === "gatehouse" ||
       amenity.kind === "maintenance_room" ||
-      amenity.kind === "community_room"
+      amenity.kind === "community_room" ||
+      amenity.kind === "kitchenette"
     );
   }
 
@@ -4355,24 +4397,32 @@ export class WorldBuilder {
     const panelColor =
       amenity.kind === "changeroom"
         ? 0x5f725f
+        : amenity.kind === "umpire_room"
+          ? 0x5b5f67
         : amenity.kind === "gatehouse"
           ? 0x6a4c32
           : amenity.kind === "maintenance_room"
             ? 0x5b6665
             : amenity.kind === "community_room"
               ? 0x315d67
+              : amenity.kind === "kitchenette"
+                ? 0x826b4d
               : 0x314f44;
     const panelMaterial = this.standardDetailMaterial(`structure-access-${amenity.kind}`, panelColor, 0.72, 0.08);
     const latchMaterial = this.standardDetailMaterial("structure-access-latch", 0xd0a343, 0.48, 0.28);
     const signText =
       amenity.kind === "changeroom"
         ? "CHANGE"
+        : amenity.kind === "umpire_room"
+          ? "UMPIRE"
         : amenity.kind === "gatehouse"
           ? "GATE"
           : amenity.kind === "maintenance_room"
             ? "STORE"
             : amenity.kind === "community_room"
               ? "ROOM"
+              : amenity.kind === "kitchenette"
+                ? "KITCHEN"
               : "CLUB";
     const signMaterial = this.canvasSignMaterial(`structure-access-${amenity.kind}`, signText, "#2b332c", "#f0d996");
 
@@ -4388,6 +4438,15 @@ export class WorldBuilder {
       this.addLocalBox(amenity.position, angle, -0.5, -0.56, 0.24, 0.055, 0.065, cross, 0.92, false);
       this.addLocalBox(amenity.position, angle, -0.5, -0.565, 0.055, 0.24, 0.065, cross, 0.92, false);
       this.addLocalBox(amenity.position, angle, 0.18, 0.28, 1.15, 0.16, 0.32, this.materials.timber, 0.2);
+      return;
+    }
+
+    if (amenity.kind === "umpire_room") {
+      const clipboard = this.basicDetailMaterial("umpire-room-clipboard", 0xd8cfad);
+      this.addLocalBox(amenity.position, angle, -0.46, -0.52, 0.34, 0.46, 0.06, clipboard, 0.92, false);
+      this.addLocalBox(amenity.position, angle, -0.46, -0.565, 0.24, 0.045, 0.065, this.materials.darkOpening, 1.0, false);
+      this.addLocalCylinder(amenity.position, angle, 0.42, 0.28, 0.16, 0.16, 0.08, this.materials.metal, 0.28);
+      this.addLocalBox(amenity.position, angle, 0.42, 0.46, 0.5, 0.12, 0.24, this.materials.timber, 0.28);
       return;
     }
 
@@ -4416,8 +4475,30 @@ export class WorldBuilder {
       return;
     }
 
+    if (amenity.kind === "kitchenette") {
+      const appliance = this.standardDetailMaterial("kitchenette-appliance", 0xe2e0d2, 0.54, 0.12);
+      const doorSeal = this.basicDetailMaterial("kitchenette-door-seal", 0x2d3430);
+      this.addLocalBox(amenity.position, angle, -0.48, 0.24, 0.42, 0.72, 0.34, appliance, 0.42);
+      this.addLocalBox(amenity.position, angle, -0.48, 0.02, 0.36, 0.055, 0.05, doorSeal, 0.58, false);
+      this.addLocalBox(amenity.position, angle, 0.46, 0.25, 0.52, 0.18, 0.34, this.materials.metal, 0.56);
+      this.addLocalCylinder(amenity.position, angle, 0.46, 0.05, 0.06, 0.06, 0.28, this.materials.metal, 0.61);
+      return;
+    }
+
     this.addLocalBox(amenity.position, angle, -0.48, 0.24, 0.48, 0.58, 0.34, this.materials.metal, 0.38);
     this.addLocalBox(amenity.position, angle, 0.48, 0.24, 0.44, 0.44, 0.32, this.materials.timber, 0.32);
+  }
+
+  private addMemorialPlaqueCue(position: Vec2, angle: number): void {
+    const stone = this.standardDetailMaterial("memorial-plaque-stone", 0xb8ad91, 0.74, 0.02);
+    const bronze = this.standardDetailMaterial("memorial-plaque-bronze", 0x8a5d2d, 0.48, 0.38);
+    const base = this.addLocalBox(position, angle, 0, 0.12, 1.25, 0.18, 0.48, stone, 0.12);
+    base.castShadow = true;
+    this.addLocalBox(position, angle, 0, -0.12, 0.95, 0.58, 0.08, stone, 0.48);
+    this.addLocalBox(position, angle, 0, -0.18, 0.72, 0.34, 0.055, bronze, 0.55, false);
+    for (const y of [0.49, 0.58, 0.67]) {
+      this.addLocalBox(position, angle, 0, -0.215, 0.54, 0.026, 0.06, this.basicDetailMaterial("memorial-plaque-lines", 0x2f2518), y, false);
+    }
   }
 
   private addToiletSign(position: Vec2, angle: number): void {
@@ -4547,6 +4628,27 @@ export class WorldBuilder {
       const plate = new THREE.Mesh(new THREE.BoxGeometry(0.82, 0.34, 0.05), plaque);
       plate.position.set(side * 1.05, 1.55, -4.48);
       group.add(plate);
+    }
+    const palisade = new THREE.MeshStandardMaterial({ color: 0x26302d, metalness: 0.38, roughness: 0.48 });
+    const planting = new THREE.MeshStandardMaterial({ color: 0x49673f, roughness: 0.96 });
+    const plantingRing = new THREE.Mesh(new THREE.TorusGeometry(6.35, 0.18, 8, 42), planting);
+    plantingRing.position.y = 0.16;
+    plantingRing.rotation.x = Math.PI / 2;
+    plantingRing.receiveShadow = true;
+    group.add(plantingRing);
+    for (let i = 0; i < 28; i += 1) {
+      const angle = (i / 28) * Math.PI * 2;
+      if (Math.abs(angle - Math.PI * 1.5) < 0.28) continue;
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.045, 0.62, 6), palisade);
+      post.position.set(Math.cos(angle) * 6.55, 0.46, Math.sin(angle) * 6.55);
+      post.castShadow = true;
+      group.add(post);
+      if (i % 2 === 0) {
+        const rail = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.045, 0.045), palisade);
+        rail.position.set(Math.cos(angle + 0.055) * 6.55, 0.6, Math.sin(angle + 0.055) * 6.55);
+        rail.rotation.y = -angle;
+        group.add(rail);
+      }
     }
     group.position.set(position.x, this.radialSupportY(position, 5.7), position.z);
     group.rotation.y = -0.34;

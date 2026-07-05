@@ -1414,6 +1414,14 @@ export class GameApp {
       player.health = Math.min(100, player.health + (amenity.kind === "bench" ? 10 : 12));
       return true;
     }
+    if (amenity.kind === "memorial_plaque") {
+      if (this.searchedAmenityIds.has(amenity.id)) {
+        return false;
+      }
+      this.searchedAmenityIds.add(amenity.id);
+      player.condition.blurTimer = Math.max(0, player.condition.blurTimer - 4);
+      return true;
+    }
     if (this.searchedAmenityIds.has(amenity.id)) {
       return false;
     }
@@ -3257,6 +3265,20 @@ export class GameApp {
       this.audio.playWorld("rest", amenity.position, { volume: 0.85 });
       return true;
     }
+    if (amenity.kind === "memorial_plaque") {
+      if (alreadySearched) {
+        this.flashStatus("Plaque already read");
+        this.audio.playWorld("deny");
+        return false;
+      }
+      this.searchedAmenityIds.add(amenity.id);
+      this.shotBloom *= 0.28;
+      this.condition.blurTimer = Math.max(0, this.condition.blurTimer - 4);
+      this.player.velocity.multiplyScalar(0.1);
+      this.flashStatus("Regained focus at memorial plaque");
+      this.audio.playWorld("rest", amenity.position, { volume: 0.7 });
+      return true;
+    }
     if (alreadySearched) {
       this.flashStatus(`${amenity.label} already searched`);
       this.audio.playWorld("deny");
@@ -3398,6 +3420,8 @@ export class GameApp {
 
   private amenitySearchDuration(amenity: AmenityPoint): number {
     if (amenity.kind === "maintenance_room") return 1.85;
+    if (amenity.kind === "kitchenette") return 1.65;
+    if (amenity.kind === "umpire_room") return 1.55;
     if (amenity.kind === "clubroom" || amenity.kind === "changeroom" || amenity.kind === "community_room") return 1.7;
     if (amenity.kind === "gatehouse") return 1.25;
     if (amenity.kind === "bbq") return 1.75;
@@ -3418,6 +3442,7 @@ export class GameApp {
     if (amenity.kind === "bench") return `E: rest ${REST_SECONDS}s`;
     if (amenity.kind === "picnic_table") return `E: rest ${REST_SECONDS}s`;
     if (amenity.kind === "table_tennis") return "E: play";
+    if (amenity.kind === "memorial_plaque") return this.searchedAmenityIds.has(amenity.id) ? "Plaque read" : "E: read plaque";
     if (amenity.kind === "waste_basket") return this.searchedAmenityIds.has(amenity.id) ? "Bin searched" : "E: search bin";
     if (amenity.kind === "bicycle_parking") return this.searchedAmenityIds.has(amenity.id) ? "Bike racks searched" : "E: search bike racks";
     if (amenity.kind === "bbq") return this.searchedAmenityIds.has(amenity.id) ? "BBQ searched" : "E: search BBQ";

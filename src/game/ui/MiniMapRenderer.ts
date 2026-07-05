@@ -127,9 +127,12 @@ export class MiniMapRenderer {
             ? "rgba(112, 180, 139, 0.68)"
             : amenity.kind === "clubroom" ||
                 amenity.kind === "changeroom" ||
+                amenity.kind === "umpire_room" ||
                 amenity.kind === "gatehouse" ||
                 amenity.kind === "maintenance_room" ||
-                amenity.kind === "community_room"
+                amenity.kind === "community_room" ||
+                amenity.kind === "kitchenette" ||
+                amenity.kind === "memorial_plaque"
               ? "rgba(227, 168, 74, 0.82)"
               : "rgba(213, 142, 67, 0.74)";
       ctx.beginPath();

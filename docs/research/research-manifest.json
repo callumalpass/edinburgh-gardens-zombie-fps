@@ -283,6 +283,7 @@
         "yarra-significant-trees-data",
         "yarra-brunswick-street-oval",
         "yarra-emely-baker-centre",
+        "yarra-edinburgh-gardens-rotunda",
         "yarra-fitzroy-bowls-mural",
         "fitzroy-bowls-official",
         "brunswick-tree-protection-plan"
@@ -559,6 +560,20 @@
         "yarra-edinburgh-gardens",
         "yarra-edinburgh-gardens-rotunda",
         "yarra-emely-baker-centre"
+      ]
+    },
+    {
+      "id": "structure-depth-pass",
+      "path": "docs/research/structure-depth-pass-2026-07-06.md",
+      "requiredHeadings": ["## Sources", "## Findings", "## Implementation Translation", "## Uncertainty", "## Validation"],
+      "sourceIds": [
+        "yarra-edinburgh-gardens",
+        "yarra-edinburgh-gardens-rotunda",
+        "yarra-emely-baker-centre",
+        "yarra-brunswick-street-oval",
+        "edinburgh-gardens-cmp",
+        "osm-way-api",
+        "fitzroy-bowls-official"
       ]
     },
     {

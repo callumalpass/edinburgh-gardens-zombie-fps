@@ -369,6 +369,20 @@ describe("map geometry", () => {
     expect(tennisCourts.every((court) => court.polygon?.every((point) => pointInPolygon(point, level.boundary)))).toBe(true);
   });
 
+  it("adds source-backed deeper structure affordances", () => {
+    const level = createLevelData();
+    const amenitiesById = new Map(level.amenities.map((amenity) => [amenity.id, amenity]));
+
+    expect(amenitiesById.get("grandstand-umpire-room-access")?.kind).toBe("umpire_room");
+    expect(amenitiesById.get("grandstand-umpire-room-access")?.source).toContain("umpire");
+    expect(amenitiesById.get("emely-baker-kitchenette")?.kind).toBe("kitchenette");
+    expect(amenitiesById.get("emely-baker-kitchenette")?.source).toContain("microwave");
+    expect(amenitiesById.get("bowling-green-service-locker")?.linkedStructureId).toBe("osm-building-1475006770");
+    expect(amenitiesById.get("north-toilets-service-room")?.source).toContain("flat concrete roof");
+    expect(amenitiesById.get("rotunda-memorial-plaque")?.kind).toBe("memorial_plaque");
+    expect(amenitiesById.get("rotunda-memorial-plaque")?.source).toContain("memorial plaques");
+  });
+
   it("includes researched hardscape edge and drain features", () => {
     const level = createLevelData();
     const hardscapeIds = new Set(level.hardscapeLines.map((line) => line.id));
