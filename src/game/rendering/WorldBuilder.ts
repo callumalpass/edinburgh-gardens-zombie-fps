@@ -101,6 +101,7 @@ export class WorldBuilder {
     this.addStreetEdges();
     this.addMownLawnBands();
     this.addLawnWearPatches();
+    this.addDistantGroundBreakup();
     this.addPaths();
     this.addPathSurfacePatches();
     this.addHardscapeLines();
@@ -270,6 +271,50 @@ export class WorldBuilder {
       stripe.receiveShadow = true;
       this.scene.add(stripe);
     });
+  }
+
+  private addDistantGroundBreakup(): void {
+    const minX = Math.min(...this.level.boundary.map((point) => point.x)) + 6;
+    const maxX = Math.max(...this.level.boundary.map((point) => point.x)) - 6;
+    const minZ = Math.min(...this.level.boundary.map((point) => point.z)) + 6;
+    const maxZ = Math.max(...this.level.boundary.map((point) => point.z)) - 6;
+    const ovalGeometry = new THREE.CircleGeometry(1, 22);
+    const breakupMaterials = [
+      new THREE.MeshBasicMaterial({ color: 0x1d3e2d, transparent: true, opacity: 0.2, depthWrite: false }),
+      new THREE.MeshBasicMaterial({ color: 0x58643d, transparent: true, opacity: 0.16, depthWrite: false }),
+      new THREE.MeshBasicMaterial({ color: 0x543d2a, transparent: true, opacity: 0.13, depthWrite: false }),
+      new THREE.MeshBasicMaterial({ color: 0x173024, transparent: true, opacity: 0.18, depthWrite: false })
+    ];
+    const maxPatches = 160;
+    let placed = 0;
+
+    outer: for (let x = minX; x <= maxX; x += 14) {
+      for (let z = minZ; z <= maxZ; z += 14) {
+        if (this.stableNoise(x, z, 101) < 0.5) continue;
+        const point = {
+          x: x + (this.stableNoise(x, z, 102) - 0.5) * 13,
+          z: z + (this.stableNoise(x, z, 103) - 0.5) * 13
+        };
+        if (!this.isGrassEligible(point)) continue;
+
+        const tone = this.stableNoise(point.x, point.z, 104);
+        const material = breakupMaterials[Math.min(breakupMaterials.length - 1, Math.floor(tone * breakupMaterials.length))];
+        const mown = this.isMownOvalPoint(point);
+        const longAxis = THREE.MathUtils.lerp(mown ? 11 : 7, mown ? 28 : 21, this.stableNoise(point.x, point.z, 105));
+        const shortAxis = THREE.MathUtils.lerp(mown ? 1.4 : 1.8, mown ? 3.8 : 6.2, this.stableNoise(point.x, point.z, 106));
+        const patch = new THREE.Mesh(ovalGeometry, material);
+        patch.position.set(point.x, this.groundY(point) + 0.088 + placed * 0.00002, point.z);
+        patch.rotation.set(-Math.PI / 2, 0, this.stableNoise(point.x, point.z, 107) * Math.PI);
+        patch.scale.set(longAxis * 0.5, shortAxis * 0.5, 1);
+        patch.receiveShadow = true;
+        patch.renderOrder = 1;
+        patch.userData.kind = "distant-ground-breakup";
+        this.scene.add(patch);
+
+        placed += 1;
+        if (placed >= maxPatches) break outer;
+      }
+    }
   }
 
   private addDampGroundDetails(): void {
