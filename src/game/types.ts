@@ -91,6 +91,15 @@ export interface MappedBuilding {
   polygon: Vec2[];
   height: number;
   material: "brick" | "timber" | "utility";
+  detailProfile?:
+    | "tennis-pavilion"
+    | "bowling-club"
+    | "gatehouse"
+    | "rotunda-pavilion"
+    | "community-centre"
+    | "bowling-shed"
+    | "amenities";
+  source?: string;
   collision: boolean;
 }
 

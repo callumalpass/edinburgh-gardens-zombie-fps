@@ -603,6 +603,84 @@ export class WorldBuilder {
     if (building.id === "osm-building-543505702" || building.id === "osm-building-242003562") {
       this.addLabel(building.label, center, building.height + 1.8);
     }
+    this.addMappedBuildingDetails(building, center);
+  }
+
+  private addMappedBuildingDetails(building: MappedBuilding, center: Vec2): void {
+    if (!building.detailProfile) return;
+    const footprint = this.fitBoxFromPolygon(building.polygon, 0, 0);
+    const rotation = -footprint.angle;
+    const frontZ = footprint.halfZ + 0.08;
+    const rearZ = -footprint.halfZ - 0.08;
+
+    if (building.detailProfile === "tennis-pavilion") {
+      this.addLocalBox(center, rotation, 0, frontZ + 0.9, footprint.halfX * 1.45, 0.08, 1.55, this.materials.concrete, 0.14, false);
+      this.addLocalBox(center, rotation, 0, frontZ + 0.72, footprint.halfX * 1.5, 0.18, 1.28, this.materials.metal, building.height + 0.1);
+      for (const x of [-0.42, 0, 0.42]) {
+        this.addLocalCylinder(center, rotation, x * footprint.halfX * 2, frontZ + 0.42, 0.055, 0.07, 2.7, this.materials.metal);
+      }
+      for (const x of [-0.55, 0, 0.55]) {
+        this.addLocalBox(center, rotation, x * footprint.halfX * 1.15, rearZ - 0.03, footprint.halfX * 0.3, 1.15, 0.08, this.materials.darkOpening, 1.45, false);
+      }
+      this.addLocalBox(center, rotation, 0, rearZ - 0.08, footprint.halfX * 1.35, 1.55, 0.12, this.materials.hedge, 1.1);
+      this.addLabel("Fitzroy Tennis Club", center, building.height + 1.45);
+      return;
+    }
+
+    if (building.detailProfile === "bowling-club") {
+      this.addLocalBox(center, rotation, -footprint.halfX * 0.18, frontZ + 0.82, footprint.halfX * 1.42, 0.12, 1.7, this.materials.concrete, 0.14, false);
+      this.addLocalBox(center, rotation, -footprint.halfX * 0.18, frontZ + 0.58, footprint.halfX * 1.5, 0.22, 1.35, this.materials.timber, building.height + 0.08);
+      for (const x of [-0.58, -0.22, 0.14, 0.5]) {
+        this.addLocalBox(center, rotation, x * footprint.halfX, frontZ - 0.02, 1.35, 0.86, 0.09, this.materials.darkOpening, 1.36, false);
+      }
+      for (const x of [-0.66, 0.66]) {
+        this.addLocalBox(center, rotation, x * footprint.halfX, frontZ + 0.25, 0.12, 1.35, 0.12, this.materials.timber, 0.8);
+      }
+      this.addLabel("Fitzroy Victoria Bowling Club", center, building.height + 1.45);
+      return;
+    }
+
+    if (building.detailProfile === "gatehouse") {
+      this.addLocalBox(center, rotation, 0, 0, footprint.halfX * 2.3, 0.42, footprint.halfZ * 2.45, this.materials.timber, building.height + 0.16);
+      this.addLocalBox(center, rotation, 0, frontZ + 0.02, footprint.halfX * 0.82, 1.65, 0.09, this.materials.darkOpening, 1.08, false);
+      for (const x of [-0.72, 0.72]) {
+        this.addLocalBox(center, rotation, x * footprint.halfX, frontZ + 0.015, footprint.halfX * 0.42, 0.62, 0.08, this.materials.line, 1.78, false);
+      }
+      this.addLabel("Freeman Street gatehouse", center, building.height + 1.15);
+      return;
+    }
+
+    if (building.detailProfile === "rotunda-pavilion") {
+      const dome = new THREE.Mesh(new THREE.ConeGeometry(footprint.halfX * 1.45, 0.9, 18), this.materials.timber);
+      dome.position.set(center.x, this.radialSupportY(center, footprint.halfX) + building.height + 0.48, center.z);
+      dome.castShadow = true;
+      this.scene.add(dome);
+      this.addLocalBox(center, rotation, 0, frontZ + 0.18, footprint.halfX * 0.8, 1.2, 0.08, this.materials.darkOpening, 0.86, false);
+      return;
+    }
+
+    if (building.detailProfile === "community-centre") {
+      this.addLocalBox(center, rotation, 0, frontZ + 0.48, footprint.halfX * 1.35, 0.1, 1.05, this.materials.concrete, 0.13, false);
+      for (const x of [-0.62, -0.22, 0.22, 0.62]) {
+        this.addLocalBox(center, rotation, x * footprint.halfX, frontZ + 0.02, footprint.halfX * 0.32, 0.72, 0.08, this.materials.darkOpening, 1.82, false);
+      }
+      this.addLabel("Emely Baker Centre", center, building.height + 1.35);
+      return;
+    }
+
+    if (building.detailProfile === "amenities") {
+      this.addLocalBox(center, rotation, 0, frontZ + 0.34, footprint.halfX * 1.3, 0.09, 0.84, this.materials.concrete, 0.12, false);
+      for (const x of [-0.42, 0, 0.42]) {
+        this.addLocalBox(center, rotation, x * footprint.halfX, frontZ + 0.02, footprint.halfX * 0.28, 1.38, 0.08, this.materials.darkOpening, 1.02, false);
+      }
+      this.addLocalBox(center, rotation, 0, frontZ + 0.03, footprint.halfX * 0.48, 0.45, 0.09, this.materials.line, 2.48, false);
+      return;
+    }
+
+    if (building.detailProfile === "bowling-shed") {
+      this.addLocalBox(center, rotation, 0, 0, footprint.halfX * 2.18, 0.22, footprint.halfZ * 2.28, this.materials.metal, building.height + 0.1);
+      this.addLocalBox(center, rotation, 0, frontZ + 0.02, footprint.halfX * 0.95, 1.15, 0.08, this.materials.darkOpening, 0.74, false);
+    }
   }
 
   private addMappedFences(): void {
@@ -1611,21 +1689,83 @@ export class WorldBuilder {
 
   private addRotunda(position: Vec2): void {
     const group = new THREE.Group();
-    const base = new THREE.Mesh(new THREE.CylinderGeometry(5.2, 5.6, 0.45, 24), this.materials.path);
-    base.position.y = 0.22;
+    const renderStone = new THREE.MeshStandardMaterial({ color: 0xd5c6a2, roughness: 0.58 });
+    const copper = new THREE.MeshStandardMaterial({ color: 0x6f8069, metalness: 0.18, roughness: 0.66 });
+    const plaque = new THREE.MeshStandardMaterial({ color: 0x4a3921, metalness: 0.5, roughness: 0.42 });
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(5.35, 5.75, 0.72, 36), renderStone);
+    base.position.y = 0.36;
+    base.castShadow = true;
+    base.receiveShadow = true;
     group.add(base);
+    const lowerStorey = new THREE.Mesh(new THREE.CylinderGeometry(4.25, 4.45, 1.18, 32), renderStone);
+    lowerStorey.position.y = 1.1;
+    lowerStorey.castShadow = true;
+    lowerStorey.receiveShadow = true;
+    group.add(lowerStorey);
     for (let i = 0; i < 8; i += 1) {
       const angle = (i / 8) * Math.PI * 2;
-      const column = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.3, 4.6, 10), new THREE.MeshStandardMaterial({ color: 0xe0d0aa, roughness: 0.55 }));
-      column.position.set(Math.cos(angle) * 4.2, 2.55, Math.sin(angle) * 4.2);
+      const vent = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.28, 0.06), this.materials.darkOpening);
+      vent.position.set(Math.cos(angle) * 4.48, 1.12, Math.sin(angle) * 4.48);
+      vent.rotation.y = -angle;
+      group.add(vent);
+    }
+    const platform = new THREE.Mesh(new THREE.CylinderGeometry(4.8, 5.05, 0.28, 36), this.materials.path);
+    platform.position.y = 1.86;
+    platform.castShadow = true;
+    platform.receiveShadow = true;
+    group.add(platform);
+    for (let i = 0; i < 8; i += 1) {
+      const angle = (i / 8) * Math.PI * 2;
+      const column = new THREE.Mesh(new THREE.CylinderGeometry(0.23, 0.31, 3.65, 12), renderStone);
+      column.position.set(Math.cos(angle) * 4.0, 3.68, Math.sin(angle) * 4.0);
       column.castShadow = true;
       group.add(column);
+      const capital = new THREE.Mesh(new THREE.CylinderGeometry(0.44, 0.36, 0.16, 12), renderStone);
+      capital.position.set(column.position.x, 5.58, column.position.z);
+      group.add(capital);
     }
-    const roof = new THREE.Mesh(new THREE.ConeGeometry(5.7, 2.4, 24), new THREE.MeshStandardMaterial({ color: 0x63715f, roughness: 0.72 }));
-    roof.position.y = 5.65;
+    const entablature = new THREE.Mesh(new THREE.CylinderGeometry(4.85, 4.95, 0.44, 36), renderStone);
+    entablature.position.y = 5.84;
+    entablature.castShadow = true;
+    group.add(entablature);
+    for (let i = 0; i < 16; i += 1) {
+      const angle = (i / 16) * Math.PI * 2;
+      const triglyph = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.28, 0.08), this.materials.darkOpening);
+      triglyph.position.set(Math.cos(angle) * 5.02, 5.85, Math.sin(angle) * 5.02);
+      triglyph.rotation.y = -angle;
+      group.add(triglyph);
+    }
+    const roof = new THREE.Mesh(new THREE.SphereGeometry(4.65, 36, 12, 0, Math.PI * 2, 0, Math.PI / 2), copper);
+    roof.scale.y = 0.44;
+    roof.position.y = 6.05;
     roof.castShadow = true;
     group.add(roof);
+    const lantern = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.54, 0.72, 16), copper);
+    lantern.position.y = 8.14;
+    lantern.castShadow = true;
+    group.add(lantern);
+    const finial = new THREE.Mesh(new THREE.ConeGeometry(0.38, 0.52, 16), copper);
+    finial.position.y = 8.78;
+    finial.castShadow = true;
+    group.add(finial);
+    for (let step = 0; step < 5; step += 1) {
+      const stair = new THREE.Mesh(new THREE.BoxGeometry(2.4 + step * 0.28, 0.18, 0.62), renderStone);
+      stair.position.set(0, 0.16 + step * 0.18, -5.25 - step * 0.48);
+      stair.castShadow = true;
+      stair.receiveShadow = true;
+      group.add(stair);
+    }
+    for (const side of [-1, 1]) {
+      const pier = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.92, 0.5), renderStone);
+      pier.position.set(side * 1.62, 0.78, -5.88);
+      pier.castShadow = true;
+      group.add(pier);
+      const plate = new THREE.Mesh(new THREE.BoxGeometry(0.82, 0.34, 0.05), plaque);
+      plate.position.set(side * 1.05, 1.55, -4.48);
+      group.add(plate);
+    }
     group.position.set(position.x, this.radialSupportY(position, 5.7), position.z);
+    group.rotation.y = -0.34;
     this.scene.add(group);
     this.addLabel("Rotunda", position, 7);
   }

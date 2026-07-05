@@ -66,6 +66,9 @@ test("game loop advances and gameplay helpers mutate state", async ({ page }) =>
   expect(spawned.miniMapVisibleZombies).toBeLessThanOrEqual(spawned.zombies);
   const zombieStates = await page.evaluate(() => window.__EGAME__!.testZombieStates());
   expect(zombieStates.some((zombie) => zombie.aiState === "wander" && zombie.hasTarget && (zombie.targetDistance ?? 0) > 3)).toBe(true);
+  await page.waitForFunction(() => window.__EGAME__!.testZombieFacing().some((zombie) => zombie.targetDistance > 3 && zombie.faceAlignment > 0.8));
+  const zombieFacing = await page.evaluate(() => window.__EGAME__!.testZombieFacing());
+  expect(zombieFacing.some((zombie) => zombie.targetDistance > 3 && zombie.faceAlignment > 0.8)).toBe(true);
   const grounding = await page.evaluate(() => window.__EGAME__!.testGrounding());
   expect(grounding.zombiesMeasured).toBeGreaterThan(0);
   expect(Math.abs(grounding.playerGroundDelta)).toBeLessThan(0.01);

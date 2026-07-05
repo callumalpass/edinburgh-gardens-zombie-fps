@@ -116,6 +116,7 @@ export interface GameTestApi {
     zombiesMeasured: number;
   };
   testZombieStates: () => Array<{ id: number; type: ZombieType; aiState: ZombieAiState; hasTarget: boolean; targetDistance: number | null; x: number; z: number }>;
+  testZombieFacing: () => Array<{ id: number; faceAlignment: number; targetDistance: number }>;
   testSetCrouching: (crouching: boolean) => boolean;
   testStartIntermission: () => ActiveObjective | null;
 }

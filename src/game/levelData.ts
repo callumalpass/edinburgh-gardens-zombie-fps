@@ -1325,6 +1325,8 @@ const OSM_BUILDING_FOOTPRINTS_GEO: Array<{
   label: string;
   height: number;
   material: MappedBuilding["material"];
+  detailProfile?: MappedBuilding["detailProfile"];
+  source: string;
   collision: boolean;
   points: GeoPoint[];
 }> = [
@@ -1333,6 +1335,8 @@ const OSM_BUILDING_FOOTPRINTS_GEO: Array<{
     label: "South service and amenities building",
     height: 3.4,
     material: "utility",
+    detailProfile: "amenities",
+    source: "OSM way 242003562 full JSON; Yarra Edinburgh Gardens facilities listing",
     collision: true,
     points: [
       g(-37.7884009, 144.9834542),
@@ -1359,6 +1363,8 @@ const OSM_BUILDING_FOOTPRINTS_GEO: Array<{
     label: "Fitzroy Tennis Club rooms",
     height: 3.8,
     material: "utility",
+    detailProfile: "tennis-pavilion",
+    source: "OSM way 403753784 full JSON; Edinburgh Gardens CMP 2004 tennis pavilion analysis; Yarra Brunswick Street Oval tennis pavilion project",
     collision: false,
     points: [
       g(-37.7882091, 144.9819287),
@@ -1383,6 +1389,8 @@ const OSM_BUILDING_FOOTPRINTS_GEO: Array<{
     label: "Oval gatehouse",
     height: 2.7,
     material: "brick",
+    detailProfile: "gatehouse",
+    source: "OSM way 543505638 full JSON; Edinburgh Gardens CMP 2004 hard-landscaping and buildings schedule",
     collision: true,
     points: [
       g(-37.7896325, 144.9801426),
@@ -1397,6 +1405,8 @@ const OSM_BUILDING_FOOTPRINTS_GEO: Array<{
     label: "Fitzroy Victoria Bowling Club rooms",
     height: 4.2,
     material: "brick",
+    detailProfile: "bowling-club",
+    source: "OSM way 543505639 full JSON; Edinburgh Gardens CMP 2004 bowling club analysis",
     collision: false,
     points: [
       g(-37.7879856, 144.9809226),
@@ -1420,6 +1430,8 @@ const OSM_BUILDING_FOOTPRINTS_GEO: Array<{
     label: "Round pavilion building",
     height: 3.1,
     material: "timber",
+    detailProfile: "rotunda-pavilion",
+    source: "OSM way 543505640 full JSON",
     collision: true,
     points: [
       g(-37.7867751, 144.9815512),
@@ -1442,6 +1454,8 @@ const OSM_BUILDING_FOOTPRINTS_GEO: Array<{
     label: "Emely Baker Centre",
     height: 4.2,
     material: "brick",
+    detailProfile: "community-centre",
+    source: "OSM way 543505702 full JSON",
     collision: true,
     points: [
       g(-37.7857727, 144.982404),
@@ -1460,6 +1474,8 @@ const OSM_BUILDING_FOOTPRINTS_GEO: Array<{
     label: "Bowling club outbuilding",
     height: 2.9,
     material: "utility",
+    detailProfile: "bowling-shed",
+    source: "OSM way 1475006767 full JSON",
     collision: false,
     points: [
       g(-37.7880133, 144.9809609),
@@ -1475,6 +1491,8 @@ const OSM_BUILDING_FOOTPRINTS_GEO: Array<{
     label: "Bowling club shed",
     height: 2.6,
     material: "utility",
+    detailProfile: "bowling-shed",
+    source: "OSM way 1475006768 full JSON",
     collision: false,
     points: [
       g(-37.7881042, 144.9806922),
@@ -1489,6 +1507,8 @@ const OSM_BUILDING_FOOTPRINTS_GEO: Array<{
     label: "Bowling club outbuilding",
     height: 2.8,
     material: "utility",
+    detailProfile: "bowling-shed",
+    source: "OSM way 1475006769 full JSON",
     collision: false,
     points: [
       g(-37.787959, 144.9811502),
@@ -1503,6 +1523,8 @@ const OSM_BUILDING_FOOTPRINTS_GEO: Array<{
     label: "Bowling green shed",
     height: 2.4,
     material: "timber",
+    detailProfile: "bowling-shed",
+    source: "OSM way 1475006770 full JSON",
     collision: false,
     points: [
       g(-37.7875114, 144.9811606),
@@ -1517,6 +1539,8 @@ const OSM_BUILDING_FOOTPRINTS_GEO: Array<{
     label: "Bowling green shed",
     height: 2.3,
     material: "timber",
+    detailProfile: "bowling-shed",
+    source: "OSM way 1475006771 full JSON",
     collision: false,
     points: [
       g(-37.787481, 144.9805718),
@@ -1531,6 +1555,8 @@ const OSM_BUILDING_FOOTPRINTS_GEO: Array<{
     label: "Bowling green shed",
     height: 2.3,
     material: "timber",
+    detailProfile: "bowling-shed",
+    source: "OSM way 1475006772 full JSON",
     collision: false,
     points: [
       g(-37.7877459, 144.9804572),
@@ -1545,6 +1571,8 @@ const OSM_BUILDING_FOOTPRINTS_GEO: Array<{
     label: "Bowling green shed",
     height: 2.3,
     material: "timber",
+    detailProfile: "bowling-shed",
+    source: "OSM way 1475006773 full JSON",
     collision: false,
     points: [
       g(-37.7878326, 144.9811639),
@@ -1778,6 +1806,8 @@ export function createLevelData(): LevelData {
     polygon: polygonFromGeo(building.points),
     height: building.height,
     material: building.material,
+    detailProfile: building.detailProfile,
+    source: building.source,
     collision: building.collision
   })).filter((building) => pointInPolygon(polygonCentroid(building.polygon), boundary));
   const mappedFences: MappedFence[] = OSM_FENCES_GEO.map((fence) => ({

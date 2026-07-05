@@ -55,6 +55,7 @@ These notes record the real-world sources and implementation decisions used to s
 - Existing OSM-derived paths, amenities, trees, sports facilities, memorials and park landmarks remain in `src/game/levelData.ts`.
 - Detailed OSM path/service research is stored in `docs/research/osm-path-service-inventory-2026-07-05.md`.
 - Hardscape and terrain-edge research is stored in `docs/research/hardscape-terrain-edges-2026-07-05.md`.
+- Built-feature research is stored in `docs/research/built-features-2026-07-05.md`.
 
 ## Data Notes
 

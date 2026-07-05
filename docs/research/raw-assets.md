@@ -10,4 +10,7 @@ Current local assets:
   - Source: `https://www.openstreetmap.org/api/0.6/way/{way_id}/full.json`
   - Purpose: raw OSM way responses backing path/service connector geometry and related map-source checks.
   - Validation: each file was checked with `jq -e '.elements | length > 0'`.
-
+- `docs/research/raw/osm/2026-07-05/buildings/way-*-full.json`
+  - Source: `https://www.openstreetmap.org/api/0.6/way/{way_id}/full.json`
+  - Purpose: raw OSM way responses backing building footprints and sourceable built-feature profiles.
+  - Validation: each file was checked with `jq -e '.elements | length > 0'`.

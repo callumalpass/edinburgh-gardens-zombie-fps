@@ -207,6 +207,7 @@ export class GameApp {
       testMiniMapVisibility: () => this.testMiniMapVisibility(),
       testGrounding: () => this.testGrounding(),
       testZombieStates: () => this.testZombieStates(),
+      testZombieFacing: () => this.testZombieFacing(),
       testSetCrouching: (crouching: boolean) => this.testSetCrouching(crouching),
       testStartIntermission: () => this.testStartIntermission()
     };
@@ -720,7 +721,7 @@ export class GameApp {
       const groundY = this.groundY(next);
       zombie.position.set(next.x, groundY, next.z);
       if (distanceToTarget > 0.1) {
-        zombie.mesh.rotation.y = Math.atan2(toTarget.x, toTarget.z);
+        zombie.mesh.rotation.y = Math.atan2(toTarget.x, toTarget.z) + Math.PI;
       }
       zombie.mesh.position.set(next.x, groundY + (Math.sin(now * 7 + zombie.walkOffset) + 1) * 0.035, next.z);
       this.animateZombie(zombie, now, distanceToPlayer);
@@ -1359,6 +1360,29 @@ export class GameApp {
     }));
   }
 
+  private testZombieFacing(): ReturnType<GameTestApi["testZombieFacing"]> {
+    return this.zombies
+      .filter((zombie) => zombie.target)
+      .map((zombie) => {
+        const target = zombie.target!;
+        const toTarget = new THREE.Vector3(target.x - zombie.position.x, 0, target.z - zombie.position.z);
+        const targetDistance = toTarget.length();
+        if (targetDistance > 0.001) {
+          toTarget.normalize();
+        }
+        const faceForward = new THREE.Vector3(0, 0, -1).applyQuaternion(zombie.mesh.quaternion);
+        faceForward.y = 0;
+        if (faceForward.lengthSq() > 0.001) {
+          faceForward.normalize();
+        }
+        return {
+          id: zombie.id,
+          faceAlignment: Number(faceForward.dot(toTarget).toFixed(3)),
+          targetDistance: Number(targetDistance.toFixed(2))
+        };
+      });
+  }
+
   private testSetCrouching(crouching: boolean): boolean {
     this.testCrouchOverride = crouching;
     this.player.crouching = crouching;
@@ -1543,6 +1567,7 @@ export class GameApp {
 
   private rebuildViewWeapon(): void {
     this.weaponModel.clear();
+    this.meleeSwing = 0;
     const stats = getWeaponStats(this.loadout);
     const weapon = this.meshFactory.createWeaponMesh(this.loadout.weaponId, true);
     if (stats.kind === "melee") {

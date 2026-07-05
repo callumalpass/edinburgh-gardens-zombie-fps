@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { clampToPolygon, geoToWorld, pointInPolygon, polygonArea, polygonCentroid, WORLD_SCALE } from "../src/game/geo";
 import { createLevelData, PARK_BOUNDARY_GEO } from "../src/game/levelData";
+import type { MappedBuilding } from "../src/game/types";
 
 describe("map geometry", () => {
   it("converts the OSM boundary into a playable non-degenerate park polygon", () => {
@@ -47,9 +48,16 @@ describe("map geometry", () => {
   it("includes OSM-mapped building and fence footprints", () => {
     const level = createLevelData();
     const buildingIds = new Set(level.mappedBuildings.map((building) => building.id));
+    const profiles = new Set(level.mappedBuildings.map((building) => building.detailProfile).filter(Boolean));
     expect(level.mappedBuildings.length).toBeGreaterThanOrEqual(12);
     expect(buildingIds.has("osm-building-543505702")).toBe(true);
     expect(buildingIds.has("osm-building-242003562")).toBe(true);
+    const expectedProfiles: Array<NonNullable<MappedBuilding["detailProfile"]>> = ["tennis-pavilion", "bowling-club", "gatehouse", "community-centre", "amenities"];
+    for (const profile of expectedProfiles) {
+      expect(profiles.has(profile)).toBe(true);
+    }
+    expect(level.mappedBuildings.every((building) => building.source?.includes("OSM way"))).toBe(true);
+    expect(level.mappedBuildings.some((building) => building.source?.includes("CMP"))).toBe(true);
     expect(level.mappedFences.length).toBeGreaterThanOrEqual(1);
     expect(level.mappedBuildings.filter((building) => pointInPolygon(polygonCentroid(building.polygon), level.boundary)).length).toBe(level.mappedBuildings.length);
   });
