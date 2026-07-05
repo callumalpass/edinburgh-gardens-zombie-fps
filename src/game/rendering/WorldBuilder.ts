@@ -1234,7 +1234,7 @@ export class WorldBuilder {
     return mesh;
   }
 
-  private addBlockPolygon(polygon: Vec2[], height: number, material: THREE.Material): void {
+  private addBlockPolygon(polygon: Vec2[], height: number, material: THREE.Material, frontSign = -1): void {
     const footprint = this.fitBoxFromPolygon(polygon, 0.8, 0.45);
     const center = footprint.center;
     const rotation = -footprint.angle;
@@ -1254,10 +1254,9 @@ export class WorldBuilder {
 
     for (let row = 0; row < 4; row += 1) {
       const seat = new THREE.Mesh(new THREE.BoxGeometry(footprint.halfX * 1.65, 0.18, 0.34), this.materials.timber);
-      seat.position.set(center.x, baseY + 1.2 + row * 0.45, center.z);
+      const rowCenter = this.localPoint(center, rotation, 0, frontSign * (footprint.halfZ - 0.6 - row * 0.35));
+      seat.position.set(rowCenter.x, baseY + 1.2 + row * 0.45, rowCenter.z);
       seat.rotation.y = rotation;
-      const forward = new THREE.Vector3(Math.sin(rotation), 0, Math.cos(rotation));
-      seat.position.addScaledVector(forward, -footprint.halfZ + 0.6 + row * 0.35);
       seat.castShadow = true;
       this.scene.add(seat);
     }
@@ -1652,26 +1651,35 @@ export class WorldBuilder {
 
   private addGrandstand(landmark: Landmark): void {
     if (!landmark.polygon) return;
-    this.addBlockPolygon(landmark.polygon, 5.8, this.materials.brick);
     const footprint = this.fitBoxFromPolygon(landmark.polygon, 0.8, 0.45);
     const rotation = -footprint.angle;
     const center = footprint.center;
-    const frontZ = -footprint.halfZ - 0.05;
+    const oval = this.level.landmarks.find((candidate) => candidate.kind === "oval" && candidate.polygon)?.polygon;
+    const ovalCenter = oval ? polygonCentroid(oval) : center;
+    const dx = ovalCenter.x - center.x;
+    const dz = ovalCenter.z - center.z;
+    const ovalLocalZ = -dx * Math.sin(rotation) + dz * Math.cos(rotation);
+    const frontSign = ovalLocalZ < 0 ? -1 : 1;
+    const frontZ = frontSign * (footprint.halfZ + 0.05);
+    const frontOut = (distanceFromFront: number) => frontZ + frontSign * distanceFromFront;
+    const frontIn = (distanceFromFront: number) => frontZ - frontSign * distanceFromFront;
+
+    this.addBlockPolygon(landmark.polygon, 5.8, this.materials.brick, frontSign);
 
     this.addLocalBox(center, rotation, 0, frontZ, footprint.halfX * 1.45, 1.35, 0.08, this.materials.darkOpening, 1.75, false);
     for (const x of [-0.42, -0.14, 0.14, 0.42]) {
-      this.addLocalCylinder(center, rotation, x * footprint.halfX * 2, frontZ - 0.08, 0.09, 0.12, 2.8, this.materials.metal);
+      this.addLocalCylinder(center, rotation, x * footprint.halfX * 2, frontOut(0.08), 0.09, 0.12, 2.8, this.materials.metal);
     }
     for (let i = -4; i <= 4; i += 1) {
       this.addLocalBox(center, rotation, (i / 4) * footprint.halfX * 0.9, 0, 0.08, 0.09, footprint.halfZ * 2 + 2.3, this.materials.metal, 6.12);
     }
     for (let step = 0; step < 4; step += 1) {
-      this.addLocalBox(center, rotation, footprint.halfX + 0.55, frontZ + 0.55 + step * 0.42, 1.1, 0.16, 0.32, this.materials.concrete, 0.18 + step * 0.18);
+      this.addLocalBox(center, rotation, footprint.halfX + 0.55, frontIn(0.55 + step * 0.42), 1.1, 0.16, 0.32, this.materials.concrete, 0.18 + step * 0.18);
     }
     for (const side of [-1, 1]) {
-      this.addLocalBox(center, rotation, footprint.halfX + 0.55 + side * 0.64, frontZ + 1.16, 0.08, 0.08, 2.4, this.materials.metal, 0.9);
+      this.addLocalBox(center, rotation, footprint.halfX + 0.55 + side * 0.64, frontIn(1.16), 0.08, 0.08, 2.4, this.materials.metal, 0.9);
       for (const z of [0.24, 1.16, 2.08]) {
-        this.addLocalBox(center, rotation, footprint.halfX + 0.55 + side * 0.64, frontZ + z, 0.08, 0.85, 0.08, this.materials.metal, 0.48);
+        this.addLocalBox(center, rotation, footprint.halfX + 0.55 + side * 0.64, frontIn(z), 0.08, 0.85, 0.08, this.materials.metal, 0.48);
       }
     }
     this.addLabel("Kevin Murray Stand", center, 6.7);

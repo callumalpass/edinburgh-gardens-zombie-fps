@@ -69,6 +69,9 @@ Purpose: track the building-by-building realism pass for every structure current
 - `osm-building-543505702` / Emely Baker Centre:
   - Added an access-friendly ramp with rails, venue sign, rear concrete courtyard, low gate/fence rails, sloped shade sail and roof/service vent.
   - Source basis: OSM way `543505702` for footprint and orientation; Yarra Emely Baker Centre venue page for access-friendly status plus gated outdoor area and shade sail.
+- `grandstand` / Kevin Murray Stand:
+  - Corrected the stand frontage so seating, front posts and stairs face W. T. Peterson Oval instead of inheriting a fixed side from the OSM polygon point order.
+  - Source basis: OSM grandstand footprint and W. T. Peterson Oval geometry; Yarra Brunswick Street Oval works context for the stand's external stairs and oval-facing sports use.
 
 ## Implementation Notes
 
