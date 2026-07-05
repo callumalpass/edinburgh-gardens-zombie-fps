@@ -326,6 +326,8 @@ export type AmenityKind =
   | "maintenance_room"
   | "community_room"
   | "kitchenette"
+  | "kiosk_hatch"
+  | "utility_box"
   | "memorial_plaque";
 
 export interface AmenityPoint {

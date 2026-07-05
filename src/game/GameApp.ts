@@ -132,6 +132,14 @@ import type {
   WeaponSpawn
 } from "./types";
 
+const STRUCTURE_FLOODLIGHT_RADIUS = 34;
+const STRUCTURE_LIGHT_EXPOSURE_RADIUS = 28;
+
+interface StructureUtilityEffect {
+  root: THREE.Group;
+  position: Vec2;
+}
+
 export class GameApp {
   private readonly root: HTMLElement;
   private readonly level: LevelData;
@@ -142,6 +150,7 @@ export class GameApp {
   private readonly interactableById: Map<string, InteractableFixture>;
   private readonly toggleInteractables: InteractableFixture[];
   private readonly brokenBikeDetails: ParkLifeDetail[];
+  private readonly activeStructureUtilityEffects = new Map<string, StructureUtilityEffect>();
   private readonly entities = new GameEntityStore();
   private readonly noise = new NoiseSystem();
   private readonly rng = new SeededRandom(0xed1b97);
@@ -630,6 +639,7 @@ export class GameApp {
     this.applyFlashlightVisibility();
     this.testCrouchOverride = null;
     this.entities.clearSceneEntities(this.scene);
+    this.clearStructureUtilityEffects();
     this.recoil = 0;
     this.recoilYaw = 0;
     this.meleeSwing = 0;
@@ -1417,6 +1427,10 @@ export class GameApp {
       player.condition = applyBikePumpBoost(player.condition);
     }
     player.condition.throwables = Math.min(MAX_THROWABLES, player.condition.throwables + loot.throwables);
+    if (amenity.kind === "utility_box") {
+      this.activateStructureUtility(amenity);
+      this.emitNoise("scavenge", amenity.position, loot.noiseMultiplier * 1.05, { volume: 0.78 });
+    }
     this.emitNoise("scavenge", amenity.position, loot.noiseMultiplier * 0.75);
     return true;
   }
@@ -2499,6 +2513,7 @@ export class GameApp {
       inCover,
       elevatedHeight: this.combatantElevation(combatant),
       flashlightOn: combatant.condition.flashlightOn,
+      structureLit: this.isPointInStructureUtilityLight(playerPoint),
       weather: this.currentWeather
     });
     if (distanceToPlayer > sightRange) {
@@ -3323,10 +3338,82 @@ export class GameApp {
       this.condition = applyBikePumpBoost(this.condition);
     }
     this.condition.throwables = Math.min(MAX_THROWABLES, this.condition.throwables + loot.throwables);
+    if (amenity.kind === "utility_box") {
+      this.activateStructureUtility(amenity);
+      this.emitNoise("scavenge", amenity.position, loot.noiseMultiplier * 1.05, { volume: 0.78 });
+    }
     this.emitNoise("scavenge", amenity.position, loot.noiseMultiplier * 0.75);
     this.flashStatus(loot.status);
     this.audio.playWorld("searchComplete", amenity.position);
     return true;
+  }
+
+  private activateStructureUtility(amenity: AmenityPoint): void {
+    if (this.activeStructureUtilityEffects.has(amenity.id)) {
+      return;
+    }
+
+    const angle = this.structureUtilityAngle(amenity);
+    const root = new THREE.Group();
+    root.position.set(amenity.position.x, this.groundY(amenity.position), amenity.position.z);
+    root.rotation.y = angle;
+
+    const mastMaterial = new THREE.MeshStandardMaterial({ color: 0x59615d, roughness: 0.48, metalness: 0.36 });
+    const headMaterial = new THREE.MeshStandardMaterial({
+      color: 0xf0b85d,
+      emissive: 0xf0a64d,
+      emissiveIntensity: 0.68,
+      roughness: 0.36,
+      metalness: 0.08
+    });
+    const spillMaterial = new THREE.MeshBasicMaterial({ color: 0xf6bd68, transparent: true, opacity: 0.18, depthWrite: false });
+
+    const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.075, 2.15, 8), mastMaterial);
+    mast.position.set(0, 1.08, 0.28);
+    mast.castShadow = true;
+    root.add(mast);
+
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.22, 0.24), headMaterial);
+    head.position.set(0, 2.16, -0.04);
+    head.castShadow = true;
+    root.add(head);
+
+    const spill = new THREE.Mesh(new THREE.CircleGeometry(5.8, 24), spillMaterial);
+    spill.position.set(0, 0.035, -2.8);
+    spill.rotation.x = -Math.PI / 2;
+    root.add(spill);
+
+    const light = new THREE.PointLight(0xffc777, this.smokeMode ? 1.75 : 3.25, STRUCTURE_FLOODLIGHT_RADIUS, 1.35);
+    light.position.set(0, 2.05, -0.55);
+    root.add(light);
+
+    this.scene.add(root);
+    this.activeStructureUtilityEffects.set(amenity.id, { root, position: amenity.position });
+  }
+
+  private clearStructureUtilityEffects(): void {
+    for (const effect of this.activeStructureUtilityEffects.values()) {
+      this.scene.remove(effect.root);
+      disposeThreeResources(effect.root);
+    }
+    this.activeStructureUtilityEffects.clear();
+  }
+
+  private structureUtilityAngle(amenity: AmenityPoint): number {
+    let hash = 0;
+    for (const char of amenity.id) {
+      hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+    }
+    return ((hash % 6283) / 1000) - Math.PI;
+  }
+
+  private isPointInStructureUtilityLight(point: Vec2): boolean {
+    for (const effect of this.activeStructureUtilityEffects.values()) {
+      if (distance(point, effect.position) < STRUCTURE_LIGHT_EXPOSURE_RADIUS) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private lootSearchContext(amenity: AmenityPoint): LootSearchContext {
@@ -3344,6 +3431,8 @@ export class GameApp {
   private amenitySearchDuration(amenity: AmenityPoint): number {
     if (amenity.kind === "maintenance_room") return 1.85;
     if (amenity.kind === "kitchenette") return 1.65;
+    if (amenity.kind === "kiosk_hatch") return 1.55;
+    if (amenity.kind === "utility_box") return 2.05;
     if (amenity.kind === "umpire_room") return 1.55;
     if (amenity.kind === "clubroom" || amenity.kind === "changeroom" || amenity.kind === "community_room") return 1.7;
     if (amenity.kind === "gatehouse") return 1.25;
@@ -3801,6 +3890,7 @@ export class GameApp {
       throwables: this.condition.throwables,
       flashlightOn: this.condition.flashlightOn,
       activeDistractions: this.distractions.length,
+      activeStructureUtilities: this.activeStructureUtilityEffects.size,
       bikeMounted: this.bike?.mounted === true,
       bikePumpBoostRemaining: Number(this.condition.bikePumpTimer.toFixed(1)),
       repairedBrokenBikes: this.repairedBrokenBikeIds.size

@@ -22,13 +22,20 @@ describe("location and zombie loot", () => {
     const maintenance = searchAmenityLoot("maintenance_room", new SeededRandom(31));
     const communityRoom = searchAmenityLoot("community_room", new SeededRandom(31));
     const kitchenette = searchAmenityLoot("kitchenette", new SeededRandom(31));
+    const kioskHatch = searchAmenityLoot("kiosk_hatch", new SeededRandom(31));
+    const utilityBox = searchAmenityLoot("utility_box", new SeededRandom(31));
 
     expect(changeroom.health + changeroom.medicine).toBeGreaterThan(gatehouse.health + gatehouse.medicine);
     expect(umpireRoom.ammo + umpireRoom.scrap).toBeGreaterThan(communityRoom.ammo + communityRoom.scrap);
     expect(maintenance.scrap).toBeGreaterThan(gatehouse.scrap - 3);
     expect(communityRoom.health + communityRoom.medicine).toBeGreaterThan(maintenance.health);
     expect(kitchenette.health + kitchenette.medicine).toBeGreaterThan(gatehouse.health + gatehouse.medicine);
+    expect(kioskHatch.health + kioskHatch.scrap).toBeGreaterThan(communityRoom.scrap);
+    expect(utilityBox.scrap).toBeGreaterThan(maintenance.scrap - 3);
+    expect(utilityBox.status).toMatch(/floodlights|switchboard/);
     expect(gatehouse.noiseMultiplier).toBeLessThan(maintenance.noiseMultiplier);
+    expect(kioskHatch.noiseMultiplier).toBeGreaterThan(communityRoom.noiseMultiplier);
+    expect(utilityBox.noiseMultiplier).toBeGreaterThan(kioskHatch.noiseMultiplier);
   });
 
   it("raises loot quality, noise, and search time in exposed zombie-dense areas", () => {

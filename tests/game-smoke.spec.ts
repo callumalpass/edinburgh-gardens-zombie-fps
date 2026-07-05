@@ -72,6 +72,7 @@ test("game loop advances and gameplay helpers mutate state", async ({ page }) =>
   expect(first.throwables).toBe(2);
   expect(first.flashlightOn).toBe(true);
   expect(first.activeDistractions).toBe(0);
+  expect(first.activeStructureUtilities).toBe(0);
   expect(first.bikePumpBoostRemaining).toBe(0);
   expect(first.repairedBrokenBikes).toBe(0);
   expect(first.bleeding).toBe(false);
@@ -170,6 +171,10 @@ test("game loop advances and gameplay helpers mutate state", async ({ page }) =>
   expect(usedAmenity).toBe(true);
   const afterAmenity = await page.evaluate(() => window.__EGAME__!.snapshot());
   expect(afterAmenity.scrap).toBeGreaterThan(beforeAmenity.scrap);
+  const activatedUtility = await page.evaluate(() => window.__EGAME__!.testUseAmenity("utility_box"));
+  expect(activatedUtility).toBe(true);
+  const afterUtility = await page.evaluate(() => window.__EGAME__!.snapshot());
+  expect(afterUtility.activeStructureUtilities).toBe(1);
   const foundPump = await page.evaluate(() => window.__EGAME__!.testUseAmenity("bicycle_parking"));
   expect(foundPump).toBe(true);
   const afterPump = await page.evaluate(() => window.__EGAME__!.snapshot());

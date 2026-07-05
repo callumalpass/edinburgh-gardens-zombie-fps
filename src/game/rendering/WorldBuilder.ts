@@ -4614,41 +4614,17 @@ export class WorldBuilder {
       amenity.kind === "gatehouse" ||
       amenity.kind === "maintenance_room" ||
       amenity.kind === "community_room" ||
-      amenity.kind === "kitchenette"
+      amenity.kind === "kitchenette" ||
+      amenity.kind === "kiosk_hatch" ||
+      amenity.kind === "utility_box"
     );
   }
 
   private addStructureAccessCue(amenity: AmenityPoint, angle: number): void {
-    const panelColor =
-      amenity.kind === "changeroom"
-        ? 0x5f725f
-        : amenity.kind === "umpire_room"
-          ? 0x5b5f67
-        : amenity.kind === "gatehouse"
-          ? 0x6a4c32
-          : amenity.kind === "maintenance_room"
-            ? 0x5b6665
-            : amenity.kind === "community_room"
-              ? 0x315d67
-              : amenity.kind === "kitchenette"
-                ? 0x826b4d
-              : 0x314f44;
+    const panelColor = this.structureAccessPanelColor(amenity.kind);
     const panelMaterial = this.standardDetailMaterial(`structure-access-${amenity.kind}`, panelColor, 0.72, 0.08);
     const latchMaterial = this.standardDetailMaterial("structure-access-latch", 0xd0a343, 0.48, 0.28);
-    const signText =
-      amenity.kind === "changeroom"
-        ? "CHANGE"
-        : amenity.kind === "umpire_room"
-          ? "UMPIRE"
-        : amenity.kind === "gatehouse"
-          ? "GATE"
-          : amenity.kind === "maintenance_room"
-            ? "STORE"
-            : amenity.kind === "community_room"
-              ? "ROOM"
-              : amenity.kind === "kitchenette"
-                ? "KITCHEN"
-              : "CLUB";
+    const signText = this.structureAccessSignText(amenity.kind);
     const signMaterial = this.canvasSignMaterial(`structure-access-${amenity.kind}`, signText, "#2b332c", "#f0d996");
 
     this.addLocalBox(amenity.position, angle, 0, 0, 1.8, 0.065, 1.1, this.materials.concrete, 0.095, false);
@@ -4710,8 +4686,58 @@ export class WorldBuilder {
       return;
     }
 
+    if (amenity.kind === "kiosk_hatch") {
+      const shutter = this.standardDetailMaterial("kiosk-roller-shutter", 0xa6a697, 0.68, 0.18);
+      const counter = this.standardDetailMaterial("kiosk-counter", 0x8b6a3d, 0.72, 0.08);
+      this.addLocalBox(amenity.position, angle, 0, -0.55, 1.22, 0.64, 0.06, shutter, 0.86, false);
+      for (const y of [0.68, 0.82, 0.96, 1.1]) {
+        this.addLocalBox(amenity.position, angle, 0, -0.595, 1.16, 0.026, 0.064, this.materials.darkOpening, y, false);
+      }
+      this.addLocalBox(amenity.position, angle, 0, -0.18, 1.35, 0.14, 0.42, counter, 0.44);
+      this.addLocalBox(amenity.position, angle, -0.48, 0.3, 0.38, 0.32, 0.3, this.materials.timber, 0.28);
+      this.addLocalBox(amenity.position, angle, 0.46, 0.28, 0.34, 0.24, 0.28, this.materials.metal, 0.26);
+      return;
+    }
+
+    if (amenity.kind === "utility_box") {
+      const panel = this.standardDetailMaterial("utility-switchboard-panel", 0x6e7770, 0.58, 0.18);
+      const meter = this.basicDetailMaterial("utility-switchboard-meter", 0xc9d7d0);
+      const warning = this.basicDetailMaterial("utility-switchboard-warning", 0xd0a343);
+      this.addLocalBox(amenity.position, angle, -0.48, -0.54, 0.38, 0.46, 0.06, panel, 0.88, false);
+      this.addLocalBox(amenity.position, angle, -0.48, -0.58, 0.24, 0.18, 0.064, meter, 0.98, false);
+      this.addLocalBox(amenity.position, angle, -0.48, -0.595, 0.28, 0.05, 0.068, warning, 0.76, false);
+      this.addLocalBox(amenity.position, angle, -0.2, 0.26, 0.055, 0.92, 0.06, this.materials.metal, 0.54, false);
+      this.addLocalBox(amenity.position, angle, 0.12, 0.26, 0.055, 0.72, 0.06, this.materials.metal, 0.48, false);
+      this.addLocalBox(amenity.position, angle, 0.4, 0.28, 0.42, 0.34, 0.3, this.materials.metal, 0.3);
+      return;
+    }
+
     this.addLocalBox(amenity.position, angle, -0.48, 0.24, 0.48, 0.58, 0.34, this.materials.metal, 0.38);
     this.addLocalBox(amenity.position, angle, 0.48, 0.24, 0.44, 0.44, 0.32, this.materials.timber, 0.32);
+  }
+
+  private structureAccessPanelColor(kind: AmenityPoint["kind"]): number {
+    if (kind === "changeroom") return 0x5f725f;
+    if (kind === "umpire_room") return 0x5b5f67;
+    if (kind === "gatehouse") return 0x6a4c32;
+    if (kind === "maintenance_room") return 0x5b6665;
+    if (kind === "community_room") return 0x315d67;
+    if (kind === "kitchenette") return 0x826b4d;
+    if (kind === "kiosk_hatch") return 0x6f5635;
+    if (kind === "utility_box") return 0x4f5e56;
+    return 0x314f44;
+  }
+
+  private structureAccessSignText(kind: AmenityPoint["kind"]): string {
+    if (kind === "changeroom") return "CHANGE";
+    if (kind === "umpire_room") return "UMPIRE";
+    if (kind === "gatehouse") return "GATE";
+    if (kind === "maintenance_room") return "STORE";
+    if (kind === "community_room") return "ROOM";
+    if (kind === "kitchenette") return "KITCHEN";
+    if (kind === "kiosk_hatch") return "KIOSK";
+    if (kind === "utility_box") return "POWER";
+    return "CLUB";
   }
 
   private addMemorialPlaqueCue(position: Vec2, angle: number): void {

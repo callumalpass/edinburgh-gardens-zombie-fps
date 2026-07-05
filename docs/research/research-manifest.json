@@ -583,6 +583,18 @@
       ]
     },
     {
+      "id": "structure-utility-interactions",
+      "path": "docs/research/structure-utility-interactions-2026-07-06.md",
+      "requiredHeadings": ["## Sources", "## Findings", "## Implementation Translation", "## Uncertainty", "## Validation"],
+      "sourceIds": [
+        "yarra-brunswick-street-oval",
+        "yarra-emely-baker-centre",
+        "yarra-edinburgh-gardens-rotunda",
+        "yarra-edinburgh-gardens",
+        "osm-way-api"
+      ]
+    },
+    {
       "id": "heritage-furniture-winter-weather",
       "path": "docs/research/heritage-furniture-winter-weather-2026-07-06.md",
       "requiredHeadings": ["## Sources", "## Findings", "## Implementation Translation", "## Uncertainty", "## Validation"],

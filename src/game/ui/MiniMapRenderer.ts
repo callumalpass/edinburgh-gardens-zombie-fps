@@ -132,6 +132,8 @@ export class MiniMapRenderer {
                 amenity.kind === "maintenance_room" ||
                 amenity.kind === "community_room" ||
                 amenity.kind === "kitchenette" ||
+                amenity.kind === "kiosk_hatch" ||
+                amenity.kind === "utility_box" ||
                 amenity.kind === "memorial_plaque"
               ? "rgba(227, 168, 74, 0.82)"
               : "rgba(213, 142, 67, 0.74)";

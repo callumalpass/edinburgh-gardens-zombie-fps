@@ -114,6 +114,7 @@ export interface Snapshot {
   throwables: number;
   flashlightOn: boolean;
   activeDistractions: number;
+  activeStructureUtilities: number;
   bikeMounted: boolean;
   bikePumpBoostRemaining: number;
   repairedBrokenBikes: number;

@@ -370,6 +370,17 @@ describe("map geometry", () => {
     expect(amenitiesById.get("north-toilets-service-room")?.source).toContain("flat concrete roof");
     expect(amenitiesById.get("rotunda-memorial-plaque")?.kind).toBe("memorial_plaque");
     expect(amenitiesById.get("rotunda-memorial-plaque")?.source).toContain("memorial plaques");
+    expect(amenitiesById.get("grandstand-external-public-toilets")?.kind).toBe("toilets");
+    expect(amenitiesById.get("grandstand-external-public-toilets")?.source).toContain("externally accessible public toilets");
+    expect(amenitiesById.get("grandstand-kiosk-hatch")?.kind).toBe("kiosk_hatch");
+    expect(amenitiesById.get("grandstand-kiosk-hatch")?.source).toContain("kiosk terrace");
+
+    const utilityBoxes = level.amenities.filter((amenity) => amenity.kind === "utility_box");
+    expect(utilityBoxes.map((amenity) => amenity.id).sort()).toEqual(
+      ["emely-baker-switchboard", "grandstand-switchboard", "south-amenities-switchboard", "tennis-switchboard"].sort()
+    );
+    expect(utilityBoxes.every((amenity) => amenity.source?.includes("no-current-power constraint"))).toBe(true);
+    expect(utilityBoxes.some((amenity) => amenity.linkedStructureId === "osm-building-543505640")).toBe(false);
   });
 
   it("includes researched hardscape edge and drain features", () => {

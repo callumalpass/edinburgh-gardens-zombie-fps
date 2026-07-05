@@ -173,6 +173,7 @@ export const RESEARCH_NOTES = [
   "A 2026-07-06 Fitzy Bowl pass removed the old invisible full-skatepark blocker, added source-backed depressed skate bowls, and made bowl exits constrained to roll-out gaps so dropping in is easy and climbing out is deliberately awkward.",
   "A 2026-07-06 public-use pass added source-backed rule signs for dog-leash edges, alcohol hours, access-friendly venue cues and the rotunda stair/no-power constraint so the park reads like the current public Edinburgh Gardens rather than a generic arena.",
   "A 2026-07-06 structure-depth pass added additional source-backed building affordances: grandstand umpire access, Emely Baker kitchenette/service cues, bowling-green shed supplies, north toilet service access and an interactable rotunda memorial plaque.",
+  "A 2026-07-06 structure utility pass adds source-backed grandstand kiosk/public-toilet access plus powered-building switchboards that can activate exterior floodlights; the rotunda remains explicitly unpowered.",
   "A 2026-07-06 heritage-furniture and winter-weather pass adds CMP-backed Chandler Fountain, cast-iron gas-lamp, bollard, reproduction-seat and interpretive-sign cues, and retunes weather toward Bureau of Meteorology Melbourne July cloud/rain/wind normals.",
   "See docs/edinburgh-gardens-research.md for source URLs, query notes, data licensing notes and implementation decisions."
 ];
@@ -462,6 +463,8 @@ const FITZY_BOWL_SOURCE =
   "Yarra Fitzy Bowl upgrade page: 2022 upgraded Fitzy Bowl doubled the facility, kept the original bowls and added beginner/accessibility features; GOSKATE lists two deep concrete bowls around 1.2m and 1.5m deep plus a shallow 0.3m beginners bowl, roll-over/spine/hip transfer and street section; Time Out and Skater Maps confirm multiple concrete bowls and a beginner double bowl";
 const STRUCTURE_ACCESS_SOURCE =
   "Yarra Edinburgh Gardens facility listing; OSM building footprints; Edinburgh Gardens CMP 2004 built-feature inventory; Yarra Brunswick Street Oval redevelopment scope for changerooms, accessible public toilets, tennis social/community space, external stairs and secure access gates";
+const STRUCTURE_UTILITY_SOURCE =
+  "Yarra Brunswick Street Oval redevelopment kiosk terrace, externally accessible public toilets, tennis social space and upgraded amenities; Yarra Emely Baker Centre kitchenette/refrigerator/microwave; Yarra Edinburgh Gardens Rotunda no-current-power constraint; switchboard cabinet locations are exterior gameplay approximations because public service drawings were unavailable";
 const HERITAGE_FURNITURE_SOURCE =
   "Edinburgh Gardens CMP 2004 sections 3.4.17-3.4.25 and 6.5.25: Chandler Drinking Fountain, gas lamp standards around the Rotunda/remnant cast-iron lanterns, reproduction seats, interpretive signs and Fitzroy cast-iron bollards";
 
@@ -3381,6 +3384,45 @@ export function createLevelData(): LevelData {
       source: `${STRUCTURE_ACCESS_SOURCE}; Yarra redevelopment source identifies refreshed umpire areas and secure access gates at the heritage grandstand`
     },
     {
+      id: "grandstand-external-public-toilets",
+      label: "Grandstand external public toilets",
+      kind: "toilets",
+      position: exteriorPointFromPolygon(
+        offsetPoint(grandstandCenter, grandstandRotation, -grandstandFootprint.halfX * 0.16, grandstandFrontSign * (grandstandVisualHalfZ + 2.25)),
+        grandstand,
+        grandstandCenter,
+        1.6
+      ),
+      linkedStructureId: "grandstand",
+      source: `${STRUCTURE_UTILITY_SOURCE}; Yarra redevelopment source specifies externally accessible public toilets in the sports-pavilion works`
+    },
+    {
+      id: "grandstand-kiosk-hatch",
+      label: "Grandstand kiosk hatch",
+      kind: "kiosk_hatch",
+      position: exteriorPointFromPolygon(
+        offsetPoint(grandstandCenter, grandstandRotation, grandstandFootprint.halfX * 0.46, grandstandFrontSign * (grandstandVisualHalfZ + 2.55)),
+        grandstand,
+        grandstandCenter,
+        1.75
+      ),
+      linkedStructureId: "grandstand",
+      source: `${STRUCTURE_UTILITY_SOURCE}; Yarra redevelopment concept images label a kiosk terrace, translated as an exterior hatch rather than an interior kiosk`
+    },
+    {
+      id: "grandstand-switchboard",
+      label: "Grandstand switchboard",
+      kind: "utility_box",
+      position: exteriorPointFromPolygon(
+        offsetPoint(grandstandCenter, grandstandRotation, grandstandFootprint.halfX * 0.86, -grandstandFrontSign * (grandstandVisualHalfZ + 3.2)),
+        grandstand,
+        grandstandCenter,
+        3.2
+      ),
+      linkedStructureId: "grandstand",
+      source: `${STRUCTURE_UTILITY_SOURCE}; powered sports-pavilion functions are source-backed, but the exact service cabinet location is inferred from the rear service edge`
+    },
+    {
       id: "tennis-clubroom-access",
       label: "Tennis clubroom",
       kind: "clubroom",
@@ -3392,6 +3434,19 @@ export function createLevelData(): LevelData {
       ),
       linkedStructureId: "osm-building-403753784",
       source: `${STRUCTURE_ACCESS_SOURCE}; Yarra redevelopment source specifically identifies an adjoining tennis social space and upgraded amenities`
+    },
+    {
+      id: "tennis-switchboard",
+      label: "Tennis pavilion switchboard",
+      kind: "utility_box",
+      position: exteriorPointFromPolygon(
+        buildingAccessPosition("osm-building-403753784", g(-37.7880800, 144.9822400), 4.7, 1.25),
+        tennis,
+        polygonCentroid(tennis),
+        1.35
+      ),
+      linkedStructureId: "osm-building-403753784",
+      source: `${STRUCTURE_UTILITY_SOURCE}; tennis social space and upgraded amenities imply powered service infrastructure, with cabinet placement inferred from the mapped pavilion frontage`
     },
     {
       id: "bowling-clubroom-access",
@@ -3452,12 +3507,28 @@ export function createLevelData(): LevelData {
       source: "OSM way 543505702; Yarra Emely Baker Centre page lists kitchenette, small refrigerator, microwave, trestle tables and chairs"
     },
     {
+      id: "emely-baker-switchboard",
+      label: "Emely Baker switchboard",
+      kind: "utility_box",
+      position: buildingAccessPosition("osm-building-543505702", g(-37.7856400, 144.9824800), 0, 1.35),
+      linkedStructureId: "osm-building-543505702",
+      source: `${STRUCTURE_UTILITY_SOURCE}; Emely Baker's refrigerator, microwave and bookable room use support a powered-building service cue, with exact cabinet location inferred`
+    },
+    {
       id: "south-amenities-service-room",
       label: "South amenities service room",
       kind: "maintenance_room",
       position: buildingAccessPosition("osm-building-242003562", g(-37.7884306, 144.9835333), 6.2, 1.25),
       linkedStructureId: "osm-building-242003562",
       source: "OSM way 242003562; Yarra Edinburgh Gardens public-toilet/accessibility listing; CMP 2004 notes toilet blocks as functional service buildings"
+    },
+    {
+      id: "south-amenities-switchboard",
+      label: "South amenities switchboard",
+      kind: "utility_box",
+      position: buildingAccessPosition("osm-building-242003562", g(-37.7884306, 144.9835333), -6.2, 1.25),
+      linkedStructureId: "osm-building-242003562",
+      source: `${STRUCTURE_UTILITY_SOURCE}; public toilets and accessible-amenity use support a powered service cue, with exact cabinet location inferred from the opposite service wall`
     },
     {
       id: "north-toilets-service-room",

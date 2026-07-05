@@ -27,6 +27,29 @@ describe("stealth tuning", () => {
     expect(zombieFacingThreshold(true, true, false)).toBeGreaterThan(zombieFacingThreshold(false, false, false));
   });
 
+  it("makes powered structure floodlights a visibility tradeoff", () => {
+    const unlit = playerVisibilityMultiplier({
+      surface: "concrete",
+      crouching: false,
+      inCover: false,
+      elevatedHeight: 0,
+      flashlightOn: false,
+      structureLit: false,
+      weather: rainyWeather
+    });
+    const lit = playerVisibilityMultiplier({
+      surface: "concrete",
+      crouching: false,
+      inCover: false,
+      elevatedHeight: 0,
+      flashlightOn: false,
+      structureLit: true,
+      weather: rainyWeather
+    });
+
+    expect(lit).toBeGreaterThan(unlit);
+  });
+
   it("masks subtle noises in rain but keeps hard alerts loud", () => {
     expect(weatherNoiseMaskForKind("scavenge", rainyWeather)).toBeLessThan(weatherNoiseMaskForKind("scavenge", dryWeather));
     expect(weatherNoiseMaskForKind("gunshot", rainyWeather)).toBe(1);

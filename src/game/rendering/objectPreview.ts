@@ -307,6 +307,8 @@ function amenityRadius(kind: LevelData["amenities"][number]["kind"]): number {
     kind === "maintenance_room" ||
     kind === "community_room" ||
     kind === "kitchenette" ||
+    kind === "kiosk_hatch" ||
+    kind === "utility_box" ||
     kind === "memorial_plaque"
   ) {
     return 2.6;

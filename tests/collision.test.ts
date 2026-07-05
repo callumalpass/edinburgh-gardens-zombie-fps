@@ -90,18 +90,25 @@ describe("collision system", () => {
       "maintenance_room",
       "community_room",
       "kitchenette",
+      "kiosk_hatch",
+      "utility_box",
       "memorial_plaque"
     ]);
     const expectedIds = [
       "grandstand-changeroom-access",
       "grandstand-umpire-room-access",
+      "grandstand-kiosk-hatch",
+      "grandstand-switchboard",
       "tennis-clubroom-access",
+      "tennis-switchboard",
       "bowling-clubroom-access",
       "bowling-green-service-locker",
       "oval-gatehouse-window",
       "emely-baker-community-room",
       "emely-baker-kitchenette",
+      "emely-baker-switchboard",
       "south-amenities-service-room",
+      "south-amenities-switchboard",
       "north-toilets-service-room",
       "rotunda-memorial-plaque"
     ];
