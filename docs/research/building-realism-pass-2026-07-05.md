@@ -92,6 +92,9 @@ Purpose: track the building-by-building realism pass for every structure current
 - `osm-building-1475006772` / Bowling green shed:
   - Added front guttering, a compact roller-door slat, roof vent and hose-reel cue for a small green-side service shed.
   - Source basis: OSM way `1475006772` for footprint and timber shed scale; Fitzroy Bowls official site for active greens/BBQ operation; bowling-club precinct context from CMP.
+- `osm-building-1475006773` / Bowling green shed:
+  - Added long front/rear guttering, paired shed doors, rear timber storage rack and metal rack uprights to match the longer green-side footprint.
+  - Source basis: OSM way `1475006773` for the long skewed footprint; Fitzroy Bowls official site for active greens/BBQ operation; bowling-club precinct context from CMP.
 
 ## Implementation Notes
 
