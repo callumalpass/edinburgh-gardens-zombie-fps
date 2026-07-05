@@ -122,6 +122,10 @@ export class MeshFactory {
       }
       this.addGripWraps(group, length * 0.26, width, guardMaterial);
       this.addBladeWeathering(group, length, width, isMachete);
+      if (!firstPerson) {
+        this.addArtifactPaintStroke(group, MELBOURNE_ANIME_PALETTE.tramOchre, 0.02, 0.15, -length * 0.22, width * 1.6, 0.014, 0.24, 0, -0.08);
+        this.addArtifactPaintStroke(group, MELBOURNE_ANIME_PALETTE.wetBluestone, -width * 0.28, 0.135, -length * 0.54, width * 1.2, 0.012, 0.18, 0, 0.12);
+      }
 
       if (firstPerson) {
         this.addFirstPersonArm(group, 1, { x: 0.12, y: -0.34, z: 0.28 }, { x: -0.62, y: 0.08, z: 0.22 }, { x: 0.05, y: -0.2, z: 0.1 });
@@ -240,6 +244,10 @@ export class MeshFactory {
     }
 
     this.addFirearmParkDetails(group, weaponId, length);
+    if (!firstPerson) {
+      this.addArtifactPaintStroke(group, MELBOURNE_ANIME_PALETTE.weatheredWhite, -0.02, 0.155, -length * 0.52, 0.26, 0.018, 0.2, 0, -0.03);
+      this.addArtifactPaintStroke(group, MELBOURNE_ANIME_PALETTE.eucalyptus, 0.02, 0.125, length * 0.22, 0.22, 0.016, 0.22, 0, 0.08);
+    }
 
     if (firstPerson) {
       for (const side of [-1, 1]) {
@@ -351,10 +359,67 @@ export class MeshFactory {
     return tube;
   }
 
+  private addArtifactBrushShadow(
+    group: THREE.Group,
+    color: THREE.ColorRepresentation,
+    radiusX: number,
+    radiusZ: number,
+    opacity = 0.18,
+    y = -0.34,
+    rotation = 0
+  ): THREE.Mesh {
+    const shadow = new THREE.Mesh(
+      new THREE.CircleGeometry(1, 22),
+      new THREE.MeshBasicMaterial({
+        color,
+        transparent: true,
+        opacity,
+        depthWrite: false,
+        side: THREE.DoubleSide
+      })
+    );
+    shadow.position.y = y;
+    shadow.rotation.x = Math.PI / 2;
+    shadow.rotation.z = rotation;
+    shadow.scale.set(radiusX, radiusZ, 1);
+    shadow.renderOrder = -2;
+    group.add(shadow);
+    return shadow;
+  }
+
+  private addArtifactPaintStroke(
+    group: THREE.Group,
+    color: THREE.ColorRepresentation,
+    x: number,
+    y: number,
+    z: number,
+    length: number,
+    thickness: number,
+    opacity = 0.48,
+    rotationY = 0,
+    rotationZ = 0
+  ): THREE.Mesh {
+    const stroke = new THREE.Mesh(
+      new THREE.BoxGeometry(length, thickness, thickness),
+      new THREE.MeshBasicMaterial({
+        color,
+        transparent: true,
+        opacity,
+        depthWrite: false
+      })
+    );
+    stroke.position.set(x, y, z);
+    stroke.rotation.set(0, rotationY, rotationZ);
+    stroke.renderOrder = 2;
+    group.add(stroke);
+    return stroke;
+  }
+
   createWeaponDropMesh(weaponId: WeaponId): THREE.Object3D {
     const group = this.createWeaponMesh(weaponId, false);
     group.scale.setScalar(2.0);
     group.rotation.x = 0.16;
+    this.addArtifactBrushShadow(group, MELBOURNE_ANIME_PALETTE.bluestoneShadow, 0.98, 0.54, 0.2, -0.32, -0.12);
     const haloMaterials = [
       new THREE.MeshBasicMaterial({ color: MELBOURNE_ANIME_PALETTE.tramOchre, transparent: true, opacity: 0.46, depthWrite: false }),
       new THREE.MeshBasicMaterial({ color: MELBOURNE_ANIME_PALETTE.wetBluestone, transparent: true, opacity: 0.34, depthWrite: false })
@@ -374,12 +439,14 @@ export class MeshFactory {
     tag.position.set(0.48, -0.22, 0.38);
     tag.rotation.set(0.02, 0.18, -0.08);
     group.add(tag);
+    this.addArtifactPaintStroke(group, MELBOURNE_ANIME_PALETTE.weatheredWhite, -0.18, -0.2, 0.55, 0.62, 0.02, 0.2, 0.08, -0.06);
     return group;
   }
 
   createBikeMesh(options: { issue?: BikeIssue } = {}): THREE.Group {
     const root = new THREE.Group();
     const group = new THREE.Group();
+    this.addArtifactBrushShadow(root, MELBOURNE_ANIME_PALETTE.bluestoneShadow, 1.36, 0.54, 0.2, 0.018, 0.08);
     const frameMaterial = this.paintedStandardMaterial({ color: 0x244a42, metalness: 0.22, roughness: 0.58 });
     const forkMaterial = this.paintedStandardMaterial({ color: MELBOURNE_ANIME_PALETTE.weatheredWhite, metalness: 0.32, roughness: 0.5 });
     const tyreMaterial = this.paintedStandardMaterial({ color: 0x171c1b, roughness: 0.78 });
@@ -414,6 +481,12 @@ export class MeshFactory {
       group.add(rim);
       wheelMeshes.push(rim);
 
+      const fender = new THREE.Mesh(new THREE.TorusGeometry(wheelRadius * 1.04, 0.018, 6, 24, Math.PI * 0.72), forkMaterial);
+      fender.position.copy(hub);
+      fender.rotation.z = Math.PI * 0.14;
+      fender.castShadow = true;
+      group.add(fender);
+
       const hubMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.28, 10), forkMaterial);
       hubMesh.position.copy(hub);
       hubMesh.rotation.x = Math.PI / 2;
@@ -439,6 +512,8 @@ export class MeshFactory {
     ] as Array<[THREE.Vector3, THREE.Vector3, number, THREE.Material]>) {
       this.addTubeBetween(group, a, b, radius, material);
     }
+    this.addArtifactPaintStroke(group, MELBOURNE_ANIME_PALETTE.tramOchre, -0.02, 0.94, -0.035, 0.62, 0.018, 0.26, 0, -0.03);
+    this.addArtifactPaintStroke(group, MELBOURNE_ANIME_PALETTE.weatheredWhite, 0.16, 0.73, 0.035, 0.54, 0.016, 0.22, 0, 0.08);
 
     const chainTop = new THREE.Mesh(new THREE.BoxGeometry(0.68, 0.026, 0.038), rubberMaterial);
     chainTop.position.set(-0.45, 0.52, -0.08);
@@ -499,6 +574,14 @@ export class MeshFactory {
     gumLeaf.position.set(1.25, 1.05, -0.12);
     gumLeaf.rotation.set(0.18, 0, -0.72);
     group.add(gumLeaf);
+
+    const crateTag = new THREE.Mesh(
+      new THREE.BoxGeometry(0.26, 0.024, 0.18),
+      this.artifactLabelMaterial("FITZ", "#263d45", "#efd18a", "#76906c")
+    );
+    crateTag.position.set(1.02, 0.92, -0.27);
+    crateTag.rotation.x = -0.02;
+    group.add(crateTag);
 
     const rearReflector = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.13, 0.05), reflectorMaterial);
     rearReflector.position.set(-0.94, 0.96, -0.04);
@@ -1304,6 +1387,15 @@ export class MeshFactory {
   createPickupMesh(type: PickupKind): THREE.Object3D {
     const group = new THREE.Group();
     this.addPickupBrushMarker(group, type);
+    this.addArtifactBrushShadow(
+      group,
+      type === "ammo" ? MELBOURNE_ANIME_PALETTE.tramOchre : type === "health" ? MELBOURNE_ANIME_PALETTE.brick : MELBOURNE_ANIME_PALETTE.wetBluestone,
+      0.88,
+      0.52,
+      0.12,
+      -0.37,
+      type === "scrap" ? 0.22 : -0.08
+    );
 
     if (type === "ammo") {
       const boxMaterial = this.paintedStandardMaterial({
@@ -1347,6 +1439,8 @@ export class MeshFactory {
       strap.position.set(0, 0.58, -0.12);
       strap.rotation.y = 0.05;
       group.add(strap);
+      this.addArtifactPaintStroke(group, MELBOURNE_ANIME_PALETTE.weatheredWhite, -0.1, 0.62, -0.52, 0.72, 0.02, 0.2, 0, -0.04);
+      this.addArtifactPaintStroke(group, MELBOURNE_ANIME_PALETTE.eucalyptus, 0.18, 0.22, -0.73, 0.58, 0.018, 0.18, 0, 0.06);
     } else if (type === "health") {
       const caseMaterial = this.paintedStandardMaterial({
         color: MELBOURNE_ANIME_PALETTE.terraceCream,
@@ -1387,6 +1481,14 @@ export class MeshFactory {
       bandage.position.set(0.34, 0.18, 0.52);
       bandage.castShadow = true;
       group.add(bandage);
+      const aidTag = new THREE.Mesh(
+        new THREE.BoxGeometry(0.42, 0.03, 0.18),
+        this.artifactLabelMaterial("AID", "#b35f4a", "#f2e8d4", "#d9caa7")
+      );
+      aidTag.position.set(-0.3, 0.24, 0.52);
+      aidTag.rotation.set(0.06, 0.08, -0.04);
+      group.add(aidTag);
+      this.addArtifactPaintStroke(group, MELBOURNE_ANIME_PALETTE.eucalyptus, -0.12, 0.58, -0.44, 0.68, 0.02, 0.18, 0, 0.05);
     } else {
       const scrapMaterial = this.paintedStandardMaterial({ color: 0x8fa693, metalness: 0.24, roughness: 0.62 });
       const darkMaterial = this.paintedStandardMaterial({ color: MELBOURNE_ANIME_PALETTE.wetBluestone, metalness: 0.26, roughness: 0.66 });
@@ -1411,6 +1513,8 @@ export class MeshFactory {
       ticket.position.set(-0.28, 0.34, 0.34);
       ticket.rotation.set(0.12, -0.16, 0.18);
       group.add(ticket);
+      this.addArtifactPaintStroke(group, MELBOURNE_ANIME_PALETTE.tramOchre, 0.2, 0.44, -0.3, 0.62, 0.02, 0.18, 0.2, -0.05);
+      this.addArtifactPaintStroke(group, MELBOURNE_ANIME_PALETTE.weatheredWhite, -0.24, 0.2, -0.2, 0.46, 0.018, 0.16, -0.16, 0.08);
     }
     this.applyAnimeMeshStyle(group, 1.08);
     return group;

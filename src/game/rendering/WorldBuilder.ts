@@ -303,11 +303,37 @@ export class WorldBuilder {
 
     const ring = new THREE.Mesh(
       new THREE.RingGeometry(radius * 0.92, radius, 48),
-      new THREE.MeshBasicMaterial({ color: 0xf0cf7a, transparent: true, opacity: 0.34, side: THREE.DoubleSide })
+      this.washDetailMaterial("preview-platform-tram-ring", MELBOURNE_ANIME_PALETTE.tramOchre, 0.34)
     );
     ring.position.set(target.position.x, this.groundY(target.position) + 0.075, target.position.z);
     ring.rotation.x = -Math.PI / 2;
     this.scene.add(ring);
+
+    const wash = new THREE.Mesh(
+      new THREE.CircleGeometry(radius * 0.78, 26),
+      this.washDetailMaterial("preview-platform-bluegum-wash", MELBOURNE_ANIME_PALETTE.deepBluegum, 0.12)
+    );
+    wash.position.set(target.position.x, this.groundY(target.position) + 0.062, target.position.z);
+    wash.rotation.set(-Math.PI / 2, 0, this.angleFromId(target.id) * 0.35);
+    wash.scale.set(1.2, 0.62, 1);
+    this.scene.add(wash);
+
+    for (let index = 0; index < 4; index += 1) {
+      const angle = this.angleFromId(`${target.id}:stroke:${index}`) + index * 0.72;
+      const offset = {
+        x: target.position.x + Math.cos(angle) * radius * 0.25,
+        z: target.position.z + Math.sin(angle) * radius * 0.18
+      };
+      const stroke = this.createTerrainOverlayRect(
+        offset,
+        angle,
+        radius * (0.82 + index * 0.08),
+        0.05 + index * 0.01,
+        0.088 + index * 0.006,
+        this.washDetailMaterial(`preview-brush-stroke-${index}`, index % 2 === 0 ? MELBOURNE_ANIME_PALETTE.weatheredWhite : MELBOURNE_ANIME_PALETTE.wetBluestone, 0.24)
+      );
+      this.scene.add(stroke);
+    }
 
     this.addLabel(target.label, target.position, target.height + 1.15);
   }
@@ -565,13 +591,28 @@ export class WorldBuilder {
   }
 
   private addUpgradeStation(station: UpgradeStation): void {
-    const material = this.standardDetailMaterial("upgrade-station-crate", 0xd0a343, 0.55, 0.08);
+    const material = this.standardDetailMaterial("upgrade-station-crate", MELBOURNE_ANIME_PALETTE.tramOchre, 0.64, 0.06);
+    const strapMaterial = this.standardDetailMaterial("upgrade-station-bluestone-straps", MELBOURNE_ANIME_PALETTE.bluestoneShadow, 0.58, 0.24);
+    const labelMaterial = this.canvasSignMaterial("upgrade-station-label", "SCRAP", "#263d45", "#efd18a");
     const group = new THREE.Group();
     group.name = station.label;
+    this.addLocalBrushShadow(group, MELBOURNE_ANIME_PALETTE.bluestoneShadow, 1.85, 1.08, 0.18, 0.025, this.angleFromId(station.id));
     const crate = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.5, 1.8), material);
     crate.position.y = 0.75;
     crate.castShadow = true;
     group.add(crate);
+
+    for (const x of [-1.1, 1.1]) {
+      const strap = new THREE.Mesh(new THREE.BoxGeometry(0.16, 1.62, 1.9), strapMaterial);
+      strap.position.set(x, 0.78, 0);
+      strap.castShadow = true;
+      group.add(strap);
+    }
+    const label = new THREE.Mesh(new THREE.BoxGeometry(1.18, 0.4, 0.055), labelMaterial);
+    label.position.set(0, 0.92, -0.93);
+    group.add(label);
+    this.addLocalPaintStroke(group, MELBOURNE_ANIME_PALETTE.weatheredWhite, -0.08, 1.36, -0.94, 1.7, 0.035, 0.26, 0, -0.04);
+    this.addLocalPaintStroke(group, MELBOURNE_ANIME_PALETTE.eucalyptus, 0.1, 0.24, -0.96, 1.4, 0.028, 0.22, 0, 0.05);
 
     const lamp = new THREE.PointLight(0xd5a948, 1.2, 18);
     lamp.position.y = 2.4;
@@ -2429,26 +2470,158 @@ export class WorldBuilder {
     return material as THREE.MeshBasicMaterial;
   }
 
+  private washDetailMaterial(key: string, color: number, opacity: number): THREE.MeshBasicMaterial {
+    const cacheKey = `wash:${key}:${color.toString(16)}:${opacity}`;
+    let material = this.detailMaterialCache.get(cacheKey);
+    if (!material) {
+      material = new THREE.MeshBasicMaterial({
+        color,
+        transparent: true,
+        opacity,
+        depthWrite: false,
+        side: THREE.DoubleSide
+      });
+      this.detailMaterialCache.set(cacheKey, material);
+    }
+    return material as THREE.MeshBasicMaterial;
+  }
+
+  private addLocalBrushShadow(
+    group: THREE.Group,
+    color: number,
+    radiusX: number,
+    radiusZ: number,
+    opacity = 0.16,
+    y = 0.018,
+    rotation = 0
+  ): THREE.Mesh {
+    const shadow = new THREE.Mesh(
+      new THREE.CircleGeometry(1, 22),
+      this.washDetailMaterial(`brush-shadow-${color.toString(16)}-${opacity}`, color, opacity)
+    );
+    shadow.position.y = y;
+    shadow.rotation.x = -Math.PI / 2;
+    shadow.rotation.z = rotation;
+    shadow.scale.set(radiusX, radiusZ, 1);
+    shadow.renderOrder = -2;
+    group.add(shadow);
+    return shadow;
+  }
+
+  private addLocalPaintStroke(
+    group: THREE.Group,
+    color: number,
+    localX: number,
+    localY: number,
+    localZ: number,
+    length: number,
+    thickness: number,
+    opacity = 0.62,
+    rotationY = 0,
+    rotationZ = 0
+  ): THREE.Mesh {
+    const stroke = new THREE.Mesh(
+      new THREE.BoxGeometry(length, thickness, thickness),
+      this.washDetailMaterial(`paint-stroke-${color.toString(16)}-${opacity}`, color, opacity)
+    );
+    stroke.position.set(localX, localY, localZ);
+    stroke.rotation.set(0, rotationY, rotationZ);
+    stroke.renderOrder = 2;
+    group.add(stroke);
+    return stroke;
+  }
+
   private canvasSignMaterial(key: string, text: string, background: string, foreground: string): THREE.MeshBasicMaterial {
     const cacheKey = `canvas-sign:${key}:${text}:${background}:${foreground}`;
     let material = this.detailMaterialCache.get(cacheKey);
     if (!material) {
       const canvas = document.createElement("canvas");
-      canvas.width = 256;
-      canvas.height = 128;
+      canvas.width = 320;
+      canvas.height = 160;
       const ctx = canvas.getContext("2d")!;
       ctx.fillStyle = background;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = foreground;
-      ctx.font = text.length > 4 ? "700 44px system-ui, sans-serif" : "800 52px system-ui, sans-serif";
+
+      const seed = hashString(`${key}:${text}:${background}:${foreground}`);
+      const accent = mixHex(background, foreground, 0.32);
+      const shade = mixHex(background, "#07131a", 0.38);
+      const light = mixHex(foreground, "#d9d5bd", 0.32);
+
+      for (let i = 0; i < 80; i += 1) {
+        const x = seededRange(seed, i, -24, canvas.width + 12);
+        const y = seededRange(seed, i + 91, -12, canvas.height + 8);
+        ctx.fillStyle = `${i % 2 === 0 ? light : shade}${alphaHex(seededRange(seed, i + 181, 0.035, 0.11))}`;
+        ctx.fillRect(x, y, seededRange(seed, i + 271, 1, 4), seededRange(seed, i + 361, 1, 3));
+      }
+
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      for (let i = 0; i < 12; i += 1) {
+        const y = seededRange(seed, i + 17, 14, canvas.height - 14);
+        ctx.strokeStyle = `${i % 3 === 0 ? shade : light}${alphaHex(seededRange(seed, i + 43, 0.08, 0.18))}`;
+        ctx.lineWidth = seededRange(seed, i + 71, 1.4, 6.4);
+        ctx.beginPath();
+        ctx.moveTo(seededRange(seed, i + 83, -32, 20), y);
+        ctx.bezierCurveTo(
+          seededRange(seed, i + 97, 58, 116),
+          y + seededRange(seed, i + 103, -12, 12),
+          seededRange(seed, i + 137, 176, 248),
+          y + seededRange(seed, i + 149, -14, 14),
+          seededRange(seed, i + 163, 300, 356),
+          y + seededRange(seed, i + 191, -8, 8)
+        );
+        ctx.stroke();
+      }
+
+      ctx.fillStyle = `${accent}33`;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(canvas.width, 0);
+      ctx.lineTo(canvas.width, 21 + seededRange(seed, 403, -4, 6));
+      ctx.bezierCurveTo(214, 18, 96, 30, 0, 20);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.moveTo(0, canvas.height - 22 + seededRange(seed, 419, -5, 5));
+      ctx.bezierCurveTo(88, canvas.height - 30, 212, canvas.height - 14, canvas.width, canvas.height - 24);
+      ctx.lineTo(canvas.width, canvas.height);
+      ctx.lineTo(0, canvas.height);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.strokeStyle = foreground;
+      ctx.lineWidth = 7;
+      ctx.strokeRect(13, 13, canvas.width - 26, canvas.height - 26);
+      ctx.strokeStyle = `${background}cc`;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(24, 24, canvas.width - 48, canvas.height - 48);
+
+      const maxTextWidth = canvas.width - 74;
+      let fontSize = text.length > 7 ? 46 : text.length > 4 ? 54 : 66;
+      do {
+        ctx.font = `900 ${fontSize}px system-ui, sans-serif`;
+        fontSize -= 2;
+      } while (ctx.measureText(text).width > maxTextWidth && fontSize >= 30);
+
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(text, canvas.width / 2, canvas.height / 2 + 2);
-      ctx.strokeStyle = foreground;
-      ctx.lineWidth = 6;
-      ctx.strokeRect(10, 10, canvas.width - 20, canvas.height - 20);
+      ctx.lineWidth = 5;
+      ctx.strokeStyle = `${shade}cc`;
+      ctx.strokeText(text, canvas.width / 2 + 1, canvas.height / 2 + 5);
+      ctx.fillStyle = foreground;
+      ctx.fillText(text, canvas.width / 2, canvas.height / 2 + 3);
+
+      ctx.strokeStyle = `${light}77`;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(28, canvas.height - 30);
+      ctx.bezierCurveTo(94, canvas.height - 22, 194, canvas.height - 36, 292, canvas.height - 27);
+      ctx.stroke();
+
       const texture = new THREE.CanvasTexture(canvas);
       texture.colorSpace = THREE.SRGBColorSpace;
+      texture.anisotropy = 2;
       material = new THREE.MeshBasicMaterial({ map: texture });
       this.detailMaterialCache.set(cacheKey, material);
     }
@@ -3892,17 +4065,16 @@ export class WorldBuilder {
 
   private addDogAreaSign(detail: ParkLifeDetail): void {
     const group = new THREE.Group();
+    this.addLocalBrushShadow(group, MELBOURNE_ANIME_PALETTE.bluestoneShadow, 0.64, 0.42, 0.12);
     const post = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.055, 1.45, 8), this.materials.metal);
     post.position.y = 0.72;
     post.castShadow = true;
     group.add(post);
-    const sign = new THREE.Mesh(new THREE.BoxGeometry(0.82, 0.5, 0.06), new THREE.MeshStandardMaterial({ color: 0x315c45, roughness: 0.62 }));
+    const sign = new THREE.Mesh(new THREE.BoxGeometry(0.82, 0.5, 0.06), this.canvasSignMaterial(`dog-area-${detail.id}`, "DOGS", "#315c45", "#f2e6bf"));
     sign.position.y = 1.32;
     sign.castShadow = true;
     group.add(sign);
-    const mark = new THREE.Mesh(new THREE.CircleGeometry(0.12, 14), new THREE.MeshBasicMaterial({ color: 0xe7e2cb }));
-    mark.position.set(-0.18, 1.32, -0.034);
-    group.add(mark);
+    this.addLocalPaintStroke(group, MELBOURNE_ANIME_PALETTE.tramOchre, 0.06, 1.02, -0.05, 0.48, 0.018, 0.28, 0, -0.12);
     group.position.set(detail.position.x, this.groundY(detail.position), detail.position.z);
     group.rotation.y = detail.angle;
     this.scene.add(group);
@@ -4136,6 +4308,7 @@ export class WorldBuilder {
     const group = new THREE.Group();
     const timber = this.materials.timber;
     const iron = this.standardDetailMaterial("heritage-seat-iron-frame", 0x25302c, 0.56, 0.32);
+    this.addLocalBrushShadow(group, MELBOURNE_ANIME_PALETTE.bluestoneShadow, 1.78, 0.76, 0.13, 0.018, 0.04);
     const pad = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.045, 1.25), this.materials.concrete);
     pad.position.y = 0.025;
     pad.receiveShadow = true;
@@ -4145,6 +4318,7 @@ export class WorldBuilder {
       slat.position.set(0, 0.62, z);
       slat.castShadow = true;
       group.add(slat);
+      this.addLocalPaintStroke(group, MELBOURNE_ANIME_PALETTE.weatheredWhite, 0.18, 0.685, z - 0.065, 1.6, 0.016, 0.14, 0, 0.03);
     }
     for (const y of [0.9, 1.1, 1.3]) {
       const back = new THREE.Mesh(new THREE.BoxGeometry(2.82, 0.09, 0.12), timber);
@@ -4152,6 +4326,7 @@ export class WorldBuilder {
       back.rotation.x = -0.22;
       back.castShadow = true;
       group.add(back);
+      this.addLocalPaintStroke(group, MELBOURNE_ANIME_PALETTE.tramOchre, -0.2, y + 0.04, 0.35, 1.48, 0.016, 0.12, 0, -0.02);
     }
     for (const x of [-1.16, 1.16]) {
       const side = new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.035, 8, 20, Math.PI * 1.08), iron);
@@ -4213,8 +4388,9 @@ export class WorldBuilder {
 
   private addNoticeBoard(detail: ParkLifeDetail): void {
     const group = new THREE.Group();
-    const frame = new THREE.MeshStandardMaterial({ color: 0x4c3926, roughness: 0.72 });
-    const board = new THREE.MeshStandardMaterial({ color: 0x244734, roughness: 0.66 });
+    this.addLocalBrushShadow(group, MELBOURNE_ANIME_PALETTE.bluestoneShadow, 1.02, 0.48, 0.13);
+    const frame = this.standardDetailMaterial("notice-board-frame", 0x4c3926, 0.78, 0.03);
+    const board = this.standardDetailMaterial("notice-board-green", 0x244734, 0.72, 0.04);
     for (const x of [-0.62, 0.62]) {
       const post = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.75, 0.08), frame);
       post.position.set(x, 0.88, 0);
@@ -4230,6 +4406,7 @@ export class WorldBuilder {
       notice.position.set(0, y, -0.048);
       group.add(notice);
     }
+    this.addLocalPaintStroke(group, MELBOURNE_ANIME_PALETTE.tramOchre, -0.08, 1.78, -0.05, 1.18, 0.024, 0.2, 0, -0.04);
     group.position.set(detail.position.x, this.groundY(detail.position), detail.position.z);
     group.rotation.y = detail.angle;
     this.scene.add(group);
@@ -4390,7 +4567,8 @@ export class WorldBuilder {
   }
 
   private addTrainingCones(detail: ParkLifeDetail): void {
-    const coneMaterial = new THREE.MeshStandardMaterial({ color: 0xd6632e, roughness: 0.58 });
+    const coneMaterial = this.standardDetailMaterial("training-cone-vermilion", 0xd6632e, 0.62, 0.02);
+    const stripeMaterial = this.basicDetailMaterial("training-cone-pale-stripe", 0xf2e6bf);
     for (let index = 0; index < 6; index += 1) {
       const localX = (index - 2.5) * 0.82;
       const localZ = Math.sin(index * 1.7) * 0.32;
@@ -4399,11 +4577,20 @@ export class WorldBuilder {
       cone.position.set(point.x, this.groundY(point) + 0.22, point.z);
       cone.castShadow = true;
       this.scene.add(cone);
+      const stripe = new THREE.Mesh(new THREE.CylinderGeometry(0.095, 0.12, 0.025, 8), stripeMaterial);
+      stripe.position.set(point.x, this.groundY(point) + 0.28, point.z);
+      stripe.castShadow = false;
+      this.scene.add(stripe);
     }
   }
 
   private addDogWaterBowl(detail: ParkLifeDetail): void {
     const groundY = this.groundY(detail.position);
+    const shadow = new THREE.Mesh(new THREE.CircleGeometry(0.56, 18), this.washDetailMaterial("dog-bowl-shadow", MELBOURNE_ANIME_PALETTE.bluestoneShadow, 0.16));
+    shadow.position.set(detail.position.x, groundY + 0.018, detail.position.z);
+    shadow.rotation.x = -Math.PI / 2;
+    shadow.scale.set(1.18, 0.72, 1);
+    this.scene.add(shadow);
     const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.34, 0.16, 18), this.materials.metal);
     bowl.position.set(detail.position.x, groundY + 0.08, detail.position.z);
     bowl.castShadow = true;
@@ -4415,8 +4602,9 @@ export class WorldBuilder {
 
   private addPicnicCooler(detail: ParkLifeDetail): void {
     const group = new THREE.Group();
-    const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x4f8f9a, roughness: 0.58 });
-    const lidMaterial = new THREE.MeshStandardMaterial({ color: 0xe6dfc8, roughness: 0.52 });
+    this.addLocalBrushShadow(group, MELBOURNE_ANIME_PALETTE.bluestoneShadow, 0.74, 0.46, 0.16);
+    const bodyMaterial = this.standardDetailMaterial("picnic-cooler-teal", 0x4f8f9a, 0.66, 0.04);
+    const lidMaterial = this.standardDetailMaterial("picnic-cooler-lid", 0xe6dfc8, 0.58, 0.02);
     const body = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.48, 0.58), bodyMaterial);
     body.position.y = 0.28;
     body.castShadow = true;
@@ -4429,6 +4617,7 @@ export class WorldBuilder {
     handle.position.y = 0.74;
     handle.rotation.x = Math.PI / 2;
     group.add(handle);
+    this.addLocalPaintStroke(group, MELBOURNE_ANIME_PALETTE.weatheredWhite, -0.06, 0.42, -0.31, 0.54, 0.018, 0.24, 0, -0.04);
     group.position.set(detail.position.x, this.boxSupportY(detail.position, detail.angle, 0.52, 0.33), detail.position.z);
     group.rotation.y = detail.angle;
     this.scene.add(group);
@@ -4436,7 +4625,8 @@ export class WorldBuilder {
 
   private addSportsBag(detail: ParkLifeDetail): void {
     const group = new THREE.Group();
-    const bagMaterial = new THREE.MeshStandardMaterial({ color: 0x293a4d, roughness: 0.74 });
+    this.addLocalBrushShadow(group, MELBOURNE_ANIME_PALETTE.bluestoneShadow, 0.9, 0.48, 0.17, 0.018, -0.1);
+    const bagMaterial = this.standardDetailMaterial("sports-bag-blue", 0x293a4d, 0.78, 0.03);
     const bag = new THREE.Mesh(new THREE.BoxGeometry(1.25, 0.42, 0.58), bagMaterial);
     bag.position.y = 0.26;
     bag.castShadow = true;
@@ -4448,6 +4638,9 @@ export class WorldBuilder {
       strap.scale.z = 0.55;
       group.add(strap);
     }
+    const tag = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.16, 0.035), this.canvasSignMaterial("sports-bag-tag", "FC", "#263d45", "#efd18a"));
+    tag.position.set(-0.42, 0.34, -0.32);
+    group.add(tag);
     group.position.set(detail.position.x, this.boxSupportY(detail.position, detail.angle, 0.65, 0.32), detail.position.z);
     group.rotation.y = detail.angle;
     this.scene.add(group);
@@ -4614,6 +4807,7 @@ export class WorldBuilder {
 
   private addBench(position: Vec2, angle: number): void {
     const group = new THREE.Group();
+    this.addLocalBrushShadow(group, MELBOURNE_ANIME_PALETTE.bluestoneShadow, 1.85, 0.72, 0.12, 0.018, -0.08);
     const pad = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.06, 1.55), this.materials.concrete);
     pad.position.y = 0.035;
     pad.receiveShadow = true;
@@ -4623,6 +4817,7 @@ export class WorldBuilder {
       slat.position.set(0, 0.72, z);
       slat.castShadow = true;
       group.add(slat);
+      this.addLocalPaintStroke(group, MELBOURNE_ANIME_PALETTE.weatheredWhite, -0.24, 0.79, z - 0.065, 1.72, 0.018, 0.16, 0, 0.02);
     }
     for (const y of [0.96, 1.18]) {
       const back = new THREE.Mesh(new THREE.BoxGeometry(2.72, 0.12, 0.14), this.materials.timber);
@@ -4630,6 +4825,7 @@ export class WorldBuilder {
       back.rotation.x = -0.18;
       back.castShadow = true;
       group.add(back);
+      this.addLocalPaintStroke(group, MELBOURNE_ANIME_PALETTE.tramOchre, 0.26, y + 0.045, 0.34, 1.46, 0.018, 0.12, 0, -0.03);
     }
     for (const x of [-0.92, 0.92]) {
       for (const z of [-0.2, 0.28]) {
@@ -4646,6 +4842,7 @@ export class WorldBuilder {
 
   private addPicnicTable(position: Vec2, angle: number): void {
     const group = new THREE.Group();
+    this.addLocalBrushShadow(group, MELBOURNE_ANIME_PALETTE.bluestoneShadow, 1.95, 1.28, 0.12, 0.018, 0.12);
     const pad = new THREE.Mesh(new THREE.BoxGeometry(3.35, 0.055, 2.45), this.materials.concrete);
     pad.position.y = 0.032;
     pad.receiveShadow = true;
@@ -4654,11 +4851,14 @@ export class WorldBuilder {
     top.position.y = 0.82;
     top.castShadow = true;
     group.add(top);
+    this.addLocalPaintStroke(group, MELBOURNE_ANIME_PALETTE.weatheredWhite, -0.1, 0.91, -0.34, 1.75, 0.022, 0.18, 0, 0.02);
+    this.addLocalPaintStroke(group, MELBOURNE_ANIME_PALETTE.eucalyptus, 0.12, 0.92, 0.34, 1.42, 0.02, 0.16, 0, -0.04);
     for (const z of [-0.85, 0.85]) {
       const bench = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.12, 0.32), this.materials.timber);
       bench.position.set(0, 0.52, z);
       bench.castShadow = true;
       group.add(bench);
+      this.addLocalPaintStroke(group, MELBOURNE_ANIME_PALETTE.tramOchre, 0.18, 0.59, z - 0.17, 1.1, 0.018, 0.13, 0, z < 0 ? -0.03 : 0.03);
     }
     for (const x of [-0.72, 0.72]) {
       const leg = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.72, 0.12), this.materials.metal);
@@ -4674,11 +4874,12 @@ export class WorldBuilder {
 
   private addTableTennis(position: Vec2, angle: number): void {
     const group = new THREE.Group();
+    this.addLocalBrushShadow(group, MELBOURNE_ANIME_PALETTE.bluestoneShadow, 2.25, 1.42, 0.13, 0.018, -0.16);
     const pad = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.055, 2.8), this.materials.concrete);
     pad.position.y = 0.032;
     pad.receiveShadow = true;
     group.add(pad);
-    const tableMaterial = new THREE.MeshStandardMaterial({ color: 0x2f6b65, roughness: 0.54 });
+    const tableMaterial = this.standardDetailMaterial("painted-table-tennis-top", 0x2f6b65, 0.6, 0.04);
     const table = new THREE.Mesh(new THREE.BoxGeometry(2.75, 0.12, 1.53), tableMaterial);
     table.position.y = 0.78;
     table.castShadow = true;
@@ -4703,31 +4904,43 @@ export class WorldBuilder {
       }
     }
     for (const x of [-1.85, 1.85]) {
-      const paddle = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.035, 18), new THREE.MeshStandardMaterial({ color: 0xb74838, roughness: 0.48 }));
+      const paddle = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.035, 18), this.standardDetailMaterial("table-tennis-paddle-brick", MELBOURNE_ANIME_PALETTE.brick, 0.58, 0.02));
       paddle.position.set(x, 0.19, -0.9);
       paddle.rotation.x = Math.PI / 2;
       paddle.castShadow = true;
       group.add(paddle);
     }
+    this.addLocalPaintStroke(group, MELBOURNE_ANIME_PALETTE.weatheredWhite, -0.35, 0.868, -0.42, 0.72, 0.018, 0.28, 0, -0.05);
+    this.addLocalPaintStroke(group, MELBOURNE_ANIME_PALETTE.tramOchre, 0.58, 0.87, 0.46, 0.58, 0.016, 0.2, 0, 0.08);
     group.position.set(position.x, this.boxSupportY(position, angle, 2.1, 1.4), position.z);
     group.rotation.y = angle;
     this.scene.add(group);
   }
 
   private addWasteBasket(position: Vec2): void {
-    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.34, 0.9, 12), new THREE.MeshStandardMaterial({ color: 0x2e4a3a, roughness: 0.82 }));
-    body.position.set(position.x, this.groundY(position) + 0.45, position.z);
+    const group = new THREE.Group();
+    this.addLocalBrushShadow(group, MELBOURNE_ANIME_PALETTE.bluestoneShadow, 0.66, 0.48, 0.16);
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.34, 0.9, 12), this.standardDetailMaterial("waste-basket-bluegum", 0x2e4a3a, 0.82, 0.04));
+    body.position.y = 0.45;
     body.castShadow = true;
-    this.scene.add(body);
+    group.add(body);
     const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.48, 0.48, 0.08, 12), this.materials.metal);
-    lid.position.set(position.x, this.groundY(position) + 0.94, position.z);
+    lid.position.y = 0.94;
     lid.castShadow = true;
-    this.scene.add(lid);
+    group.add(lid);
+    const sticker = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.22, 0.045), this.canvasSignMaterial("waste-basket-sticker", "BIN", "#315c45", "#f2e6bf"));
+    sticker.position.set(0, 0.52, -0.35);
+    group.add(sticker);
+    this.addLocalPaintStroke(group, MELBOURNE_ANIME_PALETTE.weatheredWhite, -0.05, 0.78, -0.37, 0.48, 0.018, 0.18, 0, -0.04);
+    group.position.set(position.x, this.groundY(position), position.z);
+    group.rotation.y = this.angleFromPoint(position);
+    this.scene.add(group);
   }
 
   private addDrinkingFountain(position: Vec2): void {
     const group = new THREE.Group();
-    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, 1.15, 12), new THREE.MeshStandardMaterial({ color: 0x496e76, roughness: 0.58 }));
+    this.addLocalBrushShadow(group, MELBOURNE_ANIME_PALETTE.stormTeal, 0.74, 0.5, 0.14);
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, 1.15, 12), this.standardDetailMaterial("drinking-fountain-teal", 0x496e76, 0.62, 0.08));
     post.position.y = 0.58;
     post.castShadow = true;
     group.add(post);
@@ -4739,6 +4952,7 @@ export class WorldBuilder {
     spout.position.set(0, 1.28, -0.52);
     spout.castShadow = true;
     group.add(spout);
+    this.addLocalPaintStroke(group, MELBOURNE_ANIME_PALETTE.wetBluestone, 0, 0.88, -0.2, 0.36, 0.02, 0.34, 0, 0.08);
     const glow = new THREE.PointLight(0x5fc6d6, 0.45, 9);
     glow.position.set(0, 1.25, -0.45);
     group.add(glow);
@@ -4762,12 +4976,27 @@ export class WorldBuilder {
   }
 
   private addSupplyCrate(position: Vec2, angle: number): void {
-    const crate = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.72, 0.95), new THREE.MeshStandardMaterial({ color: 0x80603b, roughness: 0.76 }));
-    crate.position.set(position.x, this.boxSupportY(position, angle, 0.65, 0.48) + 0.38, position.z);
-    crate.rotation.y = angle;
+    const group = new THREE.Group();
+    this.addLocalBrushShadow(group, MELBOURNE_ANIME_PALETTE.bluestoneShadow, 0.9, 0.6, 0.16);
+    const crateMaterial = this.standardDetailMaterial("bbq-supply-crate", 0x80603b, 0.8, 0.03);
+    const bandMaterial = this.standardDetailMaterial("bbq-supply-crate-band", MELBOURNE_ANIME_PALETTE.tramOchre, 0.74, 0.02);
+    const crate = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.72, 0.95), crateMaterial);
+    crate.position.y = 0.38;
     crate.castShadow = true;
     crate.receiveShadow = true;
-    this.scene.add(crate);
+    group.add(crate);
+    for (const x of [-0.44, 0.44]) {
+      const band = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.76, 1.0), bandMaterial);
+      band.position.set(x, 0.39, 0);
+      band.castShadow = true;
+      group.add(band);
+    }
+    const label = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.24, 0.045), this.canvasSignMaterial("bbq-supply-label", "BBQ", "#5c4630", "#f2e6bf"));
+    label.position.set(0, 0.46, -0.5);
+    group.add(label);
+    group.position.set(position.x, this.boxSupportY(position, angle, 0.65, 0.48), position.z);
+    group.rotation.y = angle;
+    this.scene.add(group);
   }
 
   private isStructureAmenity(amenity: AmenityPoint): boolean {
@@ -5657,4 +5886,59 @@ function createGrassClumpGeometry(): THREE.BufferGeometry {
   geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
   geometry.computeVertexNormals();
   return geometry;
+}
+
+function hashString(value: string): number {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return hash >>> 0;
+}
+
+function seededUnit(seed: number, salt: number): number {
+  let value = seed ^ Math.imul(salt + 1, 0x9e3779b1);
+  value ^= value >>> 16;
+  value = Math.imul(value, 0x85ebca6b);
+  value ^= value >>> 13;
+  value = Math.imul(value, 0xc2b2ae35);
+  value ^= value >>> 16;
+  return (value >>> 0) / 0xffffffff;
+}
+
+function seededRange(seed: number, salt: number, min: number, max: number): number {
+  return min + (max - min) * seededUnit(seed, salt);
+}
+
+function alphaHex(alpha: number): string {
+  return Math.round(THREE.MathUtils.clamp(alpha, 0, 1) * 255)
+    .toString(16)
+    .padStart(2, "0");
+}
+
+function mixHex(a: string, b: string, amount: number): string {
+  const left = parseHexColor(a);
+  const right = parseHexColor(b);
+  const t = THREE.MathUtils.clamp(amount, 0, 1);
+  const channel = (key: keyof typeof left) => Math.round(THREE.MathUtils.lerp(left[key], right[key], t));
+  return `#${channel("r").toString(16).padStart(2, "0")}${channel("g").toString(16).padStart(2, "0")}${channel("b")
+    .toString(16)
+    .padStart(2, "0")}`;
+}
+
+function parseHexColor(value: string): { r: number; g: number; b: number } {
+  const normalized = value.startsWith("#") ? value.slice(1) : value;
+  const expanded =
+    normalized.length === 3
+      ? normalized
+          .split("")
+          .map((entry) => `${entry}${entry}`)
+          .join("")
+      : normalized.padEnd(6, "0").slice(0, 6);
+  return {
+    r: Number.parseInt(expanded.slice(0, 2), 16),
+    g: Number.parseInt(expanded.slice(2, 4), 16),
+    b: Number.parseInt(expanded.slice(4, 6), 16)
+  };
 }
