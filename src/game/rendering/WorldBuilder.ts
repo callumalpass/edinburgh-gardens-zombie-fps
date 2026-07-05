@@ -15,6 +15,7 @@ import type {
   TreeProfile,
   Vec2
 } from "../types";
+import { createAnimeToonRamp } from "./animeStyle";
 
 const COLLISION_Y = 0.04;
 const TERRAIN_GRID_STEP = 7.5;
@@ -23,7 +24,7 @@ const TREE_SCALE_MULTIPLIER = 1.22;
 const GRASS_SAMPLE_STEP = 5.2;
 const GRASS_CLUSTER_LIMIT = 5600;
 const GRASS_PATH_CLEARANCE = 1.25;
-const WORLD_TOON_RAMP = createWorldToonRamp();
+const WORLD_TOON_RAMP = createAnimeToonRamp();
 
 type StyledSurfaceMaterial = THREE.MeshStandardMaterial | THREE.MeshToonMaterial;
 
@@ -3382,21 +3383,6 @@ export class WorldBuilder {
     sprite.scale.set(18, 4.5, 1);
     this.scene.add(sprite);
   }
-}
-
-function createWorldToonRamp(): THREE.DataTexture {
-  const data = new Uint8Array([
-    48, 48, 48, 255,
-    112, 112, 112, 255,
-    196, 196, 196, 255,
-    255, 255, 255, 255
-  ]);
-  const texture = new THREE.DataTexture(data, 4, 1, THREE.RGBAFormat);
-  texture.minFilter = THREE.NearestFilter;
-  texture.magFilter = THREE.NearestFilter;
-  texture.colorSpace = THREE.NoColorSpace;
-  texture.needsUpdate = true;
-  return texture;
 }
 
 function createGrassClumpGeometry(): THREE.BufferGeometry {

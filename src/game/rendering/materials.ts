@@ -1,10 +1,11 @@
 import * as THREE from "three";
 import type { RandomSource } from "../types";
+import { createAnimeToonRamp } from "./animeStyle";
 import type { GameMaterials } from "./WorldBuilder";
 
 type TextureKind = "grass" | "path" | "gravel" | "asphalt" | "concrete" | "rubber" | "mulch" | "basalt" | "brick" | "timber";
 
-const TOON_RAMP = createToonRamp();
+const TOON_RAMP = createAnimeToonRamp();
 
 export function createGameMaterials(rng: RandomSource): GameMaterials {
   const grass = createToonMaterial("grass", rng, {
@@ -189,16 +190,16 @@ function createToonMaterial(kind: TextureKind, rng: RandomSource, options: ToonM
 
 function createCanvasTexture(kind: TextureKind, rng: RandomSource): THREE.CanvasTexture {
   const specs = {
-    grass: { base: "#5f7c58", wash: "#7d9969", shade: "#243b36", fleck: [201, 220, 154], repeat: 30, count: 760 },
-    path: { base: "#9a8463", wash: "#c3a872", shade: "#44301f", fleck: [219, 194, 128], repeat: 11, count: 760 },
-    gravel: { base: "#827969", wash: "#aaa085", shade: "#3b3934", fleck: [217, 209, 176], repeat: 15, count: 980 },
-    asphalt: { base: "#233540", wash: "#3e5a62", shade: "#0c161b", fleck: [118, 151, 153], repeat: 18, count: 920 },
-    concrete: { base: "#929a96", wash: "#c3c6b4", shade: "#39484b", fleck: [226, 222, 198], repeat: 10, count: 760 },
-    rubber: { base: "#7e4442", wash: "#b1564b", shade: "#261018", fleck: [215, 131, 111], repeat: 12, count: 800 },
-    mulch: { base: "#63462d", wash: "#8d6840", shade: "#24150b", fleck: [172, 121, 68], repeat: 13, count: 820 },
-    basalt: { base: "#4d646b", wash: "#7b8c89", shade: "#18272d", fleck: [173, 190, 181], repeat: 7, count: 960 },
-    brick: { base: "#94503f", wash: "#c66b50", shade: "#2e1815", fleck: [225, 151, 116], repeat: 8, count: 780 },
-    timber: { base: "#755136", wash: "#a9784b", shade: "#28160c", fleck: [201, 142, 86], repeat: 9, count: 720 }
+    grass: { base: "#5f7c58", wash: "#7d9969", shade: "#243b36", fleck: [201, 220, 154], repeat: 7, count: 620 },
+    path: { base: "#9a8463", wash: "#c3a872", shade: "#44301f", fleck: [219, 194, 128], repeat: 5, count: 720 },
+    gravel: { base: "#827969", wash: "#aaa085", shade: "#3b3934", fleck: [217, 209, 176], repeat: 6, count: 920 },
+    asphalt: { base: "#233540", wash: "#3e5a62", shade: "#0c161b", fleck: [118, 151, 153], repeat: 6, count: 860 },
+    concrete: { base: "#929a96", wash: "#c3c6b4", shade: "#39484b", fleck: [226, 222, 198], repeat: 4, count: 720 },
+    rubber: { base: "#7e4442", wash: "#b1564b", shade: "#261018", fleck: [215, 131, 111], repeat: 5, count: 760 },
+    mulch: { base: "#63462d", wash: "#8d6840", shade: "#24150b", fleck: [172, 121, 68], repeat: 6, count: 780 },
+    basalt: { base: "#4d646b", wash: "#7b8c89", shade: "#18272d", fleck: [173, 190, 181], repeat: 4, count: 880 },
+    brick: { base: "#94503f", wash: "#c66b50", shade: "#2e1815", fleck: [225, 151, 116], repeat: 4, count: 720 },
+    timber: { base: "#755136", wash: "#a9784b", shade: "#28160c", fleck: [201, 142, 86], repeat: 4, count: 680 }
   } as const;
   const spec = specs[kind];
   const canvas = document.createElement("canvas");
@@ -262,27 +263,13 @@ function createCanvasTexture(kind: TextureKind, rng: RandomSource): THREE.Canvas
   texture.wrapT = THREE.RepeatWrapping;
   texture.repeat.set(spec.repeat, spec.repeat);
   texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 4;
   return texture;
 }
 
 function createBumpTexture(kind: TextureKind, rng: RandomSource): THREE.CanvasTexture {
   const texture = createCanvasTexture(kind, rng);
   texture.colorSpace = THREE.NoColorSpace;
-  return texture;
-}
-
-function createToonRamp(): THREE.DataTexture {
-  const data = new Uint8Array([
-    54, 54, 54, 255,
-    116, 116, 116, 255,
-    196, 196, 196, 255,
-    255, 255, 255, 255
-  ]);
-  const texture = new THREE.DataTexture(data, 4, 1, THREE.RGBAFormat);
-  texture.minFilter = THREE.NearestFilter;
-  texture.magFilter = THREE.NearestFilter;
-  texture.colorSpace = THREE.NoColorSpace;
-  texture.needsUpdate = true;
   return texture;
 }
 

@@ -2,6 +2,7 @@ import * as THREE from "three";
 import type { GameMaterials } from "./WorldBuilder";
 import type { WeaponId } from "../weapons";
 import type { ZombieType } from "../waves";
+import { ANIME_OUTLINE_COLOR, tuneAnimeMaterial as tuneAnimeMaterialStyle } from "./animeStyle";
 
 export type PickupKind = "scrap" | "health" | "ammo";
 
@@ -480,7 +481,7 @@ export class MeshFactory {
 
   private applyAnimeMeshStyle(root: THREE.Object3D, outlineScale: number): void {
     const outlineMaterial = new THREE.MeshBasicMaterial({
-      color: 0x07131a,
+      color: ANIME_OUTLINE_COLOR,
       side: THREE.BackSide,
       transparent: true,
       opacity: 0.76,
@@ -491,7 +492,7 @@ export class MeshFactory {
       if (!(object instanceof THREE.Mesh) || object.userData.animeOutline) {
         return;
       }
-      this.tuneAnimeMaterial(object.material);
+      tuneAnimeMaterialStyle(object.material);
       if (this.shouldOutline(object)) {
         meshes.push(object);
       }
@@ -511,19 +512,5 @@ export class MeshFactory {
   private shouldOutline(mesh: THREE.Mesh): boolean {
     const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
     return materials.every((material) => !(material instanceof THREE.MeshBasicMaterial) && (!material.transparent || material.opacity >= 0.9));
-  }
-
-  private tuneAnimeMaterial(material: THREE.Material | THREE.Material[]): void {
-    const materials = Array.isArray(material) ? material : [material];
-    for (const entry of materials) {
-      if (entry instanceof THREE.MeshStandardMaterial) {
-        entry.flatShading = true;
-        entry.roughness = Math.max(entry.roughness, 0.72);
-        entry.color.offsetHSL(0, 0.025, 0.02);
-        entry.emissive.lerp(entry.color, 0.12);
-        entry.emissiveIntensity = Math.max(entry.emissiveIntensity, 0.1);
-        entry.needsUpdate = true;
-      }
-    }
   }
 }
