@@ -492,6 +492,18 @@ export class MeshFactory {
       hand.castShadow = true;
       group.add(hand);
 
+      for (const finger of [-1, 0, 1]) {
+        const claw = new THREE.Mesh(new THREE.BoxGeometry(0.032 * bodyScale, 0.035 * bodyScale, 0.18 * bodyScale), boneMaterial);
+        claw.position.set(
+          hand.position.x + finger * 0.045 * bodyScale,
+          hand.position.y - 0.035 * bodyScale,
+          hand.position.z - 0.14 * bodyScale
+        );
+        claw.rotation.set(-0.46, side * 0.06, side * 0.08 + finger * 0.06);
+        claw.castShadow = true;
+        group.add(claw);
+      }
+
       const leg = new THREE.Mesh(new THREE.CapsuleGeometry(0.17 * bodyScale, 1.0 * bodyScale, 4, 8), pantsMaterial);
       leg.position.set(side * 0.25 * bodyScale, 0.68 * bodyScale, side < 0 ? 0.08 * bodyScale : -0.05 * bodyScale);
       leg.rotation.x = lowPosture ? 0.72 : side < 0 ? 0.1 : -0.08;
