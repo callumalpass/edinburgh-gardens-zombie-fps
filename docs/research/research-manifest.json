@@ -1,0 +1,336 @@
+{
+  "schemaVersion": 1,
+  "indexDocument": "docs/edinburgh-gardens-research.md",
+  "sources": [
+    {
+      "id": "yarra-edinburgh-gardens",
+      "label": "Yarra City Council Edinburgh Gardens",
+      "url": "https://www.yarracity.vic.gov.au/things-to-do/parks-reserves-and-playgrounds/edinburgh-gardens"
+    },
+    {
+      "id": "osm-park-boundary",
+      "label": "OpenStreetMap Edinburgh Gardens boundary way 13815924",
+      "url": "https://www.openstreetmap.org/way/13815924"
+    },
+    {
+      "id": "osm-map-bbox",
+      "label": "OpenStreetMap map API bounded extract",
+      "url": "https://api.openstreetmap.org/api/0.6/map?bbox=144.9798,-37.7903,144.9860,-37.7853"
+    },
+    {
+      "id": "osm-way-api",
+      "label": "OpenStreetMap way full API template",
+      "urlTemplate": "https://www.openstreetmap.org/api/0.6/way/{way_id}/full.json"
+    },
+    {
+      "id": "overpass-api",
+      "label": "OpenStreetMap Overpass API",
+      "url": "https://wiki.openstreetmap.org/wiki/Overpass_API"
+    },
+    {
+      "id": "vicmap-elevation-feature-server",
+      "label": "Vicmap Elevation metro 1-5 m FeatureServer",
+      "url": "https://services-ap1.arcgis.com/P744lA0wf4LlBZ84/ArcGIS/rest/services/Vicmap_Elevation_METRO_1_to_5_metre/FeatureServer"
+    },
+    {
+      "id": "vicmap-elevation-overview",
+      "label": "Vicmap Elevation catalogue",
+      "url": "https://www.land.vic.gov.au/maps-and-spatial/spatial-data/vicmap-catalogue/vicmap-elevation"
+    },
+    {
+      "id": "vicmap-elevation-1m-dem",
+      "label": "Vicmap Elevation 1m DEM overview",
+      "url": "https://www.land.vic.gov.au/maps-and-spatial/spatial-data/vicmap-catalogue/vicmap-elevation/1m-dem"
+    },
+    {
+      "id": "vicmap-vegetation-tree-urban",
+      "label": "Vicmap Vegetation Tree Urban dataset metadata",
+      "url": "https://discover.data.vic.gov.au/dataset/vicmap-vegetation-tree-urban-rest-api"
+    },
+    {
+      "id": "vicmap-vegetation-tree-urban-feature-server",
+      "label": "Vicmap Vegetation Tree Urban FeatureServer layer",
+      "url": "https://services-ap1.arcgis.com/P744lA0wf4LlBZ84/ArcGIS/rest/services/Vicmap_Vegetation_Tree_Urban/FeatureServer/0"
+    },
+    {
+      "id": "edinburgh-gardens-3068-archive",
+      "label": "3068 Group Edinburgh Gardens studies archive",
+      "url": "https://the3068group.org/edinburgh-gardens-studies/"
+    },
+    {
+      "id": "edinburgh-gardens-cmp",
+      "label": "Edinburgh Gardens Conservation Management Plan PDF",
+      "url": "https://www.yarracity.vic.gov.au/sites/default/files/2024-05/www.yarracity.vic.gov.au/-/media/files/ycc/the-area/heritage/edinburgh-gardens-conservation-management-plan-2004.pdf"
+    },
+    {
+      "id": "yarra-northern-precinct",
+      "label": "Yarra Edinburgh Gardens northern precinct consultation",
+      "url": "https://yoursayyarra.com.au/eg-north"
+    },
+    {
+      "id": "yarra-significant-trees-data",
+      "label": "City of Yarra significant trees dataset metadata",
+      "url": "https://data.gov.au/data/dataset/yarra-significant-trees"
+    },
+    {
+      "id": "yarra-significant-tree-guidance",
+      "label": "Yarra significant-tree guidance",
+      "url": "https://www.yarracity.vic.gov.au/residents/plants-and-trees/significant-trees"
+    },
+    {
+      "id": "national-trust-holm-oak",
+      "label": "National Trust Holm Oak record",
+      "url": "https://www.trusttrees.org.au/tree/VIC/Fitzroy_North/Edinburgh_Gardens_Brunswick_Street"
+    },
+    {
+      "id": "yarra-brunswick-street-oval",
+      "label": "Yarra Brunswick Street Oval redevelopment",
+      "url": "https://www.yarracity.vic.gov.au/planning-and-building/our-projects-and-initiatives/brunswick-street-oval"
+    },
+    {
+      "id": "yoursay-brunswick-street-oval",
+      "label": "Brunswick Street Oval consultation",
+      "url": "https://yoursayyarra.com.au/brunswickstoval"
+    },
+    {
+      "id": "brunswick-tree-protection-plan",
+      "label": "Brunswick Street Oval tree protection and management plan",
+      "url": "https://www.yarracity.vic.gov.au/sites/default/files/2026-02/Tree_protection_management_plan_brunswick_street_oval.pdf"
+    },
+    {
+      "id": "cits-australian-rules-dimensions",
+      "label": "CITS WA Australian rules football dimensions guide",
+      "url": "https://www.cits.wa.gov.au/sport-and-recreation/sports-dimensions-guide/football-%28australian-rules%29"
+    },
+    {
+      "id": "afl-line-marking",
+      "label": "AFL oval line-marking guide",
+      "url": "https://play.afl/sites/default/files/2024-10/Measure%20Out%20and%20Line%20Mark%20of%20Australian%20Rules%20Oval_v1.pdf"
+    },
+    {
+      "id": "fiba-equipment",
+      "label": "FIBA basketball rules and equipment",
+      "url": "https://assets.fiba.basketball/image/upload/documents-corporate-fiba-official-rules-2024-official-basketball-rules-and-basketball-equipment.pdf"
+    },
+    {
+      "id": "dimensions-basketball-hoop",
+      "label": "Dimensions.com basketball hoop reference",
+      "url": "https://www.dimensions.com/element/basketball-hoop"
+    }
+  ],
+  "documents": [
+    {
+      "id": "index",
+      "path": "docs/edinburgh-gardens-research.md",
+      "requireIndexReference": false,
+      "requiredHeadings": ["## Primary Sources", "## Current Implementation", "## Data Notes"],
+      "sourceIds": [
+        "yarra-edinburgh-gardens",
+        "osm-park-boundary",
+        "osm-map-bbox",
+        "osm-way-api",
+        "vicmap-vegetation-tree-urban",
+        "vicmap-vegetation-tree-urban-feature-server",
+        "vicmap-elevation-feature-server",
+        "vicmap-elevation-1m-dem",
+        "edinburgh-gardens-3068-archive",
+        "yarra-northern-precinct",
+        "yarra-significant-trees-data",
+        "yarra-brunswick-street-oval",
+        "brunswick-tree-protection-plan"
+      ]
+    },
+    {
+      "id": "raw-assets",
+      "path": "docs/research/raw-assets.md",
+      "sourceIds": ["osm-way-api", "overpass-api", "vicmap-elevation-feature-server"]
+    },
+    {
+      "id": "osm-path-service-inventory",
+      "path": "docs/research/osm-path-service-inventory-2026-07-05.md",
+      "sourceIds": ["osm-way-api", "osm-park-boundary"]
+    },
+    {
+      "id": "hardscape-terrain-edges",
+      "path": "docs/research/hardscape-terrain-edges-2026-07-05.md",
+      "sourceIds": ["edinburgh-gardens-3068-archive", "edinburgh-gardens-cmp"]
+    },
+    {
+      "id": "built-features",
+      "path": "docs/research/built-features-2026-07-05.md",
+      "sourceIds": ["osm-way-api", "edinburgh-gardens-cmp", "yarra-edinburgh-gardens"]
+    },
+    {
+      "id": "building-interactions",
+      "path": "docs/research/building-interactions-2026-07-05.md",
+      "sourceIds": ["osm-way-api", "edinburgh-gardens-cmp", "yarra-edinburgh-gardens"]
+    },
+    {
+      "id": "object-placement-collision",
+      "path": "docs/research/object-placement-collision-2026-07-05.md",
+      "sourceIds": [
+        "osm-park-boundary",
+        "vicmap-vegetation-tree-urban",
+        "yarra-significant-trees-data",
+        "yarra-significant-tree-guidance",
+        "edinburgh-gardens-3068-archive",
+        "cits-australian-rules-dimensions",
+        "afl-line-marking",
+        "fiba-equipment",
+        "dimensions-basketball-hoop"
+      ]
+    },
+    {
+      "id": "vegetation-realism",
+      "path": "docs/research/vegetation-realism-2026-07-05.md",
+      "sourceIds": [
+        "edinburgh-gardens-cmp",
+        "edinburgh-gardens-3068-archive",
+        "vicmap-vegetation-tree-urban",
+        "vicmap-vegetation-tree-urban-feature-server",
+        "yarra-significant-trees-data",
+        "yarra-significant-tree-guidance",
+        "national-trust-holm-oak"
+      ]
+    },
+    {
+      "id": "street-context",
+      "path": "docs/research/street-context-2026-07-05.md",
+      "sourceIds": ["overpass-api", "yarra-edinburgh-gardens", "edinburgh-gardens-cmp", "edinburgh-gardens-3068-archive"]
+    },
+    {
+      "id": "park-life-data-pipeline",
+      "path": "docs/research/park-life-data-pipeline-2026-07-05.md",
+      "sourceIds": ["yarra-edinburgh-gardens", "yarra-northern-precinct", "edinburgh-gardens-cmp", "edinburgh-gardens-3068-archive"]
+    },
+    {
+      "id": "micro-terrain-elevation",
+      "path": "docs/research/micro-terrain-elevation-2026-07-05.md",
+      "sourceIds": [
+        "vicmap-elevation-overview",
+        "vicmap-elevation-1m-dem",
+        "vicmap-elevation-feature-server",
+        "overpass-api",
+        "edinburgh-gardens-3068-archive"
+      ]
+    },
+    {
+      "id": "vegetation-massing",
+      "path": "docs/research/vegetation-massing-2026-07-05.md",
+      "sourceIds": [
+        "yarra-significant-trees-data",
+        "yarra-significant-tree-guidance",
+        "national-trust-holm-oak",
+        "edinburgh-gardens-3068-archive",
+        "vicmap-vegetation-tree-urban",
+        "vicmap-vegetation-tree-urban-feature-server",
+        "overpass-api"
+      ]
+    },
+    {
+      "id": "path-material-transitions",
+      "path": "docs/research/path-material-transitions-2026-07-05.md",
+      "sourceIds": ["edinburgh-gardens-3068-archive", "overpass-api", "yarra-edinburgh-gardens", "yarra-northern-precinct"]
+    },
+    {
+      "id": "building-affordance-realism",
+      "path": "docs/research/building-affordance-realism-2026-07-05.md",
+      "sourceIds": ["edinburgh-gardens-3068-archive", "overpass-api", "osm-way-api"]
+    },
+    {
+      "id": "tree-source-refresh",
+      "path": "docs/research/tree-source-refresh-2026-07-05.md",
+      "sourceIds": [
+        "yarra-brunswick-street-oval",
+        "yoursay-brunswick-street-oval",
+        "brunswick-tree-protection-plan",
+        "overpass-api",
+        "vicmap-vegetation-tree-urban",
+        "vicmap-vegetation-tree-urban-feature-server",
+        "edinburgh-gardens-3068-archive"
+      ]
+    },
+    {
+      "id": "tree-placement-refresh",
+      "path": "docs/research/tree-placement-refresh-2026-07-05.md",
+      "sourceIds": [
+        "vicmap-vegetation-tree-urban",
+        "vicmap-vegetation-tree-urban-feature-server",
+        "osm-map-bbox",
+        "osm-park-boundary",
+        "yarra-significant-trees-data",
+        "edinburgh-gardens-cmp",
+        "yarra-brunswick-street-oval",
+        "brunswick-tree-protection-plan",
+        "yarra-northern-precinct"
+      ]
+    },
+    {
+      "id": "human-use-traces",
+      "path": "docs/research/human-use-traces-2026-07-05.md",
+      "sourceIds": ["yarra-edinburgh-gardens", "yarra-northern-precinct", "yarra-brunswick-street-oval", "overpass-api"]
+    },
+    {
+      "id": "data-pipeline-automation",
+      "path": "docs/research/data-pipeline-automation-2026-07-05.md",
+      "sourceIds": [
+        "osm-way-api",
+        "overpass-api",
+        "vicmap-elevation-feature-server",
+        "vicmap-elevation-1m-dem",
+        "vicmap-vegetation-tree-urban-feature-server"
+      ]
+    }
+  ],
+  "rawAssets": [
+    {
+      "id": "osm-path-ways",
+      "pathPattern": "docs/research/raw/osm/2026-07-05/way-*-full.json",
+      "format": "osm-elements",
+      "sourceId": "osm-way-api",
+      "optional": true
+    },
+    {
+      "id": "osm-building-ways",
+      "pathPattern": "docs/research/raw/osm/2026-07-05/buildings/way-*-full.json",
+      "format": "osm-elements",
+      "sourceId": "osm-way-api",
+      "optional": true
+    },
+    {
+      "id": "osm-street-context-overpass",
+      "pathPattern": "docs/research/raw/osm/2026-07-05/street-context/edinburgh-gardens-surrounding-roads-overpass.json",
+      "format": "osm-elements",
+      "sourceId": "overpass-api",
+      "optional": true
+    },
+    {
+      "id": "osm-further-realism-overpass",
+      "pathPattern": "docs/research/raw/osm/2026-07-05/further-realism/edinburgh-gardens-park-features-overpass.json",
+      "format": "osm-elements",
+      "sourceId": "overpass-api",
+      "optional": true
+    },
+    {
+      "id": "vicmap-ground-surface-points",
+      "pathPattern": "docs/research/raw/vicmap/2026-07-05/further-realism/edinburgh-gardens-ground-surface-points.json",
+      "format": "arcgis-features",
+      "sourceId": "vicmap-elevation-feature-server",
+      "optional": true
+    },
+    {
+      "id": "vicmap-contours",
+      "pathPattern": "docs/research/raw/vicmap/2026-07-05/further-realism/edinburgh-gardens-contours.json",
+      "format": "arcgis-features",
+      "sourceId": "vicmap-elevation-feature-server",
+      "optional": true
+    },
+    {
+      "id": "vicmap-vegetation-tree-urban",
+      "pathPattern": "docs/research/raw/vicmap/2026-07-05/further-realism/edinburgh-gardens-vicmap-tree-urban.json",
+      "format": "arcgis-features",
+      "sourceId": "vicmap-vegetation-tree-urban-feature-server",
+      "optional": true
+    }
+  ]
+}

@@ -30,10 +30,10 @@ describe("map geometry", () => {
 
   it("uses mapped tree points inside the park for more accurate placement", () => {
     const level = createLevelData();
-    expect(level.treePoints.length).toBe(119);
+    expect(level.treePoints.length).toBe(365);
     expect(level.treeLines.length).toBeGreaterThanOrEqual(5);
     expect(level.significantTrees.length).toBe(19);
-    expect(level.trees.length).toBe(138);
+    expect(level.trees.length).toBe(384);
     expect(level.trees.length).toBe(level.treeColliders.length);
     expect(level.treePoints.filter((tree) => pointInPolygon(tree, level.boundary)).length).toBe(level.treePoints.length);
     expect(level.significantTrees.filter((tree) => pointInPolygon(tree.position, level.boundary)).length).toBe(level.significantTrees.length);
@@ -50,9 +50,15 @@ describe("map geometry", () => {
     expect(level.trees.every((tree) => tree.canopyDensity >= 0.42 && tree.canopyDensity <= 0.95)).toBe(true);
     expect(level.trees.filter((tree) => tree.canopyGroup === "specimen").length).toBeGreaterThanOrEqual(level.significantTrees.length - 1);
     expect(level.trees.some((tree) => tree.source?.includes("Yarra significant trees") && tree.height && tree.dbh)).toBe(true);
-    expect(level.trees.some((tree) => tree.id === "osm-tree-5365391973" && tree.source?.includes("OpenStreetMap natural=tree node"))).toBe(true);
-    expect(level.trees.some((tree) => tree.source?.includes("OpenStreetMap") && tree.profile === "elm")).toBe(true);
+    expect(level.trees.some((tree) => tree.source?.includes("Vicmap Vegetation Tree Urban") && tree.height && tree.canopyRadius)).toBe(true);
     expect(level.trees.some((tree) => tree.id.startsWith("tree-row-") || tree.source?.includes("tree avenue sample"))).toBe(false);
+    const queenVictoriaPlinth = level.landmarks.find((landmark) => landmark.id === "queen-victoria-plinth");
+    if (!queenVictoriaPlinth?.position) {
+      throw new Error("Missing Queen Victoria plinth landmark");
+    }
+    const plinthTrees = level.trees.filter((tree) => distance(tree.position, queenVictoriaPlinth.position!) < 85 * WORLD_SCALE);
+    expect(plinthTrees.length).toBeGreaterThanOrEqual(45);
+    expect(plinthTrees.filter((tree) => tree.source?.includes("Vicmap Vegetation Tree Urban")).length).toBeGreaterThanOrEqual(40);
     for (const removedNodeId of [5365392008, 5365392009, 5365392010, 5365392011, 5365393282, 5365393283, 5365393284]) {
       expect(level.trees.some((tree) => tree.id === `osm-tree-${removedNodeId}`)).toBe(false);
     }
@@ -61,11 +67,11 @@ describe("map geometry", () => {
   it("derives solid trunk colliders from mapped and researched trees", () => {
     const level = createLevelData();
     const obstacleIds = new Set(level.obstacles.map((obstacle) => obstacle.id));
-    expect(level.treeColliders.length).toBe(138);
+    expect(level.treeColliders.length).toBe(384);
     expect(level.treeColliders.every((tree) => pointInPolygon(tree.position, level.boundary))).toBe(true);
     expect(level.treeColliders.every((tree) => tree.radius >= 0.34 && tree.radius <= 1.05)).toBe(true);
     expect(level.treeColliders.some((tree) => tree.source?.includes("Yarra significant trees"))).toBe(true);
-    expect(level.treeColliders.some((tree) => tree.source?.includes("OpenStreetMap"))).toBe(true);
+    expect(level.treeColliders.some((tree) => tree.source?.includes("Vicmap Vegetation Tree Urban"))).toBe(true);
     expect(level.treeColliders.some((tree) => tree.source?.includes("tree avenue sample"))).toBe(false);
 
     const sampleTree = level.treeColliders[0];

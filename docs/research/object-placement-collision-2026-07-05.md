@@ -10,9 +10,11 @@ Scope: football posts, basketball hoops and solid tree trunks. This pass keeps o
   - Edinburgh Gardens boundary way `13815924`: https://www.openstreetmap.org/way/13815924
   - W. T. Peterson Oval geometry: derived from the existing OSM oval polygon in `src/game/levelData.ts`.
   - Basketball half-court geometry: derived from the existing OSM basketball court polygon in `src/game/levelData.ts`.
-  - Tree points: existing `OSM_TREE_GEO` `natural=tree` points, filtered to the park boundary.
+  - OSM tree nodes: retained as sourceable `natural=tree` references and fallback points.
+- Vicmap Vegetation Tree Urban REST API: https://discover.data.vic.gov.au/dataset/vicmap-vegetation-tree-urban-rest-api
+  - Used as the primary non-significant tree placement layer for trunk collision because it covers tree points missing from OSM, including the Queen Victoria plinth lawns.
 - City of Yarra significant trees dataset metadata: https://data.gov.au/data/dataset/yarra-significant-trees
-  - Used to keep known significant trees distinct from generic OSM tree points.
+  - Used to keep known significant trees distinct from generic Vicmap/OSM tree points.
   - DBH values are used to scale trunk collider radii, clamped to a playable range.
 - Yarra significant-tree guidance: https://www.yarracity.vic.gov.au/residents/plants-and-trees/significant-trees
   - Used as council context for significant-tree measurement and management.
@@ -38,7 +40,7 @@ Scope: football posts, basketball hoops and solid tree trunks. This pass keeps o
   - Basketball hoops are placed on the court's mapped long axis using the fitted court footprint.
 - `LevelData.treeColliders` is the source of truth for solid tree trunks.
   - Significant-tree trunks scale from DBH.
-  - OSM tree points and sampled avenue rows receive compact trunk radii.
+  - Vicmap/OSM mapped tree points receive compact trunk radii.
   - Colliders are deduplicated by minimum spacing so avenues do not create dense overlapping blockers.
 - Collision uses small circular blockers for trunks and posts.
   - Canopies are intentionally non-blocking so the player can move beneath trees.
@@ -50,4 +52,4 @@ Scope: football posts, basketball hoops and solid tree trunks. This pass keeps o
 ## Follow-Up Notes
 
 - A future spatial hash would be useful if tree density increases further. The current obstacle count is acceptable for this level, but broad-phase culling would reduce per-frame collision checks as park-life details are added.
-- If higher-confidence tree stem coordinates become available from a City of Yarra spatial export, they should replace the current mixed OSM/significant-tree/avenue-sample model.
+- If higher-confidence tree stem coordinates become available from a City of Yarra spatial export, they should replace the current mixed Vicmap/OSM/significant-tree model.

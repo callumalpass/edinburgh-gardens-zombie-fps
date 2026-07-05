@@ -4,6 +4,8 @@ Raw API responses used during research should be kept locally under `docs/resear
 
 This folder is intentionally ignored by git so JSON pulls can be retained in the codebase workspace without being committed by default.
 
+Committed research notes and raw-asset patterns are registered in `docs/research/research-manifest.json`. Run `npm run research:check` after adding or refreshing a source note. The check is offline and validates local raw JSON only when the ignored files are present.
+
 Current local assets:
 
 - `docs/research/raw/osm/2026-07-05/way-*-full.json`
@@ -29,4 +31,8 @@ Current local assets:
 - `docs/research/raw/vicmap/2026-07-05/further-realism/edinburgh-gardens-contours.json`
   - Source: Vicmap Elevation metro 1-5 m FeatureServer layer 1 query over the Edinburgh Gardens bounding box.
   - Purpose: raw contour response used to recheck broad elevation and micro-terrain source context.
+  - Validation: checked with `jq -e '.features | length'`.
+- `docs/research/raw/vicmap/2026-07-05/further-realism/edinburgh-gardens-vicmap-tree-urban.json`
+  - Source: Vicmap Vegetation Tree Urban FeatureServer layer 0 query over the Edinburgh Gardens bounding box.
+  - Purpose: raw aerial/LiDAR tree-point response used to derive the compact `VICMAP_TREE_GEO` constants.
   - Validation: checked with `jq -e '.features | length'`.

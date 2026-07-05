@@ -82,8 +82,8 @@ export const RESEARCH_NOTES = [
   "A 2026-07-05 bounded OSM path/service inventory added missing asphalt connectors around the northern paths, Queen Victoria plinth, central rail-trail link, southern entries and bowling-club service path.",
   "The Edinburgh Gardens CMP records asphalt paths with remnant basalt/bluestone edging, a bluestone-pitcher open drain on the oval's eastern perimeter and a bluestone retaining wall along Alfred Crescent; these are represented as hardscape lines.",
   "Football posts, basketball hoops and solid tree trunks now share researched placement data with collision obstacles so the visuals and playable blockers stay aligned.",
-  "Tree rendering now uses a single mapped-tree data model with species/profile inference from Yarra significant trees, OSM node IDs and CMP heritage avenue context.",
-  "A 2026-07-05 tree refresh removed synthetic avenue sample trunks and suppresses OSM tree nodes that intersect the 2026 Brunswick Street Oval tennis works tree-removal footprint.",
+  "Tree rendering now uses a single mapped-tree data model with species/profile inference from Yarra significant trees, Vicmap aerial/LiDAR tree points, OSM node IDs and CMP heritage avenue context.",
+  "A 2026-07-05 tree refresh added Vicmap Vegetation Tree Urban points for missing non-significant trees around the Queen Victoria plinth and broader lawns, removed synthetic avenue sample trunks and suppresses current tennis-works tree removals.",
   "Street edges now use a bounded OSM road query for Alfred Crescent, Freeman Street, Brunswick Street and St Georges Road, including trunk-road tram cues.",
   "Small park-life details are stored as sourceable level data so picnic, dog-area, cycling and sports-use cues remain separate from collision and amenity loot data.",
   "Micro-terrain modifiers now layer path crowns, worn shoulders, root mounds, oval banking and drainage swales over the broad Vicmap elevation interpolation.",
@@ -2277,22 +2277,25 @@ function distanceToPolyline(point: Vec2, points: readonly Vec2[]): number {
   return closest;
 }
 
-function inferMappedTreeProfile(
-  point: Vec2,
-  index: number,
-  heritageLines: {
-    elmAvenue: readonly Vec2[];
-    crescentPath: readonly Vec2[];
-    railTrail: readonly Vec2[];
-    englishOakAvenue: readonly Vec2[];
-  }
-): TreeProfile {
-  if (distanceToPolyline(point, heritageLines.englishOakAvenue) < 13) return "oak";
-  if (
+type HeritageTreeLines = {
+  elmAvenue: readonly Vec2[];
+  crescentPath: readonly Vec2[];
+  railTrail: readonly Vec2[];
+  englishOakAvenue: readonly Vec2[];
+};
+
+function isHeritageAvenuePoint(point: Vec2, heritageLines: HeritageTreeLines): boolean {
+  return (
+    distanceToPolyline(point, heritageLines.englishOakAvenue) < 13 ||
     distanceToPolyline(point, heritageLines.elmAvenue) < 14 ||
     distanceToPolyline(point, heritageLines.railTrail) < 11 ||
     distanceToPolyline(point, heritageLines.crescentPath) < 10
-  ) {
+  );
+}
+
+function inferMappedTreeProfile(point: Vec2, index: number, heritageLines: HeritageTreeLines): TreeProfile {
+  if (distanceToPolyline(point, heritageLines.englishOakAvenue) < 13) return "oak";
+  if (isHeritageAvenuePoint(point, heritageLines)) {
     return "elm";
   }
   if (index % 13 === 0) return "gum";
@@ -2784,13 +2787,19 @@ export function createLevelData(): LevelData {
     dbh: tree.dbh,
     position: geoToWorld(tree.point)
   }));
+  const removedTreePositions = OSM_TREE_GEO.filter((tree) => REDEVELOPMENT_REMOVED_TREE_NODE_IDS.has(tree.osmId)).map((tree) => geoToWorld(tree.point));
+  const vicmapTreeRecords = VICMAP_TREE_GEO.map((tree) => ({
+    ...tree,
+    position: geoToWorld(tree.point)
+  }))
+    .filter((tree) => pointInPolygon(tree.position, boundary))
+    .filter((tree) => removedTreePositions.every((removedPosition) => distance(tree.position, removedPosition) > 9 * WORLD_SCALE));
   const osmTreeRecords = OSM_TREE_GEO.filter((tree) => !REDEVELOPMENT_REMOVED_TREE_NODE_IDS.has(tree.osmId))
     .map((tree) => ({
       ...tree,
       position: geoToWorld(tree.point)
     }))
     .filter((tree) => pointInPolygon(tree.position, boundary));
-  const treePoints = osmTreeRecords.map((tree) => tree.position);
   const elevationSamples = VICMAP_ELEVATION_GEO.map((sample) => ({
     position: geoToWorld(sample.point),
     altitude: sample.altitude,
@@ -2941,13 +2950,33 @@ export function createLevelData(): LevelData {
       1.8
     );
   });
+  const heritageTreeLines = {
+    elmAvenue: formalNorthSouth.points,
+    crescentPath: crescentPath.points,
+    railTrail: railTrail.points,
+    englishOakAvenue
+  };
+  vicmapTreeRecords.forEach((tree, index) => {
+    const profile = inferMappedTreeProfile(tree.position, index, heritageTreeLines);
+    const canopyGroup = isHeritageAvenuePoint(tree.position, heritageTreeLines) ? "avenue" : "mapped";
+    appendMappedTree(
+      trees,
+      {
+        id: `vicmap-tree-${tree.objectId}`,
+        label: profile === "elm" ? "Vicmap elm-like tree" : profile === "oak" ? "Vicmap oak-like tree" : profile === "gum" ? "Vicmap gum-like tree" : "Vicmap tree",
+        position: tree.position,
+        profile,
+        height: Math.max(tree.height, tree.canopyRadius * 1.85),
+        canopyRadius: Math.max(3.1, Math.min(12.6, tree.canopyRadius * WORLD_SCALE)),
+        canopyDensity: tree.dense ? 0.74 : 0.56,
+        canopyGroup,
+        source: `Vicmap Vegetation Tree Urban OBJECTID ${tree.objectId}`
+      },
+      5 * WORLD_SCALE
+    );
+  });
   osmTreeRecords.forEach((tree, index) => {
-    const profile = inferMappedTreeProfile(tree.position, index, {
-      elmAvenue: formalNorthSouth.points,
-      crescentPath: crescentPath.points,
-      railTrail: railTrail.points,
-      englishOakAvenue
-    });
+    const profile = inferMappedTreeProfile(tree.position, index, heritageTreeLines);
     appendMappedTree(
       trees,
       {
@@ -2957,9 +2986,10 @@ export function createLevelData(): LevelData {
         profile,
         source: `OpenStreetMap natural=tree node ${tree.osmId}`
       },
-      2.25
+      10 * WORLD_SCALE
     );
   });
+  const treePoints = trees.filter((tree) => !tree.source?.includes("Yarra significant trees")).map((tree) => tree.position);
   const treeColliders: TreeCollider[] = trees.map((tree) => ({
     id: `tree-collider-${tree.id}`,
     label: `${tree.label} trunk`,

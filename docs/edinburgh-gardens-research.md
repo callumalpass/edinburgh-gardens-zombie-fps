@@ -13,6 +13,9 @@ These notes record the real-world sources and implementation decisions used to s
   - OSM data is available under ODbL. Derived coordinates in `src/game/levelData.ts` should keep OSM attribution in user-facing or published material.
 - OpenStreetMap bounded tree-node extract: https://api.openstreetmap.org/api/0.6/map?bbox=144.9798,-37.7903,144.9860,-37.7853
   - Used on 2026-07-05 to refresh `OSM_TREE_GEO` as 126 in-boundary `natural=tree` node IDs before current works exclusions.
+- Vicmap Vegetation Tree Urban REST API: https://discover.data.vic.gov.au/dataset/vicmap-vegetation-tree-urban-rest-api
+  - Used on 2026-07-05 as the primary non-significant tree source after the OSM tree layer proved sparse around the Queen Victoria plinth and eastern/northern lawns.
+  - The source is aerial-photo/LiDAR-derived individual tree points with canopy radius and height fields.
 - OpenStreetMap feature ways fetched individually through the OSM API:
   - `22673070`, `22768137`, `75488632`, `22760904`, `22760905`, `210387722`, `1340465893`, `1340465894`, `1361307046`, `1361307049` path/service connectors added after a bounded path inventory.
   - `403753786` Kevin Murray Stand
@@ -58,7 +61,7 @@ These notes record the real-world sources and implementation decisions used to s
   - Standalone buildings such as the Emely Baker Centre and south service/amenities building also add collision.
   - Buildings already inside tennis/bowls fenced precincts render visually but avoid duplicate collision blockers.
 - Paths, amenities, mapped buildings, trees, fixtures, memorials, entrances and pickups are placed relative to interpolated terrain height.
-- Existing OSM-derived paths, amenities, trees, sports facilities, memorials and park landmarks remain in `src/game/levelData.ts`.
+- Existing OSM-derived paths, amenities, sports facilities, memorials and park landmarks remain in `src/game/levelData.ts`; broad non-significant tree placement now comes primarily from Vicmap Vegetation Tree Urban.
 - Tree placement refresh research is stored in `docs/research/tree-placement-refresh-2026-07-05.md`.
 - Detailed OSM path/service research is stored in `docs/research/osm-path-service-inventory-2026-07-05.md`.
 - Hardscape and terrain-edge research is stored in `docs/research/hardscape-terrain-edges-2026-07-05.md`.
@@ -74,6 +77,8 @@ These notes record the real-world sources and implementation decisions used to s
 - Building affordance realism research is stored in `docs/research/building-affordance-realism-2026-07-05.md`.
 - Tree source refresh research is stored in `docs/research/tree-source-refresh-2026-07-05.md`.
 - Human-use traces research is stored in `docs/research/human-use-traces-2026-07-05.md`.
+- Local raw research asset guidance is stored in `docs/research/raw-assets.md`.
+- Research/data pipeline automation is stored in `docs/research/data-pipeline-automation-2026-07-05.md` and `docs/research/research-manifest.json`.
 
 ## Data Notes
 
@@ -85,5 +90,6 @@ These notes record the real-world sources and implementation decisions used to s
 - Tree rendering distinguishes specimen, avenue and generic mapped trees with sourceable canopy-radius/density metadata plus instanced under-canopy ground wear.
 - Path material transitions are represented as sourceable visual patches for feathered edges, compacted junctions, muddy thresholds and informal desire paths.
 - Climbable fixtures now declare access kinds and landing positions so visual stairs/ladders and player placement align.
-- OSM tree records now retain source node IDs and suppress nodes in the Brunswick Street Oval redevelopment removal footprint.
+- Mapped tree records now retain Vicmap object IDs or OSM node IDs and suppress current Brunswick Street Oval redevelopment tree removals.
 - Human-use traces add small non-colliding bowls, coolers, bags and chalk/scuff marks in documented activity zones.
+- `npm run research:check` validates the checked-in research manifest, expected notes, source URLs and any ignored local raw JSON cache that is present.

@@ -75,8 +75,8 @@ export class WorldBuilder {
   ) {}
 
   createWorld(): void {
-    this.scene.add(new THREE.HemisphereLight(0xcde4d1, 0x262217, 1.65));
-    const moon = new THREE.DirectionalLight(0xeef4d7, 2.65);
+    this.scene.add(new THREE.HemisphereLight(0xd4d8ce, 0x2b261f, 1.82));
+    const moon = new THREE.DirectionalLight(0xdce3d2, 2.35);
     moon.position.set(-150, 205, 75);
     moon.castShadow = true;
     moon.shadow.camera.left = -360;
@@ -86,7 +86,7 @@ export class WorldBuilder {
     moon.shadow.mapSize.set(2048, 2048);
     this.scene.add(moon);
 
-    const emergency = new THREE.PointLight(0xd64b36, 7, 165);
+    const emergency = new THREE.PointLight(0xc64d38, 4.8, 145);
     emergency.position.set(22, 7, 48);
     this.scene.add(emergency);
 
@@ -200,11 +200,11 @@ export class WorldBuilder {
         const p01 = { x, z: z + TERRAIN_GRID_STEP };
         const p11 = { x: x + TERRAIN_GRID_STEP, z: z + TERRAIN_GRID_STEP };
         addVertex(p00);
+        addVertex(p11);
         addVertex(p10);
-        addVertex(p11);
         addVertex(p00);
-        addVertex(p11);
         addVertex(p01);
+        addVertex(p11);
       }
     }
 
@@ -322,11 +322,12 @@ export class WorldBuilder {
         const spread = shortMown
           ? THREE.MathUtils.lerp(0.36, 0.68, this.stableNoise(point.x, point.z, 5))
           : THREE.MathUtils.lerp(0.55, 1.18, this.stableNoise(point.x, point.z, 5));
-        const baseColor = shortMown ? 0x83a66a : shaded ? 0x587749 : 0x6f9854;
+        const dry = this.stableNoise(point.x, point.z, 12) > 0.78;
+        const baseColor = dry ? 0x857b59 : shortMown ? 0x747d58 : shaded ? 0x4b563f : 0x62704c;
         const color = new THREE.Color(baseColor).offsetHSL(
           (this.stableNoise(point.x, point.z, 6) - 0.5) * 0.035,
-          (this.stableNoise(point.x, point.z, 7) - 0.5) * 0.08,
-          (this.stableNoise(point.x, point.z, 8) - 0.5) * 0.12
+          (this.stableNoise(point.x, point.z, 7) - 0.5) * 0.055,
+          (this.stableNoise(point.x, point.z, 8) - 0.5) * 0.09
         );
 
         clumps.push({
@@ -975,8 +976,8 @@ export class WorldBuilder {
     geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
     geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
     geometry.setIndex([
-      0, 1, 2, 0, 2, 3,
-      5, 4, 7, 5, 7, 6,
+      0, 2, 1, 0, 3, 2,
+      4, 5, 6, 4, 6, 7,
       4, 5, 1, 4, 1, 0,
       5, 6, 2, 5, 2, 1,
       6, 7, 3, 6, 3, 2,
@@ -2576,7 +2577,7 @@ export class WorldBuilder {
     const group = new THREE.Group();
     const point = tree.position;
     const profile = tree.profile;
-    const isAvenueTree = tree.source?.includes("avenue") ?? false;
+    const isAvenueTree = tree.canopyGroup === "avenue" || (tree.source?.includes("avenue") ?? false);
     const heritageScale = tree.height ? THREE.MathUtils.clamp(tree.height / 20, 0.72, 1.45) : isAvenueTree ? 1.08 : 1;
     const scale = this.rng.range(0.9, 1.35) * heritageScale * TREE_SCALE_MULTIPLIER;
     const trunkHeight =
@@ -2677,10 +2678,10 @@ export class WorldBuilder {
     if (cached) return cached;
 
     const baseTrunkColor = profile === "gum" ? 0x746a58 : profile === "oak" ? 0x4b3829 : 0x58432e;
-    const baseLeafColor = profile === "gum" ? 0x6f806d : profile === "oak" ? 0x365636 : profile === "elm" ? 0x4d6b38 : 0x4f6f3e;
+    const baseLeafColor = profile === "gum" ? 0x667066 : profile === "oak" ? 0x334434 : profile === "elm" ? 0x405238 : 0x46563c;
     const hueOffset = (variant - 3.5) * 0.004;
-    const saturationOffset = ((variant % 3) - 1) * 0.035;
-    const lightOffset = ((variant % 5) - 2) * 0.025;
+    const saturationOffset = ((variant % 3) - 1) * 0.02;
+    const lightOffset = ((variant % 5) - 2) * 0.018;
     const materials = {
       trunk: new THREE.MeshStandardMaterial({
         color: new THREE.Color(baseTrunkColor).offsetHSL(hueOffset, saturationOffset, lightOffset),

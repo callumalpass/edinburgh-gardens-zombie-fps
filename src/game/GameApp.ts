@@ -168,6 +168,9 @@ export class GameApp {
       preserveDrawingBuffer: true
     });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, this.smokeMode ? 1 : 1.5));
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.08;
     this.renderer.shadowMap.enabled = !this.smokeMode;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
 
@@ -181,6 +184,7 @@ export class GameApp {
     this.miniMap = new MiniMapRenderer(this.hud.miniMap, this.level);
     this.scene.add(this.camera);
     this.camera.add(this.weaponModel);
+    this.addPlayerTorch();
     this.rebuildViewWeapon();
     this.createWorld();
     this.world.createUpgradeStations();
@@ -1583,6 +1587,17 @@ export class GameApp {
     this.world.createWorld();
     this.renderedTreeCount = this.world.getRenderedTreeCount();
     this.renderedGrassClumpCount = this.world.getRenderedGrassClumpCount();
+  }
+
+  private addPlayerTorch(): void {
+    const torch = new THREE.SpotLight(0xf0e2bd, this.smokeMode ? 1.1 : 1.55, 46, 0.62, 0.78, 1.25);
+    torch.position.set(0.1, -0.18, 0.08);
+    torch.castShadow = false;
+    const target = new THREE.Object3D();
+    target.position.set(0, -0.24, -1);
+    torch.target = target;
+    this.camera.add(torch);
+    this.camera.add(target);
   }
 
   private rebuildViewWeapon(): void {

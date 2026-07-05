@@ -35,8 +35,8 @@ export class AtmosphereSystem {
     this.root.userData.dynamic = true;
     this.root.frustumCulled = false;
 
-    this.scene.background = new THREE.Color(0x101b17);
-    this.scene.fog = new THREE.FogExp2(0x14201a, smokeMode ? 0.0018 : 0.00235);
+    this.scene.background = new THREE.Color(0x0d1112);
+    this.scene.fog = new THREE.FogExp2(0x151815, smokeMode ? 0.00145 : 0.00195);
 
     this.addSkyDome();
     this.addStars();
@@ -80,10 +80,10 @@ export class AtmosphereSystem {
       depthWrite: false,
       fog: false,
       uniforms: {
-        topColor: { value: new THREE.Color(0x21394a) },
-        midColor: { value: new THREE.Color(0x1a2a24) },
-        horizonColor: { value: new THREE.Color(0x494634) },
-        bottomColor: { value: new THREE.Color(0x111b15) }
+        topColor: { value: new THREE.Color(0x1f2e3a) },
+        midColor: { value: new THREE.Color(0x151d1d) },
+        horizonColor: { value: new THREE.Color(0x3c392f) },
+        bottomColor: { value: new THREE.Color(0x0b0f0e) }
       },
       vertexShader: `
         varying vec3 vDirection;

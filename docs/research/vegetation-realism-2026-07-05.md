@@ -19,11 +19,16 @@ Scope: tree species/form, heritage avenue cues, trunk collision alignment and tr
 - OpenStreetMap tree points:
   - `OSM_TREE_GEO` stores current `natural=tree` node IDs and points filtered to the OSM park boundary.
   - The 2026-07-05 tree-placement refresh removed stale outside-boundary coordinates and suppresses a small set of OSM nodes in the Brunswick Street Oval tennis works removal footprint.
+- Vicmap Vegetation Tree Urban REST API: https://discover.data.vic.gov.au/dataset/vicmap-vegetation-tree-urban-rest-api
+  - Used as the broad non-significant tree layer because OSM individual-tree coverage is sparse around the Queen Victoria plinth and eastern/northern lawns.
+  - Supplies per-tree canopy radius and height fields derived from aerial photography and LiDAR.
+  - Local raw JSON: `docs/research/raw/vicmap/2026-07-05/further-realism/edinburgh-gardens-vicmap-tree-urban.json`
 
 ## Implementation Decisions
 
 - `LevelData.trees` is now the source of truth for rendered trees.
   - Significant Yarra trees keep their real common name, genus-derived profile, height and DBH.
+  - Vicmap trees provide the primary non-significant placement layer, including trees around the Queen Victoria plinth.
   - OSM tree nodes receive a stable `osm-tree-{nodeId}` ID and a profile inferred from proximity to researched heritage lines.
   - CMP/OSM-derived avenue samples remain guide geometry only; they no longer become rendered trunks or collision obstacles.
 - `LevelData.treeColliders` is derived from `LevelData.trees`.
@@ -41,5 +46,5 @@ Scope: tree species/form, heritage avenue cues, trunk collision alignment and tr
 
 ## Follow-Up Notes
 
-- The current OSM tree points do not include species tags. If a City of Yarra spatial tree export with species-level coordinates becomes available, it should replace profile inference for generic OSM trees.
+- The current Vicmap/OSM tree points do not include species tags. If the Yarra Urban Forest Dashboard exposes a directly downloadable species-level public tree export, it should replace profile inference for generic mapped trees.
 - The CMP identifies Dutch Elm circles; they are represented indirectly by OSM tree nodes and elm-profile inference for now. A later pass could add explicit circle metadata if precise centre/radius data is sourced.

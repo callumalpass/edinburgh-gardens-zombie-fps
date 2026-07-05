@@ -5,11 +5,15 @@ import type { GameMaterials } from "./WorldBuilder";
 export function createGameMaterials(rng: RandomSource): GameMaterials {
   const grass = new THREE.MeshStandardMaterial({
     map: createCanvasTexture("grass", rng),
-    color: 0x789162,
+    color: 0x6f7656,
+    emissive: 0x15170f,
+    emissiveIntensity: 0.07,
     roughness: 0.94
   });
   const grassBlade = new THREE.MeshStandardMaterial({
     color: 0xffffff,
+    emissive: 0x303721,
+    emissiveIntensity: 0.32,
     roughness: 0.98,
     side: THREE.DoubleSide,
     vertexColors: true
@@ -46,8 +50,8 @@ export function createGameMaterials(rng: RandomSource): GameMaterials {
     roughness: 0.96
   });
   const dirt = new THREE.MeshStandardMaterial({ color: 0x655741, roughness: 0.98, transparent: true, opacity: 0.58 });
-  const leafLitter = new THREE.MeshStandardMaterial({ color: 0x5f5432, roughness: 0.98, transparent: true, opacity: 0.44 });
-  const wornGrass = new THREE.MeshStandardMaterial({ color: 0x75815a, roughness: 0.98, transparent: true, opacity: 0.46 });
+  const leafLitter = new THREE.MeshStandardMaterial({ color: 0x5b5138, roughness: 0.98, transparent: true, opacity: 0.5 });
+  const wornGrass = new THREE.MeshStandardMaterial({ color: 0x6f7056, roughness: 0.98, transparent: true, opacity: 0.42 });
   const puddle = new THREE.MeshStandardMaterial({
     color: 0x1e302d,
     metalness: 0.12,
@@ -97,7 +101,7 @@ export function createGameMaterials(rng: RandomSource): GameMaterials {
 
 function createCanvasTexture(kind: "grass" | "path" | "gravel" | "asphalt" | "concrete" | "rubber" | "mulch" | "basalt", rng: RandomSource): THREE.CanvasTexture {
   const specs = {
-    grass: { base: "#6f865c", fleck: [38, 72, 38], repeat: 34, count: 1050 },
+    grass: { base: "#687252", fleck: [68, 77, 49], repeat: 34, count: 1050 },
     path: { base: "#b79962", fleck: [83, 63, 42], repeat: 11, count: 900 },
     gravel: { base: "#aa925f", fleck: [93, 78, 55], repeat: 14, count: 1250 },
     asphalt: { base: "#2f332f", fleck: [74, 78, 72], repeat: 18, count: 1100 },

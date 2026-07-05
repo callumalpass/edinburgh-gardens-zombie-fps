@@ -13,6 +13,10 @@ Scope: keeping tree placement sourceable after the Brunswick Street Oval redevel
 - OpenStreetMap bounded park-feature query:
   - Local raw JSON: `docs/research/raw/osm/2026-07-05/further-realism/edinburgh-gardens-park-features-overpass.json`
   - Used to retain OSM `natural=tree` node IDs in the compact level data.
+- Vicmap Vegetation Tree Urban REST API: https://discover.data.vic.gov.au/dataset/vicmap-vegetation-tree-urban-rest-api
+  - Used to add the missing non-significant tree layer after OSM proved sparse around the Queen Victoria plinth and broader lawns.
+  - The FeatureServer provides individual tree points plus canopy radius and height fields derived from aerial photography and LiDAR.
+  - Local raw JSON: `docs/research/raw/vicmap/2026-07-05/further-realism/edinburgh-gardens-vicmap-tree-urban.json`
 - Edinburgh Gardens CMP via the 3068 archive: https://the3068group.org/edinburgh-gardens-studies/
   - Used for heritage context around elm avenues and significant planting.
 
@@ -22,12 +26,16 @@ Scope: keeping tree placement sourceable after the Brunswick Street Oval redevel
   - Rendered tree IDs now include the OSM node ID, making future map-data refreshes easier to diff.
 - Suppressed OSM tree nodes inside the known Brunswick Street Oval tennis-works removal footprint.
   - This keeps the playable map closer to the 2026-2027 project state while preserving the raw local OSM snapshot for reference.
+- Added Vicmap tree points as the primary non-significant placement source.
+  - Vicmap detections are filtered to substantial trees and deduped against significant trees.
+  - OSM nodes are now fallback/reference data rather than the only broad tree layer.
 - Removed synthetic avenue sample trunks from the rendered tree/collider model.
-  - Avenue structure is now carried by OSM/Yarra/CMP-derived profiles and canopy massing rather than extra hand-sampled trunk blockers.
+  - Avenue structure is now carried by Vicmap/OSM/Yarra/CMP-derived profiles and canopy massing rather than extra hand-sampled trunk blockers.
 - Updated tree-count assertions to exact source counts for this refreshed model:
-  - 119 OSM tree points inside the boundary after removal-footprint filtering.
+  - 365 non-significant tree points inside the boundary after filtering and dedupe.
   - 19 Yarra significant trees.
-  - 138 rendered trees and trunk colliders.
+  - 384 rendered trees and trunk colliders.
+  - At least 45 trees within 85 m of the Queen Victoria plinth.
 
 ## Follow-Up Notes
 
