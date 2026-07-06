@@ -3,6 +3,7 @@ import type { Loadout, WeaponId } from "./weapons";
 import type { PlayerCondition } from "./playerCondition";
 import type { NetworkInputState } from "./multiplayer/types";
 import type { AmenityPoint, InteractableFixture, ParkLifeDetail, UpgradeStation, Vec2 } from "./types";
+import type { WorldItemId } from "./items";
 
 export interface PlayerRuntimeState {
   position: THREE.Vector3;
@@ -52,6 +53,29 @@ export interface RideableBike {
   position: THREE.Vector3;
   angle: number;
   mounted: boolean;
+  state: "available" | "flat-tyres" | "locked";
+  requiredItem?: WorldItemId;
+  linkedDetailId?: string;
+  rackId?: string;
+}
+
+export interface DroppedWorldItem {
+  id: number;
+  itemId: WorldItemId;
+  label: string;
+  mesh: THREE.Object3D;
+  position: THREE.Vector3;
+  angle: number;
+  ttl: number;
+}
+
+export interface PlacedLadder {
+  id: string;
+  fixtureId: string;
+  mesh: THREE.Object3D;
+  accessPosition: Vec2;
+  landingPosition: Vec2;
+  angle: number;
 }
 
 export interface NetworkRemotePlayer {
@@ -105,5 +129,6 @@ export type NearbyInteractable =
   | InteractableFixture
   | AmenityPoint
   | RideableBike
+  | DroppedWorldItem
   | ParkLifeDetail
   | null;

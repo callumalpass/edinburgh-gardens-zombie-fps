@@ -69,6 +69,7 @@ test("game loop advances and gameplay helpers mutate state", async ({ page }) =>
   expect(first.weatherWind).toBeGreaterThanOrEqual(0);
   expect(first.weatherWind).toBeLessThanOrEqual(1);
   expect(first.stamina).toBe(100);
+  expect(first.hydration).toBe(100);
   expect(first.throwables).toBe(2);
   expect(first.flashlightOn).toBe(true);
   expect(first.activeDistractions).toBe(0);
@@ -126,6 +127,11 @@ test("game loop advances and gameplay helpers mutate state", async ({ page }) =>
   expect(flashlightOn).toBe(false);
   const afterFlashlight = await page.evaluate(() => window.__EGAME__!.snapshot());
   expect(afterFlashlight.flashlightOn).toBe(false);
+  const afterDrink = await page.evaluate(() => {
+    window.__EGAME__!.testUseAmenity("drinking_water");
+    return window.__EGAME__!.snapshot();
+  });
+  expect(afterDrink.hydration).toBe(100);
   const afterKnife = await page.evaluate(() => {
     window.__EGAME__!.testShoot();
     return window.__EGAME__!.snapshot();

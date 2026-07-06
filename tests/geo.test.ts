@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clampToPolygon, distance, distanceToSegment, geoToWorld, pointInPolygon, polygonArea, polygonCentroid, WORLD_SCALE } from "../src/game/geo";
+import { clampToPolygon, distance, distanceToSegment, geoToWorld, nearestPointOnSegment, pointInPolygon, polygonArea, polygonCentroid, WORLD_SCALE } from "../src/game/geo";
 import { pointInRaisedFootprint } from "../src/game/interactables";
 import { createLevelData, PARK_BOUNDARY_GEO } from "../src/game/levelData";
 import {
@@ -114,6 +114,53 @@ function averageRadius(polygon: readonly { x: number; z: number }[]): number {
   return polygon.reduce((sum, point) => sum + distance(point, center), 0) / polygon.length;
 }
 
+function normalizedDirection(from: { x: number; z: number }, to: { x: number; z: number }): { x: number; z: number } {
+  const dx = to.x - from.x;
+  const dz = to.z - from.z;
+  const length = Math.hypot(dx, dz) || 1;
+  return { x: dx / length, z: dz / length };
+}
+
+function dot2(a: { x: number; z: number }, b: { x: number; z: number }): number {
+  return a.x * b.x + a.z * b.z;
+}
+
+function basketballHoopFacingVector(angle: number): { x: number; z: number } {
+  return { x: -Math.sin(angle), z: Math.cos(angle) };
+}
+
+function benchFacingVector(angle: number): { x: number; z: number } {
+  return { x: Math.sin(angle), z: -Math.cos(angle) };
+}
+
+function nearestPathSegment(point: { x: number; z: number }, paths: ReturnType<typeof createLevelData>["paths"]) {
+  let closest:
+    | {
+        point: { x: number; z: number };
+        start: { x: number; z: number };
+        end: { x: number; z: number };
+        distance: number;
+      }
+    | undefined;
+
+  for (const path of paths) {
+    for (let index = 0; index < path.points.length - 1; index += 1) {
+      const start = path.points[index];
+      const end = path.points[index + 1];
+      const nearest = nearestPointOnSegment(point, start, end);
+      const segmentDistance = distance(point, nearest);
+      if (!closest || segmentDistance < closest.distance) {
+        closest = { point: nearest, start, end, distance: segmentDistance };
+      }
+    }
+  }
+
+  if (!closest) {
+    throw new Error("Expected level path segment");
+  }
+  return closest;
+}
+
 const level = createLevelData();
 const terrainSampler = new TerrainSampler(level);
 
@@ -220,6 +267,13 @@ describe("map geometry", () => {
     expect(basketballHoops.every((fixture) => fixture.height === BASKETBALL_RIM_HEIGHT_METRES)).toBe(true);
     expect(basketballHoops.every((fixture) => obstacleIds.has(`${fixture.id}-post`))).toBe(true);
     expect(basketballHoops.every((fixture) => level.obstacles.find((obstacle) => obstacle.id === `${fixture.id}-post`)?.blocksSight === false)).toBe(true);
+
+    const westHoop = basketballHoops.find((fixture) => fixture.id === "basketball-west-hoop");
+    const eastHoop = basketballHoops.find((fixture) => fixture.id === "basketball-east-hoop");
+    expect(westHoop).toBeTruthy();
+    expect(eastHoop).toBeTruthy();
+    expect(dot2(basketballHoopFacingVector(westHoop!.angle), normalizedDirection(westHoop!.position, eastHoop!.position))).toBeGreaterThan(0.99);
+    expect(dot2(basketballHoopFacingVector(eastHoop!.angle), normalizedDirection(eastHoop!.position, westHoop!.position))).toBeGreaterThan(0.99);
   });
 
   it("keeps sport marking constants aligned with source dimensions", () => {
@@ -401,6 +455,12 @@ describe("map geometry", () => {
     expect(amenitiesById.get("grandstand-external-public-toilets")?.source).toContain("externally accessible public toilets");
     expect(amenitiesById.get("grandstand-kiosk-hatch")?.kind).toBe("kiosk_hatch");
     expect(amenitiesById.get("grandstand-kiosk-hatch")?.source).toContain("kiosk terrace");
+    expect(amenitiesById.get("grandstand-first-aid-room")?.kind).toBe("first_aid_room");
+    expect(amenitiesById.get("grandstand-first-aid-room")?.source).toContain("first aid room");
+    expect(amenitiesById.get("grandstand-sports-kitchen")?.kind).toBe("kitchenette");
+    expect(amenitiesById.get("grandstand-sports-kitchen")?.source).toContain("kitchen");
+    expect(amenitiesById.get("bowling-roof-gutter-maintenance")?.source).toContain("zincalume");
+    expect(amenitiesById.get("bowling-roof-gutter-maintenance")?.source).toContain("gutters");
 
     const utilityBoxes = level.amenities.filter((amenity) => amenity.kind === "utility_box");
     expect(utilityBoxes.map((amenity) => amenity.id).sort()).toEqual(
@@ -766,6 +826,33 @@ describe("map geometry", () => {
     expect(obstacleIds.has("north-table-tennis")).toBe(false);
   });
 
+  it("orients park benches from nearby paths and heritage focal points", () => {
+    const parkCenter = polygonCentroid(level.boundary);
+    const benches = level.amenities.filter((amenity) => amenity.kind === "bench");
+    expect(benches.length).toBeGreaterThanOrEqual(20);
+    for (const bench of benches) {
+      expect(Number.isFinite(bench.angle)).toBe(true);
+      const nearest = nearestPathSegment(bench.position, level.paths);
+      const pathDirection = normalizedDirection(nearest.start, nearest.end);
+      const benchLengthDirection = { x: Math.cos(bench.angle!), z: Math.sin(bench.angle!) };
+      const target = nearest.distance > 0.2 ? nearest.point : parkCenter;
+      expect(Math.abs(dot2(benchLengthDirection, pathDirection)), bench.id).toBeGreaterThan(0.99);
+      expect(dot2(benchFacingVector(bench.angle!), normalizedDirection(bench.position, target)), bench.id).toBeGreaterThan(0);
+      expect(bench.source?.includes("orientation inferred")).toBe(true);
+    }
+
+    const rotundaSeat = level.parkLifeDetails.find((detail) => detail.id === "rotunda-reproduction-seat");
+    const queenVictoriaSeat = level.parkLifeDetails.find((detail) => detail.id === "queen-victoria-reproduction-seat");
+    const rotunda = level.landmarks.find((landmark) => landmark.id === "rotunda");
+    const queenVictoriaPlinth = level.landmarks.find((landmark) => landmark.id === "queen-victoria-plinth");
+    expect(rotundaSeat).toBeTruthy();
+    expect(queenVictoriaSeat).toBeTruthy();
+    expect(rotunda?.position).toBeTruthy();
+    expect(queenVictoriaPlinth?.position).toBeTruthy();
+    expect(dot2(benchFacingVector(rotundaSeat!.angle), normalizedDirection(rotundaSeat!.position, rotunda!.position!))).toBeGreaterThan(0.99);
+    expect(dot2(benchFacingVector(queenVictoriaSeat!.angle), normalizedDirection(queenVictoriaSeat!.position, queenVictoriaPlinth!.position!))).toBeGreaterThan(0.99);
+  });
+
   it("keeps park-life details sourceable and non-colliding", () => {
     const detailKinds = new Set(level.parkLifeDetails.map((detail) => detail.kind));
     for (const kind of [
@@ -797,7 +884,7 @@ describe("map geometry", () => {
     );
     const brokenBikes = level.parkLifeDetails.filter((detail) => detail.kind === "broken-bike");
     expect(brokenBikes.length).toBeGreaterThanOrEqual(1);
-    expect(brokenBikes.every((detail) => detail.bikeIssue === "flat-tyres" || detail.bikeIssue === "broken-chain")).toBe(true);
+    expect(brokenBikes.every((detail) => detail.bikeIssue === "flat-tyres" || detail.bikeIssue === "broken-chain" || detail.bikeIssue === "locked")).toBe(true);
     const heritageIds = new Set(level.parkLifeDetails.filter((detail) => detail.source?.includes("Edinburgh Gardens CMP 2004")).map((detail) => detail.id));
     for (const id of [
       "chandler-drinking-fountain",

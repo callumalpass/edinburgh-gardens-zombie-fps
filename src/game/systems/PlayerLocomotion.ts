@@ -9,6 +9,10 @@ import {
   JUMP_GRAVITY,
   JUMP_INITIAL_VELOCITY,
   PLAYER_RADIUS,
+  SKATEBOARD_FORWARD_SPEED,
+  SKATEBOARD_REVERSE_SPEED,
+  SKATEBOARD_SPRINT_SPEED,
+  SKATEBOARD_STRAFE_SPEED,
   SPRINT_SPEED,
   WALK_SPEED
 } from "../gameConfig";
@@ -54,6 +58,7 @@ export interface LocomotionWorld {
   movementSurfaceAt(point: Vec2): MovementSurface;
   surfaceSpeedMultiplier(surface: MovementSurface): number;
   bikeSurfaceSpeedMultiplier(surface: MovementSurface): number;
+  skateboardSurfaceSpeedMultiplier(surface: MovementSurface): number;
 }
 
 export interface LocomotionMoveResult {
@@ -146,6 +151,47 @@ export class PlayerLocomotion {
       actor.velocity.set(0, 0, 0);
     }
     return { moved: false, sprinting: false, surface };
+  }
+
+  moveOnSkateboard(
+    actor: LocomotionActor,
+    dt: number,
+    input: LocomotionInput,
+    options: { wantsSprint: boolean; condition: PlayerCondition }
+  ): LocomotionMoveResult & { usable: boolean } {
+    actor.activeFixtureId = null;
+    actor.heightTarget = 0;
+    actor.crouching = false;
+    const surface = this.world.movementSurfaceAt({ x: actor.position.x, z: actor.position.z });
+    if (surface === "grass") {
+      actor.velocity.multiplyScalar(0.38);
+      this.applyHorizontalMovement(actor, dt, PLAYER_RADIUS + 0.18, false);
+      return { moved: false, sprinting: false, surface, usable: false };
+    }
+
+    const sprinting = options.wantsSprint && options.condition.stamina > 8 && options.condition.limpTimer <= 0;
+    const forwardInput = (input.z < 0 ? 1 : 0) - (input.z > 0 ? 1 : 0);
+    const sideInput = (input.x > 0 ? 1 : 0) - (input.x < 0 ? 1 : 0);
+
+    if (forwardInput !== 0 || sideInput !== 0) {
+      const sin = Math.sin(actor.yaw);
+      const cos = Math.cos(actor.yaw);
+      const forwardSpeed = sprinting && forwardInput > 0 ? SKATEBOARD_SPRINT_SPEED : SKATEBOARD_FORWARD_SPEED;
+      const forward = this.forwardVector
+        .set(-sin, 0, -cos)
+        .multiplyScalar(forwardInput >= 0 ? forwardInput * forwardSpeed : forwardInput * SKATEBOARD_REVERSE_SPEED);
+      const right = this.rightVector.set(cos, 0, -sin).multiplyScalar(sideInput * SKATEBOARD_STRAFE_SPEED);
+      const conditionScale = Math.max(0.7, speedMultiplierForCondition(options.condition));
+      actor.velocity.copy(forward.add(right)).multiplyScalar(this.world.skateboardSurfaceSpeedMultiplier(surface) * conditionScale);
+      this.applyHorizontalMovement(actor, dt, PLAYER_RADIUS + 0.28, false);
+      return { moved: true, sprinting, surface, usable: true };
+    }
+
+    actor.velocity.multiplyScalar(0.93);
+    if (actor.velocity.lengthSq() < 0.01) {
+      actor.velocity.set(0, 0, 0);
+    }
+    return { moved: false, sprinting: false, surface, usable: true };
   }
 
   canStartJump(actor: LocomotionActor, options: { disabled?: boolean } = {}): boolean {

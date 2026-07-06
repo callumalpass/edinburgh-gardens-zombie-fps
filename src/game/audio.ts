@@ -75,10 +75,11 @@ export const NOISE_SOUND_PROFILES: Record<NoiseKind, NoiseSoundProfile> = {
   melee: { audibleScale: 1.2, baseGain: 0.24, duration: 0.16 },
   reload: { audibleScale: 1.15, baseGain: 0.2, duration: 0.34 },
   climb: { audibleScale: 1.05, baseGain: 0.28, duration: 0.42 },
-  scream: { audibleScale: 1.2, baseGain: 0.52, duration: 0.92 },
+  scream: { audibleScale: 1.28, baseGain: 0.68, duration: 1.2 },
   distraction: { audibleScale: 1.14, baseGain: 0.32, duration: 0.34 },
   scavenge: { audibleScale: 1.12, baseGain: 0.2, duration: 0.28 },
-  flashlight: { audibleScale: 1.08, baseGain: 0.12, duration: 0.08 }
+  flashlight: { audibleScale: 1.08, baseGain: 0.12, duration: 0.08 },
+  skateboard: { audibleScale: 1.16, baseGain: 0.3, duration: 0.18 }
 };
 
 export const SURFACE_FOOTSTEP_PROFILES: Record<MovementSurface, FootstepSoundProfile> = {
@@ -119,19 +120,20 @@ export function soundPanForSource(listener: AudioListenerState, source: Vec2): n
 
 export function worldSoundAudibleRadius(kind: WorldSoundKind, options: WorldSoundOptions = {}): number {
   if (kind === "zombieGroan") {
-    const alertRadius = options.aiState === "chase" ? 150 : options.aiState === "investigate" || options.aiState === "search" ? 124 : 96;
-    if (options.zombieType === "screamer") return alertRadius * 1.18;
-    if (options.zombieType === "crawler") return alertRadius * 0.78;
+    const alertRadius = options.aiState === "chase" ? 158 : options.aiState === "investigate" || options.aiState === "search" ? 130 : 98;
+    if (options.zombieType === "screamer") return alertRadius * 1.28;
+    if (options.zombieType === "bloater") return alertRadius * 1.08;
+    if (options.zombieType === "crawler") return alertRadius * 0.74;
     return alertRadius;
   }
   if (kind === "zombieStep") {
-    if (options.zombieType === "bloater") return 58;
-    if (options.zombieType === "sprinter") return 48;
-    if (options.zombieType === "crawler") return 34;
+    if (options.zombieType === "bloater") return 68;
+    if (options.zombieType === "sprinter") return 52;
+    if (options.zombieType === "crawler") return 30;
     return 42;
   }
-  if (kind === "zombieDeath") return 72;
-  if (kind === "zombieAttack") return 42;
+  if (kind === "zombieDeath") return options.zombieType === "bloater" ? 86 : options.zombieType === "screamer" ? 92 : 72;
+  if (kind === "zombieAttack") return options.zombieType === "bloater" ? 58 : options.zombieType === "screamer" ? 64 : 42;
   if (kind === "bulletHit") return 36;
   if (kind === "meleeHit") return 32;
   if (kind === "shell") return 10;
@@ -141,20 +143,20 @@ export function worldSoundAudibleRadius(kind: WorldSoundKind, options: WorldSoun
 export function worldSoundBaseGain(kind: WorldSoundKind, options: WorldSoundOptions = {}): number {
   if (kind === "playerHit") return 0.62;
   if (kind === "zombieGroan") {
-    if (options.zombieType === "screamer") return 0.72;
-    if (options.zombieType === "bloater") return 0.56;
-    if (options.zombieType === "sprinter") return 0.48;
+    if (options.zombieType === "screamer") return 0.9;
+    if (options.zombieType === "bloater") return 0.62;
+    if (options.zombieType === "sprinter") return 0.5;
     if (options.zombieType === "crawler") return 0.42;
     return 0.46;
   }
   if (kind === "zombieStep") {
-    if (options.zombieType === "bloater") return 0.3;
-    if (options.zombieType === "sprinter") return 0.22;
-    if (options.zombieType === "crawler") return 0.18;
+    if (options.zombieType === "bloater") return 0.38;
+    if (options.zombieType === "sprinter") return 0.24;
+    if (options.zombieType === "crawler") return 0.14;
     return 0.2;
   }
-  if (kind === "zombieDeath") return 0.38;
-  if (kind === "zombieAttack") return 0.34;
+  if (kind === "zombieDeath") return options.zombieType === "screamer" ? 0.52 : options.zombieType === "bloater" ? 0.48 : 0.38;
+  if (kind === "zombieAttack") return options.zombieType === "screamer" ? 0.54 : options.zombieType === "bloater" ? 0.44 : 0.34;
   if (kind === "bulletHit") return 0.26;
   if (kind === "meleeHit") return 0.34;
   if (kind === "shell") return 0.12;
@@ -283,6 +285,11 @@ export class GameAudio {
       case "flashlight":
         this.playClick(bus, 880, 0.025, 0.18);
         break;
+      case "skateboard":
+        this.playNoiseBurst(bus, 0.14, 0.26, 1500, "bandpass");
+        this.playTone(bus, 108, 0.08, "sine", 0.12);
+        this.playClick(bus, 2100, 0.025, 0.14, 0.06);
+        break;
     }
   }
 
@@ -352,19 +359,16 @@ export class GameAudio {
         this.playClick(bus, 980, 0.024, 0.11, 0.09);
         break;
       case "zombieStep":
-        this.playNoiseBurst(bus, 0.09, 0.16, 620, "lowpass");
-        this.playTone(bus, options.zombieType === "bloater" ? 58 : 76, 0.055, "sine", options.zombieType === "bloater" ? 0.18 : 0.11);
+        this.playZombieStep(bus, options.zombieType ?? "shambler", options.aiState ?? "wander");
         break;
       case "zombieGroan":
         this.playZombieGroan(bus, options.zombieType ?? "shambler", options.aiState ?? "wander");
         break;
       case "zombieDeath":
-        this.playToneSweep(bus, options.zombieType === "bloater" ? 94 : 130, options.zombieType === "crawler" ? 74 : 52, 0.46, "sawtooth", 0.24);
-        this.playNoiseBurst(bus, 0.22, 0.22, 540, "lowpass", 0.08);
+        this.playZombieDeath(bus, options.zombieType ?? "shambler");
         break;
       case "zombieAttack":
-        this.playToneSweep(bus, 150, 96, 0.18, "sawtooth", 0.22);
-        this.playNoiseBurst(bus, 0.08, 0.18, 1100, "bandpass");
+        this.playZombieAttack(bus, options.zombieType ?? "shambler");
         break;
       case "playerHit":
         this.playTone(bus, 82, 0.09, "sawtooth", 0.44);
@@ -495,6 +499,7 @@ export class GameAudio {
       machete: { thump: 90, crack: 500, boom: 0.4, tail: 0.08 },
       carbine: { thump: 142, crack: 840, boom: 0.74, tail: 0.1 },
       shotgun: { thump: 82, crack: 560, boom: 1.1, tail: 0.16 },
+      flareGun: { thump: 96, crack: 720, boom: 0.82, tail: 0.22 },
       smg: { thump: 176, crack: 1020, boom: 0.55, tail: 0.075 },
       rifle: { thump: 118, crack: 1320, boom: 0.9, tail: 0.13 }
     };
@@ -512,7 +517,7 @@ export class GameAudio {
   }
 
   private playReload(bus: SoundBus, weaponId: WeaponId): void {
-    const singleShell = weaponId === "shotgun";
+    const singleShell = weaponId === "shotgun" || weaponId === "flareGun";
     this.playClick(bus, singleShell ? 420 : 620, 0.04, singleShell ? 0.38 : 0.28);
     this.playNoiseBurst(bus, 0.07, singleShell ? 0.18 : 0.12, singleShell ? 1200 : 1800, "bandpass", 0.055);
     this.playClick(bus, singleShell ? 980 : 1320, 0.035, singleShell ? 0.2 : 0.24, singleShell ? 0.15 : 0.1);
@@ -529,26 +534,115 @@ export class GameAudio {
   }
 
   private playScream(bus: SoundBus): void {
-    this.playToneSweep(bus, 330, 760, 0.34, "sawtooth", 0.26);
-    this.playToneSweep(bus, 190, 390, 0.52, "sawtooth", 0.22, 0.08);
-    this.playNoiseBurst(bus, 0.52, 0.18, 2200, "bandpass", 0.04);
+    this.playScreamerShriek(bus, 1.05);
   }
 
   private playZombieGroan(bus: SoundBus, zombieType: ZombieType, aiState: ZombieAiState): void {
     const chase = aiState === "chase" || aiState === "investigate";
-    const base =
-      zombieType === "bloater"
-        ? 62
-        : zombieType === "crawler"
-          ? 104
-          : zombieType === "screamer"
-            ? 180
-            : zombieType === "sprinter"
-              ? 126
-              : 92;
-    const top = chase ? base * 1.5 : base * 1.16;
-    this.playToneSweep(bus, base, top, chase ? 0.34 : 0.48, zombieType === "screamer" ? "sawtooth" : "triangle", chase ? 0.24 : 0.15);
-    this.playNoiseBurst(bus, chase ? 0.25 : 0.18, zombieType === "bloater" ? 0.16 : 0.1, zombieType === "screamer" ? 1800 : 740, "bandpass", 0.08);
+    if (zombieType === "screamer") {
+      this.playScreamerShriek(bus, chase ? 0.72 : 0.48);
+      return;
+    }
+
+    const profile = zombieVoiceProfile(zombieType);
+    const top = chase ? profile.baseFrequency * profile.alertPitchMultiplier : profile.baseFrequency * 1.12;
+    const duration = chase ? profile.alertDuration : profile.idleDuration;
+    this.playToneSweep(bus, profile.baseFrequency, top, duration, profile.wave, chase ? profile.voiceGain : profile.voiceGain * 0.68);
+    this.playToneSweep(bus, profile.baseFrequency * 0.52, top * 0.46, duration * 0.9, "sine", profile.voiceGain * 0.36, 0.035);
+    this.playNoiseBurst(bus, duration * 0.62, profile.breathGain, profile.breathFrequency, "bandpass", 0.035);
+    if (zombieType === "bloater") {
+      this.playTone(bus, 42, 0.2, "sine", 0.18, 0.08);
+      this.playNoiseBurst(bus, 0.3, 0.12, 260, "lowpass", 0.12);
+    }
+    if (zombieType === "sprinter") {
+      this.playBreathPulses(bus, 4, 0.045, 0.075, 1800, 0.08);
+    }
+    if (zombieType === "crawler") {
+      this.playNoiseBurst(bus, 0.34, 0.08, 420, "lowpass", 0.12);
+      this.playClick(bus, 190, 0.035, 0.1, 0.22);
+    }
+  }
+
+  private playZombieStep(bus: SoundBus, zombieType: ZombieType, aiState: ZombieAiState): void {
+    const alerted = aiState === "chase" || aiState === "investigate";
+    if (zombieType === "bloater") {
+      this.playTone(bus, 45, 0.11, "sine", alerted ? 0.32 : 0.24);
+      this.playNoiseBurst(bus, 0.16, alerted ? 0.2 : 0.15, 310, "lowpass", 0.02);
+      this.playClick(bus, 96, 0.045, 0.16, 0.06);
+      return;
+    }
+    if (zombieType === "sprinter") {
+      this.playNoiseBurst(bus, 0.055, alerted ? 0.2 : 0.14, 1300, "bandpass");
+      this.playClick(bus, 620, 0.026, 0.09, 0.03);
+      this.playClick(bus, 760, 0.022, 0.07, 0.08);
+      return;
+    }
+    if (zombieType === "crawler") {
+      this.playNoiseBurst(bus, 0.12, 0.12, 360, "lowpass");
+      this.playNoiseBurst(bus, 0.06, 0.08, 1300, "bandpass", 0.06);
+      return;
+    }
+    this.playNoiseBurst(bus, 0.09, alerted ? 0.18 : 0.14, zombieType === "screamer" ? 980 : 620, "lowpass");
+    this.playTone(bus, zombieType === "screamer" ? 94 : 76, 0.055, "sine", zombieType === "screamer" ? 0.14 : 0.11);
+  }
+
+  private playZombieAttack(bus: SoundBus, zombieType: ZombieType): void {
+    if (zombieType === "screamer") {
+      this.playScreamerShriek(bus, 0.62);
+      this.playClick(bus, 2400, 0.025, 0.22, 0.08);
+      return;
+    }
+    if (zombieType === "bloater") {
+      this.playToneSweep(bus, 86, 48, 0.28, "sawtooth", 0.32);
+      this.playNoiseBurst(bus, 0.16, 0.28, 420, "lowpass", 0.04);
+      this.playClick(bus, 130, 0.055, 0.24, 0.12);
+      return;
+    }
+    if (zombieType === "sprinter") {
+      this.playToneSweep(bus, 260, 190, 0.11, "sawtooth", 0.2);
+      this.playNoiseBurst(bus, 0.08, 0.2, 1500, "bandpass");
+      return;
+    }
+    if (zombieType === "crawler") {
+      this.playToneSweep(bus, 130, 82, 0.18, "sawtooth", 0.18);
+      this.playNoiseBurst(bus, 0.1, 0.16, 520, "lowpass");
+      return;
+    }
+    this.playToneSweep(bus, 150, 96, 0.18, "sawtooth", 0.22);
+    this.playNoiseBurst(bus, 0.08, 0.18, 1100, "bandpass");
+  }
+
+  private playZombieDeath(bus: SoundBus, zombieType: ZombieType): void {
+    if (zombieType === "screamer") {
+      this.playToneSweep(bus, 540, 130, 0.56, "sawtooth", 0.3);
+      this.playNoiseBurst(bus, 0.42, 0.24, 2400, "bandpass", 0.04);
+      this.playNoiseBurst(bus, 0.28, 0.2, 520, "lowpass", 0.18);
+      return;
+    }
+    if (zombieType === "bloater") {
+      this.playToneSweep(bus, 92, 38, 0.68, "sawtooth", 0.3);
+      this.playNoiseBurst(bus, 0.42, 0.28, 300, "lowpass", 0.08);
+      this.playClick(bus, 72, 0.05, 0.16, 0.32);
+      return;
+    }
+    this.playToneSweep(bus, zombieType === "crawler" ? 96 : 130, zombieType === "crawler" ? 62 : 52, 0.46, "sawtooth", 0.24);
+    this.playNoiseBurst(bus, 0.22, 0.22, zombieType === "sprinter" ? 760 : 540, "lowpass", 0.08);
+  }
+
+  private playScreamerShriek(bus: SoundBus, intensity: number): void {
+    const gain = Math.max(0.18, intensity);
+    this.playNoiseBurst(bus, 0.16, 0.12 * gain, 700, "bandpass");
+    this.playToneSweep(bus, 260, 1180, 0.42, "sawtooth", 0.24 * gain, 0.08);
+    this.playToneSweep(bus, 411, 1640, 0.34, "square", 0.12 * gain, 0.12);
+    this.playToneSweep(bus, 92, 210, 0.72, "sawtooth", 0.18 * gain, 0.1);
+    this.playNoiseBurst(bus, 0.62, 0.24 * gain, 2600, "bandpass", 0.1);
+    this.playNoiseBurst(bus, 0.42, 0.12 * gain, 5200, "highpass", 0.16);
+  }
+
+  private playBreathPulses(bus: SoundBus, count: number, duration: number, gap: number, frequency: number, gain: number): void {
+    for (let index = 0; index < count; index += 1) {
+      this.playNoiseBurst(bus, duration, gain, frequency, "bandpass", index * gap);
+    }
   }
 
   private playPickup(bus: SoundBus, low: number, high: number): void {
@@ -664,8 +758,10 @@ export class GameAudio {
   }
 
   private worldSoundDuration(kind: WorldSoundKind): number {
-    if (kind === "zombieGroan") return 0.95;
-    if (kind === "zombieDeath") return 0.58;
+    if (kind === "zombieGroan") return 1.05;
+    if (kind === "zombieAttack") return 0.86;
+    if (kind === "zombieDeath") return 0.78;
+    if (kind === "zombieStep") return 0.24;
     if (kind === "playerHit") return 0.18;
     if (kind === "drink") return 0.32;
     if (kind === "searchComplete") return 0.24;
@@ -687,6 +783,64 @@ export class GameAudio {
       this.activeSoundBuses = Math.max(0, this.activeSoundBuses - 1);
     }, Math.ceil(delay * 1000));
   }
+}
+
+function zombieVoiceProfile(zombieType: ZombieType): {
+  baseFrequency: number;
+  alertPitchMultiplier: number;
+  idleDuration: number;
+  alertDuration: number;
+  voiceGain: number;
+  breathGain: number;
+  breathFrequency: number;
+  wave: OscillatorType;
+} {
+  if (zombieType === "bloater") {
+    return {
+      baseFrequency: 58,
+      alertPitchMultiplier: 1.34,
+      idleDuration: 0.62,
+      alertDuration: 0.48,
+      voiceGain: 0.27,
+      breathGain: 0.18,
+      breathFrequency: 520,
+      wave: "sawtooth"
+    };
+  }
+  if (zombieType === "sprinter") {
+    return {
+      baseFrequency: 128,
+      alertPitchMultiplier: 1.62,
+      idleDuration: 0.36,
+      alertDuration: 0.28,
+      voiceGain: 0.2,
+      breathGain: 0.13,
+      breathFrequency: 1500,
+      wave: "triangle"
+    };
+  }
+  if (zombieType === "crawler") {
+    return {
+      baseFrequency: 98,
+      alertPitchMultiplier: 1.24,
+      idleDuration: 0.58,
+      alertDuration: 0.44,
+      voiceGain: 0.18,
+      breathGain: 0.12,
+      breathFrequency: 620,
+      wave: "triangle"
+    };
+  }
+  return {
+    baseFrequency: 92,
+    alertPitchMultiplier: zombieType === "screamer" ? 2.2 : 1.48,
+    idleDuration: 0.5,
+    alertDuration: 0.36,
+    voiceGain: zombieType === "screamer" ? 0.3 : 0.2,
+    breathGain: zombieType === "screamer" ? 0.2 : 0.1,
+    breathFrequency: zombieType === "screamer" ? 2200 : 740,
+    wave: zombieType === "screamer" ? "sawtooth" : "triangle"
+  };
 }
 
 function normalizeAngle(angle: number): number {

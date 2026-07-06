@@ -94,6 +94,8 @@ describe("weapon upgrades", () => {
     const machete = getWeaponStats(loadout);
     loadout = addWeapon(loadout, "shotgun");
     const shotgun = getWeaponStats(loadout);
+    loadout = addWeapon(loadout, "flareGun");
+    const flareGun = getWeaponStats(loadout);
     loadout = addWeapon(loadout, "smg");
     const smg = getWeaponStats(loadout);
     loadout = addWeapon(loadout, "rifle");
@@ -103,6 +105,9 @@ describe("weapon upgrades", () => {
     expect(machete.penetration).toBeGreaterThan(knife.penetration);
     expect(shotgun.noiseMultiplier).toBeGreaterThan(smg.noiseMultiplier);
     expect(rifle.noiseMultiplier).toBeGreaterThan(shotgun.noiseMultiplier);
+    expect(flareGun.reloadStyle).toBe("single");
+    expect(flareGun.magazineSize).toBe(1);
+    expect(flareGun.noiseMultiplier).toBeGreaterThan(smg.noiseMultiplier);
     expect(smg.movingSpread).toBeGreaterThan(rifle.movingSpread);
     expect(WEAPON_DEFINITIONS.rifle.pickupAmmo).toBeLessThan(WEAPON_DEFINITIONS.carbine.pickupAmmo);
   });
@@ -181,5 +186,44 @@ describe("weapon upgrades", () => {
     expect(shelteredStorm).toBeLessThan(standingStorm);
     expect(standingStorm / standingClear).toBeLessThan(1.12);
     expect(crouchedAimedStorm).toBeLessThan(standingClear);
+  });
+
+  it("adds modest thirst sway without affecting hydrated handling", () => {
+    const loadout = addWeapon(createInitialLoadout(), "carbine");
+    const stats = getWeaponStats(loadout);
+    const hydrated = effectiveFirearmSpread(stats, {
+      movementSpeed: 0,
+      shotBloom: 0,
+      crouching: false,
+      aimAmount: 1,
+      aimHeld: true,
+      stamina: 100,
+      hydration: 100
+    });
+    const parched = effectiveFirearmSpread(stats, {
+      movementSpeed: 0,
+      shotBloom: 0,
+      crouching: false,
+      aimAmount: 1,
+      aimHeld: true,
+      stamina: 100,
+      hydration: 20
+    });
+
+    expect(parched).toBeGreaterThan(hydrated);
+    expect(parched / hydrated).toBeLessThan(1.2);
+  });
+
+  it("keeps flare gun upgrades useful without turning it into a magazine weapon", () => {
+    let loadout = addWeapon(createInitialLoadout(), "flareGun");
+    const base = getWeaponStats(loadout);
+    loadout = applyUpgrade(loadout, "magazine");
+    loadout = applyUpgrade(loadout, "reload");
+    const upgraded = getWeaponStats(loadout);
+
+    expect(base.magazineSize).toBe(1);
+    expect(upgraded.magazineSize).toBe(2);
+    expect(upgraded.magazineSize).toBeLessThan(getWeaponStats(addWeapon(createInitialLoadout(), "carbine")).magazineSize);
+    expect(upgraded.reloadTime).toBeLessThan(base.reloadTime);
   });
 });

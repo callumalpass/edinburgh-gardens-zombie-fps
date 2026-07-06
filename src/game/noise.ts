@@ -11,7 +11,8 @@ export type NoiseKind =
   | "scream"
   | "distraction"
   | "scavenge"
-  | "flashlight";
+  | "flashlight"
+  | "skateboard";
 export type MovementSurface = "grass" | "dirt" | "gravel" | "asphalt" | "concrete" | "rail";
 
 export interface NoiseEvent {
@@ -39,7 +40,8 @@ export const NOISE_PROFILES: Record<NoiseKind, NoiseProfile> = {
   scream: { radius: 98, intensity: 0.95, ttl: 3.4 },
   distraction: { radius: 76, intensity: 0.9, ttl: 5.6 },
   scavenge: { radius: 26, intensity: 0.38, ttl: 2 },
-  flashlight: { radius: 34, intensity: 0.32, ttl: 1.5 }
+  flashlight: { radius: 34, intensity: 0.32, ttl: 1.5 },
+  skateboard: { radius: 42, intensity: 0.72, ttl: 1.8 }
 };
 
 export class NoiseSystem {

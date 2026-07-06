@@ -1,5 +1,6 @@
 export interface PlayerCondition {
   stamina: number;
+  hydration: number;
   bleedTimer: number;
   limpTimer: number;
   blurTimer: number;
@@ -15,18 +16,33 @@ export interface StaminaFrame {
   searching: boolean;
   crouching: boolean;
   bleeding: boolean;
+  hydration?: number;
   bikePumpBoosted?: boolean;
   sheltered?: boolean;
 }
 
+export interface HydrationFrame {
+  sprinting: boolean;
+  elevated: boolean;
+  bleeding: boolean;
+  daylight: number;
+  sheltered?: boolean;
+}
+
 export const MAX_STAMINA = 100;
+export const MAX_HYDRATION = 100;
 export const MAX_THROWABLES = 5;
 export const BIKE_PUMP_BOOST_SECONDS = 75;
 export const BIKE_PUMP_SPEED_MULTIPLIER = 1.18;
+export const THIRSTY_HYDRATION = 55;
+export const PARCHED_HYDRATION = 30;
+export const DEHYDRATED_HYDRATION = 12;
+const BASE_HYDRATION_DRAIN_PER_SECOND = MAX_HYDRATION / (24 * 60);
 
 export function createInitialPlayerCondition(): PlayerCondition {
   return {
     stamina: MAX_STAMINA,
+    hydration: MAX_HYDRATION,
     bleedTimer: 0,
     limpTimer: 0,
     blurTimer: 0,
@@ -38,11 +54,12 @@ export function createInitialPlayerCondition(): PlayerCondition {
 
 export function nextStamina(stamina: number, dt: number, frame: StaminaFrame): number {
   let next = stamina;
+  const hydration = frame.hydration ?? MAX_HYDRATION;
   if (frame.sprinting) {
-    next -= 17 * (frame.bikePumpBoosted ? 0.62 : 1) * (frame.sheltered ? 0.94 : 1) * dt;
+    next -= 17 * hydrationSprintCostMultiplier(hydration) * (frame.bikePumpBoosted ? 0.62 : 1) * (frame.sheltered ? 0.94 : 1) * dt;
   }
   if (frame.scoped) {
-    next -= 5.5 * dt;
+    next -= 5.5 * hydrationFocusCostMultiplier(hydration) * dt;
   }
 
   if (!frame.sprinting && !frame.scoped) {
@@ -52,10 +69,34 @@ export function nextStamina(stamina: number, dt: number, frame: StaminaFrame): n
       frame.crouching ? 18 :
       14;
     const shelterRecovery = frame.sheltered ? 2.5 : 0;
-    next += (recovery + shelterRecovery) * (frame.bleeding ? 0.78 : 1) * (frame.bikePumpBoosted ? 1.16 : 1) * dt;
+    next +=
+      (recovery + shelterRecovery) *
+      hydrationRecoveryMultiplier(hydration) *
+      (frame.bleeding ? 0.78 : 1) *
+      (frame.bikePumpBoosted ? 1.16 : 1) *
+      dt;
   }
 
   return clampStamina(next);
+}
+
+export function nextHydration(hydration: number, dt: number, frame: HydrationFrame): number {
+  const exertion = frame.sprinting ? 0.65 : 0;
+  const heightPressure = frame.elevated ? 0.55 : 0;
+  const injuryPressure = frame.bleeding ? 0.35 : 0;
+  const daylightPressure = Math.max(0, Math.min(1, frame.daylight)) * 0.2;
+  const shelterRelief = frame.sheltered ? -0.12 : 0;
+  const multiplier = Math.max(0.72, 1 + exertion + heightPressure + injuryPressure + daylightPressure + shelterRelief);
+  return clampHydration(hydration - BASE_HYDRATION_DRAIN_PER_SECOND * multiplier * dt);
+}
+
+export function hydrateCondition(condition: PlayerCondition): PlayerCondition {
+  return {
+    ...condition,
+    hydration: MAX_HYDRATION,
+    stamina: Math.min(MAX_STAMINA, condition.stamina + 16),
+    blurTimer: Math.max(0, condition.blurTimer - 3)
+  };
 }
 
 export function applyBikePumpBoost(
@@ -80,10 +121,12 @@ export function spendStamina(stamina: number, cost: number): { stamina: number; 
   return { stamina: clampStamina(stamina - cost), spent: true };
 }
 
-export function speedMultiplierForCondition(condition: Pick<PlayerCondition, "stamina" | "limpTimer">): number {
+export function speedMultiplierForCondition(condition: Pick<PlayerCondition, "stamina" | "limpTimer"> & Partial<Pick<PlayerCondition, "hydration">>): number {
   const staminaScale = condition.stamina <= 0 ? 0.78 : condition.stamina < 20 ? 0.9 : 1;
   const limpScale = condition.limpTimer > 0 ? 0.74 : 1;
-  return staminaScale * limpScale;
+  const hydration = condition.hydration ?? MAX_HYDRATION;
+  const hydrationScale = hydration < DEHYDRATED_HYDRATION ? 0.84 : hydration < PARCHED_HYDRATION ? 0.93 : 1;
+  return staminaScale * limpScale * hydrationScale;
 }
 
 export function bleedDamagePerSecond(bleedTimer: number): number {
@@ -97,6 +140,38 @@ export function injuryStatus(condition: Pick<PlayerCondition, "bleedTimer" | "li
   return null;
 }
 
+export function hydrationStatus(condition: Pick<PlayerCondition, "hydration">): string | null {
+  if (condition.hydration < DEHYDRATED_HYDRATION) return "Dehydrated";
+  if (condition.hydration < PARCHED_HYDRATION) return "Parched";
+  if (condition.hydration < THIRSTY_HYDRATION) return "Thirsty";
+  return null;
+}
+
+export function hydrationRecoveryMultiplier(hydration: number): number {
+  if (hydration < DEHYDRATED_HYDRATION) return 0.55;
+  if (hydration < PARCHED_HYDRATION) return 0.72;
+  if (hydration < THIRSTY_HYDRATION) return 0.88;
+  return 1;
+}
+
+function hydrationSprintCostMultiplier(hydration: number): number {
+  if (hydration < DEHYDRATED_HYDRATION) return 1.34;
+  if (hydration < PARCHED_HYDRATION) return 1.18;
+  if (hydration < THIRSTY_HYDRATION) return 1.08;
+  return 1;
+}
+
+function hydrationFocusCostMultiplier(hydration: number): number {
+  if (hydration < DEHYDRATED_HYDRATION) return 1.28;
+  if (hydration < PARCHED_HYDRATION) return 1.14;
+  if (hydration < THIRSTY_HYDRATION) return 1.06;
+  return 1;
+}
+
 function clampStamina(stamina: number): number {
   return Math.max(0, Math.min(MAX_STAMINA, stamina));
+}
+
+function clampHydration(hydration: number): number {
+  return Math.max(0, Math.min(MAX_HYDRATION, hydration));
 }

@@ -1,7 +1,7 @@
 import type { WeatherState } from "./rendering/weather";
 
 export type UpgradeId = "damage" | "fireRate" | "magazine" | "reload" | "spread";
-export type WeaponId = "knife" | "machete" | "carbine" | "shotgun" | "smg" | "rifle";
+export type WeaponId = "knife" | "machete" | "carbine" | "shotgun" | "flareGun" | "smg" | "rifle";
 
 export interface FirearmSpreadContext {
   movementSpeed: number;
@@ -10,6 +10,7 @@ export interface FirearmSpreadContext {
   aimAmount: number;
   aimHeld: boolean;
   stamina: number;
+  hydration?: number;
   weather?: Pick<WeatherState, "precipitation" | "wind" | "wetness">;
   weatherProtection?: number;
 }
@@ -175,6 +176,34 @@ export const WEAPON_DEFINITIONS: Record<WeaponId, WeaponStats & { id: WeaponId; 
     reloadStyle: "single",
     pickupAmmo: 26
   },
+  flareGun: {
+    id: "flareGun",
+    kind: "firearm",
+    name: "Signal flare gun",
+    damage: 24,
+    fireDelay: 1.08,
+    magazineSize: 1,
+    reloadTime: 1.85,
+    spread: 0.018,
+    pellets: 1,
+    range: 92,
+    falloffStart: 50,
+    recoilKick: 0.7,
+    recoilDrift: 0.42,
+    movingSpread: 0.018,
+    bloomPerShot: 0.004,
+    maxBloom: 0.018,
+    headshotMultiplier: 1.22,
+    staggerPower: 0.38,
+    penetration: 1,
+    noiseMultiplier: 1.28,
+    sway: 0.48,
+    scopeZoom: 1,
+    aimSpreadMultiplier: 0.82,
+    aimRecoilMultiplier: 0.8,
+    reloadStyle: "single",
+    pickupAmmo: 8
+  },
   smg: {
     id: "smg",
     kind: "firearm",
@@ -289,6 +318,7 @@ export function createInitialLoadout(): Loadout {
       machete: 0,
       carbine: 0,
       shotgun: 0,
+      flareGun: 0,
       smg: 0,
       rifle: 0
     },
@@ -320,7 +350,7 @@ export function getWeaponStats(loadout: Loadout): WeaponStats {
     ...base,
     damage: Math.round(base.damage * (1 + damageLevel * 0.24)),
     fireDelay: Math.max(0.07, base.fireDelay * (1 - fireRateLevel * 0.16)),
-    magazineSize: base.magazineSize + magazineLevel * (loadout.weaponId === "shotgun" || loadout.weaponId === "rifle" ? 2 : 5),
+    magazineSize: base.magazineSize + magazineLevel * (loadout.weaponId === "flareGun" ? 1 : loadout.weaponId === "shotgun" || loadout.weaponId === "rifle" ? 2 : 5),
     reloadTime: Math.max(0.62, base.reloadTime * (1 - reloadLevel * 0.17)),
     spread: Math.max(0.0025, base.spread * (1 - spreadLevel * 0.22)),
     movingSpread: Math.max(0.003, base.movingSpread * (1 - spreadLevel * 0.14)),
@@ -353,9 +383,11 @@ export function effectiveFirearmSpread(stats: WeaponStats, context: FirearmSprea
   const movementSpread = Math.min(1, Math.max(0, context.movementSpeed) / 22) * stats.movingSpread;
   const crouchSpread = context.crouching ? 0.64 : 1;
   const breathControl = context.aimAmount > 0.55 && context.aimHeld ? (context.stamina > 12 ? 0.86 : 1.18) : 1;
+  const hydration = context.hydration ?? 100;
+  const hydrationSway = hydration < 12 ? 1.24 : hydration < 30 ? 1.14 : hydration < 55 ? 1.06 : 1;
   const aimSpread = 1 + (stats.aimSpreadMultiplier - 1) * Math.max(0, Math.min(1, context.aimAmount));
   const weatherJitter = (stats.spread * 0.22 + stats.movingSpread * 0.08) * weatherWeaponInstability(context.weather, context.weatherProtection);
-  return (stats.spread + movementSpread + context.shotBloom + weatherJitter) * aimSpread * crouchSpread * breathControl;
+  return (stats.spread + movementSpread + context.shotBloom + weatherJitter) * aimSpread * crouchSpread * breathControl * hydrationSway;
 }
 
 export function upgradeCost(upgradeId: UpgradeId, currentLevel: number): number {

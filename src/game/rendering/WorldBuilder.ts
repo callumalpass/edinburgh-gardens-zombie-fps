@@ -268,7 +268,7 @@ export class WorldBuilder {
       const detail = this.level.parkLifeDetails.find((candidate) => candidate.id === target.sourceId);
       if (detail) this.addParkLifeDetailPreview(detail);
     } else if (target.kind === "rideable-bike") {
-      this.addRideableBikePreview();
+      this.addRideableBikePreview(target.sourceId);
     } else if (target.kind === "tree") {
       const tree = this.level.trees.find((candidate) => candidate.id === target.sourceId);
       if (tree) this.addRealisticTree(tree, target.sourceIndex ?? this.level.trees.indexOf(tree));
@@ -277,6 +277,8 @@ export class WorldBuilder {
       if (station) this.addUpgradeStation(station);
     } else if (target.kind === "weapon-spawn" || target.kind === "weapon-model") {
       if (target.weaponId) this.addWeaponItemPreview(target);
+    } else if (target.kind === "item-spawn") {
+      if (target.itemId) this.addItemSpawnPreview(target);
     } else if (target.kind === "pickup-item") {
       if (target.pickupKind) this.addPickupItemPreview(target);
     } else if (target.kind === "zombie-model") {
@@ -451,7 +453,7 @@ export class WorldBuilder {
   private addAmenityPreview(amenity: AmenityPoint): void {
     const angle = this.angleFromId(amenity.id);
     if (amenity.kind === "bench") {
-      this.addBench(amenity.position, angle);
+      this.addBench(amenity.position, amenity.angle ?? angle);
       this.addAmenityHalo(amenity.position, 0x9ebf86, 0.62);
     } else if (amenity.kind === "picnic_table") {
       this.addPicnicTable(amenity.position, angle);
@@ -537,11 +539,18 @@ export class WorldBuilder {
 
     if (this.keyLight) {
       this.keyLight.color.copy(this.keyNightColor).lerp(this.keyDayColor, timeOfDay.daylight).lerp(this.keyDawnColor, timeOfDay.dawnDusk * 0.35);
-      this.keyLight.intensity = 2.36 + timeOfDay.daylight * 0.9 + timeOfDay.dawnDusk * 0.22;
+      this.keyLight.intensity = 2.18 + timeOfDay.daylight * 0.84 + timeOfDay.dawnDusk * 0.28;
+      const daylightInfluence = THREE.MathUtils.clamp(timeOfDay.daylight + timeOfDay.dawnDusk * 0.34, 0, 1);
+      const azimuth = THREE.MathUtils.degToRad(timeOfDay.sunAzimuthDegrees);
+      const altitude = THREE.MathUtils.degToRad(Math.max(8, timeOfDay.sunAltitudeDegrees));
+      const sunRadius = 235;
+      const sunX = Math.sin(azimuth) * Math.cos(altitude) * sunRadius;
+      const sunY = Math.sin(altitude) * sunRadius + 72;
+      const sunZ = -Math.cos(azimuth) * Math.cos(altitude) * sunRadius;
       this.keyLight.position.set(
-        THREE.MathUtils.lerp(-150, 130, timeOfDay.daylight),
-        THREE.MathUtils.lerp(205, 175, timeOfDay.daylight),
-        THREE.MathUtils.lerp(75, -120, timeOfDay.daylight)
+        THREE.MathUtils.lerp(-150, sunX, daylightInfluence),
+        THREE.MathUtils.lerp(205, sunY, daylightInfluence),
+        THREE.MathUtils.lerp(75, sunZ, daylightInfluence)
       );
     }
 
@@ -1865,6 +1874,15 @@ export class WorldBuilder {
       this.addBuildingAwning(center, rotation, -footprint.halfX * 0.18, frontZ + 0.58, footprint.halfX * 1.5, 1.35, building.height + 0.08, this.materials.timber, 0.22);
       this.addBuildingGutter(center, rotation, -footprint.halfX * 0.18, frontZ + 0.03, footprint.halfX * 1.72, building.height);
       this.addBuildingGutter(center, rotation, 0, rearZ - 0.03, footprint.halfX * 1.62, building.height);
+      const zincalumeRoof = this.standardDetailMaterial("bowls-zincalume-roof-sheets", 0xb9c4bd, 0.4, 0.34);
+      this.addLocalBox(center, rotation, -footprint.halfX * 0.1, 0, footprint.halfX * 1.72, 0.055, footprint.halfZ * 1.86, zincalumeRoof, building.height + 0.23);
+      for (const x of [-0.72, -0.42, -0.12, 0.18, 0.48, 0.78]) {
+        this.addLocalBox(center, rotation, x * footprint.halfX, 0, 0.035, 0.065, footprint.halfZ * 1.92, this.materials.metal, building.height + 0.29, false);
+      }
+      for (const x of [-0.92, 0.78]) {
+        this.addBuildingDownpipe(center, rotation, x * footprint.halfX, frontZ + 0.07, building.height);
+        this.addBuildingDownpipe(center, rotation, x * footprint.halfX, rearZ - 0.07, building.height);
+      }
       for (const x of [-0.58, -0.22, 0.14, 0.5]) {
         this.addBuildingWindow(center, rotation, x * footprint.halfX, frontZ - 0.02, 1.35, 0.86, 1.36, 0.09);
       }
@@ -1988,8 +2006,10 @@ export class WorldBuilder {
         for (const x of [-0.44, 0.18, 0.68]) {
           this.addBuildingRoofVent(center, rotation, x * footprint.halfX, -footprint.halfZ * 0.32, building.height, 0.5, 0.34);
         }
-        const ladderLocal = this.localPointOnPolygonEdge(center, rotation, building.polygon, footprint.halfX * 0.86, rearZ - 0.03);
-        this.addBuildingServiceLadder(center, rotation, ladderLocal.x, ladderLocal.z, 2.15, 1.28);
+        const ladderBracket = this.localPointOnPolygonEdge(center, rotation, building.polygon, footprint.halfX * 0.86, rearZ - 0.03);
+        for (const side of [-1, 1]) {
+          this.addLocalBox(center, rotation, ladderBracket.x + side * 0.18, ladderBracket.z, 0.045, 0.42, 0.055, this.materials.metal, 2.22, false);
+        }
         for (const x of [-0.58, 0.58]) {
           this.addLocalCylinder(center, rotation, x * footprint.halfX, frontZ + 0.78, 0.09, 0.1, 0.82, this.materials.metal);
         }
@@ -2838,6 +2858,10 @@ export class WorldBuilder {
     return this.addLocalBox(center, rotation, localX, localZ, width, 0.12, 0.12, this.materials.metal, buildingHeight + 0.02);
   }
 
+  private addBuildingDownpipe(center: Vec2, rotation: number, localX: number, localZ: number, height: number): THREE.Mesh {
+    return this.addLocalBox(center, rotation, localX, localZ, 0.09, height, 0.09, this.materials.metal, height * 0.5, false);
+  }
+
   private addBuildingServiceLadder(
     center: Vec2,
     rotation: number,
@@ -2958,6 +2982,16 @@ export class WorldBuilder {
     }
     this.addBuildingTextSign(center, rotation, -footprint.halfX * 0.54, frontOut(0.08), footprint.halfX * 0.36, 0.3, 2.72, "CHANGE", "#5b4632", "#f2e6a8", 0.06);
     this.addBuildingTextSign(center, rotation, footprint.halfX * 0.54, frontOut(0.08), footprint.halfX * 0.32, 0.3, 2.72, "UMPIRE", "#5b4632", "#f2e6a8", 0.06);
+    this.addBuildingTextSign(center, rotation, -footprint.halfX * 0.18, frontOut(0.1), footprint.halfX * 0.26, 0.28, 3.04, "AID", "#e8e0c6", "#9f2f2f", 0.064);
+    this.addBuildingTextSign(center, rotation, footprint.halfX * 0.18, frontOut(0.1), footprint.halfX * 0.34, 0.28, 3.04, "KITCHEN", "#6f5635", "#f2e6a8", 0.064);
+    const firstAidWhite = this.basicDetailMaterial("grandstand-first-aid-white", 0xf0ead7);
+    const firstAidRed = this.basicDetailMaterial("grandstand-first-aid-red", 0xb84a3e);
+    this.addLocalBox(center, rotation, -footprint.halfX * 0.34, frontOut(0.16), 0.42, 0.42, 0.06, firstAidWhite, 1.42, false);
+    this.addLocalBox(center, rotation, -footprint.halfX * 0.34, frontOut(0.19), 0.26, 0.06, 0.065, firstAidRed, 1.42, false);
+    this.addLocalBox(center, rotation, -footprint.halfX * 0.34, frontOut(0.195), 0.06, 0.26, 0.067, firstAidRed, 1.42, false);
+    const kitchenShutter = this.standardDetailMaterial("grandstand-kitchen-shutter", 0xa6a697, 0.68, 0.18);
+    this.addLocalBox(center, rotation, footprint.halfX * 0.18, frontOut(0.16), footprint.halfX * 0.3, 0.54, 0.06, kitchenShutter, 1.32, false);
+    this.addLocalBox(center, rotation, footprint.halfX * 0.18, frontOut(0.28), footprint.halfX * 0.34, 0.13, 0.34, this.materials.timber, 0.6);
     const gateMaterial = this.standardDetailMaterial("grandstand-secure-access-gates", 0x2f3b38, 0.54, 0.34);
     for (const x of [-0.68, 0.68]) {
       this.addLocalBox(center, rotation, x * footprint.halfX, frontOut(0.2), footprint.halfX * 0.42, 1.05, 0.06, gateMaterial, 0.72, false);
@@ -2970,6 +3004,10 @@ export class WorldBuilder {
     }
     for (const x of [-0.42, -0.14, 0.14, 0.42]) {
       this.addLocalCylinder(center, rotation, x * footprint.halfX * 2, frontOut(0.08), 0.09, 0.12, 2.8, this.materials.metal);
+    }
+    this.addBuildingRoofVent(center, rotation, footprint.halfX * 0.22, frontIn(0.35), 5.8, 0.58, 0.36);
+    for (const x of [-0.86, 0.86]) {
+      this.addBuildingDownpipe(center, rotation, x * footprint.halfX, frontOut(0.02), 5.8);
     }
     for (let i = -4; i <= 4; i += 1) {
       this.addLocalBox(center, rotation, (i / 4) * footprint.halfX * 0.9, 0, 0.08, 0.09, footprint.halfZ * 2 + 2.3, this.materials.metal, 6.12);
@@ -4010,8 +4048,10 @@ export class WorldBuilder {
     this.addBuildingRoofVent(center, rotation, width * 0.22, 0, 3.2, 0.42, 0.28);
     this.addLocalBox(center, rotation, width * 0.54, 0, 0.1, 1.1, depth * 0.76, this.materials.hedge, 0.72);
     if (landmark.polygon) {
-      const ladderLocal = this.localPointOnPolygonEdge(center, rotation, landmark.polygon, footprint.halfX * 0.78, footprint.halfZ + 0.1);
-      this.addBuildingServiceLadder(center, rotation, ladderLocal.x, ladderLocal.z, 2.05, 1.2);
+      const ladderBracket = this.localPointOnPolygonEdge(center, rotation, landmark.polygon, footprint.halfX * 0.78, footprint.halfZ + 0.1);
+      for (const side of [-1, 1]) {
+        this.addLocalBox(center, rotation, ladderBracket.x + side * 0.18, ladderBracket.z, 0.045, 0.38, 0.055, this.materials.metal, 2.14, false);
+      }
     }
   }
 
@@ -4038,7 +4078,7 @@ export class WorldBuilder {
     for (const amenity of this.level.amenities) {
       const angle = this.angleFromId(amenity.id);
       if (amenity.kind === "bench") {
-        this.addBench(amenity.position, angle);
+        this.addBench(amenity.position, amenity.angle ?? angle);
         this.addAmenityHalo(amenity.position, 0x9ebf86, 0.62);
       } else if (amenity.kind === "picnic_table") {
         this.addPicnicTable(amenity.position, angle);
@@ -4080,7 +4120,7 @@ export class WorldBuilder {
       } else if (detail.kind === "notice-board") {
         this.addNoticeBoard(detail);
       } else if (detail.kind === "broken-bike") {
-        this.addBrokenBike(detail);
+        continue;
       } else if (detail.kind === "construction-fence") {
         this.addConstructionFence(detail);
       } else if (detail.kind === "works-materials") {
@@ -4609,12 +4649,25 @@ export class WorldBuilder {
     this.scene.add(group);
   }
 
-  private addRideableBikePreview(): void {
-    const bike = this.level.rideableBike;
-    const group = new MeshFactory(this.materials).createBikeMesh();
+  private addRideableBikePreview(sourceId = this.level.rideableBike.id): void {
+    const bike = this.level.rideableBikes.find((candidate) => candidate.id === sourceId) ?? this.level.rideableBike;
+    const group = new MeshFactory(this.materials).createBikeMesh({ issue: bike.state === "available" ? undefined : bike.state });
     group.scale.setScalar(1.45);
     group.position.set(bike.position.x, this.groundY(bike.position), bike.position.z);
     group.rotation.y = bike.angle;
+    this.scene.add(group);
+  }
+
+  private addItemSpawnPreview(target: ObjectPreviewTarget): void {
+    if (!target.itemId) return;
+    const spawn = this.level.itemSpawns.find((candidate) => candidate.id === target.sourceId);
+    const group = new MeshFactory(this.materials).createWorldItemMesh(target.itemId);
+    group.position.set(target.position.x, this.groundY(target.position), target.position.z);
+    group.rotation.y = spawn?.angle ?? 0;
+    if (target.itemId === "ladder") {
+      group.rotation.x = -0.42;
+      group.position.y += 0.18;
+    }
     this.scene.add(group);
   }
 
@@ -5016,11 +5069,18 @@ export class WorldBuilder {
   private addBikeRack(position: Vec2, angle: number): void {
     const group = new THREE.Group();
     for (const x of [-0.72, 0, 0.72]) {
-      const rack = new THREE.Mesh(new THREE.TorusGeometry(0.38, 0.035, 8, 18), this.materials.metal);
-      rack.position.set(x, 0.46, 0);
-      rack.rotation.x = Math.PI / 2;
-      rack.castShadow = true;
-      group.add(rack);
+      const hoop = new THREE.Mesh(new THREE.TorusGeometry(0.38, 0.035, 8, 18, Math.PI), this.materials.metal);
+      hoop.position.set(x, 0.48, 0);
+      hoop.rotation.z = Math.PI;
+      hoop.scale.y = 1.22;
+      hoop.castShadow = true;
+      group.add(hoop);
+      for (const side of [-1, 1]) {
+        const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.038, 0.5, 8), this.materials.metal);
+        leg.position.set(x + side * 0.38, 0.25, 0);
+        leg.castShadow = true;
+        group.add(leg);
+      }
     }
     group.position.set(position.x, this.boxSupportY(position, angle, 1.15, 0.45), position.z);
     group.rotation.y = angle;
@@ -5056,6 +5116,7 @@ export class WorldBuilder {
       amenity.kind === "clubroom" ||
       amenity.kind === "changeroom" ||
       amenity.kind === "umpire_room" ||
+      amenity.kind === "first_aid_room" ||
       amenity.kind === "gatehouse" ||
       amenity.kind === "maintenance_room" ||
       amenity.kind === "community_room" ||
@@ -5093,6 +5154,20 @@ export class WorldBuilder {
       this.addLocalBox(amenity.position, angle, -0.46, -0.565, 0.24, 0.045, 0.065, this.materials.darkOpening, 1.0, false);
       this.addLocalCylinder(amenity.position, angle, 0.42, 0.28, 0.16, 0.16, 0.08, this.materials.metal, 0.28);
       this.addLocalBox(amenity.position, angle, 0.42, 0.46, 0.5, 0.12, 0.24, this.materials.timber, 0.28);
+      return;
+    }
+
+    if (amenity.kind === "first_aid_room") {
+      const firstAid = this.basicDetailMaterial("structure-first-aid-room-white", 0xf0ead7);
+      const cross = this.basicDetailMaterial("structure-first-aid-room-cross", 0xb84a3e);
+      const stretcher = this.standardDetailMaterial("structure-first-aid-stretcher", 0xd8c995, 0.72, 0.02);
+      this.addLocalBox(amenity.position, angle, -0.5, -0.52, 0.42, 0.42, 0.06, firstAid, 0.94, false);
+      this.addLocalBox(amenity.position, angle, -0.5, -0.56, 0.28, 0.06, 0.065, cross, 0.94, false);
+      this.addLocalBox(amenity.position, angle, -0.5, -0.565, 0.06, 0.28, 0.067, cross, 0.94, false);
+      this.addLocalBox(amenity.position, angle, 0.44, 0.28, 0.78, 0.12, 0.28, stretcher, 0.34);
+      for (const x of [0.12, 0.76]) {
+        this.addLocalCylinder(amenity.position, angle, x, 0.45, 0.065, 0.065, 0.08, this.materials.metal, 0.24);
+      }
       return;
     }
 
@@ -5164,6 +5239,7 @@ export class WorldBuilder {
   private structureAccessPanelColor(kind: AmenityPoint["kind"]): number {
     if (kind === "changeroom") return 0x5f725f;
     if (kind === "umpire_room") return 0x5b5f67;
+    if (kind === "first_aid_room") return 0x8e4a43;
     if (kind === "gatehouse") return 0x6a4c32;
     if (kind === "maintenance_room") return 0x5b6665;
     if (kind === "community_room") return 0x315d67;
@@ -5176,6 +5252,7 @@ export class WorldBuilder {
   private structureAccessSignText(kind: AmenityPoint["kind"]): string {
     if (kind === "changeroom") return "CHANGE";
     if (kind === "umpire_room") return "UMPIRE";
+    if (kind === "first_aid_room") return "FIRST";
     if (kind === "gatehouse") return "GATE";
     if (kind === "maintenance_room") return "STORE";
     if (kind === "community_room") return "ROOM";
@@ -5718,14 +5795,16 @@ export class WorldBuilder {
       const angle = this.angleFromId(tree.id);
       const canopyRadius = tree.canopyRadius * (tree.profile === "gum" ? 0.72 : tree.profile === "oak" ? 0.95 : 0.84);
       const y = this.groundY(tree.position);
+      const litterScale = this.winterLeafLitterScale(tree);
+      const wearScale = tree.profile === "gum" ? 0.92 : tree.profile === "oak" ? 1.08 : tree.profile === "elm" ? 1.04 : 1;
 
       quaternion.setFromEuler(new THREE.Euler(-Math.PI / 2, 0, angle));
-      scale.set(canopyRadius * (tree.canopyGroup === "avenue" ? 0.82 : 1), canopyRadius * 0.58, 1);
+      scale.set(canopyRadius * (tree.canopyGroup === "avenue" ? 0.82 : 1) * litterScale, canopyRadius * 0.58 * litterScale, 1);
       matrix.compose(new THREE.Vector3(tree.position.x, y + 0.038, tree.position.z), quaternion, scale);
       litterMesh.setMatrixAt(index, matrix);
 
       quaternion.setFromEuler(new THREE.Euler(-Math.PI / 2, 0, angle + Math.PI * 0.5));
-      scale.set(canopyRadius * 1.12, canopyRadius * 0.74, 1);
+      scale.set(canopyRadius * 1.12 * wearScale, canopyRadius * 0.74 * wearScale, 1);
       matrix.compose(new THREE.Vector3(tree.position.x, y + 0.033, tree.position.z), quaternion, scale);
       wearMesh.setMatrixAt(index, matrix);
     }
@@ -5741,13 +5820,19 @@ export class WorldBuilder {
     const point = tree.position;
     const profile = tree.profile;
     const isAvenueTree = tree.canopyGroup === "avenue" || (tree.source?.includes("avenue") ?? false);
+    const isReplacementTree = this.isYoungReplacementTree(tree);
+    const winterRetention = this.winterCanopyRetention(profile);
     const heritageScale = tree.height ? THREE.MathUtils.clamp(tree.height / 20, 0.72, 1.45) : isAvenueTree ? 1.08 : 1;
-    const scale = this.rng.range(0.9, 1.35) * heritageScale * TREE_SCALE_MULTIPLIER;
+    const scale = this.rng.range(0.9, 1.35) * heritageScale * TREE_SCALE_MULTIPLIER * (isReplacementTree ? 0.68 : 1);
     const trunkHeight =
       profile === "gum"
         ? this.rng.range(6.8, 9.8) * scale
         : profile === "oak"
           ? this.rng.range(4.5, 6.8) * scale
+          : profile === "jacaranda"
+            ? this.rng.range(4.1, 5.8) * scale
+            : profile === "kurrajong"
+              ? this.rng.range(4.4, 6.2) * scale
           : this.rng.range(5.2, 8.4) * scale;
     const trunkRadius = this.rng.range(0.3, 0.54) * scale * (tree.dbh ? THREE.MathUtils.clamp(tree.dbh / 95, 0.8, 1.45) : isAvenueTree ? 1.08 : 1);
     const materials = this.getTreeMaterials(profile, index);
@@ -5772,34 +5857,64 @@ export class WorldBuilder {
       group.add(root);
     }
 
-    const branchCount = profile === "gum" ? 5 : profile === "oak" ? 6 : 5;
+    const branchCount = profile === "gum" ? 5 : profile === "oak" || profile === "jacaranda" ? 7 : profile === "elm" || profile === "kurrajong" ? 6 : 5;
     for (let branchIndex = 0; branchIndex < branchCount; branchIndex += 1) {
       const angle = (branchIndex / branchCount) * Math.PI * 2 + this.rng.range(-0.25, 0.25);
       const start = new THREE.Vector3(0, trunkHeight * this.rng.range(0.55, 0.78), 0);
       const end = new THREE.Vector3(
-        Math.cos(angle) * this.rng.range(profile === "gum" ? 1.0 : 1.35, profile === "oak" ? 3.2 : 2.6) * scale,
-        trunkHeight * this.rng.range(profile === "gum" ? 0.72 : 0.68, 0.96),
-        Math.sin(angle) * this.rng.range(profile === "gum" ? 1.0 : 1.35, profile === "oak" ? 3.2 : 2.6) * scale
+        Math.cos(angle) * this.rng.range(profile === "gum" ? 1.0 : 1.35, profile === "oak" || profile === "jacaranda" ? 3.2 : profile === "kurrajong" ? 2.2 : 2.6) * scale,
+        trunkHeight * this.rng.range(profile === "gum" ? 0.72 : profile === "kurrajong" ? 0.76 : 0.68, 0.96),
+        Math.sin(angle) * this.rng.range(profile === "gum" ? 1.0 : 1.35, profile === "oak" || profile === "jacaranda" ? 3.2 : profile === "kurrajong" ? 2.2 : 2.6) * scale
       );
       group.add(this.createBranch(start, end, trunkRadius * this.rng.range(0.28, 0.42), materials.trunk));
     }
 
-    const lobeCount = Math.max(4, Math.round((profile === "gum" ? 5 : profile === "oak" ? 8 : 7) * tree.canopyDensity + (tree.canopyGroup === "specimen" ? 1 : 0)));
+    const twigCount = this.winterTwigCount(tree, index);
+    for (let twigIndex = 0; twigIndex < twigCount; twigIndex += 1) {
+      const angle = (twigIndex / Math.max(1, twigCount)) * Math.PI * 2 + this.rng.range(-0.26, 0.26);
+      const reach = tree.canopyRadius * this.rng.range(profile === "oak" ? 0.42 : 0.32, profile === "oak" ? 0.72 : 0.58);
+      const start = new THREE.Vector3(
+        Math.cos(angle) * reach * 0.28,
+        trunkHeight * this.rng.range(0.7, 0.92),
+        Math.sin(angle) * reach * 0.28
+      );
+      const end = new THREE.Vector3(
+        Math.cos(angle) * reach,
+        trunkHeight + this.rng.range(0.7, profile === "oak" ? 2.0 : 1.55) * scale,
+        Math.sin(angle) * reach
+      );
+      group.add(this.createBranch(start, end, trunkRadius * this.rng.range(0.08, 0.15), materials.trunk));
+      const forkAngle = angle + this.rng.range(-0.42, 0.42);
+      const forkEnd = new THREE.Vector3(
+        end.x + Math.cos(forkAngle) * reach * 0.22,
+        end.y + this.rng.range(-0.25, 0.45) * scale,
+        end.z + Math.sin(forkAngle) * reach * 0.22
+      );
+      group.add(this.createBranch(end, forkEnd, trunkRadius * this.rng.range(0.045, 0.08), materials.trunk));
+    }
+
+    const baseLobeCount = profile === "gum" ? 5 : profile === "oak" ? 8 : profile === "elm" || profile === "jacaranda" ? 7 : profile === "kurrajong" ? 6 : 6;
+    const lobeCount = Math.max(profile === "gum" || profile === "kurrajong" ? 4 : 2, Math.round(baseLobeCount * tree.canopyDensity * winterRetention + (tree.canopyGroup === "specimen" ? 1 : 0)));
     for (let lobeIndex = 0; lobeIndex < lobeCount; lobeIndex += 1) {
       const angle = (lobeIndex / lobeCount) * Math.PI * 2 + this.rng.range(-0.3, 0.3);
-      const canopyRadius = tree.canopyRadius * this.rng.range(profile === "gum" ? 0.22 : 0.25, profile === "oak" ? 0.42 : 0.36);
-      const spread = tree.canopyRadius * (profile === "gum" ? 0.28 : profile === "oak" ? 0.5 : tree.canopyGroup === "avenue" ? 0.42 : 0.46);
+      const canopyRadius =
+        tree.canopyRadius *
+        this.rng.range(profile === "gum" ? 0.22 : profile === "jacaranda" ? 0.2 : 0.25, profile === "oak" ? 0.42 : profile === "kurrajong" ? 0.34 : 0.36) *
+        (profile === "gum" || profile === "kurrajong" ? 1 : 0.82 + winterRetention * 0.24);
+      const spread =
+        tree.canopyRadius *
+        (profile === "gum" ? 0.28 : profile === "oak" || profile === "jacaranda" ? 0.5 : profile === "kurrajong" ? 0.38 : tree.canopyGroup === "avenue" ? 0.42 : 0.46);
       const canopyMaterial = lobeIndex % (profile === "gum" ? 3 : 4) === 0 ? materials.leafHighlight : materials.leaf;
       const canopy = new THREE.Mesh(this.treeCanopyGeometry, canopyMaterial);
       canopy.position.set(
         Math.cos(angle) * this.rng.range(spread * 0.45, spread),
-        trunkHeight + this.rng.range(profile === "gum" ? -0.45 : 0.05, profile === "oak" ? 1.0 : 1.45) * scale,
+        trunkHeight + this.rng.range(profile === "gum" ? -0.45 : profile === "kurrajong" ? -0.2 : 0.05, profile === "oak" ? 1.0 : profile === "jacaranda" ? 1.25 : 1.45) * scale,
         Math.sin(angle) * this.rng.range(spread * 0.45, spread)
       );
       canopy.scale.set(
-        canopyRadius * this.rng.range(profile === "gum" ? 0.85 : 1.05, profile === "oak" ? 1.75 : 1.55),
-        canopyRadius * this.rng.range(profile === "gum" ? 1.05 : 0.68, profile === "oak" ? 0.9 : 1.08),
-        canopyRadius * this.rng.range(profile === "gum" ? 0.85 : 1.05, profile === "oak" ? 1.75 : 1.55)
+        canopyRadius * this.rng.range(profile === "gum" ? 0.85 : profile === "kurrajong" ? 0.95 : 1.05, profile === "oak" || profile === "jacaranda" ? 1.75 : 1.55),
+        canopyRadius * this.rng.range(profile === "gum" || profile === "kurrajong" ? 1.05 : 0.68, profile === "oak" ? 0.9 : profile === "jacaranda" ? 0.82 : 1.08),
+        canopyRadius * this.rng.range(profile === "gum" ? 0.85 : profile === "kurrajong" ? 0.95 : 1.05, profile === "oak" || profile === "jacaranda" ? 1.75 : 1.55)
       );
       canopy.rotation.set(this.rng.range(-0.2, 0.2), this.rng.range(0, Math.PI), this.rng.range(-0.2, 0.2));
       canopy.castShadow = true;
@@ -5816,12 +5931,53 @@ export class WorldBuilder {
       group.add(palePatch);
     }
 
+    if (isReplacementTree) {
+      this.addYoungReplacementTreeDetails(group, trunkRadius, trunkHeight);
+    }
+
     group.position.set(point.x, this.groundY(point), point.z);
     group.rotation.y = this.rng.range(0, Math.PI * 2);
     group.userData.treeIndex = index;
     group.userData.treeSource = tree.source ?? "mapped";
     group.userData.treeSpecies = tree.label;
     this.scene.add(group);
+  }
+
+  private isYoungReplacementTree(tree: MappedTree): boolean {
+    return tree.id.startsWith("yarra-replacement-tree-") || (tree.source?.includes("35 semi-mature shade trees") ?? false);
+  }
+
+  private addYoungReplacementTreeDetails(group: THREE.Group, trunkRadius: number, trunkHeight: number): void {
+    const stakeMaterial = this.standardDetailMaterial("replacement-tree-hardwood-stakes", 0x8a6a3e, 0.82, 0.02);
+    const tieMaterial = this.standardDetailMaterial("replacement-tree-ties", 0x2f4d46, 0.72, 0.06);
+    const mulchMaterial = this.washDetailMaterial("replacement-tree-mulch-ring", 0x6f5137, 0.36);
+    const guardMaterial = this.standardDetailMaterial("replacement-tree-guard", 0xbec8bb, 0.48, 0.18, true, 0.38);
+    const stakeHeight = Math.max(1.9, trunkHeight * 0.72);
+    const stakeOffset = Math.max(0.36, trunkRadius * 2.35);
+
+    const mulch = new THREE.Mesh(new THREE.CircleGeometry(Math.max(0.8, trunkRadius * 3.8), 22), mulchMaterial);
+    mulch.rotation.x = -Math.PI / 2;
+    mulch.position.y = 0.035;
+    mulch.receiveShadow = true;
+    group.add(mulch);
+
+    for (const side of [-1, 1]) {
+      const stake = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.055, stakeHeight, 8), stakeMaterial);
+      stake.position.set(side * stakeOffset, stakeHeight * 0.5, -trunkRadius * 0.28);
+      stake.castShadow = true;
+      group.add(stake);
+    }
+    for (const y of [stakeHeight * 0.44, stakeHeight * 0.66]) {
+      const tie = new THREE.Mesh(new THREE.BoxGeometry(stakeOffset * 2.12, 0.055, 0.055), tieMaterial);
+      tie.position.set(0, y, -trunkRadius * 0.3);
+      tie.castShadow = true;
+      group.add(tie);
+    }
+
+    const guard = new THREE.Mesh(new THREE.CylinderGeometry(stakeOffset * 1.18, stakeOffset * 1.24, 0.55, 12, 1, true), guardMaterial);
+    guard.position.y = 0.36;
+    guard.castShadow = false;
+    group.add(guard);
   }
 
   private createBranch(start: THREE.Vector3, end: THREE.Vector3, radius: number, material: THREE.Material): THREE.Mesh {
@@ -5835,15 +5991,65 @@ export class WorldBuilder {
     return branch;
   }
 
+  private winterCanopyRetention(profile: TreeProfile): number {
+    if (profile === "gum") return 1;
+    if (profile === "kurrajong") return 0.9;
+    if (profile === "jacaranda") return 0.22;
+    if (profile === "oak") return 0.46;
+    if (profile === "elm") return 0.36;
+    return 0.72;
+  }
+
+  private winterTwigCount(tree: MappedTree, index: number): number {
+    if (tree.profile === "gum") return tree.canopyGroup === "specimen" ? 1 : 0;
+    if (tree.profile === "kurrajong") return this.isYoungReplacementTree(tree) ? 2 : 1;
+    if (tree.profile === "jacaranda") return this.isYoungReplacementTree(tree) ? 6 : 8;
+    if (tree.profile === "oak") return tree.canopyGroup === "mapped" ? 4 : 7;
+    if (tree.profile === "elm") return tree.canopyGroup === "mapped" ? 3 : 6;
+    return index % 3 === 0 ? 2 : 0;
+  }
+
+  private winterLeafLitterScale(tree: MappedTree): number {
+    if (tree.profile === "oak") return tree.canopyGroup === "specimen" ? 1.28 : 1.16;
+    if (tree.profile === "elm") return tree.canopyGroup === "avenue" ? 1.24 : 1.12;
+    if (tree.profile === "jacaranda") return this.isYoungReplacementTree(tree) ? 0.5 : 0.72;
+    if (tree.profile === "kurrajong") return 0.58;
+    if (tree.profile === "gum") return 0.64;
+    return 0.82;
+  }
+
   private getTreeMaterials(profile: TreeProfile, index: number): TreeMaterialSet {
     const variant = index % 8;
     const key = `${profile}-${variant}`;
     const cached = this.treeMaterialCache.get(key);
     if (cached) return cached;
 
-    const baseTrunkColor = profile === "gum" ? 0x8b806b : profile === "oak" ? 0x56402e : 0x684d34;
-    const baseLeafColor = profile === "gum" ? 0x748782 : profile === "oak" ? 0x3d573d : profile === "elm" ? 0x506b43 : 0x597044;
-    const highlightLeafColor = profile === "gum" ? 0x9aaca3 : profile === "oak" ? 0x6f7b4c : profile === "elm" ? 0x7e8f55 : 0x81925b;
+    const baseTrunkColor =
+      profile === "gum" ? 0x8b806b : profile === "oak" ? 0x56402e : profile === "jacaranda" ? 0x6f6454 : profile === "kurrajong" ? 0x6d664d : 0x684d34;
+    const baseLeafColor =
+      profile === "gum"
+        ? 0x748782
+        : profile === "oak"
+          ? 0x5a5534
+          : profile === "elm"
+            ? 0x62613b
+            : profile === "jacaranda"
+              ? 0x5b5b68
+              : profile === "kurrajong"
+                ? 0x66775b
+                : 0x597044;
+    const highlightLeafColor =
+      profile === "gum"
+        ? 0x9aaca3
+        : profile === "oak"
+          ? 0x9a8547
+          : profile === "elm"
+            ? 0x9b8d53
+            : profile === "jacaranda"
+              ? 0x9483a8
+              : profile === "kurrajong"
+                ? 0x9aa27b
+                : 0x81925b;
     const hueOffset = (variant - 3.5) * 0.004;
     const saturationOffset = ((variant % 3) - 1) * 0.02;
     const lightOffset = ((variant % 5) - 2) * 0.018;

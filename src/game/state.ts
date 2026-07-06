@@ -1,6 +1,7 @@
 import type * as THREE from "three";
 import type { WeatherKind } from "./rendering/weather";
 import type { AmenityPoint } from "./types";
+import type { InventoryItemId, LargeCarryItemId } from "./items";
 import type { WeaponId } from "./weapons";
 import type { ZombieType } from "./waves";
 
@@ -110,6 +111,7 @@ export interface Snapshot {
   amenityAction: "rest" | "search" | null;
   amenityActionRemaining: number;
   stamina: number;
+  hydration: number;
   bleeding: boolean;
   limp: boolean;
   blur: boolean;
@@ -118,6 +120,15 @@ export interface Snapshot {
   activeDistractions: number;
   activeStructureUtilities: number;
   bikeMounted: boolean;
+  skateboardMounted: boolean;
+  inventory: InventoryItemId[];
+  inventoryCapacity: number;
+  carriedItem: LargeCarryItemId | null;
+  droppedItems: number;
+  availableBikes: number;
+  lockedBikes: number;
+  flatBikes: number;
+  placedLadders: number;
   bikePumpBoostRemaining: number;
   repairedBrokenBikes: number;
 }
@@ -133,6 +144,13 @@ export interface GameTestApi {
   testInteract: (fixtureId?: string) => boolean;
   testUseAmenity: (kind?: AmenityPoint["kind"]) => boolean;
   testRepairFlatBike: () => boolean;
+  testUnlockLockedBike: () => boolean;
+  testPickupItem: (itemId?: string) => boolean;
+  testDropItem: () => boolean;
+  testInspectInventory: () => string;
+  testPlaceLadder: (fixtureId?: string) => boolean;
+  testPickupPlacedLadder: () => boolean;
+  testToggleSkateboard: () => boolean;
   testThrowDistraction: () => boolean;
   testToggleFlashlight: () => boolean;
   testMiniMapVisibility: () => { front: boolean; behind: boolean; occluded: boolean };

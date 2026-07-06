@@ -30,6 +30,10 @@ const sheets = [
     svg: weatherSheet()
   },
   {
+    name: "winter-daylight-tree-zombie-audit",
+    svg: winterRealismSheet()
+  },
+  {
     name: "public-use-rule-sign-audit",
     svg: publicUseSheet()
   },
@@ -170,6 +174,66 @@ function facadeSheet() {
   ], "Door bank, accessible sign, wall light, gutters and roof vents remain aligned to the mapped amenities building.")}
 `;
   return svgShell("Building Facade Placement Audit", content);
+}
+
+function winterRealismSheet() {
+  const content = `
+  <g transform="translate(54 96)">
+    <rect class="panel" x="0" y="0" width="1492" height="238" rx="8"/>
+    <text x="28" y="46" class="label">Melbourne July 2026 daylight timing</text>
+    ${rect(42, 108, 1340, 30, "#16252c")}
+    ${rect(402, 108, 542, 30, "#d8b56c")}
+    ${rect(350, 108, 52, 30, "#786c5c")}
+    ${rect(944, 108, 56, 30, "#786c5c")}
+    ${timeTick(286, "5:45", "game start")}
+    ${timeTick(350, "7:06", "civil dawn")}
+    ${timeTick(402, "7:35", "sunrise")}
+    ${timeTick(674, "12:24", "low winter noon")}
+    ${timeTick(944, "5:13", "sunset")}
+    ${timeTick(1000, "5:43", "civil dusk")}
+    ${circle(674, 94, 24, "#e5c470")}
+    ${line(674, 94, 778, 138, "#b89046", 6)}
+    ${noteText(42, 214, 1320, "The runtime now uses winter sunrise/sunset and low solar altitude for key-light placement, so night lasts longer and late-afternoon visibility drops quickly.", "small", 18)}
+  </g>
+
+  <g transform="translate(54 388)">
+    <rect class="panel" x="0" y="0" width="466" height="492" rx="8"/>
+    <text x="24" y="44" class="label">Elm avenue, winter sparse</text>
+    ${treeSkeleton(232, 302, "#65472f", "#8f814c", 0.36)}
+    ${leafLitter(232, 382, "#9b8d53", 1.2)}
+    ${noteText(24, 438, 410, "Mapped elm/profile trees keep source-backed trunks but render fewer leaf lobes, more bare branch forks and larger winter leaf litter.", "small", 18)}
+  </g>
+
+  <g transform="translate(566 388)">
+    <rect class="panel" x="0" y="0" width="466" height="492" rx="8"/>
+    <text x="24" y="44" class="label">Oak specimen, broad bare crown</text>
+    ${treeSkeleton(232, 302, "#55402c", "#9a8547", 0.46, true)}
+    ${leafLitter(232, 382, "#9a8547", 1.34)}
+    ${noteText(24, 438, 410, "Oak-like avenue/specimen profiles keep wider crowns and heavier litter while exposing more winter branch structure.", "small", 18)}
+  </g>
+
+  <g transform="translate(1078 388)">
+    <rect class="panel" x="0" y="0" width="466" height="492" rx="8"/>
+    <text x="24" y="44" class="label">Gum-like profile, evergreen</text>
+    ${rect(216, 170, 32, 184, "#8b806b")}
+    ${rect(224, 205, 18, 96, "#cdbf9f", 0.9)}
+    ${circle(190, 174, 72, "#748782", 0.94)}
+    ${circle(264, 160, 68, "#9aaca3", 0.9)}
+    ${circle(248, 238, 74, "#748782", 0.92)}
+    ${circle(170, 244, 58, "#6f837e", 0.88)}
+    ${leafLitter(232, 382, "#748782", 0.62)}
+    ${noteText(24, 438, 410, "Gum-like profiles retain evergreen massing and pale-bark strips, so tree families stay legible without dense geometry.", "small", 18)}
+  </g>
+
+  <g transform="translate(54 930)">
+    <rect class="panel" x="0" y="0" width="1492" height="86" rx="8"/>
+    <text x="28" y="36" class="label">Zombie and stealth modifiers</text>
+    ${bar(390, 22, 180, 18, 0.72, "#7d8e69", "bloater wet grass")}
+    ${bar(620, 22, 180, 18, 0.92, "#7d8e69", "bloater asphalt")}
+    ${bar(850, 22, 180, 18, 0.66, "#536b79", "unlit night visibility")}
+    ${bar(1080, 22, 180, 18, 1.26, "#d8b56c", "flashlight at night")}
+  </g>`;
+  return svgShell("Winter Daylight, Tree and Zombie Realism Audit", content);
 }
 
 function worksSheet() {
@@ -507,6 +571,49 @@ function winterWeatherStrip(x, y) {
     ${[0, 1, 2, 3, 4].map((i) => line(x + 36 + i * 54, y + 126, x + 62 + i * 54, y + 96, "#61a8d3", 5)).join("")}
     ${circle(x + 304, y + 112, 34, "#c49a55", 0.3)}
     ${rect(x + 298, y + 76, 10, 70, "#353c39")}
+  </g>`;
+}
+
+function timeTick(x, time, label) {
+  return `<g>
+    ${line(x, 92, x, 154, "#384139", 4)}
+    <text x="${x}" y="174" text-anchor="middle" class="small">${escapeXml(time)}</text>
+    <text x="${x}" y="194" text-anchor="middle" class="tiny">${escapeXml(label)}</text>
+  </g>`;
+}
+
+function treeSkeleton(x, y, trunk, leaves, retention, wide = false) {
+  const crown = wide ? 92 : 74;
+  return `<g>
+    ${rect(x - 16, y - 148, 32, 148, trunk)}
+    ${line(x, y - 126, x - crown, y - 210, trunk, 14)}
+    ${line(x, y - 126, x + crown, y - 218, trunk, 14)}
+    ${line(x, y - 100, x - crown * 0.78, y - 150, trunk, 10)}
+    ${line(x, y - 98, x + crown * 0.82, y - 154, trunk, 10)}
+    ${line(x - 48, y - 170, x - 92, y - 212, trunk, 6)}
+    ${line(x + 48, y - 176, x + 96, y - 214, trunk, 6)}
+    ${circle(x - crown * 0.48, y - 202, 42, leaves, retention)}
+    ${circle(x + crown * 0.4, y - 208, 46, leaves, retention)}
+    ${circle(x, y - 238, 38, leaves, retention * 0.86)}
+  </g>`;
+}
+
+function leafLitter(x, y, fill, scale = 1) {
+  return `<g>
+    ${circle(x, y, 96 * scale, fill, 0.2)}
+    ${circle(x - 56 * scale, y + 8, 42 * scale, fill, 0.28)}
+    ${circle(x + 62 * scale, y - 4, 48 * scale, fill, 0.24)}
+    ${line(x - 88 * scale, y + 12, x + 90 * scale, y - 8, fill, 7)}
+  </g>`;
+}
+
+function bar(x, y, width, height, value, fill, label) {
+  const capped = Math.max(0, Math.min(1.32, value));
+  return `<g>
+    ${rect(x, y, width, height, "#d9d5c4")}
+    ${rect(x, y, width * Math.min(1, capped), height, fill)}
+    ${capped > 1 ? rect(x + width, y, (width * (capped - 1)) / 0.32, height, "#d8b56c") : ""}
+    <text x="${x}" y="${y + 46}" class="tiny">${escapeXml(label)}</text>
   </g>`;
 }
 

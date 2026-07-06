@@ -52,6 +52,7 @@ export interface NetworkPlayerSnapshot {
   health: number;
   scrap: number;
   stamina: number;
+  hydration: number;
   bleedTimer: number;
   limpTimer: number;
   blurTimer: number;

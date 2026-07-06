@@ -37,5 +37,11 @@ export const BIKE_INTERACTION_RADIUS = 5.6;
 export const BIKE_CAMERA_HEIGHT_BONUS = 0.34;
 export const BIKE_ALLOWED_WEAPONS = new Set<WeaponId>(["knife", "machete", "carbine", "smg"]);
 
+export const SKATEBOARD_FORWARD_SPEED = 13.4;
+export const SKATEBOARD_SPRINT_SPEED = 17.6;
+export const SKATEBOARD_REVERSE_SPEED = 3.2;
+export const SKATEBOARD_STRAFE_SPEED = 2.1;
+export const SKATEBOARD_CAMERA_HEIGHT_BONUS = 0.12;
+
 export const NETWORK_INPUT_HZ = 30;
 export const NETWORK_SNAPSHOT_HZ = 18;

@@ -2,10 +2,11 @@ import * as THREE from "three";
 import type { GameMaterials } from "./WorldBuilder";
 import type { WeaponId } from "../weapons";
 import type { ZombieType } from "../waves";
+import type { WorldItemId } from "../items";
 import { ANIME_OUTLINE_COLOR, MELBOURNE_ANIME_PALETTE, tuneAnimeMaterial as tuneAnimeMaterialStyle } from "./animeStyle";
 
 export type PickupKind = "scrap" | "health" | "ammo";
-export type BikeIssue = "flat-tyres" | "broken-chain";
+export type BikeIssue = "flat-tyres" | "broken-chain" | "locked";
 
 const ZOMBIE_ACCENT_COLORS: Record<ZombieType, THREE.ColorRepresentation> = {
   shambler: 0xcaa260,
@@ -28,6 +29,7 @@ const WEAPON_STENCIL: Record<WeaponId, string> = {
   machete: "FITZ",
   carbine: "CAR",
   shotgun: "12G",
+  flareGun: "FLR",
   smg: "9MM",
   rifle: "RFL"
 };
@@ -137,6 +139,90 @@ export class MeshFactory {
 
       if (firstPerson) {
         this.addFirstPersonArm(group, 1, { x: 0.12, y: -0.34, z: 0.28 }, { x: -0.62, y: 0.08, z: 0.22 }, { x: 0.05, y: -0.2, z: 0.1 });
+      }
+
+      this.applyAnimeMeshStyle(group, firstPerson ? 1.025 : 1.04);
+      return group;
+    }
+
+    if (weaponId === "flareGun") {
+      const frameMaterial = this.paintedStandardMaterial({ color: 0xbb3f2f, emissive: 0x3d1008, emissiveIntensity: 0.12, roughness: 0.7, metalness: 0.08 });
+      const barrelMaterial = this.paintedStandardMaterial({ color: 0x252c2d, metalness: 0.34, roughness: 0.52 });
+      const gripMaterial = this.paintedStandardMaterial({ color: 0x283f39, roughness: 0.86, metalness: 0.04 });
+      const flareMaterial = this.paintedStandardMaterial({ color: MELBOURNE_ANIME_PALETTE.tramOchre, emissive: 0xff5d32, emissiveIntensity: 0.72, roughness: 0.58 });
+      const hingeMaterial = this.paintedStandardMaterial({ color: MELBOURNE_ANIME_PALETTE.weatheredWhite, roughness: 0.66, metalness: 0.22 });
+
+      const grip = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.42, 0.18), gripMaterial);
+      grip.position.set(0, -0.26, 0.1);
+      grip.rotation.x = -0.3;
+      grip.castShadow = true;
+      group.add(grip);
+
+      const frame = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.18, 0.34), frameMaterial);
+      frame.position.set(0, 0, -0.08);
+      frame.castShadow = true;
+      group.add(frame);
+
+      const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.105, 0.118, 0.58, 14), barrelMaterial);
+      barrel.rotation.x = Math.PI / 2;
+      barrel.position.set(0, 0.08, -0.42);
+      barrel.castShadow = true;
+      group.add(barrel);
+
+      const muzzle = new THREE.Mesh(new THREE.CylinderGeometry(0.128, 0.108, 0.1, 14), hingeMaterial);
+      muzzle.rotation.x = Math.PI / 2;
+      muzzle.position.set(0, 0.08, -0.76);
+      muzzle.castShadow = true;
+      group.add(muzzle);
+
+      const flare = new THREE.Mesh(new THREE.CylinderGeometry(0.072, 0.058, 0.22, 12), flareMaterial);
+      flare.rotation.x = Math.PI / 2;
+      flare.position.set(0, 0.08, -0.86);
+      flare.castShadow = true;
+      group.add(flare);
+
+      const topLatch = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.045, 0.22), hingeMaterial);
+      topLatch.position.set(0, 0.2, -0.16);
+      topLatch.castShadow = true;
+      group.add(topLatch);
+
+      const triggerGuard = new THREE.Mesh(new THREE.TorusGeometry(0.075, 0.012, 6, 12, Math.PI * 1.42), barrelMaterial);
+      triggerGuard.position.set(0, -0.13, 0.02);
+      triggerGuard.rotation.set(Math.PI / 2, 0, Math.PI * 0.08);
+      group.add(triggerGuard);
+
+      const trigger = new THREE.Mesh(new THREE.BoxGeometry(0.022, 0.1, 0.035), barrelMaterial);
+      trigger.position.set(0, -0.19, 0.04);
+      trigger.rotation.x = -0.28;
+      group.add(trigger);
+
+      const sight = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.07, 0.035), flareMaterial);
+      sight.position.set(0, 0.25, -0.52);
+      sight.castShadow = true;
+      group.add(sight);
+
+      this.addStickerTab(group, "FLR", { x: 0, y: 0.105, z: -0.1 }, { x: -0.04 }, { width: 0.2, height: 0.028, depth: 0.12 });
+      this.addGripWraps(group, 0.1, 0.09, hingeMaterial);
+      if (!firstPerson) {
+        this.addArtifactPaintStroke(group, MELBOURNE_ANIME_PALETTE.tramOchre, -0.02, 0.17, -0.48, 0.22, 0.016, 0.18, 0, -0.08);
+        this.addArtifactPaintFlecks(
+          group,
+          [MELBOURNE_ANIME_PALETTE.paperGlow, MELBOURNE_ANIME_PALETTE.tramOchre, 0xff7551],
+          { x: 0.02, y: 0.18, z: -0.28 },
+          { x: 0.06, z: 0.16 },
+          0.8
+        );
+        this.addGumLeafCharm(group, -0.12, 0.12, 0.18, 0.62, 0.38);
+      }
+
+      if (firstPerson) {
+        this.addFirstPersonArm(
+          group,
+          1,
+          { x: 0.17, y: -0.31, z: 0.14 },
+          { x: -0.2, y: 0.08, z: 0.34 },
+          { x: 0.1, y: -0.23, z: -0.02 }
+        );
       }
 
       this.applyAnimeMeshStyle(group, firstPerson ? 1.025 : 1.04);
@@ -714,6 +800,16 @@ export class MeshFactory {
       looseLink.position.set(-0.14, 0.2, -0.16);
       looseLink.rotation.z = -0.7;
       group.add(looseLink);
+    } else if (options.issue === "locked") {
+      const chain = new THREE.Mesh(new THREE.TorusGeometry(0.36, 0.024, 8, 24), rubberMaterial);
+      chain.position.set(0.06, 0.58, -0.26);
+      chain.rotation.set(Math.PI / 2, 0.08, 0.22);
+      chain.scale.set(1.22, 0.78, 1);
+      group.add(chain);
+      const padlock = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.24, 0.1), forkMaterial);
+      padlock.position.set(0.2, 0.43, -0.34);
+      padlock.castShadow = true;
+      group.add(padlock);
     }
 
     group.rotation.y = Math.PI / 2;
@@ -1494,6 +1590,135 @@ export class MeshFactory {
     mouthSlash.position.set(0.03 * bodyScale, 2.72 * bodyScale, -0.58 * bodyScale);
     mouthSlash.rotation.z = 0.08;
     add(mouthSlash, false);
+  }
+
+  createWorldItemMesh(itemId: WorldItemId): THREE.Group {
+    if (itemId === "ladder") return this.createLadderMesh();
+    if (itemId === "skateboard") return this.createSkateboardMesh();
+
+    const group = new THREE.Group();
+    this.addArtifactBrushShadow(group, MELBOURNE_ANIME_PALETTE.wetBluestone, 0.72, 0.42, 0.14, -0.12, 0.1);
+    const metal = this.paintedStandardMaterial({ color: 0x87938c, metalness: 0.36, roughness: 0.54 });
+    const dark = this.paintedStandardMaterial({ color: 0x202827, roughness: 0.82, metalness: 0.08 });
+    const ochre = this.paintedStandardMaterial({ color: MELBOURNE_ANIME_PALETTE.tramOchre, roughness: 0.78, metalness: 0.04 });
+    const red = this.paintedStandardMaterial({ color: MELBOURNE_ANIME_PALETTE.brick, roughness: 0.82 });
+
+    if (itemId === "bolt-cutters") {
+      const hinge = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.08, 12), metal);
+      hinge.rotation.x = Math.PI / 2;
+      hinge.position.set(0, 0.18, 0);
+      group.add(hinge);
+      for (const side of [-1, 1]) {
+        const handle = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.84), dark);
+        handle.position.set(side * 0.18, 0.15, 0.38);
+        handle.rotation.y = side * 0.22;
+        handle.castShadow = true;
+        group.add(handle);
+        const jaw = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.08, 0.44), metal);
+        jaw.position.set(side * 0.1, 0.2, -0.31);
+        jaw.rotation.y = -side * 0.42;
+        jaw.castShadow = true;
+        group.add(jaw);
+      }
+      this.addStickerTab(group, "CUT", { x: 0, y: 0.27, z: 0.12 }, { x: -0.04 }, { width: 0.28, height: 0.024, depth: 0.13 });
+    } else if (itemId === "tyre-kit") {
+      const pouch = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.28, 0.46), dark);
+      pouch.position.y = 0.18;
+      pouch.castShadow = true;
+      group.add(pouch);
+      const patch = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.035, 0.26), ochre);
+      patch.position.set(0, 0.34, -0.03);
+      group.add(patch);
+      const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.64, 10), metal);
+      tube.rotation.z = Math.PI / 2;
+      tube.position.set(0, 0.44, 0.22);
+      tube.castShadow = true;
+      group.add(tube);
+      this.addStickerTab(group, "TYRE", { x: 0, y: 0.38, z: -0.24 }, { x: -0.08 }, { width: 0.38, height: 0.024, depth: 0.14 });
+    } else if (itemId === "noise-radio") {
+      const body = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.42, 0.26), ochre);
+      body.position.y = 0.28;
+      body.castShadow = true;
+      group.add(body);
+      const speaker = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.035, 14), dark);
+      speaker.rotation.x = Math.PI / 2;
+      speaker.position.set(-0.13, 0.29, -0.14);
+      group.add(speaker);
+      const knob = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.04, 10), red);
+      knob.rotation.x = Math.PI / 2;
+      knob.position.set(0.18, 0.36, -0.15);
+      group.add(knob);
+      this.addTubeBetween(group, new THREE.Vector3(0.18, 0.5, 0), new THREE.Vector3(0.38, 0.88, 0), 0.01, metal);
+    } else {
+      const glass = this.paintedStandardMaterial({ color: 0x557774, roughness: 0.7, metalness: 0.02, transparent: true, opacity: 0.82 });
+      const bottle = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.13, 0.52, 10), glass);
+      bottle.position.y = 0.31;
+      bottle.rotation.z = -0.18;
+      bottle.castShadow = true;
+      group.add(bottle);
+      const rag = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.2, 0.08), red);
+      rag.position.set(0.03, 0.63, 0);
+      rag.rotation.z = 0.34;
+      group.add(rag);
+      const glow = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffa144 }));
+      glow.position.set(0.04, 0.76, 0);
+      group.add(glow);
+    }
+
+    this.applyAnimeMeshStyle(group, 1.06);
+    return group;
+  }
+
+  createLadderMesh(): THREE.Group {
+    const group = new THREE.Group();
+    this.addArtifactBrushShadow(group, MELBOURNE_ANIME_PALETTE.bluestoneShadow, 0.62, 1.42, 0.13, -0.08, 0);
+    const rail = this.paintedStandardMaterial({ color: 0x9ba59d, metalness: 0.34, roughness: 0.5 });
+    for (const x of [-0.28, 0.28]) {
+      const side = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.06, 2.9), rail);
+      side.position.set(x, 0.22, 0);
+      side.rotation.x = -0.08;
+      side.castShadow = true;
+      group.add(side);
+    }
+    for (let rung = 0; rung < 7; rung += 1) {
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(0.68, 0.055, 0.055), rail);
+      bar.position.set(0, 0.24, -1.18 + rung * 0.4);
+      bar.castShadow = true;
+      group.add(bar);
+    }
+    this.applyAnimeMeshStyle(group, 1.04);
+    return group;
+  }
+
+  createSkateboardMesh(): THREE.Group {
+    const group = new THREE.Group();
+    this.addArtifactBrushShadow(group, MELBOURNE_ANIME_PALETTE.wetBluestone, 0.78, 0.28, 0.13, -0.1, 0.08);
+    const deckMaterial = this.paintedStandardMaterial({ color: 0x2f635d, roughness: 0.82, metalness: 0.02 });
+    const gripMaterial = this.paintedStandardMaterial({ color: 0x1c2424, roughness: 0.94 });
+    const truckMaterial = this.paintedStandardMaterial({ color: 0xa6aaa0, roughness: 0.48, metalness: 0.36 });
+    const wheelMaterial = this.paintedStandardMaterial({ color: MELBOURNE_ANIME_PALETTE.tramOchre, roughness: 0.72 });
+    const deck = new THREE.Mesh(new THREE.BoxGeometry(1.34, 0.1, 0.36), deckMaterial);
+    deck.position.y = 0.22;
+    deck.castShadow = true;
+    group.add(deck);
+    const grip = new THREE.Mesh(new THREE.BoxGeometry(1.08, 0.025, 0.3), gripMaterial);
+    grip.position.y = 0.286;
+    group.add(grip);
+    for (const x of [-0.42, 0.42]) {
+      const truck = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.08, 0.52), truckMaterial);
+      truck.position.set(x, 0.12, 0);
+      group.add(truck);
+      for (const z of [-0.32, 0.32]) {
+        const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.095, 0.095, 0.08, 12), wheelMaterial);
+        wheel.rotation.x = Math.PI / 2;
+        wheel.position.set(x, 0.08, z);
+        wheel.castShadow = true;
+        group.add(wheel);
+      }
+    }
+    this.addStickerTab(group, "SK8", { x: 0.22, y: 0.31, z: -0.17 }, { x: -0.04 }, { width: 0.28, height: 0.018, depth: 0.11 });
+    this.applyAnimeMeshStyle(group, 1.05);
+    return group;
   }
 
   createPickupMesh(type: PickupKind): THREE.Object3D {

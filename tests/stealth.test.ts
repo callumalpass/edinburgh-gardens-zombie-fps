@@ -3,6 +3,8 @@ import { playerVisibilityMultiplier, weatherNoiseMaskForKind, zombieFacingThresh
 
 const dryWeather = { precipitation: 0, fog: 0, cloudCover: 0.2 };
 const rainyWeather = { precipitation: 0.8, fog: 0.25, cloudCover: 0.85 };
+const winterNoon = { daylight: 1, night: 0, dawnDusk: 0 };
+const winterNight = { daylight: 0, night: 1, dawnDusk: 0 };
 
 describe("stealth tuning", () => {
   it("rewards crouching in cover and penalizes flashlight use", () => {
@@ -12,7 +14,8 @@ describe("stealth tuning", () => {
       inCover: true,
       elevatedHeight: 0,
       flashlightOn: false,
-      weather: rainyWeather
+      weather: rainyWeather,
+      timeOfDay: winterNight
     });
     const standingWithLight = playerVisibilityMultiplier({
       surface: "asphalt",
@@ -20,7 +23,8 @@ describe("stealth tuning", () => {
       inCover: false,
       elevatedHeight: 0,
       flashlightOn: true,
-      weather: dryWeather
+      weather: dryWeather,
+      timeOfDay: winterNight
     });
 
     expect(crouchedInCover).toBeLessThan(standingWithLight);
@@ -35,7 +39,8 @@ describe("stealth tuning", () => {
       elevatedHeight: 0,
       flashlightOn: false,
       structureLit: false,
-      weather: rainyWeather
+      weather: rainyWeather,
+      timeOfDay: winterNight
     });
     const lit = playerVisibilityMultiplier({
       surface: "concrete",
@@ -44,7 +49,8 @@ describe("stealth tuning", () => {
       elevatedHeight: 0,
       flashlightOn: false,
       structureLit: true,
-      weather: rainyWeather
+      weather: rainyWeather,
+      timeOfDay: winterNight
     });
 
     expect(lit).toBeGreaterThan(unlit);
@@ -58,7 +64,8 @@ describe("stealth tuning", () => {
       elevatedHeight: 0,
       flashlightOn: false,
       structureShelter: 0,
-      weather: rainyWeather
+      weather: rainyWeather,
+      timeOfDay: winterNight
     });
     const sheltered = playerVisibilityMultiplier({
       surface: "concrete",
@@ -67,7 +74,8 @@ describe("stealth tuning", () => {
       elevatedHeight: 0,
       flashlightOn: false,
       structureShelter: 0.8,
-      weather: rainyWeather
+      weather: rainyWeather,
+      timeOfDay: winterNight
     });
     const shelteredLit = playerVisibilityMultiplier({
       surface: "concrete",
@@ -77,7 +85,8 @@ describe("stealth tuning", () => {
       flashlightOn: false,
       structureLit: true,
       structureShelter: 0.8,
-      weather: rainyWeather
+      weather: rainyWeather,
+      timeOfDay: winterNight
     });
 
     expect(sheltered).toBeLessThan(exposed);
@@ -88,5 +97,38 @@ describe("stealth tuning", () => {
     expect(weatherNoiseMaskForKind("scavenge", rainyWeather)).toBeLessThan(weatherNoiseMaskForKind("scavenge", dryWeather));
     expect(weatherNoiseMaskForKind("gunshot", rainyWeather)).toBe(1);
     expect(weatherNoiseMaskForKind("distraction", rainyWeather)).toBe(1);
+  });
+
+  it("makes unlit winter night darker but makes flashlights more obvious", () => {
+    const unlitNoon = playerVisibilityMultiplier({
+      surface: "grass",
+      crouching: false,
+      inCover: false,
+      elevatedHeight: 0,
+      flashlightOn: false,
+      weather: dryWeather,
+      timeOfDay: winterNoon
+    });
+    const unlitNight = playerVisibilityMultiplier({
+      surface: "grass",
+      crouching: false,
+      inCover: false,
+      elevatedHeight: 0,
+      flashlightOn: false,
+      weather: dryWeather,
+      timeOfDay: winterNight
+    });
+    const litNight = playerVisibilityMultiplier({
+      surface: "grass",
+      crouching: false,
+      inCover: false,
+      elevatedHeight: 0,
+      flashlightOn: true,
+      weather: dryWeather,
+      timeOfDay: winterNight
+    });
+
+    expect(unlitNight).toBeLessThan(unlitNoon);
+    expect(litNight).toBeGreaterThan(unlitNoon);
   });
 });

@@ -78,6 +78,11 @@
       "url": "https://www.bom.gov.au/climate/averages/tables/cw_086071.shtml"
     },
     {
+      "id": "timeanddate-melbourne-july-2026-sun",
+      "label": "Timeanddate Melbourne July 2026 sunrise and sunset table",
+      "url": "https://www.timeanddate.com/sun/australia/melbourne"
+    },
+    {
       "id": "edinburgh-gardens-cmp-2021-3068",
       "label": "Lovell Chen 2021 Edinburgh Gardens CMP copy archived by the 3068 Group",
       "url": "https://the3068group.org/wp-content/uploads/2025/11/2021-conservation-management-plan-_merged.pdf"
@@ -272,6 +277,7 @@
         "edinburgh-gardens-3068-archive",
         "edinburgh-gardens-cmp",
         "bom-melbourne-regional-office-climate",
+        "timeanddate-melbourne-july-2026-sun",
         "edinburgh-gardens-cmp-2021-3068",
         "captain-cook-society-edinburgh-gardens",
         "yarra-northern-precinct",
@@ -293,6 +299,8 @@
         "yarra-wsud-guidelines",
         "yarra-significant-trees-data",
         "yarra-brunswick-street-oval",
+        "brisbane-lions-brunswick-oval-upgrade",
+        "yarra-news-bowling-roof",
         "yarra-emely-baker-centre",
         "yarra-edinburgh-gardens-rotunda",
         "yarra-fitzroy-bowls-mural",
@@ -616,10 +624,34 @@
       ]
     },
     {
+      "id": "structure-facility-refresh",
+      "path": "docs/research/structure-facility-refresh-2026-07-06.md",
+      "requiredHeadings": ["## Sources", "## Findings", "## Implementation Translation", "## Uncertainty", "## Validation"],
+      "sourceIds": [
+        "yarra-brunswick-street-oval",
+        "brisbane-lions-brunswick-oval-upgrade",
+        "yarra-news-bowling-roof",
+        "osm-way-api"
+      ]
+    },
+    {
       "id": "heritage-furniture-winter-weather",
       "path": "docs/research/heritage-furniture-winter-weather-2026-07-06.md",
       "requiredHeadings": ["## Sources", "## Findings", "## Implementation Translation", "## Uncertainty", "## Validation"],
       "sourceIds": ["edinburgh-gardens-cmp", "bom-melbourne-regional-office-climate"]
+    },
+    {
+      "id": "winter-daylight-tree-zombie-realism",
+      "path": "docs/research/winter-daylight-tree-zombie-realism-2026-07-06.md",
+      "requiredHeadings": ["## Sources", "## Findings", "## Implementation Translation", "## Uncertainty", "## Validation"],
+      "sourceIds": [
+        "yarra-edinburgh-gardens",
+        "yarra-significant-trees-data",
+        "vicmap-vegetation-tree-urban",
+        "yarra-brunswick-street-oval",
+        "bom-melbourne-regional-office-climate",
+        "timeanddate-melbourne-july-2026-sun"
+      ]
     },
     {
       "id": "oval-sports-markings",

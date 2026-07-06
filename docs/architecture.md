@@ -17,6 +17,7 @@ This codebase is organized around a small app shell with gameplay, rendering, an
 
 - `src/game/movement.ts` classifies movement surfaces from level path data and exposes player/bike speed curves.
 - `src/game/weapons.ts`, `src/game/playerCondition.ts`, `src/game/noise.ts`, `src/game/visibility.ts`, `src/game/loot.ts`, and `src/game/waves.ts` are pure or mostly pure gameplay rules with direct unit coverage.
+- `src/game/combat/` owns reusable combat rules that should stay independent of scene orchestration, including hit-zone targeting, melee arcs, ray tests, damage, stagger and zombie memory updates.
 - `src/game/systems/PlayerLocomotion.ts` applies shared local/remote player movement, sprint gating, bike movement, jump settling, fixture elevation, obstacle bypasses, and skate-bowl exit collision.
 - `src/game/systems/WaveDirector.ts` keeps wave pacing independent from the app shell and scene graph.
 - `src/game/spatial/` owns reusable spatial acceleration and agent separation logic.

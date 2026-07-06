@@ -1,3 +1,5 @@
+import type { WorldItemId } from "./items";
+
 export interface Vec2 {
   x: number;
   z: number;
@@ -102,7 +104,7 @@ export interface SignificantTreePoint {
   position: Vec2;
 }
 
-export type TreeProfile = "elm" | "gum" | "oak" | "generic";
+export type TreeProfile = "elm" | "gum" | "oak" | "jacaranda" | "kurrajong" | "generic";
 
 export interface MappedTree {
   id: string;
@@ -304,7 +306,7 @@ export type InteractableRaisedFootprint =
 export interface InteractableFixture {
   id: string;
   label: string;
-  kind: "rotunda" | "grandstand" | "playground" | "skate" | "basketball" | "toilets";
+  kind: "rotunda" | "grandstand" | "playground" | "skate" | "basketball" | "toilets" | "tennis";
   position: Vec2;
   accessPosition?: Vec2;
   landingPosition?: Vec2;
@@ -332,6 +334,7 @@ export type AmenityKind =
   | "clubroom"
   | "changeroom"
   | "umpire_room"
+  | "first_aid_room"
   | "gatehouse"
   | "maintenance_room"
   | "community_room"
@@ -345,6 +348,7 @@ export interface AmenityPoint {
   label: string;
   kind: AmenityKind;
   position: Vec2;
+  angle?: number;
   linkedStructureId?: string;
   source?: string;
 }
@@ -374,7 +378,7 @@ export interface ParkLifeDetail {
     | "chandler-fountain";
   position: Vec2;
   angle: number;
-  bikeIssue?: "flat-tyres" | "broken-chain";
+  bikeIssue?: "flat-tyres" | "broken-chain" | "locked";
   rule?: "dogs-on-leash" | "alcohol-hours" | "rotunda-stairs-no-power" | "access-friendly";
   source?: string;
 }
@@ -382,7 +386,7 @@ export interface ParkLifeDetail {
 export interface WeaponSpawn {
   id: string;
   label: string;
-  weaponId: "knife" | "machete" | "carbine" | "shotgun" | "smg" | "rifle";
+  weaponId: "knife" | "machete" | "carbine" | "shotgun" | "flareGun" | "smg" | "rifle";
   position: Vec2;
 }
 
@@ -391,6 +395,19 @@ export interface RideableBikeSpawn {
   label: string;
   position: Vec2;
   angle: number;
+  state?: "available" | "flat-tyres" | "locked";
+  requiredItem?: WorldItemId;
+  linkedDetailId?: string;
+  rackId?: string;
+}
+
+export interface ItemSpawn {
+  id: string;
+  itemId: WorldItemId;
+  label: string;
+  position: Vec2;
+  angle: number;
+  source?: string;
 }
 
 export interface LevelData {
@@ -422,7 +439,9 @@ export interface LevelData {
   amenities: AmenityPoint[];
   parkLifeDetails: ParkLifeDetail[];
   weaponSpawns: WeaponSpawn[];
+  itemSpawns: ItemSpawn[];
   rideableBike: RideableBikeSpawn;
+  rideableBikes: RideableBikeSpawn[];
 }
 
 export interface RandomSource {

@@ -4,6 +4,9 @@ import {
   bleedDamagePerSecond,
   bikePumpSpeedMultiplier,
   createInitialPlayerCondition,
+  hydrateCondition,
+  hydrationStatus,
+  nextHydration,
   nextStamina,
   speedMultiplierForCondition,
   spendStamina
@@ -17,7 +20,8 @@ describe("player condition", () => {
       resting: false,
       searching: false,
       crouching: false,
-      bleeding: false
+      bleeding: false,
+      hydration: 100
     });
     const rested = nextStamina(sprinted, 1, {
       sprinting: false,
@@ -25,7 +29,8 @@ describe("player condition", () => {
       resting: true,
       searching: false,
       crouching: false,
-      bleeding: false
+      bleeding: false,
+      hydration: 100
     });
 
     expect(sprinted).toBeLessThan(100);
@@ -142,5 +147,60 @@ describe("player condition", () => {
     expect(shelteredSprint).toBeGreaterThan(exposedSprint);
     expect(shelteredRecovery).toBeGreaterThan(exposedRecovery);
     expect(shelteredRecovery - exposedRecovery).toBeLessThan(3);
+  });
+
+  it("drains hydration faster when sprinting or camping high", () => {
+    const walking = nextHydration(100, 60, {
+      sprinting: false,
+      elevated: false,
+      bleeding: false,
+      daylight: 0.2
+    });
+    const exposedHighSprint = nextHydration(100, 60, {
+      sprinting: true,
+      elevated: true,
+      bleeding: false,
+      daylight: 1
+    });
+
+    expect(walking).toBeLessThan(100);
+    expect(exposedHighSprint).toBeLessThan(walking);
+  });
+
+  it("uses thirst as a stamina and movement pressure instead of direct damage", () => {
+    const hydrated = nextStamina(50, 1, {
+      sprinting: false,
+      scoped: false,
+      resting: false,
+      searching: false,
+      crouching: false,
+      bleeding: false,
+      hydration: 100
+    });
+    const parched = nextStamina(50, 1, {
+      sprinting: false,
+      scoped: false,
+      resting: false,
+      searching: false,
+      crouching: false,
+      bleeding: false,
+      hydration: 24
+    });
+
+    expect(parched).toBeLessThan(hydrated);
+    expect(speedMultiplierForCondition({ stamina: 100, limpTimer: 0, hydration: 10 })).toBeLessThan(
+      speedMultiplierForCondition({ stamina: 100, limpTimer: 0, hydration: 100 })
+    );
+    expect(hydrationStatus({ hydration: 50 })).toBe("Thirsty");
+    expect(hydrationStatus({ hydration: 24 })).toBe("Parched");
+    expect(hydrationStatus({ hydration: 8 })).toBe("Dehydrated");
+  });
+
+  it("refills hydration at drinking fountains", () => {
+    const refilled = hydrateCondition({ ...createInitialPlayerCondition(), hydration: 18, stamina: 42, blurTimer: 6 });
+
+    expect(refilled.hydration).toBe(100);
+    expect(refilled.stamina).toBeGreaterThan(42);
+    expect(refilled.blurTimer).toBeLessThan(6);
   });
 });

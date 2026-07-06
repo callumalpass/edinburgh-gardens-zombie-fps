@@ -11,6 +11,7 @@ import {
   distanceToSegment,
   geoToWorld,
   makeCircle,
+  nearestPointOnSegment,
   nearestPointOnPolygon,
   pointInPolygon,
   polygonCentroid,
@@ -176,7 +177,10 @@ export const RESEARCH_NOTES = [
   "A 2026-07-06 structure-depth pass added additional source-backed building affordances: grandstand umpire access, Emely Baker kitchenette/service cues, bowling-green shed supplies, north toilet service access and an interactable rotunda memorial plaque.",
   "A 2026-07-06 structure utility pass adds source-backed grandstand kiosk/public-toilet access plus powered-building switchboards that can activate exterior floodlights; the rotunda remains explicitly unpowered.",
   "A 2026-07-06 structure shelter pass adds source-backed roof, verandah, shade-sail and grandstand-cover shelter zones that reduce weather handling/search exposure while staying tied to visible building footprints.",
+  "A 2026-07-06 structure facility refresh adds source-backed sports-pavilion first-aid/kitchen access and Fitzroy Bowls zincalume roof/gutter cues, with the new gameplay points kept exterior because public room and service drawings are unavailable.",
   "A 2026-07-06 heritage-furniture and winter-weather pass adds CMP-backed Chandler Fountain, cast-iron gas-lamp, bollard, reproduction-seat and interpretive-sign cues, and retunes weather toward Bureau of Meteorology Melbourne July cloud/rain/wind normals.",
+  "A 2026-07-06 winter daylight/tree/zombie pass retunes the accelerated cycle to Melbourne July 2026 sunrise/sunset, uses winter solar azimuth/altitude for the key light, makes elm/oak profiles sparser and branchier, and lets night/rain/wet lawns modestly alter zombie visibility, hearing and footing.",
+  "A 2026-07-06 tree character pass replaces arbitrary mapped-tree profile fallbacks with heritage/significant-tree proximity rules and adds 35 source-backed young Brunswick Street Oval replacement plantings using Yarra's Kurrajong, Red Oak and Jacaranda species mix.",
   "See docs/edinburgh-gardens-research.md for source URLs, query notes, data licensing notes and implementation decisions."
 ];
 
@@ -469,6 +473,14 @@ const STRUCTURE_UTILITY_SOURCE =
   "Yarra Brunswick Street Oval redevelopment kiosk terrace, externally accessible public toilets, tennis social space and upgraded amenities; Yarra Emely Baker Centre kitchenette/refrigerator/microwave; Yarra Edinburgh Gardens Rotunda no-current-power constraint; switchboard cabinet locations are exterior gameplay approximations because public service drawings were unavailable";
 const STRUCTURE_SHELTER_SOURCE =
   "Yarra Edinburgh Gardens facility listing confirms pavilion, public toilets and access-friendly park facilities; Yarra Brunswick Street Oval redevelopment confirms kiosk terrace, grandstand external stairs/gates and tennis social-space/amenity works; Yarra Emely Baker Centre confirms gated outdoor area and shade sail; Yarra Rotunda page confirms bookable shelter use but no current power";
+const SPORTS_PAVILION_FACILITY_SOURCE =
+  "Brisbane Lions 2026 Brunswick Street Oval upgrade update records a new two-storey sports pavilion with first aid room, kiosk, social space and kitchen, while Yarra's redevelopment page records public toilets, changerooms, umpire areas, kiosk terrace, tennis social space and energy-efficient precinct lighting";
+const BOWLING_ROOF_UPGRADE_SOURCE =
+  "Yarra News April-May 2025 Fitzroy Bowls roof upgrade: ageing roof sheeting replaced with zincalume sheets, roof structure strengthened and gutters upgraded without changing the building's look or nearby heritage-listed sites";
+const TREE_CHARACTER_ZONE_SOURCE =
+  "3068 Group Edinburgh Gardens heritage-study summary and CMP source inventory: mature exotic-tree canopy, mostly avenue planting along the path system, remains a defining garden structure; Yarra significant-tree data gives precise species/height/diameter for source-backed specimen anchors";
+const REDEVELOPMENT_REPLACEMENT_TREE_SOURCE =
+  "Yarra Brunswick Street Oval redevelopment 2025-26 update: 35 semi-mature shade trees will be planted during 2026-2027, using a diverse mix of Kurrajong, Red Oak and Jacaranda species; exact landscape-plan vertices were not public, so in-game planting rows are inferred along the sports-pavilion, tennis and construction-interface landscape zones and avoid Hipster Hill";
 const HERITAGE_FURNITURE_SOURCE =
   "Edinburgh Gardens CMP 2004 sections 3.4.17-3.4.25 and 6.5.25: Chandler Drinking Fountain, gas lamp standards around the Rotunda/remnant cast-iron lanterns, reproduction seats, interpretive signs and Fitzroy cast-iron bollards";
 
@@ -689,6 +701,40 @@ const OSM_TREE_GEO: OsmTreeGeo[] = [
   { osmId: 5365393299, point: g(-37.7891356, 144.9840691) },
   { osmId: 5365393300, point: g(-37.7890487, 144.9842231) },
   { osmId: 9345277530, point: g(-37.7898375, 144.9820903) }
+];
+
+type ReplacementPlantingRowGeo = {
+  id: string;
+  label: string;
+  count: number;
+  points: GeoPoint[];
+};
+
+const REDEVELOPMENT_REPLACEMENT_PLANTING_ROWS_GEO: ReplacementPlantingRowGeo[] = [
+  {
+    id: "grandstand-st-georges-interface",
+    label: "sports-pavilion and St Georges Road landscape interface",
+    count: 9,
+    points: [g(-37.789210, 144.980340), g(-37.788930, 144.980315), g(-37.788620, 144.980395), g(-37.788385, 144.980560)]
+  },
+  {
+    id: "tennis-west-interface",
+    label: "tennis clubhouse western works interface",
+    count: 10,
+    points: [g(-37.788185, 144.981500), g(-37.787980, 144.981500), g(-37.787780, 144.981560), g(-37.787590, 144.981690)]
+  },
+  {
+    id: "tennis-north-social-space",
+    label: "tennis social-space northern planting edge",
+    count: 8,
+    points: [g(-37.787650, 144.981820), g(-37.787500, 144.981980), g(-37.787335, 144.982170)]
+  },
+  {
+    id: "rail-trail-water-sensitive-interface",
+    label: "rail-trail and water-sensitive landscape interface",
+    count: 8,
+    points: [g(-37.787270, 144.982405), g(-37.787075, 144.982560), g(-37.786890, 144.982735)]
+  }
 ];
 
 type VicmapTreeGeo = { objectId: number; point: GeoPoint; height: number; canopyRadius: number; dense: boolean };
@@ -2781,6 +2827,8 @@ function skateBowlTerrainModifier(bowl: SkateBowlFeature): TerrainModifier {
 
 function treeProfileFromGenus(genus: string): TreeProfile {
   const normalized = genus.toLowerCase();
+  if (normalized.includes("jacaranda")) return "jacaranda";
+  if (normalized.includes("brachychiton") || normalized.includes("kurrajong")) return "kurrajong";
   if (normalized.includes("eucalyptus")) return "gum";
   if (normalized.includes("quercus")) return "oak";
   if (normalized.includes("ulmus")) return "elm";
@@ -2818,15 +2866,29 @@ function treeCanopyGroup(tree: Pick<MappedTree, "profile" | "source" | "height" 
 }
 
 function treeCanopyRadius(tree: Pick<MappedTree, "profile" | "height" | "dbh" | "source">): number {
-  const heightRadius = ((tree.height ?? (tree.profile === "gum" ? 17 : tree.profile === "oak" ? 15 : 13)) * WORLD_SCALE) / (tree.profile === "gum" ? 4.8 : 3.8);
-  const dbhRadius = ((tree.dbh ?? (tree.profile === "oak" ? 92 : tree.profile === "elm" ? 80 : 66)) / 100) * WORLD_SCALE * 3.6;
-  const profileBoost = tree.profile === "oak" ? 1.18 : tree.profile === "elm" ? 1.08 : tree.profile === "gum" ? 0.9 : 1;
+  const fallbackHeight =
+    tree.profile === "gum"
+      ? 17
+      : tree.profile === "oak"
+        ? 15
+        : tree.profile === "jacaranda"
+          ? 8
+          : tree.profile === "kurrajong"
+            ? 9
+            : 13;
+  const heightDivisor = tree.profile === "gum" ? 4.8 : tree.profile === "jacaranda" || tree.profile === "kurrajong" ? 4.35 : 3.8;
+  const fallbackDbh =
+    tree.profile === "oak" ? 92 : tree.profile === "elm" ? 80 : tree.profile === "jacaranda" ? 36 : tree.profile === "kurrajong" ? 42 : 66;
+  const heightRadius = ((tree.height ?? fallbackHeight) * WORLD_SCALE) / heightDivisor;
+  const dbhRadius = ((tree.dbh ?? fallbackDbh) / 100) * WORLD_SCALE * 3.6;
+  const profileBoost =
+    tree.profile === "oak" ? 1.18 : tree.profile === "elm" ? 1.08 : tree.profile === "gum" ? 0.9 : tree.profile === "kurrajong" ? 0.96 : 0.9;
   const sourceBoost = tree.source?.includes("tree avenue") ? 0.92 : tree.source?.includes("Yarra significant trees") ? 1.12 : 1;
   return Math.max(3.1, Math.min(12.6, ((heightRadius + dbhRadius) * 0.5) * profileBoost * sourceBoost));
 }
 
 function treeCanopyDensity(profile: TreeProfile, canopyGroup: MappedTree["canopyGroup"]): number {
-  const base = profile === "gum" ? 0.55 : profile === "oak" ? 0.88 : profile === "elm" ? 0.78 : 0.66;
+  const base = profile === "gum" ? 0.55 : profile === "oak" ? 0.88 : profile === "elm" ? 0.78 : profile === "jacaranda" ? 0.58 : profile === "kurrajong" ? 0.7 : 0.66;
   const groupBoost = canopyGroup === "specimen" ? 0.06 : canopyGroup === "avenue" ? 0.04 : 0;
   return Math.max(0.42, Math.min(0.95, base + groupBoost));
 }
@@ -2846,6 +2908,24 @@ type HeritageTreeLines = {
   englishOakAvenue: readonly Vec2[];
 };
 
+type ReplacementTreeSpecies = {
+  profile: TreeProfile;
+  label: string;
+  height: number;
+  dbh: number;
+  canopyRadius: number;
+  canopyDensity: number;
+};
+
+const REPLACEMENT_TREE_SPECIES: ReplacementTreeSpecies[] = [
+  { profile: "kurrajong", label: "Young Kurrajong replacement tree", height: 8.6, dbh: 34, canopyRadius: 3.4, canopyDensity: 0.72 },
+  { profile: "oak", label: "Young Red Oak replacement tree", height: 8.2, dbh: 32, canopyRadius: 3.6, canopyDensity: 0.62 },
+  { profile: "jacaranda", label: "Young Jacaranda replacement tree", height: 7.4, dbh: 28, canopyRadius: 3.2, canopyDensity: 0.5 },
+  { profile: "kurrajong", label: "Young Kurrajong replacement tree", height: 8.1, dbh: 32, canopyRadius: 3.25, canopyDensity: 0.7 },
+  { profile: "oak", label: "Young Red Oak replacement tree", height: 8.8, dbh: 36, canopyRadius: 3.8, canopyDensity: 0.64 },
+  { profile: "jacaranda", label: "Young Jacaranda replacement tree", height: 7.8, dbh: 30, canopyRadius: 3.35, canopyDensity: 0.52 }
+];
+
 function isHeritageAvenuePoint(point: Vec2, heritageLines: HeritageTreeLines): boolean {
   return (
     distanceToPolyline(point, heritageLines.englishOakAvenue) < 13 ||
@@ -2855,17 +2935,70 @@ function isHeritageAvenuePoint(point: Vec2, heritageLines: HeritageTreeLines): b
   );
 }
 
-function inferMappedTreeProfile(point: Vec2, index: number, heritageLines: HeritageTreeLines): TreeProfile {
+function inferMappedTreeProfile(point: Vec2, heritageLines: HeritageTreeLines, significantTrees: readonly SignificantTreePoint[]): TreeProfile {
   if (distanceToPolyline(point, heritageLines.englishOakAvenue) < 13) return "oak";
   if (isHeritageAvenuePoint(point, heritageLines)) {
     return "elm";
   }
-  if (index % 13 === 0) return "gum";
-  return index % 5 === 0 ? "elm" : "generic";
+
+  const nearbySignificantProfile = nearestSignificantTreeProfile(point, significantTrees);
+  if (nearbySignificantProfile) {
+    return nearbySignificantProfile;
+  }
+
+  return "generic";
 }
 
 function distanceToAnyPolyline(point: Vec2, lines: readonly (readonly Vec2[])[]): number {
   return lines.reduce((closest, line) => Math.min(closest, distanceToPolyline(point, line)), Number.POSITIVE_INFINITY);
+}
+
+function nearestSignificantTreeProfile(point: Vec2, significantTrees: readonly SignificantTreePoint[]): TreeProfile | null {
+  let bestDistance = Number.POSITIVE_INFINITY;
+  let bestProfile: TreeProfile | null = null;
+  for (const tree of significantTrees) {
+    const candidateDistance = distance(point, tree.position);
+    if (candidateDistance < bestDistance) {
+      bestDistance = candidateDistance;
+      bestProfile = treeProfileFromGenus(tree.genus);
+    }
+  }
+  return bestDistance < 24 * WORLD_SCALE ? bestProfile : null;
+}
+
+function sampleGeoPolyline(points: readonly GeoPoint[], count: number): GeoPoint[] {
+  if (points.length === 0 || count <= 0) return [];
+  if (points.length === 1 || count === 1) return [points[0]];
+
+  const segmentLengths: number[] = [];
+  let totalLength = 0;
+  for (let index = 0; index < points.length - 1; index += 1) {
+    const length = Math.hypot(points[index + 1].lat - points[index].lat, points[index + 1].lon - points[index].lon);
+    segmentLengths.push(length);
+    totalLength += length;
+  }
+
+  const samples: GeoPoint[] = [];
+  for (let sampleIndex = 0; sampleIndex < count; sampleIndex += 1) {
+    const target = (sampleIndex / Math.max(1, count - 1)) * totalLength;
+    let cursor = 0;
+    let segmentIndex = 0;
+    while (segmentIndex < segmentLengths.length - 1 && cursor + segmentLengths[segmentIndex] < target) {
+      cursor += segmentLengths[segmentIndex];
+      segmentIndex += 1;
+    }
+    const segmentLength = segmentLengths[segmentIndex] || 1;
+    const t = Math.max(0, Math.min(1, (target - cursor) / segmentLength));
+    const start = points[segmentIndex];
+    const end = points[segmentIndex + 1];
+    samples.push(g(start.lat + (end.lat - start.lat) * t, start.lon + (end.lon - start.lon) * t));
+  }
+
+  return samples;
+}
+
+function replacementPlantingSource(row: ReplacementPlantingRowGeo): string {
+  return `${REDEVELOPMENT_REPLACEMENT_TREE_SOURCE}; ${TREE_CHARACTER_ZONE_SOURCE}; ${row.label}`;
 }
 
 function pointInTreeExclusionZone(point: Vec2, zone: TreeExclusionZone): boolean {
@@ -2890,7 +3023,8 @@ function appendMappedTree(trees: MappedTree[], tree: MappedTreeInput, minSpacing
 }
 
 function treeColliderRadius(tree: MappedTree): number {
-  const fallbackDbh = tree.profile === "oak" ? 82 : tree.profile === "elm" ? 74 : tree.profile === "gum" ? 68 : 58;
+  const fallbackDbh =
+    tree.profile === "oak" ? 82 : tree.profile === "elm" ? 74 : tree.profile === "gum" ? 68 : tree.profile === "jacaranda" ? 34 : tree.profile === "kurrajong" ? 42 : 58;
   return Math.max(0.34, Math.min(1.05, ((tree.dbh ?? fallbackDbh) / 200) * WORLD_SCALE));
 }
 
@@ -2926,7 +3060,8 @@ function pathTerrainModifiers(path: LevelPath): TerrainModifier[] {
 }
 
 function treeRootTerrainModifier(tree: MappedTree, index: number): TerrainModifier {
-  const baseRadius = tree.profile === "oak" ? 4.9 : tree.profile === "elm" ? 4.25 : tree.profile === "gum" ? 3.6 : 3.2;
+  const baseRadius =
+    tree.profile === "oak" ? 4.9 : tree.profile === "elm" ? 4.25 : tree.profile === "gum" ? 3.6 : tree.profile === "jacaranda" ? 2.25 : tree.profile === "kurrajong" ? 2.55 : 3.2;
   const heightFactor = Math.min(0.055, ((tree.height ?? 11) / 30) * 0.04);
   const dbhFactor = Math.min(0.045, ((tree.dbh ?? 58) / 180) * 0.045);
   const variation = ((index % 7) - 3) * 0.006;
@@ -3054,6 +3189,54 @@ function pathJunctionSurfacePatches(paths: readonly LevelPath[]): PathSurfacePat
   return patches.slice(0, 42);
 }
 
+function benchFacingVector(angle: number): Vec2 {
+  return { x: Math.sin(angle), z: -Math.cos(angle) };
+}
+
+function directionBetween(from: Vec2, to: Vec2): Vec2 {
+  const dx = to.x - from.x;
+  const dz = to.z - from.z;
+  const length = Math.hypot(dx, dz) || 1;
+  return { x: dx / length, z: dz / length };
+}
+
+function benchAngleFacingTarget(position: Vec2, target: Vec2): number {
+  const direction = directionBetween(position, target);
+  return Math.atan2(direction.x, -direction.z);
+}
+
+function nearestPathSegment(
+  position: Vec2,
+  paths: readonly LevelPath[]
+): { point: Vec2; start: Vec2; end: Vec2; distance: number } | undefined {
+  let closest: { point: Vec2; start: Vec2; end: Vec2; distance: number } | undefined;
+  for (const path of paths) {
+    for (let index = 0; index < path.points.length - 1; index += 1) {
+      const start = path.points[index];
+      const end = path.points[index + 1];
+      const point = nearestPointOnSegment(position, start, end);
+      const segmentDistance = distance(position, point);
+      if (!closest || segmentDistance < closest.distance) {
+        closest = { point, start, end, distance: segmentDistance };
+      }
+    }
+  }
+  return closest;
+}
+
+function benchAngleFromNearestPath(position: Vec2, paths: readonly LevelPath[], fallbackTarget: Vec2): number {
+  const nearest = nearestPathSegment(position, paths);
+  if (!nearest) {
+    return benchAngleFacingTarget(position, fallbackTarget);
+  }
+
+  const tangent = Math.atan2(nearest.end.z - nearest.start.z, nearest.end.x - nearest.start.x);
+  const target = nearest.distance > 0.2 ? nearest.point : fallbackTarget;
+  const direction = directionBetween(position, target);
+  const front = benchFacingVector(tangent);
+  return front.x * direction.x + front.z * direction.z >= 0 ? tangent : tangent + Math.PI;
+}
+
 function surfacePatchBetweenGeo(
   id: string,
   label: string,
@@ -3085,6 +3268,8 @@ export function createLevelData(): LevelData {
   const grandstand = polygonFromGeo(GRANDSTAND_GEO);
   const tennis = polygonFromGeo(TENNIS_GEO);
   const bowling = polygonFromGeo(BOWLS_GEO);
+  const tennisCenter = polygonCentroid(tennis);
+  const tennisFootprint = footprintFromPolygon(tennis);
   const southAmenitiesBuildingSource = OSM_BUILDING_FOOTPRINTS_GEO.find((building) => building.id === "osm-building-242003562");
   if (!southAmenitiesBuildingSource) {
     throw new Error("Missing south amenities building footprint");
@@ -3200,6 +3385,11 @@ export function createLevelData(): LevelData {
     northToiletsFootprint.halfX * 0.78,
     northToiletsFootprint.halfZ + 0.1
   );
+  const tennisLadderAccess = exteriorPointFromPolygon(geoToWorld(g(-37.787955, 144.982030)), tennis, tennisCenter, 1.25);
+  const tennisLadderLanding = {
+    x: tennisLadderAccess.x + (tennisCenter.x - tennisLadderAccess.x) * 0.16,
+    z: tennisLadderAccess.z + (tennisCenter.z - tennisLadderAccess.z) * 0.16
+  };
   const southBbq = geoToWorld(g(-37.7890776, 144.9835871));
   const northBbq = geoToWorld(g(-37.7859107, 144.9831484));
   const northTableTennis = geoToWorld(g(-37.786470, 144.983075));
@@ -3268,7 +3458,7 @@ export function createLevelData(): LevelData {
       label: "Basketball half-court west hoop",
       kind: "basketball-hoop",
       position: offsetPoint(basketballCenter, basketballRotation, -basketballHoopOffset, 0),
-      angle: basketballRotation,
+      angle: basketballRotation - Math.PI / 2,
       radius: 0.42,
       width: BASKETBALL_BACKBOARD_WIDTH_METRES,
       height: BASKETBALL_RIM_HEIGHT_METRES,
@@ -3279,7 +3469,7 @@ export function createLevelData(): LevelData {
       label: "Basketball half-court east hoop",
       kind: "basketball-hoop",
       position: offsetPoint(basketballCenter, basketballRotation, basketballHoopOffset, 0),
-      angle: basketballRotation + Math.PI,
+      angle: basketballRotation + Math.PI / 2,
       radius: 0.42,
       width: BASKETBALL_BACKBOARD_WIDTH_METRES,
       height: BASKETBALL_RIM_HEIGHT_METRES,
@@ -3315,6 +3505,7 @@ export function createLevelData(): LevelData {
     surface: path.surface,
     source: path.source
   }));
+  const amenityOrientationPaths = [railTrail, crescentPath, ovalPath, rotundaLoop, ...osmPaths];
   const emelyBakerNapierPaths = osmPaths.filter((path) =>
     [
       "osm-22673070-north-west-footpath",
@@ -3355,7 +3546,11 @@ export function createLevelData(): LevelData {
       label: amenity.label,
       kind: amenity.kind,
       position: visiblePosition,
-      source: `OpenStreetMap amenity node ${amenity.id.replace("osm-", "")}; Yarra Edinburgh Gardens public facilities listing`
+      angle: amenity.kind === "bench" ? benchAngleFromNearestPath(visiblePosition, amenityOrientationPaths, polygonCentroid(boundary)) : undefined,
+      source:
+        amenity.kind === "bench"
+          ? `OpenStreetMap amenity node ${amenity.id.replace("osm-", "")}; Yarra Edinburgh Gardens public facilities listing; bench orientation inferred from nearest mapped path because the OSM node has no direction`
+          : `OpenStreetMap amenity node ${amenity.id.replace("osm-", "")}; Yarra Edinburgh Gardens public facilities listing`
     };
   });
   const featureAmenities: AmenityPoint[] = [
@@ -3414,6 +3609,32 @@ export function createLevelData(): LevelData {
       source: `${STRUCTURE_UTILITY_SOURCE}; Yarra redevelopment concept images label a kiosk terrace, translated as an exterior hatch rather than an interior kiosk`
     },
     {
+      id: "grandstand-first-aid-room",
+      label: "Sports pavilion first aid room",
+      kind: "first_aid_room",
+      position: exteriorPointFromPolygon(
+        offsetPoint(grandstandCenter, grandstandRotation, -grandstandFootprint.halfX * 0.42, grandstandFrontSign * (grandstandVisualHalfZ + 3.15)),
+        grandstand,
+        grandstandCenter,
+        1.9
+      ),
+      linkedStructureId: "grandstand",
+      source: `${SPORTS_PAVILION_FACILITY_SOURCE}; first-aid room is translated as an exterior search point on the reachable sports-pavilion/grandstand frontage because public room coordinates are unavailable`
+    },
+    {
+      id: "grandstand-sports-kitchen",
+      label: "Sports pavilion kitchen",
+      kind: "kitchenette",
+      position: exteriorPointFromPolygon(
+        offsetPoint(grandstandCenter, grandstandRotation, grandstandFootprint.halfX * 0.18, grandstandFrontSign * (grandstandVisualHalfZ + 3.55)),
+        grandstand,
+        grandstandCenter,
+        2.05
+      ),
+      linkedStructureId: "grandstand",
+      source: `${SPORTS_PAVILION_FACILITY_SOURCE}; kitchen and social-space evidence is represented as a lockable exterior kitchen/service hatch rather than a full interior`
+    },
+    {
       id: "grandstand-switchboard",
       label: "Grandstand switchboard",
       kind: "utility_box",
@@ -3468,6 +3689,23 @@ export function createLevelData(): LevelData {
       ),
       linkedStructureId: "osm-building-543505639",
       source: "OSM way 543505639; CMP 2004 bowling club entity, clubhouse, memorial-gate and bowling-precinct description; Fitzroy Victoria Bowling & Sports Club active greens/social use"
+    },
+    {
+      id: "bowling-roof-gutter-maintenance",
+      label: "Bowling roof gutter maintenance kit",
+      kind: "maintenance_room",
+      position: exteriorPointFromPolygon(
+        clearMappedBuildingFootprint(
+          exteriorPointFromPolygon(geoToWorld(g(-37.7880200, 144.9805450)), bowling, polygonCentroid(bowling), 4.5),
+          "osm-building-543505639",
+          1.35
+        ),
+        bowling,
+        polygonCentroid(bowling),
+        4.5
+      ),
+      linkedStructureId: "osm-building-543505639",
+      source: `${BOWLING_ROOF_UPGRADE_SOURCE}; represented as an exterior maintenance kit because the public source confirms roof/gutter works but not an interior access point`
     },
     {
       id: "bowling-green-service-locker",
@@ -3552,6 +3790,7 @@ export function createLevelData(): LevelData {
     }
   ];
   const amenities = [...mappedAmenities, ...featureAmenities, ...structureAmenities].filter((amenity) => pointInPolygon(amenity.position, boundary));
+  const bikeRackPosition = mappedAmenities.find((amenity) => amenity.id === "osm-2987216934")?.position ?? geoToWorld(g(-37.7888610, 144.9836540));
   const baseParkLifeDetails = ([
     {
       id: "north-lawn-dog-sign",
@@ -3666,16 +3905,16 @@ export function createLevelData(): LevelData {
       label: "Rotunda reproduction heritage seat",
       kind: "heritage-seat",
       position: offsetPoint(rotundaCenter, -0.34, -8.9, 3.6),
-      angle: -0.18,
-      source: `${HERITAGE_FURNITURE_SOURCE}; CMP figure notes reproduction seats as part of the garden furniture suite`
+      angle: benchAngleFacingTarget(offsetPoint(rotundaCenter, -0.34, -8.9, 3.6), rotundaCenter),
+      source: `${HERITAGE_FURNITURE_SOURCE}; CMP figure notes reproduction seats as part of the garden furniture suite; seat facing inferred toward the rotunda because exact seat GIS direction is unavailable`
     },
     {
       id: "queen-victoria-reproduction-seat",
       label: "Queen Victoria plinth reproduction heritage seat",
       kind: "heritage-seat",
       position: geoToWorld(g(-37.787225, 144.983585)),
-      angle: 0.64,
-      source: `${HERITAGE_FURNITURE_SOURCE}; positioned on the plinth path approach where seating and interpretive furniture are visually appropriate but exact seat GIS is unavailable`
+      angle: benchAngleFacingTarget(geoToWorld(g(-37.787225, 144.983585)), queenVictoriaPlinth),
+      source: `${HERITAGE_FURNITURE_SOURCE}; positioned on the plinth path approach where seating and interpretive furniture are visually appropriate but exact seat GIS/direction is unavailable; seat facing inferred toward the plinth`
     },
     {
       id: "grandstand-interpretive-sign",
@@ -3761,13 +4000,13 @@ export function createLevelData(): LevelData {
       source: "Yarra access context: Capital City Trail and foot/bike access"
     },
     {
-      id: "brunswick-broken-chain-bike",
-      label: "Broken-chain bike near Brunswick Street approach",
+      id: "south-bike-rack-locked-bike",
+      label: "Locked bike chained to the bike racks",
       kind: "broken-bike",
-      position: geoToWorld(g(-37.787140, 144.980535)),
-      angle: 0.92,
-      bikeIssue: "broken-chain",
-      source: "Yarra access context: Brunswick Street trams and cycling access"
+      position: bikeRackPosition,
+      angle: -0.18,
+      bikeIssue: "locked",
+      source: "OpenStreetMap bicycle_parking node 2987216934; locked-bike gameplay state uses the mapped bike rack as anchor"
     },
     {
       id: "tennis-works-mesh-fence",
@@ -3923,6 +4162,85 @@ export function createLevelData(): LevelData {
   })).filter((sample) => pointInPolygon(sample.position, boundary));
   const elevationMin = Math.min(...elevationSamples.map((sample) => sample.altitude));
   const elevationMax = Math.max(...elevationSamples.map((sample) => sample.altitude));
+  const hiddenSouthWestBike = buildingAccessPosition("osm-building-543505638", g(-37.7897200, 144.9801800), -3.4, 2.35);
+  const rideableBikes = [
+    {
+      id: "rail-trail-flat-tyre-bike",
+      label: "Flat-tyred rail trail bike",
+      position: geoToWorld(g(-37.787245, 144.983020)),
+      angle: -0.52,
+      state: "flat-tyres" as const,
+      requiredItem: "tyre-kit" as const,
+      linkedDetailId: "rail-trail-flat-tyre-bike"
+    },
+    {
+      id: "south-bike-rack-locked-bike",
+      label: "Locked bike at the rack",
+      position: bikeRackPosition,
+      angle: -0.18,
+      state: "locked" as const,
+      requiredItem: "bolt-cutters" as const,
+      linkedDetailId: "south-bike-rack-locked-bike",
+      rackId: "osm-2987216934"
+    },
+    {
+      id: "freeman-hidden-bike",
+      label: "Hidden commuter bike behind the gatehouse",
+      position: hiddenSouthWestBike,
+      angle: 0.34,
+      state: "available" as const
+    }
+  ].filter((bike) => pointInPolygon(bike.position, boundary));
+  const itemSpawns = [
+    {
+      id: "bike-rack-tyre-kit",
+      itemId: "tyre-kit" as const,
+      label: "Tyre kit stashed by the bike racks",
+      position: offsetPoint(bikeRackPosition, -0.18, 1.35, 0.85),
+      angle: -0.18,
+      source: "Gameplay placement tied to OSM bicycle_parking node 2987216934"
+    },
+    {
+      id: "south-amenities-bolt-cutters",
+      itemId: "bolt-cutters" as const,
+      label: "Bolt cutters in the south amenities service recess",
+      position: buildingAccessPosition("osm-building-242003562", g(-37.7884306, 144.9835333), 5.2, 1.65),
+      angle: 0.42,
+      source: "Gameplay placement tied to the mapped south amenities service building"
+    },
+    {
+      id: "south-service-portable-ladder",
+      itemId: "ladder" as const,
+      label: "Portable ladder beside the south service wall",
+      position: buildingAccessPosition("osm-building-242003562", g(-37.7884306, 144.9835333), -4.6, 2.05),
+      angle: -0.62,
+      source: "Gameplay placement tied to existing ladder-gated roof access"
+    },
+    {
+      id: "fitzy-bowl-skateboard",
+      itemId: "skateboard" as const,
+      label: "Skateboard left at Fitzy Bowl",
+      position: offsetPoint(skateCenter, skateRotation, 2.2, 5.6),
+      angle: skateRotation + 0.18,
+      source: "Gameplay placement tied to the source-backed skate/BMX activity precinct"
+    },
+    {
+      id: "north-bbq-noise-radio",
+      itemId: "noise-radio" as const,
+      label: "Wind-up radio on the north picnic table",
+      position: offsetPoint(northBbq, 0.32, 2.1, -0.5),
+      angle: 0.32,
+      source: "Gameplay placement tied to the north BBQ/picnic activity area"
+    },
+    {
+      id: "south-picnic-bottle-bomb",
+      itemId: "noise-bottle" as const,
+      label: "Bottle bomb tucked in the south picnic cooler",
+      position: geoToWorld(g(-37.789040, 144.983735)),
+      angle: -0.2,
+      source: "Gameplay placement tied to the south picnic lawn use cues"
+    }
+  ].filter((item) => pointInPolygon(item.position, boundary));
   const mappedBuildings: MappedBuilding[] = OSM_BUILDING_FOOTPRINTS_GEO.map((building) => ({
     id: building.id,
     label: building.label,
@@ -4309,8 +4627,32 @@ export function createLevelData(): LevelData {
     railTrail: railTrail.points,
     englishOakAvenue
   };
-  vicmapTreeRecords.forEach((tree, index) => {
-    const profile = inferMappedTreeProfile(tree.position, index, heritageTreeLines);
+  let replacementTreeIndex = 0;
+  for (const row of REDEVELOPMENT_REPLACEMENT_PLANTING_ROWS_GEO) {
+    for (const point of sampleGeoPolyline(row.points, row.count).map(geoToWorld)) {
+      const species = REPLACEMENT_TREE_SPECIES[replacementTreeIndex % REPLACEMENT_TREE_SPECIES.length];
+      appendMappedTree(
+        trees,
+        {
+          id: `yarra-replacement-tree-${String(replacementTreeIndex + 1).padStart(2, "0")}`,
+          label: species.label,
+          position: point,
+          profile: species.profile,
+          height: species.height,
+          dbh: species.dbh,
+          canopyRadius: species.canopyRadius,
+          canopyDensity: species.canopyDensity,
+          canopyGroup: "mapped",
+          source: replacementPlantingSource(row)
+        },
+        2.8 * WORLD_SCALE,
+        treeExclusionZones
+      );
+      replacementTreeIndex += 1;
+    }
+  }
+  vicmapTreeRecords.forEach((tree) => {
+    const profile = inferMappedTreeProfile(tree.position, heritageTreeLines, significantTrees);
     const canopyGroup = isHeritageAvenuePoint(tree.position, heritageTreeLines) ? "avenue" : "mapped";
     appendMappedTree(
       trees,
@@ -4329,8 +4671,8 @@ export function createLevelData(): LevelData {
       treeExclusionZones
     );
   });
-  osmTreeRecords.forEach((tree, index) => {
-    const profile = inferMappedTreeProfile(tree.position, index, heritageTreeLines);
+  osmTreeRecords.forEach((tree) => {
+    const profile = inferMappedTreeProfile(tree.position, heritageTreeLines, significantTrees);
     appendMappedTree(
       trees,
       {
@@ -4352,7 +4694,7 @@ export function createLevelData(): LevelData {
     radius: treeColliderRadius(tree),
     source: tree.source
   }));
-  const paths = [railTrail, crescentPath, ovalPath, rotundaLoop, ...osmPaths];
+  const paths = amenityOrientationPaths;
   const terrainModifiers: TerrainModifier[] = [
     ...paths.flatMap(pathTerrainModifiers),
     ...trees.map(treeRootTerrainModifier),
@@ -4628,6 +4970,24 @@ export function createLevelData(): LevelData {
         mode: "toggle",
         bypassObstacleIds: ["north-toilets"]
       },
+      {
+        id: "tennis-court-ladder",
+        label: "Tennis court fence",
+        kind: "tennis",
+        position: tennisCenter,
+        accessPosition: tennisLadderAccess,
+        landingPosition: tennisLadderLanding,
+        exitPosition: tennisLadderAccess,
+        accessRadius: 4.6,
+        accessKind: "ladder",
+        accessHeading: tennisFootprint.angle,
+        radius: Math.max(tennisFootprint.halfX, tennisFootprint.halfZ),
+        height: 0.22,
+        raisedFootprint: raisedBox(tennisCenter, tennisFootprint.halfX + 0.6, tennisFootprint.halfZ + 0.6, tennisFootprint.angle),
+        prompt: "E: place ladder at tennis fence",
+        mode: "toggle",
+        bypassObstacleIds: ["tennis"]
+      },
       ...sportsFixtures
         .filter((fixture) => fixture.kind === "basketball-hoop")
         .map((fixture) => {
@@ -4667,16 +5027,19 @@ export function createLevelData(): LevelData {
     weaponSpawns: [
       { id: "north-bbq-machete", label: "Machete near the north BBQ shelter", weaponId: "machete", position: northBbq },
       { id: "grandstand-shotgun", label: "Shotgun under the stand", weaponId: "shotgun", position: grandstandCenter },
+      {
+        id: "grandstand-flare-gun",
+        label: "Signal flare gun beside the kiosk hatch",
+        weaponId: "flareGun",
+        position: offsetPoint(grandstandCenter, grandstandRotation, grandstandFootprint.halfX * 0.46, grandstandFrontSign * (grandstandVisualHalfZ + 4.15))
+      },
       { id: "tennis-smg", label: "SMG in the tennis locker", weaponId: "smg", position: geoToWorld(g(-37.78808, 144.98224)) },
       { id: "rail-rifle", label: "Rifle by the rail trail", weaponId: "rifle", position: geoToWorld(g(-37.78708, 144.98304)) },
       { id: "rotunda-carbine", label: "Carbine ammo by the rotunda", weaponId: "carbine", position: rotundaCenter }
     ],
-    rideableBike: {
-      id: "freeman-hidden-bike",
-      label: "Hidden commuter bike",
-      position: geoToWorld(g(-37.789330, 144.980620)),
-      angle: 0.34
-    }
+    itemSpawns,
+    rideableBike: rideableBikes.find((bike) => bike.id === "freeman-hidden-bike") ?? rideableBikes[rideableBikes.length - 1],
+    rideableBikes
   };
 }
 

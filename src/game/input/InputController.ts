@@ -11,6 +11,9 @@ export interface InputControllerActions {
   interact: () => void;
   toggleFlashlight: () => void;
   throwDistraction: () => void;
+  takeItem: () => void;
+  inspectInventory: () => void;
+  dropItem: () => void;
   jump: () => void;
   equipSlot: (index: number) => void;
   look: (movementX: number, movementY: number) => void;
@@ -108,6 +111,9 @@ export class InputController {
     if (event.code === "KeyE") this.actions.interact();
     if (event.code === "KeyF") this.actions.toggleFlashlight();
     if (event.code === "KeyG") this.actions.throwDistraction();
+    if (event.code === "KeyX") this.actions.takeItem();
+    if (event.code === "KeyI") this.actions.inspectInventory();
+    if (event.code === "KeyQ") this.actions.dropItem();
     if (event.code === "Space") {
       event.preventDefault();
       if (!event.repeat) this.actions.jump();

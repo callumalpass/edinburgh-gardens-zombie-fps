@@ -1,6 +1,6 @@
 import type * as THREE from "three";
 import type { Pickup, ShellCasing, SmokePuff, Tracer, WeaponDrop, Zombie } from "../state";
-import type { ThrownDistraction } from "../runtimeTypes";
+import type { DroppedWorldItem, ThrownDistraction } from "../runtimeTypes";
 
 export class GameEntityStore {
   zombies: Zombie[] = [];
@@ -10,11 +10,13 @@ export class GameEntityStore {
   shells: ShellCasing[] = [];
   smokePuffs: SmokePuff[] = [];
   distractions: ThrownDistraction[] = [];
+  droppedItems: DroppedWorldItem[] = [];
   readonly searchedAmenityIds = new Set<string>();
   readonly repairedBrokenBikeIds = new Set<string>();
 
   private nextZombieIdValue = 1;
   private nextPickupIdValue = 1;
+  private nextWorldItemIdValue = 1;
 
   nextZombieId(): number {
     const id = this.nextZombieIdValue;
@@ -28,6 +30,12 @@ export class GameEntityStore {
     return id;
   }
 
+  nextWorldItemId(): number {
+    const id = this.nextWorldItemIdValue;
+    this.nextWorldItemIdValue += 1;
+    return id;
+  }
+
   clearSceneEntities(scene: THREE.Scene): void {
     removeMeshes(scene, this.zombies);
     removeMeshes(scene, this.pickups);
@@ -36,6 +44,7 @@ export class GameEntityStore {
     removeMeshes(scene, this.shells);
     removeMeshes(scene, this.smokePuffs);
     removeMeshes(scene, this.distractions);
+    removeMeshes(scene, this.droppedItems);
     this.zombies = [];
     this.pickups = [];
     this.weaponDrops = [];
@@ -43,6 +52,7 @@ export class GameEntityStore {
     this.shells = [];
     this.smokePuffs = [];
     this.distractions = [];
+    this.droppedItems = [];
   }
 
   clearInteractionMemory(): void {

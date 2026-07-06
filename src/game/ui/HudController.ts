@@ -8,6 +8,7 @@ import {
 } from "../weapons";
 import type { AmenityPoint, InteractableFixture, ParkLifeDetail, UpgradeStation } from "../types";
 import type { WavePhase } from "../state";
+import { ITEM_DEFINITIONS, type InventoryItemId, type LargeCarryItemId, type WorldItemId } from "../items";
 
 interface HudRefs {
   health: HTMLElement;
@@ -17,6 +18,7 @@ interface HudRefs {
   scrap: HTMLElement;
   zombies: HTMLElement;
   stamina: HTMLElement;
+  hydration: HTMLElement;
   tools: HTMLElement;
   prompt: HTMLElement;
   upgrades: HTMLElement;
@@ -34,6 +36,16 @@ export interface HudWeaponDrop {
 
 export interface HudBikeTarget {
   label: string;
+  state?: "available" | "flat-tyres" | "locked";
+}
+
+export interface HudWorldItemTarget {
+  itemId: WorldItemId;
+  label: string;
+}
+
+export interface HudPlacedLadderTarget {
+  label: string;
 }
 
 export interface HudUpdate {
@@ -48,6 +60,8 @@ export interface HudUpdate {
   nearestWeaponDrop: HudWeaponDrop | null;
   nearestBike: HudBikeTarget | null;
   nearestBrokenBike: ParkLifeDetail | null;
+  nearestWorldItem: HudWorldItemTarget | null;
+  nearestPlacedLadder: HudPlacedLadderTarget | null;
   nearestFixture: InteractableFixture | null;
   nearestAmenity: AmenityPoint | null;
   nearestStation: UpgradeStation | null;
@@ -55,11 +69,17 @@ export interface HudUpdate {
   intermissionTimer: number;
   isCrouching: boolean;
   stamina: number;
+  hydration: number;
   throwables: number;
   flashlightOn: boolean;
+  inventory: InventoryItemId[];
+  inventoryCapacity: number;
+  carriedItem: LargeCarryItemId | null;
   bikePumpBoostRemaining: number;
   bikeMounted: boolean;
+  skateboardMounted: boolean;
   injuryStatus: string | null;
+  hydrationStatus: string | null;
   amenityPrompt: (amenity: AmenityPoint) => string;
 }
 
@@ -108,31 +128,61 @@ export class HudController {
     this.refs.scrap.textContent = `${view.scrap}`;
     this.refs.zombies.textContent = `${view.zombieCount}`;
     this.refs.stamina.textContent = `${Math.round(view.stamina)}`;
-    const pumpText = view.bikePumpBoostRemaining > 0 ? " / pump" : "";
-    this.refs.tools.textContent = `${view.throwables} / ${view.flashlightOn ? "on" : "off"}${pumpText}`;
+    this.refs.hydration.textContent = `${Math.round(Math.max(0, 100 - view.hydration))}`;
+    const pumpText = view.bikePumpBoostRemaining > 0 ? " pump" : "";
+    const carried = view.carriedItem ? ` / ${view.carriedItem === "ladder" ? "ladder" : "board"}` : "";
+    this.refs.tools.textContent = `${view.inventory.length}/${view.inventoryCapacity} inv / ${view.throwables} noise / ${view.flashlightOn ? "on" : "off"}${pumpText}${carried}`;
 
     if (stats.kind !== "melee" && view.loadout.reloadingUntil > performance.now() / 1000) {
       const percent = Math.round(view.reloadProgress * 100);
-      this.refs.status.textContent = view.loadout.weaponId === "shotgun" ? `Loading shell ${percent}%` : `Reloading ${percent}%`;
+      this.refs.status.textContent =
+        view.loadout.weaponId === "shotgun" ? `Loading shell ${percent}%` :
+        view.loadout.weaponId === "flareGun" ? `Loading flare ${percent}%` :
+        `Reloading ${percent}%`;
     } else if (view.bikeMounted) {
       this.refs.prompt.textContent = "E: dismount bike";
       this.refs.status.textContent = view.bikePumpBoostRemaining > 0 ? "Riding tuned bike" : "Riding hidden bike";
+    } else if (view.skateboardMounted) {
+      this.refs.prompt.textContent = "E: pick up skateboard";
+      this.refs.status.textContent = "Skateboard rolling loud";
+    } else if (view.nearestWorldItem) {
+      this.refs.prompt.textContent = `X: pick up ${ITEM_DEFINITIONS[view.nearestWorldItem.itemId].label}`;
+      this.refs.status.textContent = view.nearestWorldItem.label;
     } else if (view.nearestWeaponDrop) {
       this.refs.prompt.textContent = `E: pick up ${WEAPON_DEFINITIONS[view.nearestWeaponDrop.weaponId].name}`;
       this.refs.status.textContent = view.nearestWeaponDrop.label;
     } else if (view.nearestBike) {
-      this.refs.prompt.textContent = "E: ride bike";
+      this.refs.prompt.textContent =
+        view.nearestBike.state === "flat-tyres"
+          ? "E: repair flat tyre"
+          : view.nearestBike.state === "locked"
+            ? "E: cut bike chain"
+            : "E: ride bike";
       this.refs.status.textContent = view.nearestBike.label;
     } else if (view.nearestBrokenBike) {
       this.refs.prompt.textContent =
-        view.nearestBrokenBike.bikeIssue === "flat-tyres" && view.bikePumpBoostRemaining > 0
-          ? "E: pump tyres"
+        view.nearestBrokenBike.bikeIssue === "flat-tyres"
+          ? "E: inspect flat tyre"
+          : view.nearestBrokenBike.bikeIssue === "locked"
+            ? "E: inspect locked bike"
           : "E: inspect bike";
       this.refs.status.textContent = view.nearestBrokenBike.label;
     } else if (view.nearestFixture) {
       const active = view.activeFixtureId === view.nearestFixture.id;
-      this.refs.prompt.textContent = active ? `E: drop from ${view.nearestFixture.label}` : view.nearestFixture.prompt;
+      const ladderFixture = view.nearestFixture.accessKind === "ladder";
+      const needsLadder = ladderFixture && view.carriedItem === "ladder" && !active;
+      const placedLadder = ladderFixture && view.nearestPlacedLadder;
+      this.refs.prompt.textContent = active
+        ? `E: climb down from ${view.nearestFixture.label}`
+        : needsLadder
+          ? `E: place ladder at ${view.nearestFixture.label}`
+          : placedLadder
+            ? `E: climb ${view.nearestFixture.label} / X: remove ladder`
+            : view.nearestFixture.prompt;
       this.refs.status.textContent = active ? `${view.nearestFixture.label} elevated` : view.nearestFixture.label;
+    } else if (view.nearestPlacedLadder) {
+      this.refs.prompt.textContent = "X: remove ladder";
+      this.refs.status.textContent = view.nearestPlacedLadder.label;
     } else if (view.nearestAmenity) {
       this.refs.prompt.textContent = view.amenityPrompt(view.nearestAmenity);
       this.refs.status.textContent = view.nearestAmenity.label;
@@ -153,9 +203,11 @@ export class HudController {
       const optic = stats.scopeZoom > 1.05 ? `, ${stats.scopeZoom.toFixed(1)}x optic` : "";
       const stance = view.isCrouching ? ", crouched" : "";
       const injury = view.injuryStatus ? `, ${view.injuryStatus.toLowerCase()}` : "";
+      const thirst = view.hydrationStatus ? `, ${view.hydrationStatus.toLowerCase()}` : "";
       const light = view.flashlightOn ? ", light on" : ", light off";
       const pump = view.bikePumpBoostRemaining > 0 ? `, bike pump ${Math.ceil(view.bikePumpBoostRemaining)}s` : "";
-      this.refs.status.textContent = `${stats.name}${optic}${stance}${injury}${light}${pump}${view.playerHeight > 0.4 ? `, height ${view.playerHeight.toFixed(1)}m` : ""}`;
+      const carriedText = view.carriedItem ? `, carrying ${ITEM_DEFINITIONS[view.carriedItem].label}` : "";
+      this.refs.status.textContent = `${stats.name}${optic}${stance}${injury}${thirst}${light}${pump}${carriedText}${view.playerHeight > 0.4 ? `, height ${view.playerHeight.toFixed(1)}m` : ""}`;
     }
 
     const weapons = view.loadout.inventory
@@ -190,6 +242,7 @@ function createMarkup(): string {
         <div class="meter"><span>Scrap</span><strong data-hud="scrap">70</strong></div>
         <div class="meter"><span>Zombies</span><strong data-hud="zombies">0</strong></div>
         <div class="meter stamina-meter"><span>Stamina</span><strong data-hud="stamina">100</strong></div>
+        <div class="meter hydration-meter"><span>Thirst</span><strong data-hud="hydration">0</strong></div>
         <div class="meter tools-meter"><span>Tools</span><strong data-hud="tools">2 / on</strong></div>
       </section>
       <section class="hud weapon-hud" aria-label="Weapon status">
@@ -215,7 +268,10 @@ function createMarkup(): string {
             <span><kbd>C</kbd><b>Crouch</b></span>
             <span><kbd>F</kbd><b>Light</b></span>
             <span><kbd>G</kbd><b>Throw</b></span>
-            <span><kbd>1-5</kbd><b>Weapons</b></span>
+            <span><kbd>X</kbd><b>Take</b></span>
+            <span><kbd>Q</kbd><b>Drop</b></span>
+            <span><kbd>I</kbd><b>Inventory</b></span>
+            <span><kbd>1-6</kbd><b>Weapons</b></span>
           </div>
           <button class="primary-action" data-action="start">Enter the gardens</button>
         </div>
@@ -242,6 +298,7 @@ function findHudRefs(root: HTMLElement): HudRefs {
     scrap: find('[data-hud="scrap"]'),
     zombies: find('[data-hud="zombies"]'),
     stamina: find('[data-hud="stamina"]'),
+    hydration: find('[data-hud="hydration"]'),
     tools: find('[data-hud="tools"]'),
     prompt: find('[data-hud="prompt"]'),
     upgrades: find('[data-hud="upgrades"]'),

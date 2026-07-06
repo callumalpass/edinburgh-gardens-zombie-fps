@@ -58,6 +58,8 @@ These notes record the real-world sources and implementation decisions used to s
   - Used to confirm the bluestone circular planter north of Rowe Street, the periodically refreshed Rowe Street entrance planters, renewed St Georges Road display beds, Queen Victoria display garden and stormwater filtration garden/storage-tank split. Figure 96 controls the visible stormwater garden placement west of the former railway/current rail trail, with the underground tank to the east.
 - Bureau of Meteorology Melbourne Regional Office climate statistics: https://www.bom.gov.au/climate/averages/tables/cw_086071.shtml
   - Used on 2026-07-06 to retune the accelerated weather loop toward Melbourne July conditions: frequent cloud, damp ground, drizzle/showers, high morning humidity, moderate wind and rare short squalls rather than constant heavy storms.
+- Timeanddate.com Melbourne July 2026 sun table: https://www.timeanddate.com/sun/australia/melbourne
+  - Used on 2026-07-06 to retune the accelerated day/night loop toward Melbourne winter daylight: 7:35am sunrise, 5:13pm sunset, civil twilight around 7:06am to 5:43pm and low winter solar altitude.
 - Yarra Edinburgh Gardens Plinth Program: https://www.yarracity.vic.gov.au/things-to-do/arts/arts-programs/public-art/edinburgh-gardens-plinth-program
   - Used to confirm the Queen Victoria plinth remains in the middle of a circular garden bed.
 - Captain Cook Society, Plaque to Cook at Edinburgh Gardens: https://www.captaincooksociety.com/remembering-cook/memorials/types-of-cook-memorials/plaque-to-cook-at-edinburgh-gardens-melbourne-victoria-australia
@@ -92,6 +94,10 @@ These notes record the real-world sources and implementation decisions used to s
   - Used for notable tree species, diameter and height context already represented by `YARRA_SIGNIFICANT_TREE_GEO`.
 - Brunswick Street Oval Redevelopment updates: https://www.yarracity.vic.gov.au/planning-and-building/our-projects-and-initiatives/brunswick-street-oval
   - Used for current 2026 tennis works, tree-removal and replacement context around the oval/tennis precinct.
+- Brisbane Lions, Brunswick Street Oval upgrade is now underway: https://www.lions.com.au/news/2058912/brunswick-street-oval-upgrade-is-now-underway
+  - Used for the current sports-pavilion first-aid room, kiosk, social space, kitchen, two-storey pavilion and energy-efficient lighting context.
+- Yarra News April-May 2025 Fitzroy Bowls roof upgrade: https://www.yarracity.vic.gov.au/sites/default/files/2025-04/yarranews_aprmay25_fa_web_nicholls_ward.pdf
+  - Used for Fitzroy Bowls Club zincalume roof-sheet, strengthened roof-structure and upgraded gutter cues.
 - Brunswick Street Oval Tree Protection and Management Plan: https://www.yarracity.vic.gov.au/sites/default/files/2026-02/Tree_protection_management_plan_brunswick_street_oval.pdf
   - Used to suppress mapped OSM tree nodes that intersect the published 2026 tennis works tree-removal footprint.
 - Yarra Emely Baker Centre: https://www.yarracity.vic.gov.au/things-to-do/find-a-venue/emely-baker-centre
@@ -133,8 +139,10 @@ These notes record the real-world sources and implementation decisions used to s
 - The 2026-07-06 structure-depth pass adds source-backed grandstand umpire-room, Emely Baker kitchenette, bowling shed service-locker, north toilet service-room and rotunda memorial-plaque interactions, plus richer building details for tennis social-space, Emely Baker venue use, grandstand secure gates, toilet service hardware and rotunda memorial setting.
 - The 2026-07-06 structure-utility pass adds source-backed grandstand kiosk/public-toilet interactions and powered-building switchboards that activate exterior floodlights with a visibility tradeoff, while preserving the rotunda source's no-current-power constraint.
 - The 2026-07-06 structure-shelter pass adds source-backed roof, verandah, grandstand-cover and shade-sail shelter zones for major buildings. These zones render as dry patches/drip edges and reduce weather handling/search exposure without inventing interiors.
+- The 2026-07-06 structure-facility refresh adds source-backed sports-pavilion first-aid/kitchen interactions and Fitzroy Bowls zincalume roof/gutter details, while keeping all new gameplay points exterior approximations because public room/service drawings are unavailable.
 - The 2026-07-06 heritage-furniture/weather pass adds non-colliding CMP-backed Chandler Fountain, cast-iron gas-lamp, cast-iron bollard, reproduction-seat and interpretive-sign artifacts, and retunes weather phases against BOM Melbourne July climate normals while preserving the existing 420 second gameplay loop.
 - The 2026-07-06 oval sports-marking pass replaces the old generic circular oval cue with an OSM-footprint-aware W. T. Peterson Oval overlay: mapped-polygon boundary markers, AFL 50 m arcs, centre square/circles, goal squares, a scaled MCC cricket pitch/crease/stump set, wet run-up sheen and spectator-side benches/scoreboard.
+- The 2026-07-06 winter daylight/tree/zombie pass retunes the time-of-day cycle to Melbourne July 2026 sunrise/sunset, positions the key light from winter azimuth/altitude, makes elm/oak profiles sparser and branchier with heavier leaf litter, keeps gum-like profiles evergreen and adds modest weather/time zombie perception and footing modifiers.
 - Tree placement refresh research is stored in `docs/research/tree-placement-refresh-2026-07-05.md`.
 - Detailed OSM path/service research is stored in `docs/research/osm-path-service-inventory-2026-07-05.md`.
 - Hardscape and terrain-edge research is stored in `docs/research/hardscape-terrain-edges-2026-07-05.md`.
@@ -163,8 +171,10 @@ These notes record the real-world sources and implementation decisions used to s
 - Structure depth research is stored in `docs/research/structure-depth-pass-2026-07-06.md`.
 - Structure utility interaction research is stored in `docs/research/structure-utility-interactions-2026-07-06.md`.
 - Structure shelter interaction research is stored in `docs/research/structure-shelter-interactions-2026-07-06.md`.
+- Structure facility refresh research is stored in `docs/research/structure-facility-refresh-2026-07-06.md`.
 - Heritage furniture and winter-weather research is stored in `docs/research/heritage-furniture-winter-weather-2026-07-06.md`.
 - Oval sports-marking research is stored in `docs/research/oval-sports-markings-2026-07-06.md`.
+- Winter daylight, tree silhouette and zombie-environment research is stored in `docs/research/winter-daylight-tree-zombie-realism-2026-07-06.md`.
 - Local raw research asset guidance is stored in `docs/research/raw-assets.md`.
 - Research/data pipeline automation is stored in `docs/research/data-pipeline-automation-2026-07-05.md` and `docs/research/research-manifest.json`.
 

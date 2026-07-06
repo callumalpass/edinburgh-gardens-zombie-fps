@@ -34,8 +34,23 @@ describe("game audio profiles", () => {
     expect(worldSoundAudibleRadius("zombieGroan", { zombieType: "screamer", aiState: "chase" })).toBeGreaterThan(
       worldSoundAudibleRadius("zombieGroan", { zombieType: "shambler", aiState: "chase" })
     );
-    expect(worldSoundAudibleRadius("zombieStep", { zombieType: "bloater" })).toBeGreaterThan(50);
+    expect(worldSoundAudibleRadius("zombieStep", { zombieType: "bloater" })).toBeGreaterThan(
+      worldSoundAudibleRadius("zombieStep", { zombieType: "sprinter" })
+    );
     expect(worldSoundBaseGain("zombieGroan", { zombieType: "shambler" })).toBeGreaterThan(worldSoundBaseGain("shell"));
+  });
+
+  it("gives screamers and bloaters stronger identity cues", () => {
+    expect(worldSoundBaseGain("zombieGroan", { zombieType: "screamer" })).toBeGreaterThan(
+      worldSoundBaseGain("zombieGroan", { zombieType: "bloater" })
+    );
+    expect(worldSoundBaseGain("zombieAttack", { zombieType: "screamer" })).toBeGreaterThan(
+      worldSoundBaseGain("zombieAttack", { zombieType: "shambler" })
+    );
+    expect(worldSoundAudibleRadius("zombieAttack", { zombieType: "bloater" })).toBeGreaterThan(
+      worldSoundAudibleRadius("zombieAttack", { zombieType: "shambler" })
+    );
+    expect(NOISE_SOUND_PROFILES.scream.baseGain).toBeGreaterThan(NOISE_SOUND_PROFILES.distraction.baseGain);
   });
 
   it("pans world sounds from the player's facing direction", () => {

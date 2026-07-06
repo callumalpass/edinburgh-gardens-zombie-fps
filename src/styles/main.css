@@ -295,6 +295,10 @@ body.hit .vignette {
   color: var(--bluegum);
 }
 
+.hydration-meter strong {
+  color: var(--rain);
+}
+
 .tools-meter strong {
   color: var(--rain);
 }

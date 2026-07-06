@@ -53,6 +53,15 @@ export function bikeSurfaceSpeedMultiplier(surface: MovementSurface): number {
   return 0.82;
 }
 
+export function skateboardSurfaceSpeedMultiplier(surface: MovementSurface): number {
+  if (surface === "rail") return 1.16;
+  if (surface === "asphalt") return 1.14;
+  if (surface === "concrete") return 1.08;
+  if (surface === "gravel") return 0.58;
+  if (surface === "dirt") return 0.42;
+  return 0;
+}
+
 interface IndexedPathSegment {
   surface: MovementSurface;
   start: Vec2;
@@ -94,6 +103,10 @@ export class MovementSurfaceSampler {
 
   bikeSpeedMultiplier(surface: MovementSurface): number {
     return bikeSurfaceSpeedMultiplier(surface);
+  }
+
+  skateboardSpeedMultiplier(surface: MovementSurface): number {
+    return skateboardSurfaceSpeedMultiplier(surface);
   }
 
   private indexPaths(): void {

@@ -4,6 +4,7 @@ import type { Pickup } from "./state";
 import type { UpgradeId, WeaponId } from "./weapons";
 import type { ZombieType } from "./zombieProfiles";
 import { zombieProfile } from "./zombieProfiles";
+import type { InventoryItemId } from "./items";
 
 export interface LootResult {
   scrap: number;
@@ -13,6 +14,7 @@ export interface LootResult {
   medicine: number;
   throwables: number;
   bikePump: boolean;
+  items: InventoryItemId[];
   junk: boolean;
   quality: "junk" | "basic" | "useful" | "valuable";
   noiseMultiplier: number;
@@ -31,6 +33,7 @@ const STRUCTURE_AMENITY_KINDS = new Set<AmenityPoint["kind"]>([
   "clubroom",
   "changeroom",
   "umpire_room",
+  "first_aid_room",
   "gatehouse",
   "maintenance_room",
   "community_room",
@@ -61,6 +64,7 @@ function lootNoiseBase(kind: AmenityPoint["kind"]): number {
   if (kind === "waste_basket") return 0.8;
   if (kind === "gatehouse") return 0.82;
   if (kind === "umpire_room") return 0.9;
+  if (kind === "first_aid_room") return 0.92;
   if (kind === "kitchenette") return 0.96;
   if (kind === "kiosk_hatch") return 1.08;
   if (kind === "utility_box") return 1.16;
@@ -186,6 +190,21 @@ export function searchAmenityLoot(kind: AmenityPoint["kind"], rng: RandomSource,
       status: attachment ? "Found umpire-room attachment" : "Recovered umpire-room supplies"
     });
   }
+  if (kind === "first_aid_room") {
+    return withLootDefaults({
+      scrap: 3 + rng.int(0, 5) + Math.floor(valueBoost * 0.35),
+      ammo: risk > 0.5 && rng.next() < 0.18 ? 3 + Math.floor(valueBoost * 0.25) : 0,
+      health: 18 + rng.int(0, 14) + Math.floor(valueBoost * 0.45),
+      attachment,
+      medicine: 18 + Math.round(risk * 14),
+      throwables,
+      junk: quality === "junk",
+      quality,
+      noiseMultiplier,
+      searchSecondsMultiplier,
+      status: attachment ? "Found first-aid attachment" : "Opened first-aid room supplies"
+    });
+  }
   if (kind === "gatehouse") {
     return withLootDefaults({
       scrap: 12 + rng.int(0, 9) + valueBoost,
@@ -293,6 +312,7 @@ function amenityLootBias(kind: AmenityPoint["kind"]): number {
   if (kind === "clubroom") return 0.1;
   if (kind === "changeroom") return 0.09;
   if (kind === "umpire_room") return 0.08;
+  if (kind === "first_aid_room") return 0.07;
   if (kind === "gatehouse") return 0.08;
   if (kind === "maintenance_room") return 0.11;
   if (kind === "community_room") return 0.06;
@@ -306,10 +326,16 @@ function amenityLootBias(kind: AmenityPoint["kind"]): number {
   return -0.08;
 }
 
-function withLootDefaults(result: Omit<LootResult, "medicine" | "bikePump"> & { medicine?: number; bikePump?: boolean }): LootResult {
+function withLootDefaults(result: Omit<LootResult, "medicine" | "bikePump" | "items"> & { medicine?: number; bikePump?: boolean; items?: InventoryItemId[] }): LootResult {
+  const inferredItems: InventoryItemId[] = [];
+  if (result.bikePump) inferredItems.push("tyre-kit");
+  for (let index = 0; index < Math.min(1, result.throwables); index += 1) {
+    inferredItems.push(result.quality === "valuable" ? "noise-radio" : "noise-bottle");
+  }
   return {
     medicine: 0,
     bikePump: false,
+    items: inferredItems,
     ...result
   };
 }
@@ -333,8 +359,9 @@ export function chooseZombieWeaponDrop(type: ZombieType, wave: number, rng: Rand
   }
   const roll = rng.next();
   if (roll < 0.14) return "machete";
-  if (wave >= 4 && roll > 0.82) return "rifle";
-  if (roll > 0.64) return "shotgun";
-  if (roll > 0.3) return "smg";
+  if (wave >= 4 && roll > 0.86) return "rifle";
+  if (wave >= 3 && roll > 0.74) return "flareGun";
+  if (roll > 0.58) return "shotgun";
+  if (roll > 0.28) return "smg";
   return "carbine";
 }

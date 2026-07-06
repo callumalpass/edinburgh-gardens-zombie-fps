@@ -18,6 +18,7 @@ describe("location and zombie loot", () => {
   it("gives source-backed structure access points distinct utility profiles", () => {
     const changeroom = searchAmenityLoot("changeroom", new SeededRandom(31));
     const umpireRoom = searchAmenityLoot("umpire_room", new SeededRandom(31));
+    const firstAidRoom = searchAmenityLoot("first_aid_room", new SeededRandom(31));
     const gatehouse = searchAmenityLoot("gatehouse", new SeededRandom(31));
     const maintenance = searchAmenityLoot("maintenance_room", new SeededRandom(31));
     const communityRoom = searchAmenityLoot("community_room", new SeededRandom(31));
@@ -27,6 +28,8 @@ describe("location and zombie loot", () => {
 
     expect(changeroom.health + changeroom.medicine).toBeGreaterThan(gatehouse.health + gatehouse.medicine);
     expect(umpireRoom.ammo + umpireRoom.scrap).toBeGreaterThan(communityRoom.ammo + communityRoom.scrap);
+    expect(firstAidRoom.health + firstAidRoom.medicine).toBeGreaterThan(changeroom.health + changeroom.medicine);
+    expect(firstAidRoom.status).toContain("first-aid");
     expect(maintenance.scrap).toBeGreaterThan(gatehouse.scrap - 3);
     expect(communityRoom.health + communityRoom.medicine).toBeGreaterThan(maintenance.health);
     expect(kitchenette.health + kitchenette.medicine).toBeGreaterThan(gatehouse.health + gatehouse.medicine);
@@ -70,6 +73,7 @@ describe("location and zombie loot", () => {
 
     expect(earlyDrops.length).toBeGreaterThan(0);
     expect(lateDrops.length).toBeGreaterThan(earlyDrops.length);
+    expect(lateDrops).toContain("flareGun");
     expect(lateDrops).toContain("rifle");
   });
 });

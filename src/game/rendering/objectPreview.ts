@@ -2,6 +2,7 @@ import { boundingRadius, distance, polygonCentroid } from "../geo";
 import type { LevelData, LevelPath, PathSurfacePatch, Vec2 } from "../types";
 import { WEAPON_DEFINITIONS, type WeaponId } from "../weapons";
 import type { ZombieType } from "../waves";
+import type { WorldItemId } from "../items";
 import type { PickupKind } from "./MeshFactory";
 
 export type ObjectPreviewTargetKind =
@@ -19,6 +20,7 @@ export type ObjectPreviewTargetKind =
   | "tree"
   | "upgrade-station"
   | "weapon-spawn"
+  | "item-spawn"
   | "weapon-model"
   | "pickup-item"
   | "zombie-model";
@@ -33,6 +35,7 @@ export interface ObjectPreviewTarget {
   radius: number;
   height: number;
   weaponId?: WeaponId;
+  itemId?: WorldItemId;
   pickupKind?: PickupKind;
   zombieType?: ZombieType;
 }
@@ -183,14 +186,16 @@ export function createObjectPreviewTargets(level: LevelData): ObjectPreviewTarge
     });
   }
 
-  add({
-    sourceId: level.rideableBike.id,
-    kind: "rideable-bike",
-    label: level.rideableBike.label,
-    position: level.rideableBike.position,
-    radius: 3.1,
-    height: 2.4
-  });
+  for (const bike of level.rideableBikes ?? [level.rideableBike]) {
+    add({
+      sourceId: bike.id,
+      kind: "rideable-bike",
+      label: bike.label,
+      position: bike.position,
+      radius: 3.1,
+      height: 2.4
+    });
+  }
 
   for (const [sourceIndex, tree] of level.trees.entries()) {
     add({
@@ -226,6 +231,19 @@ export function createObjectPreviewTargets(level: LevelData): ObjectPreviewTarge
       radius: 3.1,
       height: 2.4,
       weaponId: spawn.weaponId
+    });
+  }
+
+  for (const [sourceIndex, spawn] of level.itemSpawns.entries()) {
+    add({
+      sourceId: spawn.id,
+      sourceIndex,
+      kind: "item-spawn",
+      label: spawn.label,
+      position: spawn.position,
+      radius: spawn.itemId === "ladder" ? 3.2 : spawn.itemId === "skateboard" ? 2.4 : 1.8,
+      height: spawn.itemId === "ladder" ? 2.4 : 1.8,
+      itemId: spawn.itemId
     });
   }
 
@@ -303,6 +321,7 @@ function amenityRadius(kind: LevelData["amenities"][number]["kind"]): number {
     kind === "clubroom" ||
     kind === "changeroom" ||
     kind === "umpire_room" ||
+    kind === "first_aid_room" ||
     kind === "gatehouse" ||
     kind === "maintenance_room" ||
     kind === "community_room" ||

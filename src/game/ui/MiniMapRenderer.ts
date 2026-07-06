@@ -136,6 +136,7 @@ export class MiniMapRenderer {
             : amenity.kind === "clubroom" ||
                 amenity.kind === "changeroom" ||
                 amenity.kind === "umpire_room" ||
+                amenity.kind === "first_aid_room" ||
                 amenity.kind === "gatehouse" ||
                 amenity.kind === "maintenance_room" ||
                 amenity.kind === "community_room" ||

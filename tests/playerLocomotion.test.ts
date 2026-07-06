@@ -23,7 +23,8 @@ function makeWorld(interactables: InteractableFixture[] = []): LocomotionWorld {
     groundY: () => 1.25,
     movementSurfaceAt: () => "asphalt",
     surfaceSpeedMultiplier: () => 1,
-    bikeSurfaceSpeedMultiplier: () => 1
+    bikeSurfaceSpeedMultiplier: () => 1,
+    skateboardSurfaceSpeedMultiplier: (surface) => surface === "grass" ? 0 : 1
   };
 }
 
@@ -90,5 +91,30 @@ describe("PlayerLocomotion", () => {
     expect(actor.heightTarget).toBe(0);
     expect(actor.crouching).toBe(false);
     expect(actor.position).toBeInstanceOf(THREE.Vector3);
+  });
+
+  it("keeps skateboards off grass while using hard-surface movement", () => {
+    const hardSurface = new PlayerLocomotion(makeWorld());
+    const actor = createInitialPlayerState(1.25);
+    actor.position.set(0, 1.25, 0);
+
+    const rolling = hardSurface.moveOnSkateboard(actor, 0.35, { x: 0, z: -1, length: 1 }, {
+      wantsSprint: false,
+      condition: createInitialPlayerCondition()
+    });
+
+    expect(rolling.usable).toBe(true);
+    expect(rolling.moved).toBe(true);
+
+    const grassWorld = { ...makeWorld(), movementSurfaceAt: () => "grass" as const };
+    const grassLocomotion = new PlayerLocomotion(grassWorld);
+    const grassActor = createInitialPlayerState(1.25);
+    const bogged = grassLocomotion.moveOnSkateboard(grassActor, 0.35, { x: 0, z: -1, length: 1 }, {
+      wantsSprint: false,
+      condition: createInitialPlayerCondition()
+    });
+
+    expect(bogged.usable).toBe(false);
+    expect(bogged.moved).toBe(false);
   });
 });
