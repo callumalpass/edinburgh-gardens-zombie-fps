@@ -37,6 +37,12 @@ These notes record the real-world sources and implementation decisions used to s
   - Used for W. T. Peterson Oval 50 m arcs, centre square, centre circles, goal squares and boundary marker spacing cues.
 - MCC Laws of Cricket 2017 Code, 4th Edition 2026: https://www.lords.org/getattachment/a9ec27d0-0828-4fc1-bf10-7f7edf5204a1/Laws-of-Cricket-2017-Code-4th-Edition-2026.pdf
   - Used for the oval cricket pitch, crease, wicket and stump dimensions.
+- OpenStreetMap `sport=cricket_nets` tag page: https://wiki.openstreetmap.org/wiki/Tag%3Asport%3Dcricket_nets
+  - Used to interpret the OSM cricket-nets node as a bounded practice-net area where exact area geometry may be absent.
+- Edinburgh Cricket Club, Senior Women's: https://edinburghcricketclub.com/senior-womens
+  - Used to confirm the Brunswick Street Oval nets are active cricket-season training infrastructure.
+- Running Routes, Melbourne Carlton/Fitzroy Running Route: https://www.joggingroutes.org/2014/12/melbourne-carltonfitzroy-running-route.html
+  - Used as public visual evidence for multi-lane netted cricket practice at Edinburgh Gardens.
 - Landezine, Edinburgh Gardens Raingarden by GHD: https://landezine.com/edinburgh-gardens-raingarden-by-ghd-pty-ltd/
   - Used for the raingarden's project map marker and four-terrace treatment-garden design, zig-zag low-flow steel channel, 700 sqm filter area, 200 KL underground storage and stormwater-harvesting role. The marker is not used as the visible garden footprint centroid after the Lovell Chen Figure 96 placement audit.
 - Atlan StormTech, StormTech Raingarden at Edinburgh Gardens: https://atlanstormwater.com/au/stormtech-raingarden-at-edinburgh-gardens-fitzroy-victoria/
@@ -129,6 +135,7 @@ These notes record the real-world sources and implementation decisions used to s
 - The full-object placement audit added the OSM raingarden reservoir, tennis-side storage tank and cricket-nets cue, then aligned playground, skate and basketball climb/blocker metadata with visible objects.
 - The path and raingarden audit added remaining OSM-mapped stand steps, short path connectors and oval links, then remodeled the skate-precinct stormwater feature as a terraced raingarden rather than an open water patch.
 - The north-east shrub planter review added the 10 m bluestone circular planter north of Rowe Street and the two 5 m Rowe Street entrance planters as dense crouch-cover garden landmarks.
+- The 2026-07-06 north-east planter placement audit moved those hand-placed raised shrub beds off the OSM-mapped path corridors while keeping the CMP-described Rowe Street and Elm Circle relationships.
 - The ornamental gardens review split the visible stormwater filtration garden south of the skate park and west of the rail trail from the east-side underground reservoir footprint, then added St Georges display beds, Rotunda Lawn shrub beds, the Queen Victoria circular display bed and the tennis Agapanthus strip.
 - The 2026-07-06 realism audit adds source-backed current-works details around the tennis/grandstand precinct, visible low stumps for OSM trees already suppressed by the redevelopment footprint, more legible mapped-building facades, and weather-aware wet material and night-light states.
 - The follow-up 2026-07-06 facade/court pass adds source-backed frontage points for the major mapped buildings so facade details face the documented use side, and tags the six OSM-mapped existing tennis courts with renovation-surface cues from Yarra's 2026-2027 Brunswick Street Oval works page. The two new courts are documented but not drawn as new footprints until public vertices are available.
@@ -142,6 +149,7 @@ These notes record the real-world sources and implementation decisions used to s
 - The 2026-07-06 structure-facility refresh adds source-backed sports-pavilion first-aid/kitchen interactions and Fitzroy Bowls zincalume roof/gutter details, while keeping all new gameplay points exterior approximations because public room/service drawings are unavailable.
 - The 2026-07-06 heritage-furniture/weather pass adds non-colliding CMP-backed Chandler Fountain, cast-iron gas-lamp, cast-iron bollard, reproduction-seat and interpretive-sign artifacts, and retunes weather phases against BOM Melbourne July climate normals while preserving the existing 420 second gameplay loop.
 - The 2026-07-06 oval sports-marking pass replaces the old generic circular oval cue with an OSM-footprint-aware W. T. Peterson Oval overlay: mapped-polygon boundary markers, AFL 50 m arcs, centre square/circles, goal squares, a scaled MCC cricket pitch/crease/stump set, wet run-up sheen and spectator-side benches/scoreboard.
+- The 2026-07-06 cricket-net pass remodels the OSM cricket-nets point as a four-lane concrete/artificial-turf cage with cyclone-wire/pipe enclosure, rear mural-wall cue, internal divider nets and one front entrance.
 - The 2026-07-06 winter daylight/tree/zombie pass retunes the time-of-day cycle to Melbourne July 2026 sunrise/sunset, positions the key light from winter azimuth/altitude, makes elm/oak profiles sparser and branchier with heavier leaf litter, keeps gum-like profiles evergreen and adds modest weather/time zombie perception and footing modifiers.
 - Tree placement refresh research is stored in `docs/research/tree-placement-refresh-2026-07-05.md`.
 - Detailed OSM path/service research is stored in `docs/research/osm-path-service-inventory-2026-07-05.md`.
@@ -160,7 +168,7 @@ These notes record the real-world sources and implementation decisions used to s
 - Human-use traces research is stored in `docs/research/human-use-traces-2026-07-05.md`.
 - Full object placement audit research is stored in `docs/research/full-object-placement-audit-2026-07-05.md`.
 - Path and raingarden audit research is stored in `docs/research/path-and-raingarden-audit-2026-07-05.md`.
-- North-east shrub planter research is stored in `docs/research/north-east-shrub-planters-2026-07-05.md`.
+- North-east shrub planter research and the 2026-07-06 path-clearance placement audit are stored in `docs/research/north-east-shrub-planters-2026-07-05.md`.
 - Ornamental gardens and raingarden placement research is stored in `docs/research/ornamental-gardens-2026-07-05.md`.
 - Building realism pass research is stored in `docs/research/building-realism-pass-2026-07-05.md`.
 - Runtime artifact, facade-orientation and preview-output audit research is stored in `docs/research/realism-artifact-audit-2026-07-06.md`.
@@ -174,6 +182,7 @@ These notes record the real-world sources and implementation decisions used to s
 - Structure facility refresh research is stored in `docs/research/structure-facility-refresh-2026-07-06.md`.
 - Heritage furniture and winter-weather research is stored in `docs/research/heritage-furniture-winter-weather-2026-07-06.md`.
 - Oval sports-marking research is stored in `docs/research/oval-sports-markings-2026-07-06.md`.
+- Cricket-net cage research is stored in `docs/research/cricket-net-cage-refresh-2026-07-06.md`.
 - Winter daylight, tree silhouette and zombie-environment research is stored in `docs/research/winter-daylight-tree-zombie-realism-2026-07-06.md`.
 - Local raw research asset guidance is stored in `docs/research/raw-assets.md`.
 - Research/data pipeline automation is stored in `docs/research/data-pipeline-automation-2026-07-05.md` and `docs/research/research-manifest.json`.
@@ -186,6 +195,8 @@ These notes record the real-world sources and implementation decisions used to s
 - The north playground fence decision changed on follow-up review: older visit/CMP sources can describe an earlier or pre-relocation north playground, while current/recent north-playground sources do not support a fence around the relocated OSM footprint.
 - No public measured Fitzy Bowl CAD geometry was found. Bowl depths and feature families are source-backed, while bowl ellipses, roll-out gaps and street-section object positions are approximate within the OSM skatepark polygon.
 - No public measured W. T. Peterson Oval line-marking CAD geometry was found. The sports-surface overlay uses the OSM oval polygon, existing source-backed football goal fixtures and published AFL/MCC sport dimensions, with the centre square clamped to stay inside the mapped playable footprint.
+- No public measured cricket-net cage polygon was found. The cricket nets retain the OSM node anchor and use approximate four-lane cage dimensions from CMP/photo evidence.
+- No public GIS vertices were found for the north-east bluestone planter or Rowe Street entrance planters. Their in-game centers are therefore CMP/context hand placements constrained by current OSM path clearances.
 - No public GIS point layer was found for each individual heritage furniture item. The Chandler Fountain, gas lamps, bollards, reproduction seats and interpretive signs are hand-placed from CMP setting descriptions and nearby mapped landmarks.
 - Raw API responses are kept locally under ignored `docs/research/raw/` when useful. The durable checked-in artifacts are source notes plus compact derived constants in `src/game/levelData.ts`.
 - The Vicmap elevation samples are sparse. They are appropriate for broad park slope and local rise/fall, not for fine kerbs, gutters, steps or detailed drainage modelling.

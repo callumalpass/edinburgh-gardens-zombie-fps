@@ -175,6 +175,12 @@ test("game loop advances and gameplay helpers mutate state", async ({ page }) =>
   const afterRoof = await page.evaluate(() => window.__EGAME__!.snapshot());
   expect(afterRoof.elevation).toBeGreaterThan(0.5);
   expect(afterRoof.sheltered).toBe(false);
+  expect(afterRoof.placedLadders).toBe(1);
+  expect(await page.evaluate(() => window.__EGAME__!.testInteract("south-toilets-roof"))).toBe(true);
+  expect(await page.evaluate(() => window.__EGAME__!.testPickupPlacedLadder())).toBe(true);
+  const afterLadderPickup = await page.evaluate(() => window.__EGAME__!.snapshot());
+  expect(afterLadderPickup.placedLadders).toBe(0);
+  expect(afterLadderPickup.carriedItem).toBe("ladder");
   const beforeAmenity = await page.evaluate(() => window.__EGAME__!.snapshot());
   const usedAmenity = await page.evaluate(() => window.__EGAME__!.testUseAmenity("waste_basket"));
   expect(usedAmenity).toBe(true);
@@ -199,6 +205,19 @@ test("game loop advances and gameplay helpers mutate state", async ({ page }) =>
   expect(duringRest.amenityAction).toBe("rest");
   expect(duringRest.amenityActionRemaining).toBeGreaterThan(4);
   expect(duringRest.health).toBeLessThanOrEqual(70);
+});
+
+test("cricket-net cage can be climbed from its frame", async ({ page }) => {
+  await page.goto("/?smoke=1");
+  await page.waitForFunction(() => window.__EGAME__?.ready === true);
+  expect(await page.evaluate(() => window.__EGAME__!.testInteract("oval-cricket-nets-frame"))).toBe(true);
+  await page.waitForFunction(() => window.__EGAME__!.snapshot().elevation > 3);
+  const afterCricketNetsClimb = await page.evaluate(() => window.__EGAME__!.snapshot());
+  expect(afterCricketNetsClimb.elevation).toBeGreaterThan(3);
+  expect(afterCricketNetsClimb.elevation).toBeLessThan(3.5);
+  expect(afterCricketNetsClimb.bikeMounted).toBe(false);
+  expect(await page.evaluate(() => window.__EGAME__!.testInteract("oval-cricket-nets-frame"))).toBe(true);
+  await page.waitForFunction(() => window.__EGAME__!.snapshot().elevation < 0.2);
 });
 
 test("hidden bike can be ridden but blocks climbing and bulky weapons", async ({ page }) => {

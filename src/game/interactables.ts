@@ -1,4 +1,5 @@
 import type { InteractableFixture, InteractableRaisedFootprint, Vec2 } from "./types";
+import { distance, nearestPointOnPolygon, pointInPolygon } from "./geo";
 
 export function pointInInteractableRaisedFootprint(point: Vec2, fixture: InteractableFixture, padding = 0): boolean {
   if (!fixture.raisedFootprint) {
@@ -12,6 +13,10 @@ export function pointInRaisedFootprint(point: Vec2, footprint: InteractableRaise
     return distance(point, footprint.center) <= footprint.radius + padding;
   }
 
+  if (footprint.shape === "polygon") {
+    return pointInPolygon(point, footprint.polygon) || (padding > 0 && distance(point, nearestPointOnPolygon(point, footprint.polygon)) <= padding);
+  }
+
   const dx = point.x - footprint.center.x;
   const dz = point.z - footprint.center.z;
   const cos = Math.cos(footprint.angle);
@@ -19,8 +24,4 @@ export function pointInRaisedFootprint(point: Vec2, footprint: InteractableRaise
   const localX = dx * cos + dz * sin;
   const localZ = -dx * sin + dz * cos;
   return Math.abs(localX) <= footprint.halfX + padding && Math.abs(localZ) <= footprint.halfZ + padding;
-}
-
-function distance(a: Vec2, b: Vec2): number {
-  return Math.hypot(a.x - b.x, a.z - b.z);
 }

@@ -23,6 +23,7 @@ interface HudRefs {
   prompt: HTMLElement;
   upgrades: HTMLElement;
   status: HTMLElement;
+  inventory: HTMLElement;
   start: HTMLButtonElement;
   restart: HTMLButtonElement;
   overlay: HTMLElement;
@@ -72,6 +73,7 @@ export interface HudUpdate {
   hydration: number;
   throwables: number;
   flashlightOn: boolean;
+  inventoryOpen: boolean;
   inventory: InventoryItemId[];
   inventoryCapacity: number;
   carriedItem: LargeCarryItemId | null;
@@ -129,9 +131,10 @@ export class HudController {
     this.refs.zombies.textContent = `${view.zombieCount}`;
     this.refs.stamina.textContent = `${Math.round(view.stamina)}`;
     this.refs.hydration.textContent = `${Math.round(Math.max(0, 100 - view.hydration))}`;
-    const pumpText = view.bikePumpBoostRemaining > 0 ? " pump" : "";
-    const carried = view.carriedItem ? ` / ${view.carriedItem === "ladder" ? "ladder" : "board"}` : "";
-    this.refs.tools.textContent = `${view.inventory.length}/${view.inventoryCapacity} inv / ${view.throwables} noise / ${view.flashlightOn ? "on" : "off"}${pumpText}${carried}`;
+    this.refs.tools.textContent = `${view.inventory.length}/${view.inventoryCapacity}`;
+    this.refs.inventory.hidden = !view.inventoryOpen;
+    this.refs.inventory.setAttribute("aria-hidden", view.inventoryOpen ? "false" : "true");
+    this.refs.inventory.innerHTML = renderInventoryMenu(view);
 
     if (stats.kind !== "melee" && view.loadout.reloadingUntil > performance.now() / 1000) {
       const percent = Math.round(view.reloadProgress * 100);
@@ -142,14 +145,11 @@ export class HudController {
     } else if (view.bikeMounted) {
       this.refs.prompt.textContent = "E: dismount bike";
       this.refs.status.textContent = view.bikePumpBoostRemaining > 0 ? "Riding tuned bike" : "Riding hidden bike";
-    } else if (view.skateboardMounted) {
-      this.refs.prompt.textContent = "E: pick up skateboard";
-      this.refs.status.textContent = "Skateboard rolling loud";
     } else if (view.nearestWorldItem) {
       this.refs.prompt.textContent = `X: pick up ${ITEM_DEFINITIONS[view.nearestWorldItem.itemId].label}`;
       this.refs.status.textContent = view.nearestWorldItem.label;
     } else if (view.nearestWeaponDrop) {
-      this.refs.prompt.textContent = `E: pick up ${WEAPON_DEFINITIONS[view.nearestWeaponDrop.weaponId].name}`;
+      this.refs.prompt.textContent = `X: take ${WEAPON_DEFINITIONS[view.nearestWeaponDrop.weaponId].name}`;
       this.refs.status.textContent = view.nearestWeaponDrop.label;
     } else if (view.nearestBike) {
       this.refs.prompt.textContent =
@@ -195,6 +195,12 @@ export class HudController {
         ? `${view.nearestStation.label}: ${upgrade.label} maxed`
         : `E: ${upgrade.label} (${cost} scrap)`;
       this.refs.status.textContent = view.nearestStation.label;
+    } else if (view.skateboardMounted) {
+      this.refs.prompt.textContent = "V: step off skateboard";
+      this.refs.status.textContent = "Skateboard rolling loud";
+    } else if (view.carriedItem === "skateboard") {
+      this.refs.prompt.textContent = "V: ride skateboard";
+      this.refs.status.textContent = `Carrying ${ITEM_DEFINITIONS[view.carriedItem].label}`;
     } else if (view.wavePhase === "intermission") {
       this.refs.prompt.textContent = "";
       this.refs.status.textContent = `Regroup before wave ${view.wave + 1}: ${Math.ceil(view.intermissionTimer)}s`;
@@ -210,16 +216,13 @@ export class HudController {
       this.refs.status.textContent = `${stats.name}${optic}${stance}${injury}${thirst}${light}${pump}${carriedText}${view.playerHeight > 0.4 ? `, height ${view.playerHeight.toFixed(1)}m` : ""}`;
     }
 
-    const weapons = view.loadout.inventory
-      .map((weaponId, index) => `<span title="Press ${index + 1}">${index + 1}: ${WEAPON_DEFINITIONS[weaponId].name}</span>`)
-      .join("");
     const upgrades = Object.values(UPGRADE_DEFINITIONS)
       .map((upgrade) => {
         const level = view.loadout.upgrades[upgrade.id];
         return `<span title="${upgrade.description}">${upgrade.label} ${level}/${upgrade.maxLevel}</span>`;
       })
       .join("");
-    this.refs.upgrades.innerHTML = `${weapons}${upgrades}`;
+    this.refs.upgrades.innerHTML = upgrades;
   }
 
   flashStatus(message: string): void {
@@ -227,6 +230,77 @@ export class HudController {
     this.refs.status.classList.add("flash");
     window.setTimeout(() => this.refs.status.classList.remove("flash"), 180);
   }
+}
+
+function renderInventoryMenu(view: HudUpdate): string {
+  const slots = view.inventory.length > 0
+    ? view.inventory.map((itemId, index) => {
+      const item = ITEM_DEFINITIONS[itemId];
+      return `
+        <li class="inventory-slot">
+          <b>T${index + 1}</b>
+          <span>${item.label}</span>
+        </li>
+      `;
+    }).join("")
+    : `
+      <li class="inventory-slot empty">
+        <b>T</b>
+        <span>No tools carried</span>
+      </li>
+    `;
+  const carried = view.carriedItem ? ITEM_DEFINITIONS[view.carriedItem] : null;
+  const pump = view.bikePumpBoostRemaining > 0 ? `${Math.ceil(view.bikePumpBoostRemaining)}s` : "none";
+  const light = view.flashlightOn ? "on" : "off";
+  const boardState = view.skateboardMounted ? "Rolling" : view.carriedItem === "skateboard" ? "Carried" : "Not carried";
+
+  return `
+    <header class="inventory-header">
+      <div>
+        <span>Inventory</span>
+        <strong>${view.inventory.length}/${view.inventoryCapacity} tools</strong>
+      </div>
+      <kbd>I</kbd>
+    </header>
+    ${renderWeaponInventory(view.loadout)}
+    <ul class="inventory-slots">${slots}</ul>
+    <div class="inventory-object-grid">
+      <span><b>Hands</b><strong>${carried ? carried.label : view.skateboardMounted ? "Skateboard" : "Free"}</strong></span>
+      <span><b>Noise</b><strong>${view.throwables}</strong></span>
+      <span><b>Light</b><strong>${light}</strong></span>
+      <span><b>Pump</b><strong>${pump}</strong></span>
+      <span><b>Board</b><strong>${boardState}</strong></span>
+      <span><b>Drop</b><strong>Q</strong></span>
+    </div>
+  `;
+}
+
+function renderWeaponInventory(loadout: Loadout): string {
+  const weapons = loadout.inventory.map((weaponId, index) => {
+    const weaponLoadout = { ...loadout, weaponId };
+    const stats = getWeaponStats(weaponLoadout);
+    const active = loadout.weaponId === weaponId;
+    const ammo = stats.kind === "melee"
+      ? "MELEE"
+      : `${Math.min(loadout.magazines[weaponId] ?? 0, stats.magazineSize)}/${stats.magazineSize}`;
+    return `
+      <li class="inventory-weapon${active ? " active" : ""}">
+        <b>${index + 1}</b>
+        <span>${WEAPON_DEFINITIONS[weaponId].name}</span>
+        <strong>${ammo}</strong>
+      </li>
+    `;
+  }).join("");
+
+  return `
+    <section class="inventory-weapons">
+      <div class="inventory-section-title">
+        <span>Weapons</span>
+        <strong>${loadout.inventory.length}</strong>
+      </div>
+      <ul>${weapons}</ul>
+    </section>
+  `;
 }
 
 function createMarkup(): string {
@@ -243,19 +317,20 @@ function createMarkup(): string {
         <div class="meter"><span>Zombies</span><strong data-hud="zombies">0</strong></div>
         <div class="meter stamina-meter"><span>Stamina</span><strong data-hud="stamina">100</strong></div>
         <div class="meter hydration-meter"><span>Thirst</span><strong data-hud="hydration">0</strong></div>
-        <div class="meter tools-meter"><span>Tools</span><strong data-hud="tools">2 / on</strong></div>
+        <div class="meter tools-meter"><span>Tools</span><strong data-hud="tools">0/3</strong></div>
       </section>
       <section class="hud weapon-hud" aria-label="Weapon status">
         <div class="ammo"><strong data-hud="ammo">12</strong><span>/</span><span data-hud="reserve">72</span></div>
         <div class="status-line" data-hud="status">Emergency carbine</div>
         <div class="upgrade-strip" data-hud="upgrades"></div>
       </section>
+      <section class="inventory-menu" data-hud="inventory" aria-label="Inventory" aria-hidden="true" hidden></section>
       <canvas class="mini-map" width="220" height="220" aria-label="Mini map"></canvas>
       <div class="interaction-prompt" data-hud="prompt"></div>
       <section class="start-overlay" data-hud="overlay">
         <div class="start-panel">
           <p class="kicker">Fitzroy North, tram-lit rain</p>
-          <h1>Edinburgh Gardens: Last Light</h1>
+          <h1>Edinburgh Gardens 2030</h1>
           <p class="brief">Hold W.T. Peterson Oval, move through bluestone paths and gum shadows, and use the park fixtures before the next wave finds you.</p>
           <div class="controls-grid" aria-label="Controls">
             <span><kbd>WASD</kbd><b>Move</b></span>
@@ -271,6 +346,7 @@ function createMarkup(): string {
             <span><kbd>X</kbd><b>Take</b></span>
             <span><kbd>Q</kbd><b>Drop</b></span>
             <span><kbd>I</kbd><b>Inventory</b></span>
+            <span><kbd>V</kbd><b>Skateboard</b></span>
             <span><kbd>1-6</kbd><b>Weapons</b></span>
           </div>
           <button class="primary-action" data-action="start">Enter the gardens</button>
@@ -303,6 +379,7 @@ function findHudRefs(root: HTMLElement): HudRefs {
     prompt: find('[data-hud="prompt"]'),
     upgrades: find('[data-hud="upgrades"]'),
     status: find('[data-hud="status"]'),
+    inventory: find('[data-hud="inventory"]'),
     start: find('[data-action="start"]'),
     restart: find('[data-action="restart"]'),
     overlay: find('[data-hud="overlay"]'),

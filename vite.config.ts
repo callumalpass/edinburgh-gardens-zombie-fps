@@ -1,6 +1,14 @@
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
+  build: {
+    rollupOptions: {
+      input: {
+        main: "index.html",
+        "object-preview": "object-preview.html"
+      }
+    }
+  },
   server: {
     host: "127.0.0.1",
     port: 5480,

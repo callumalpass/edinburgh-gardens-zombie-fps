@@ -21,6 +21,7 @@ import {
   footballPostLocalOffsets
 } from "../src/game/sportsFixtures";
 import { TerrainSampler } from "../src/game/terrain";
+import { localPoint, worldToLocal } from "../src/game/rendering/worldGeometry";
 import type { MappedBuilding } from "../src/game/types";
 
 function distanceToPolygonEdge(point: { x: number; z: number }, polygon: readonly { x: number; z: number }[]): number {
@@ -112,6 +113,16 @@ function boxExtentsFromPolygon(polygon: readonly { x: number; z: number }[]): { 
 function averageRadius(polygon: readonly { x: number; z: number }[]): number {
   const center = polygonCentroid(polygon);
   return polygon.reduce((sum, point) => sum + distance(point, center), 0) / polygon.length;
+}
+
+function nearestPathEdgeClearance(point: { x: number; z: number }): number {
+  let closest = Number.POSITIVE_INFINITY;
+  for (const path of level.paths) {
+    for (let index = 0; index < path.points.length - 1; index += 1) {
+      closest = Math.min(closest, distanceToSegment(point, path.points[index], path.points[index + 1]) - path.width * 0.5);
+    }
+  }
+  return closest;
 }
 
 function normalizedDirection(from: { x: number; z: number }, to: { x: number; z: number }): { x: number; z: number } {
@@ -233,6 +244,13 @@ describe("map geometry", () => {
     }
     expect(sampleObstacle.radius).toBeCloseTo(sampleTree.radius);
     expect(sampleObstacle.blocksSight).toBe(false);
+  });
+
+  it("keeps W. T. Peterson Oval clear of mapped trees", () => {
+    const oval = level.landmarks.find((landmark) => landmark.id === "oval");
+    expect(oval?.polygon).toBeTruthy();
+    expect(level.trees.filter((tree) => pointInPolygon(tree.position, oval!.polygon!))).toEqual([]);
+    expect(level.treeColliders.filter((tree) => pointInPolygon(tree.position, oval!.polygon!))).toEqual([]);
   });
 
   it("places researched sports fixtures and collision posts from the same data", () => {
@@ -653,6 +671,14 @@ describe("map geometry", () => {
     }
     expect(southRoof?.height).toBeCloseTo(3.58, 2);
 
+    const tennis = level.interactables.find((fixture) => fixture.id === "tennis-court-ladder");
+    expect(tennis?.raisedFootprint?.shape).toBe("polygon");
+    if (tennis?.raisedFootprint?.shape === "polygon") {
+      expect(tennis.raisedFootprint.polygon.length).toBeGreaterThanOrEqual(4);
+      expect(distanceToPolygonEdge(tennis.accessPosition!, tennis.raisedFootprint.polygon)).toBeLessThan(0.35);
+      expect(pointInRaisedFootprint(tennis.landingPosition!, tennis.raisedFootprint, 0.05)).toBe(true);
+    }
+
     for (const frame of level.interactables.filter((fixture) => fixture.kind === "basketball")) {
       expect(frame.raisedFootprint?.shape).toBe("circle");
       if (frame.raisedFootprint?.shape === "circle") {
@@ -799,6 +825,9 @@ describe("map geometry", () => {
       expect(planter?.polygon).toBeDefined();
       expect(pointInPolygon(polygonCentroid(planter!.polygon!), level.boundary)).toBe(true);
       expect(level.trees.some((tree) => pointInPolygon(tree.position, planter!.polygon!))).toBe(false);
+      expect(nearestPathEdgeClearance(polygonCentroid(planter!.polygon!)), `${planter!.id} overlaps a mapped path`).toBeGreaterThan(
+        averageRadius(planter!.polygon!)
+      );
     }
 
     expect(averageRadius(bluestone!.polygon!)).toBeCloseTo(5 * WORLD_SCALE, 1);
@@ -904,6 +933,58 @@ describe("map geometry", () => {
     }
     const obstacleIds = new Set(level.obstacles.map((obstacle) => obstacle.id));
     expect(level.parkLifeDetails.some((detail) => obstacleIds.has(detail.id))).toBe(false);
+    expect(level.obstacles.filter((obstacle) => obstacle.sourceObjectKind === "park-life-detail").every((obstacle) => obstacle.sourceObjectId === "oval-cricket-nets")).toBe(true);
+  });
+
+  it("models the Edinburgh Gardens cricket nets as a four-lane cage with one entrance", () => {
+    const cricketNets = level.parkLifeDetails.find((detail) => detail.id === "oval-cricket-nets");
+    expect(cricketNets?.kind).toBe("cricket-nets");
+    expect(cricketNets?.cricketNetLanes).toBe(4);
+    expect(cricketNets?.cricketNetEntranceCount).toBe(1);
+    expect(cricketNets?.cricketNetEnclosure).toBe("galvanised-pipe-cyclone-wire-cage");
+    expect(cricketNets?.cricketNetSurface).toBe("concrete-artificial-turf");
+    expect(cricketNets?.cricketNetRearMuralWall).toBe(true);
+    expect(cricketNets?.source).toContain("CMP 2004");
+    expect(cricketNets?.source).toContain("four concrete and artificial turf wickets");
+
+    const cageObstacles = level.obstacles.filter((obstacle) => obstacle.sourceObjectKind === "park-life-detail" && obstacle.sourceObjectId === "oval-cricket-nets");
+    expect(cageObstacles.map((obstacle) => obstacle.id).sort()).toEqual(
+      [
+        "oval-cricket-nets-lane-divider-1",
+        "oval-cricket-nets-lane-divider-2",
+        "oval-cricket-nets-lane-divider-3",
+        "oval-cricket-nets-rear",
+        "oval-cricket-nets-side-east",
+        "oval-cricket-nets-side-west"
+      ].sort()
+    );
+    expect(cageObstacles.every((obstacle) => obstacle.shape === "box" && obstacle.blocksSight === false)).toBe(true);
+    expect(cageObstacles.some((obstacle) => obstacle.id.includes("front"))).toBe(false);
+
+    const sideWest = cageObstacles.find((obstacle) => obstacle.id === "oval-cricket-nets-side-west");
+    const sideEast = cageObstacles.find((obstacle) => obstacle.id === "oval-cricket-nets-side-east");
+    const rear = cageObstacles.find((obstacle) => obstacle.id === "oval-cricket-nets-rear");
+    expect(sideWest?.shape).toBe("box");
+    expect(sideEast?.shape).toBe("box");
+    expect(rear?.shape).toBe("box");
+    if (!cricketNets || !sideWest || sideWest.shape !== "box" || !sideEast || sideEast.shape !== "box" || !rear || rear.shape !== "box") {
+      throw new Error("Missing cricket-net cage test geometry");
+    }
+    const westLocalX = worldToLocal(cricketNets.position, cricketNets.angle, sideWest.center).x;
+    const eastLocalX = worldToLocal(cricketNets.position, cricketNets.angle, sideEast.center).x;
+    const frontLocalZ = -sideWest.halfZ;
+    for (const localX of [westLocalX + 0.9, 0, eastLocalX - 0.9]) {
+      const entrancePoint = localPoint(cricketNets.position, cricketNets.angle, localX, frontLocalZ);
+      expect(cageObstacles.some((obstacle) => pointInsideObstacle(entrancePoint, obstacle, 0.35)), `front should be open at local x ${localX}`).toBe(false);
+    }
+    expect(pointInsideObstacle(rear.center, rear, 0.35)).toBe(true);
+
+    const climbFixture = level.interactables.find((fixture) => fixture.id === "oval-cricket-nets-frame");
+    expect(climbFixture?.kind).toBe("cricket-nets");
+    expect(climbFixture?.accessKind).toBe("cage-frame");
+    expect(climbFixture?.prompt).toContain("climb");
+    expect(climbFixture?.bypassObstacleIds?.sort()).toEqual(cageObstacles.map((obstacle) => obstacle.id).sort());
+    expect(climbFixture?.raisedFootprint?.shape).toBe("box");
   });
 
   it("uses a fitted grandstand obstacle so nearby open lawn remains accessible", () => {
@@ -1076,7 +1157,13 @@ describe("map geometry", () => {
     level.spawnPoints.forEach((point, index) => assertClear(`spawn point ${index + 1}`, point));
     level.pickupPoints.forEach((point, index) => assertClear(`pickup point ${index + 1}`, point));
     level.amenities.forEach((amenity) => assertClear(`amenity ${amenity.id}`, amenity.position, allowedById.get(amenity.id)));
-    level.parkLifeDetails.forEach((detail) => assertClear(`park-life detail ${detail.id}`, detail.position, allowedById.get(detail.id)));
+    level.parkLifeDetails.forEach((detail) => {
+      const allowedIds = new Set(allowedById.get(detail.id) ?? []);
+      level.obstacles
+        .filter((obstacle) => obstacle.sourceObjectKind === "park-life-detail" && obstacle.sourceObjectId === detail.id)
+        .forEach((obstacle) => allowedIds.add(obstacle.id));
+      assertClear(`park-life detail ${detail.id}`, detail.position, allowedIds);
+    });
     assertClear(`rideable bike ${level.rideableBike.id}`, level.rideableBike.position);
     level.upgradeStations.forEach((station) => assertClear(`upgrade station ${station.id}`, station.position, allowedById.get(station.id)));
     level.weaponSpawns.forEach((spawn) => assertClear(`weapon spawn ${spawn.id}`, spawn.position, allowedById.get(spawn.id)));

@@ -12,9 +12,10 @@ export interface InputControllerActions {
   toggleFlashlight: () => void;
   throwDistraction: () => void;
   takeItem: () => void;
-  inspectInventory: () => void;
+  toggleInventory: () => void;
   dropItem: () => void;
   jump: () => void;
+  toggleSkateboard: () => void;
   equipSlot: (index: number) => void;
   look: (movementX: number, movementY: number) => void;
   cancel: () => void;
@@ -107,19 +108,21 @@ export class InputController {
     this.keys.add(event.code);
     this.actions.unlockAudio();
 
-    if (event.code === "KeyR") this.actions.reload();
-    if (event.code === "KeyE") this.actions.interact();
-    if (event.code === "KeyF") this.actions.toggleFlashlight();
-    if (event.code === "KeyG") this.actions.throwDistraction();
-    if (event.code === "KeyX") this.actions.takeItem();
-    if (event.code === "KeyI") this.actions.inspectInventory();
-    if (event.code === "KeyQ") this.actions.dropItem();
+    const firstPress = !event.repeat;
+    if (firstPress && event.code === "KeyR") this.actions.reload();
+    if (firstPress && event.code === "KeyE") this.actions.interact();
+    if (firstPress && event.code === "KeyF") this.actions.toggleFlashlight();
+    if (firstPress && event.code === "KeyG") this.actions.throwDistraction();
+    if (firstPress && event.code === "KeyX") this.actions.takeItem();
+    if (firstPress && event.code === "KeyI") this.actions.toggleInventory();
+    if (firstPress && event.code === "KeyQ") this.actions.dropItem();
+    if (firstPress && event.code === "KeyV") this.actions.toggleSkateboard();
     if (event.code === "Space") {
       event.preventDefault();
-      if (!event.repeat) this.actions.jump();
+      if (firstPress) this.actions.jump();
     }
-    if (event.code === "Escape") this.actions.cancel();
-    if (event.code.startsWith("Digit")) {
+    if (firstPress && event.code === "Escape") this.actions.cancel();
+    if (firstPress && event.code.startsWith("Digit")) {
       this.actions.equipSlot(Number(event.code.slice(5)) - 1);
     }
   }

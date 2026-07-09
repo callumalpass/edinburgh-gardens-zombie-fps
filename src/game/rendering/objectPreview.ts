@@ -339,7 +339,7 @@ function parkLifeRadius(kind: LevelData["parkLifeDetails"][number]["kind"]): num
   if (kind === "picnic-blanket") return 3.2;
   if (kind === "broken-bike") return 2.1;
   if (kind === "training-cones") return 3.2;
-  if (kind === "cricket-nets") return 5.8;
+  if (kind === "cricket-nets") return 11.0;
   if (kind === "construction-fence") return 5.2;
   if (kind === "works-materials") return 3.6;
   if (kind === "removed-tree-stump") return 2.2;

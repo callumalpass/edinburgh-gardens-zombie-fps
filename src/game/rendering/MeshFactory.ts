@@ -1690,6 +1690,35 @@ export class MeshFactory {
     return group;
   }
 
+  createPlacedLadderMesh(): THREE.Group {
+    const group = new THREE.Group();
+    const rail = this.paintedStandardMaterial({ color: 0x9ba59d, metalness: 0.34, roughness: 0.5 });
+    const foot = this.paintedStandardMaterial({ color: 0x747d78, metalness: 0.28, roughness: 0.58 });
+    for (const x of [-0.28, 0.28]) {
+      const side = new THREE.Mesh(new THREE.BoxGeometry(0.055, 3.55, 0.06), rail);
+      side.position.set(x, 1.9, 0);
+      side.castShadow = true;
+      group.add(side);
+
+      const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.08, 0.18), foot);
+      shoe.position.set(x, 0.1, 0);
+      shoe.castShadow = true;
+      group.add(shoe);
+    }
+    for (let rung = 0; rung < 8; rung += 1) {
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(0.68, 0.055, 0.055), rail);
+      bar.position.set(0, 0.46 + rung * 0.42, 0);
+      bar.castShadow = true;
+      group.add(bar);
+    }
+    const topHook = new THREE.Mesh(new THREE.BoxGeometry(0.78, 0.06, 0.18), rail);
+    topHook.position.set(0, 3.72, -0.08);
+    topHook.castShadow = true;
+    group.add(topHook);
+    this.applyAnimeMeshStyle(group, 1.04);
+    return group;
+  }
+
   createSkateboardMesh(): THREE.Group {
     const group = new THREE.Group();
     this.addArtifactBrushShadow(group, MELBOURNE_ANIME_PALETTE.wetBluestone, 0.78, 0.28, 0.13, -0.1, 0.08);

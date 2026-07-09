@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { createInitialPlayerCondition } from "../src/game/playerCondition";
 import { createInitialPlayerState } from "../src/game/playerState";
 import { PlayerLocomotion, type LocomotionWorld } from "../src/game/systems/PlayerLocomotion";
-import type { InteractableFixture } from "../src/game/types";
+import type { CollisionObstacle, InteractableFixture } from "../src/game/types";
 
 const boundary = [
   { x: -50, z: -50 },
@@ -116,5 +116,62 @@ describe("PlayerLocomotion", () => {
 
     expect(bogged.usable).toBe(false);
     expect(bogged.moved).toBe(false);
+  });
+
+  it("keeps ladder-entered tennis court actors inside the fence footprint", () => {
+    const tennis: InteractableFixture = {
+      id: "tennis-court-ladder",
+      label: "Tennis court fence",
+      kind: "tennis",
+      position: { x: 0, z: 0 },
+      radius: 4,
+      height: 0.22,
+      prompt: "Tennis",
+      mode: "toggle",
+      bypassObstacleIds: ["tennis"],
+      raisedFootprint: {
+        shape: "polygon",
+        center: { x: 0, z: 0 },
+        polygon: [
+          { x: -4, z: -5 },
+          { x: 4, z: -5 },
+          { x: 4, z: 5 },
+          { x: -4, z: 5 }
+        ]
+      }
+    };
+    const tennisObstacle: CollisionObstacle = {
+      id: "tennis",
+      label: "Tennis fence",
+      sourceObjectId: "tennis",
+      sourceObjectKind: "landmark",
+      shape: "polygon",
+      center: { x: 0, z: 0 },
+      polygon: [
+        { x: -4, z: -5 },
+        { x: 4, z: -5 },
+        { x: 4, z: 5 },
+        { x: -4, z: 5 }
+      ]
+    };
+    const world = makeWorld([tennis]);
+    world.obstacleIndex = {
+      forNearby: (_point, _radius, visit) => {
+        visit(tennisObstacle);
+      }
+    };
+    const locomotion = new PlayerLocomotion(world);
+    const actor = createInitialPlayerState(1.25);
+    actor.position.set(3.35, 1.25, 0);
+    actor.activeFixtureId = tennis.id;
+
+    const result = locomotion.moveOnFoot(actor, 0.35, { x: 1, z: 0, length: 1 }, {
+      wantsSprint: false,
+      condition: createInitialPlayerCondition()
+    });
+
+    expect(result.moved).toBe(true);
+    expect(actor.activeFixtureId).toBe(tennis.id);
+    expect(actor.position.x).toBeLessThanOrEqual(3.41);
   });
 });

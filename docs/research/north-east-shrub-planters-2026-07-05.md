@@ -17,14 +17,17 @@ The feature is not the newer stormwater raingarden. It is a separate set of olde
 ## Implementation Notes
 
 - These planters are not mapped as OSM features, so their exact GIS coordinates are hand-placed from the CMP descriptions, Rowe Street entrance context, existing park boundary geometry and the north-east Elm Circle relationship.
+- A 2026-07-06 placement audit found that the original hand-placed centers put the large bluestone planter and the south Rowe Street bed too close to mapped OSM path corridors. The centers were moved to preserve the CMP-described Rowe Street / Elm Circle relationships while keeping each circular bed outside the nearest mapped path edge by more than its modeled radius.
 - Game scale is `WORLD_SCALE = 1.28`.
 - The bluestone planter is modeled as a 10 m diameter circular garden landmark: `5 * WORLD_SCALE` radius.
 - The Rowe Street pair are modeled as 5 m diameter circular garden landmarks: `2.5 * WORLD_SCALE` radius.
 - All three carry `cover: "dense-shrub"` so crouching inside or right beside the bushes counts as stealth cover without making the beds behave like impassable buildings.
 - Tree generation excludes these polygons so the low shrub beds do not accidentally receive full tree trunks.
+- `tests/geo.test.ts` now checks that all three raised shrub planters remain inside the park boundary, free of generated trees and clear of the mapped path network.
 
 ## Sources
 
 - Edinburgh Gardens Conservation Management Plan, 2004: `https://www.yarracity.vic.gov.au/sites/default/files/2024-05/www.yarracity.vic.gov.au/-/media/files/ycc/the-area/heritage/edinburgh-gardens-conservation-management-plan-2004.pdf`
 - Lovell Chen, Edinburgh Gardens Conservation Management Plan, 2021 copy archived by the 3068 Group: `https://the3068group.org/wp-content/uploads/2025/11/2021-conservation-management-plan-_merged.pdf`
 - Captain Cook Society, Plaque to Cook at Edinburgh Gardens: `https://www.captaincooksociety.com/remembering-cook/memorials/types-of-cook-memorials/plaque-to-cook-at-edinburgh-gardens-melbourne-victoria-australia`
+- OpenStreetMap way API extracts for the current path network: `https://www.openstreetmap.org/api/0.6/way/{way_id}/full.json`

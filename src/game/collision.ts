@@ -105,7 +105,8 @@ function pointWithinBoxAccessGap(localX: number, localZ: number, radius: number,
 
 export function shouldBypassObstacle(obstacleId: string, point: Vec2, context: ObstacleBypassContext): boolean {
   const active = context.interactables.find((fixture) => fixture.id === context.activeFixtureId);
-  if (active && fixtureCanBypass(active, obstacleId) && pointInInteractableRaisedFootprint(point, active, 1.2)) {
+  const activePadding = active?.kind === "tennis" ? 0.05 : 1.2;
+  if (active && fixtureCanBypass(active, obstacleId) && pointInInteractableRaisedFootprint(point, active, activePadding)) {
     return true;
   }
 

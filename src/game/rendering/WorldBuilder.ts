@@ -2700,6 +2700,62 @@ export class WorldBuilder {
     return material as THREE.MeshBasicMaterial;
   }
 
+  private digitalClockMaterial(key: string, text: string, caption: string): THREE.MeshBasicMaterial {
+    const cacheKey = `digital-clock:${key}:${text}:${caption}`;
+    let material = this.detailMaterialCache.get(cacheKey);
+    if (!material) {
+      const canvas = document.createElement("canvas");
+      canvas.width = 512;
+      canvas.height = 192;
+      const ctx = canvas.getContext("2d")!;
+      ctx.fillStyle = "#040709";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      const glow = ctx.createRadialGradient(canvas.width / 2, canvas.height / 2, 18, canvas.width / 2, canvas.height / 2, 270);
+      glow.addColorStop(0, "rgba(255, 62, 46, 0.22)");
+      glow.addColorStop(0.58, "rgba(255, 62, 46, 0.06)");
+      glow.addColorStop(1, "rgba(255, 62, 46, 0)");
+      ctx.fillStyle = glow;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.strokeStyle = "#ff4a38";
+      ctx.lineWidth = 8;
+      ctx.strokeRect(16, 16, canvas.width - 32, canvas.height - 32);
+      ctx.strokeStyle = "rgba(255, 154, 103, 0.38)";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(30, 30, canvas.width - 60, canvas.height - 60);
+
+      for (let y = 38; y < canvas.height - 34; y += 8) {
+        ctx.fillStyle = y % 16 === 0 ? "rgba(255, 72, 54, 0.08)" : "rgba(255, 72, 54, 0.035)";
+        ctx.fillRect(34, y, canvas.width - 68, 2);
+      }
+
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.font = "900 74px 'Courier New', monospace";
+      ctx.lineWidth = 8;
+      ctx.strokeStyle = "rgba(93, 0, 0, 0.82)";
+      ctx.strokeText(text, canvas.width / 2 + 2, 91);
+      ctx.fillStyle = "#ff3e2e";
+      ctx.fillText(text, canvas.width / 2, 88);
+      ctx.fillStyle = "rgba(255, 225, 180, 0.88)";
+      ctx.font = "800 22px system-ui, sans-serif";
+      ctx.fillText(caption, canvas.width / 2, 146);
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.anisotropy = 2;
+      material = new THREE.MeshBasicMaterial({
+        map: texture,
+        transparent: true,
+        depthWrite: false,
+        side: THREE.DoubleSide
+      });
+      this.detailMaterialCache.set(cacheKey, material);
+    }
+    return material as THREE.MeshBasicMaterial;
+  }
+
   private standardDetailMaterial(
     key: string,
     color: number,
@@ -4753,72 +4809,133 @@ export class WorldBuilder {
 
   private addCricketNets(detail: ParkLifeDetail): void {
     const group = new THREE.Group();
-    const netMaterial = new THREE.MeshBasicMaterial({ color: 0xc9d4c6, transparent: true, opacity: 0.18, side: THREE.DoubleSide, depthWrite: false });
-    const netLineMaterial = new THREE.LineBasicMaterial({ color: 0xdde6d8, transparent: true, opacity: 0.58 });
-    const frameMaterial = this.materials.metal;
-    const width = 3.2;
-    const length = 8.5;
-    const height = 2.45;
+    const netMaterial = new THREE.MeshBasicMaterial({ color: 0x23332d, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false });
+    const netLineMaterial = new THREE.LineBasicMaterial({ color: 0xd2dbd2, transparent: true, opacity: 0.5 });
+    const frameMaterial = this.standardDetailMaterial("cricket-nets-galvanised-frame", 0x5f6966, 0.48, 0.38);
+    const turfMaterial = this.standardDetailMaterial("cricket-nets-artificial-turf", 0x4b8f68, 0.88, 0.02);
+    const concreteMaterial = this.standardDetailMaterial("cricket-nets-concrete-pad", 0x8b9189, 0.82, 0.04);
+    const creaseMaterial = this.basicDetailMaterial("cricket-nets-crease-lines", 0xe7eadc);
+    const muralBlue = this.basicDetailMaterial("cricket-nets-mural-blue", 0x274d7e);
+    const muralGold = this.basicDetailMaterial("cricket-nets-mural-gold", 0xd0a13a);
+    const muralGreen = this.basicDetailMaterial("cricket-nets-mural-green", 0x3d7151);
+    const laneCount = detail.cricketNetLanes ?? 4;
+    const width = 12.4;
+    const length = 14.8;
+    const height = 3.2;
+    const lobbyLength = 2.55;
+    const halfWidth = width * 0.5;
+    const halfLength = length * 0.5;
+    const laneWidth = width / laneCount;
+    const dividerStart = -halfLength + lobbyLength;
 
-    for (const x of [-width * 0.5, width * 0.5]) {
-      for (const z of [-length * 0.5, length * 0.5]) {
-        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.055, height, 8), frameMaterial);
-        post.position.set(x, height * 0.5, z);
-        post.castShadow = true;
-        group.add(post);
+    const addBox = (localX: number, y: number, localZ: number, boxWidth: number, boxHeight: number, boxDepth: number, material: THREE.Material, shadow = true) => {
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(boxWidth, boxHeight, boxDepth), material);
+      mesh.position.set(localX, y, localZ);
+      mesh.castShadow = shadow;
+      mesh.receiveShadow = true;
+      group.add(mesh);
+      return mesh;
+    };
+
+    addBox(0, 0.025, 0, width + 0.8, 0.05, length + 1.05, concreteMaterial, false);
+    addBox(0, 0.055, -halfLength - 1.35, width + 0.5, 0.04, 2.25, turfMaterial, false);
+
+    for (let lane = 0; lane < laneCount; lane += 1) {
+      const x = -halfWidth + laneWidth * (lane + 0.5);
+      addBox(x, 0.085, 0.2, laneWidth * 0.78, 0.045, length * 0.84, turfMaterial, false);
+      for (const z of [-halfLength + 2.15, halfLength - 1.95]) {
+        addBox(x, 0.13, z, laneWidth * 0.56, 0.025, 0.055, creaseMaterial, false);
+        for (const stumpX of [-0.16, 0, 0.16]) {
+          addBox(x + stumpX, 0.34, z + 0.2, 0.035, 0.52, 0.035, frameMaterial);
+        }
       }
     }
 
-    const addFrameRail = (x: number, y: number, z: number, railWidth: number, railHeight: number, railDepth: number) => {
-      const rail = new THREE.Mesh(new THREE.BoxGeometry(railWidth, railHeight, railDepth), frameMaterial);
-      rail.position.set(x, y, z);
-      rail.castShadow = true;
-      group.add(rail);
+    const addPost = (localX: number, localZ: number, postHeight = height) => {
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.075, postHeight, 8), frameMaterial);
+      post.position.set(localX, postHeight * 0.5, localZ);
+      post.castShadow = true;
+      group.add(post);
     };
-    for (const x of [-width * 0.5, width * 0.5]) {
-      addFrameRail(x, height, 0, 0.06, 0.06, length);
+    for (const x of [-halfWidth, halfWidth]) {
+      addPost(x, -halfLength);
+      addPost(x, halfLength);
     }
-    for (const z of [-length * 0.5, length * 0.5]) {
-      addFrameRail(0, height, z, width, 0.06, 0.06);
+    for (let lane = 1; lane < laneCount; lane += 1) {
+      const x = -halfWidth + laneWidth * lane;
+      addPost(x, dividerStart);
+      addPost(x, halfLength);
+    }
+    for (const x of [-halfWidth, halfWidth]) {
+      for (const z of [-halfLength + length * 0.25, 0, halfLength - length * 0.25]) {
+        addPost(x, z);
+      }
     }
 
-    for (const x of [-width * 0.5, width * 0.5]) {
-      const side = new THREE.Mesh(new THREE.BoxGeometry(0.03, height, length), netMaterial);
-      side.position.set(x, height * 0.5, 0);
-      group.add(side);
+    const addPanel = (localX: number, y: number, localZ: number, panelWidth: number, panelHeight: number, panelDepth: number) => {
+      addBox(localX, y, localZ, panelWidth, panelHeight, panelDepth, netMaterial, false);
+    };
+    addPanel(-halfWidth, height * 0.5, 0, 0.035, height, length);
+    addPanel(halfWidth, height * 0.5, 0, 0.035, height, length);
+    addPanel(0, height * 0.5, halfLength, width, height, 0.035);
+    addPanel(0, height + 0.01, 0, width, 0.025, length);
+    for (let lane = 1; lane < laneCount; lane += 1) {
+      const x = -halfWidth + laneWidth * lane;
+      addPanel(x, height * 0.5, (dividerStart + halfLength) * 0.5, 0.03, height, halfLength - dividerStart);
     }
-    const rear = new THREE.Mesh(new THREE.BoxGeometry(width, height, 0.03), netMaterial);
-    rear.position.set(0, height * 0.5, length * 0.5);
-    group.add(rear);
-    const top = new THREE.Mesh(new THREE.BoxGeometry(width, 0.025, length), netMaterial);
-    top.position.set(0, height, 0);
-    group.add(top);
 
     const linePoints: THREE.Vector3[] = [];
-    for (const x of [-width * 0.5, width * 0.5]) {
-      for (const y of [0.62, 1.2, 1.78, 2.34]) {
-        linePoints.push(new THREE.Vector3(x, y, -length * 0.5), new THREE.Vector3(x, y, length * 0.5));
+    const addWallGridX = (x: number, z1: number, z2: number) => {
+      for (const y of [0.55, 1.1, 1.65, 2.2, 2.75, height]) {
+        linePoints.push(new THREE.Vector3(x, y, z1), new THREE.Vector3(x, y, z2));
       }
-      for (let step = 0; step <= 4; step += 1) {
-        const z = -length * 0.5 + (length * step) / 4;
+      for (let step = 0; step <= 6; step += 1) {
+        const z = z1 + ((z2 - z1) * step) / 6;
         linePoints.push(new THREE.Vector3(x, 0.18, z), new THREE.Vector3(x, height, z));
       }
+    };
+    const addWallGridZ = (z: number, x1: number, x2: number) => {
+      for (const y of [0.55, 1.1, 1.65, 2.2, 2.75, height]) {
+        linePoints.push(new THREE.Vector3(x1, y, z), new THREE.Vector3(x2, y, z));
+      }
+      for (let step = 0; step <= Math.max(1, Math.round((x2 - x1) / 1.55)); step += 1) {
+        const x = x1 + ((x2 - x1) * step) / Math.max(1, Math.round((x2 - x1) / 1.55));
+        linePoints.push(new THREE.Vector3(x, 0.18, z), new THREE.Vector3(x, height, z));
+      }
+    };
+    addWallGridX(-halfWidth, -halfLength, halfLength);
+    addWallGridX(halfWidth, -halfLength, halfLength);
+    addWallGridZ(halfLength, -halfWidth, halfWidth);
+    for (let lane = 1; lane < laneCount; lane += 1) {
+      addWallGridX(-halfWidth + laneWidth * lane, dividerStart, halfLength);
     }
-    for (const y of [0.62, 1.2, 1.78, 2.34]) {
-      linePoints.push(new THREE.Vector3(-width * 0.5, y, length * 0.5), new THREE.Vector3(width * 0.5, y, length * 0.5));
+    for (let step = 0; step <= 6; step += 1) {
+      const z = -halfLength + (length * step) / 6;
+      linePoints.push(new THREE.Vector3(-halfWidth, height, z), new THREE.Vector3(halfWidth, height, z));
     }
-    for (let step = 0; step <= 4; step += 1) {
-      const x = -width * 0.5 + (width * step) / 4;
-      linePoints.push(new THREE.Vector3(x, 0.18, length * 0.5), new THREE.Vector3(x, height, length * 0.5));
+    for (let lane = 0; lane <= laneCount; lane += 1) {
+      const x = -halfWidth + laneWidth * lane;
+      linePoints.push(new THREE.Vector3(x, height, -halfLength), new THREE.Vector3(x, height, halfLength));
     }
     const netLines = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(linePoints), netLineMaterial);
     group.add(netLines);
 
-    const mat = new THREE.MeshStandardMaterial({ color: 0x7a725f, roughness: 0.92 });
-    const pitch = new THREE.Mesh(new THREE.BoxGeometry(width * 0.55, 0.05, length * 0.74), mat);
-    pitch.position.y = 0.035;
-    pitch.receiveShadow = true;
-    group.add(pitch);
+    const addRail = (localX: number, y: number, localZ: number, railWidth: number, railHeight: number, railDepth: number) => {
+      addBox(localX, y, localZ, railWidth, railHeight, railDepth, frameMaterial);
+    };
+    for (const x of [-halfWidth, halfWidth]) {
+      addRail(x, height, 0, 0.08, 0.08, length);
+    }
+    addRail(0, height, halfLength, width, 0.08, 0.08);
+
+    addBox(0, 0.42, halfLength + 0.12, width * 0.9, 0.78, 0.18, concreteMaterial);
+    for (const [index, material] of [muralBlue, muralGold, muralGreen, muralBlue].entries()) {
+      addBox(-width * 0.34 + index * width * 0.225, 0.72, halfLength + 0.005, width * 0.15, 0.28, 0.035, material, false);
+    }
+    const wallTag = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.32, 0.04), this.canvasSignMaterial("cricket-nets-ecc-tag", "ECC", "#263d45", "#efd18a"));
+    wallTag.position.set(0, 0.82, halfLength - 0.012);
+    group.add(wallTag);
+    addBox(0, 0.06, -halfLength - 0.08, width, 0.03, 0.28, creaseMaterial, false);
 
     group.position.set(detail.position.x, this.boxSupportY(detail.position, detail.angle, width * 0.5, length * 0.5), detail.position.z);
     group.rotation.y = detail.angle;
@@ -5470,16 +5587,39 @@ export class WorldBuilder {
 
     const sculpture = new THREE.Group();
     const frameMaterial = new THREE.MeshStandardMaterial({ color: 0x191c1a, metalness: 0.4, roughness: 0.38 });
-    const ledMaterial = new THREE.MeshBasicMaterial({ color: 0xe04f3e });
     const column = new THREE.Mesh(new THREE.BoxGeometry(1.1, 1.65, 0.28), frameMaterial);
     column.position.y = 0.85;
     column.castShadow = true;
     sculpture.add(column);
-    for (let row = 0; row < 3; row += 1) {
-      const bar = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.08, 0.035), ledMaterial);
-      bar.position.set(0, 1.28 - row * 0.34, -0.165);
-      sculpture.add(bar);
-    }
+    const clockHousing = new THREE.Mesh(new THREE.BoxGeometry(1.24, 0.62, 0.07), frameMaterial);
+    clockHousing.position.set(0, 0.88, -0.18);
+    clockHousing.castShadow = true;
+    sculpture.add(clockHousing);
+
+    const clockFace = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.1, 0.42),
+      this.digitalClockMaterial("queen-victoria-plinth-zero-clock", "00:00:00", "2030 EVENT")
+    );
+    clockFace.position.set(0, 0.88, -0.222);
+    clockFace.rotation.y = Math.PI;
+    clockFace.userData.kind = "plinth-apocalypse-clock";
+    clockFace.userData.dynamic = true;
+    sculpture.add(clockFace);
+
+    const clockGlow = new THREE.PointLight(0xff4433, 0.62, 4.6, 1.35);
+    clockGlow.position.set(0, 0.92, -0.42);
+    clockGlow.userData.kind = "plinth-apocalypse-clock-light";
+    clockGlow.userData.dynamic = true;
+    sculpture.add(clockGlow);
+
+    const statusStripe = new THREE.Mesh(
+      new THREE.BoxGeometry(0.84, 0.04, 0.038),
+      new THREE.MeshBasicMaterial({ color: 0xff3e2e, transparent: true, opacity: 0.88 })
+    );
+    statusStripe.position.set(0, 0.48, -0.174);
+    statusStripe.userData.kind = "plinth-apocalypse-clock";
+    statusStripe.userData.dynamic = true;
+    sculpture.add(statusStripe);
     sculpture.position.set(position.x, plinthGroundY + 2.36, position.z);
     sculpture.rotation.y = -0.45;
     this.scene.add(sculpture);
@@ -5580,16 +5720,18 @@ export class WorldBuilder {
         this.scene.add(cap);
       }
 
-      for (let index = -3; index <= 3; index += 1) {
-        if (Math.abs(index) < 1) continue;
-        const bollardPosition = new THREE.Vector3(entrance.position.x, 0, entrance.position.z)
-          .addScaledVector(tangent, index * 1.35)
-          .addScaledVector(normal, -1.8);
-        const bollardPoint = { x: bollardPosition.x, z: bollardPosition.z };
-        const bollard = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.1, 0.74, 8), iron);
-        bollard.position.set(bollardPoint.x, this.groundY(bollardPoint) + 0.37, bollardPoint.z);
-        bollard.castShadow = true;
-        this.scene.add(bollard);
+      if (entrance.transit !== "rail-trail") {
+        for (let index = -3; index <= 3; index += 1) {
+          if (Math.abs(index) < 1) continue;
+          const bollardPosition = new THREE.Vector3(entrance.position.x, 0, entrance.position.z)
+            .addScaledVector(tangent, index * 1.35)
+            .addScaledVector(normal, -1.8);
+          const bollardPoint = { x: bollardPosition.x, z: bollardPosition.z };
+          const bollard = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.1, 0.74, 8), iron);
+          bollard.position.set(bollardPoint.x, this.groundY(bollardPoint) + 0.37, bollardPoint.z);
+          bollard.castShadow = true;
+          this.scene.add(bollard);
+        }
       }
 
       if (entrance.sign) {

@@ -1,4 +1,4 @@
-# Edinburgh Gardens: Last Light
+# Edinburgh Gardens 2030
 
 A browser-based Three.js first-person zombie shooter set in an expanded playable version of Edinburgh Gardens, Fitzroy North.
 
@@ -11,7 +11,19 @@ npm run dev
 
 See [docs/architecture.md](docs/architecture.md) for the current runtime, gameplay, rendering and data boundaries.
 
-## LAN Co-op
+## Desktop LAN Co-op
+
+The Electron app is the preferred LAN multiplayer path. It bundles the game, serves the web build over HTTP for browser clients, and can start the WebSocket relay on the host machine.
+
+```bash
+npm run electron
+```
+
+Choose **Host LAN** on the host machine. The app starts the relay, shows a short **Host IP** such as `192.168.1.42`, and shows a browser URL served from the host machine. Other Electron clients should choose **Join LAN** and pick the discovered host.
+
+In the desktop app, clients normally do not need to type the long address. **Join LAN** scans the local network and lists available hosts. If discovery is blocked by the network or firewall, type the host machine's short **Host IP** shown on the host screen, for example `192.168.1.42`; the app fills in the WebSocket port automatically.
+
+## Browser LAN Co-op
 
 Run the browser dev server on the local network and start the WebSocket relay:
 
@@ -20,13 +32,13 @@ npm run dev:lan
 npm run multiplayer
 ```
 
-On the host machine, open:
+On the host browser, choose **Host LAN** from the launch menu or open:
 
 ```text
 http://HOST_LAN_IP:5480/?lan=host&name=Host
 ```
 
-Other players on the same network can join with:
+Other players on the same network can choose **Join LAN** from the launch menu and enter the host IP, or open:
 
 ```text
 http://HOST_LAN_IP:5480/?lan=join&server=ws://HOST_LAN_IP:5488&name=Player
@@ -34,15 +46,28 @@ http://HOST_LAN_IP:5480/?lan=join&server=ws://HOST_LAN_IP:5488&name=Player
 
 The host browser is authoritative for zombies, waves, pickups, weapon drops, damage and loot. Joined browsers send movement/actions to the host and render host snapshots.
 
+A public HTTPS web deployment is intended for single-player and demos. Browser LAN joining works best from the host machine's HTTP-served URL; public HTTPS pages cannot reliably connect to a plain `ws://` LAN relay.
+
+## Release Packaging
+
+```bash
+npm run package
+```
+
+This runs one Vite build, stages the static web artifact in `release/web`, and packages the Electron desktop artifact under `release/desktop`.
+
 ## Controls
 
 - `WASD`: move
 - Mouse: look
 - Click: fire
 - `R`: reload
-- `E`: interact, buy nearby upgrades, pick up weapons, climb/drop from fixtures
+- `E`: interact, buy nearby upgrades, climb/drop from fixtures
 - `Shift`: sprint
 - `G`: throw a timed bottle bomb
+- `I`: open/close inventory menu
+- `V`: mount or step off a carried skateboard
+- `X`: take loose weapons and world items, or remove placed ladders
 - Number keys: switch discovered weapons
 
 ## Current Mechanics

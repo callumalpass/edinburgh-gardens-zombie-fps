@@ -3,11 +3,17 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "main": "electron/main.mjs",
   "scripts": {
     "dev": "vite",
     "dev:lan": "vite --host 0.0.0.0",
     "multiplayer": "node server/multiplayer-server.mjs",
+    "electron": "npm run build && electron .",
     "build": "tsc --noEmit && vite build",
+    "package": "npm run build && npm run package:web && npm run package:desktop:nobuild",
+    "package:web": "node scripts/package-web.mjs",
+    "package:desktop": "npm run build && npm run package:desktop:nobuild",
+    "package:desktop:nobuild": "electron-builder",
     "test": "vitest",
     "test:run": "vitest run --reporter=dot",
     "research:check": "node scripts/validate-research-assets.mjs",
@@ -26,8 +32,43 @@
     "@playwright/test": "^1.61.1",
     "@types/node": "^26.1.0",
     "@types/three": "^0.185.0",
+    "electron": "^43.0.0",
+    "electron-builder": "^26.15.3",
     "typescript": "^6.0.3",
     "vite": "^8.1.3",
     "vitest": "^4.1.9"
+  },
+  "build": {
+    "appId": "com.callumalpass.edinburghgardens2030",
+    "productName": "Edinburgh Gardens 2030",
+    "directories": {
+      "output": "release/desktop"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "server/**/*",
+      "package.json"
+    ],
+    "linux": {
+      "target": [
+        "AppImage",
+        "dir"
+      ],
+      "category": "Game"
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.games"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "zip"
+      ]
+    }
   }
 }

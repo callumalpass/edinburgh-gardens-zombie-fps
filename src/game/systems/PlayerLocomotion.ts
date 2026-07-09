@@ -16,7 +16,7 @@ import {
   SPRINT_SPEED,
   WALK_SPEED
 } from "../gameConfig";
-import { clampToPolygon } from "../geo";
+import { clampToPolygon, nearestPointOnPolygon, pointInPolygon } from "../geo";
 import { pointInInteractableRaisedFootprint } from "../interactables";
 import type { MovementSurface } from "../noise";
 import { speedMultiplierForCondition, type PlayerCondition } from "../playerCondition";
@@ -281,9 +281,71 @@ export class PlayerLocomotion {
       this.world.boundary,
       3
     );
+    next = this.constrainActiveFixtureMovement(next, actor, radius);
     next = this.resolveNearbyObstacles(next, radius, actor, allowJumpBypass);
+    next = this.constrainActiveFixtureMovement(next, actor, radius);
     next = this.resolveSkateBowlExit(current, next, actor.velocity);
     actor.position.set(next.x, this.world.groundY(next), next.z);
+  }
+
+  private constrainActiveFixtureMovement(point: Vec2, actor: Pick<LocomotionActor, "activeFixtureId">, radius: number): Vec2 {
+    const active = actor.activeFixtureId ? this.interactableById.get(actor.activeFixtureId) : undefined;
+    if (active?.kind !== "tennis" || !active.raisedFootprint) {
+      return point;
+    }
+    const inset = radius + 0.12;
+    if (active.raisedFootprint.shape === "circle") {
+      const dx = point.x - active.raisedFootprint.center.x;
+      const dz = point.z - active.raisedFootprint.center.z;
+      const distance = Math.hypot(dx, dz);
+      const maxDistance = Math.max(0.1, active.raisedFootprint.radius - inset);
+      if (distance <= maxDistance) {
+        return point;
+      }
+      const length = distance || 1;
+      return {
+        x: active.raisedFootprint.center.x + (dx / length) * maxDistance,
+        z: active.raisedFootprint.center.z + (dz / length) * maxDistance
+      };
+    }
+
+    if (active.raisedFootprint.shape === "polygon") {
+      return this.constrainPointToPolygonFootprint(point, active.raisedFootprint.polygon, active.raisedFootprint.center, inset);
+    }
+
+    const footprint = active.raisedFootprint;
+    const dx = point.x - footprint.center.x;
+    const dz = point.z - footprint.center.z;
+    const cos = Math.cos(footprint.angle);
+    const sin = Math.sin(footprint.angle);
+    const localX = dx * cos + dz * sin;
+    const localZ = -dx * sin + dz * cos;
+    const clampedX = THREE.MathUtils.clamp(localX, -Math.max(0.1, footprint.halfX - inset), Math.max(0.1, footprint.halfX - inset));
+    const clampedZ = THREE.MathUtils.clamp(localZ, -Math.max(0.1, footprint.halfZ - inset), Math.max(0.1, footprint.halfZ - inset));
+    if (Math.abs(clampedX - localX) < 0.001 && Math.abs(clampedZ - localZ) < 0.001) {
+      return point;
+    }
+    return {
+      x: footprint.center.x + clampedX * cos - clampedZ * sin,
+      z: footprint.center.z + clampedX * sin + clampedZ * cos
+    };
+  }
+
+  private constrainPointToPolygonFootprint(point: Vec2, polygon: readonly Vec2[], center: Vec2, inset: number): Vec2 {
+    const nearest = nearestPointOnPolygon(point, polygon);
+    const distanceToEdge = Math.hypot(point.x - nearest.x, point.z - nearest.z);
+    if (pointInPolygon(point, polygon) && distanceToEdge >= inset) {
+      return point;
+    }
+    const inward = {
+      x: center.x - nearest.x,
+      z: center.z - nearest.z
+    };
+    const inwardLength = Math.hypot(inward.x, inward.z) || 1;
+    return {
+      x: nearest.x + (inward.x / inwardLength) * inset,
+      z: nearest.z + (inward.z / inwardLength) * inset
+    };
   }
 
   private shouldBypassObstacle(

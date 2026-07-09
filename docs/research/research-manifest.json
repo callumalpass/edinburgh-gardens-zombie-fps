@@ -248,6 +248,21 @@
       "url": "https://www.lords.org/getattachment/a9ec27d0-0828-4fc1-bf10-7f7edf5204a1/Laws-of-Cricket-2017-Code-4th-Edition-2026.pdf"
     },
     {
+      "id": "osm-cricket-nets-tag",
+      "label": "OpenStreetMap sport=cricket_nets tag page",
+      "url": "https://wiki.openstreetmap.org/wiki/Tag%3Asport%3Dcricket_nets"
+    },
+    {
+      "id": "edinburgh-cricket-club-senior-womens",
+      "label": "Edinburgh Cricket Club Senior Women's training page",
+      "url": "https://edinburghcricketclub.com/senior-womens"
+    },
+    {
+      "id": "running-routes-carlton-fitzroy",
+      "label": "Running Routes Melbourne Carlton/Fitzroy route photo",
+      "url": "https://www.joggingroutes.org/2014/12/melbourne-carltonfitzroy-running-route.html"
+    },
+    {
       "id": "fiba-equipment",
       "label": "FIBA basketball rules and equipment",
       "url": "https://assets.fiba.basketball/image/upload/documents-corporate-fiba-official-rules-2024-official-basketball-rules-and-basketball-equipment.pdf"
@@ -308,7 +323,10 @@
         "brunswick-tree-protection-plan",
         "cits-australian-rules-dimensions",
         "afl-line-marking",
-        "mcc-laws-cricket-2026"
+        "mcc-laws-cricket-2026",
+        "osm-cricket-nets-tag",
+        "edinburgh-cricket-club-senior-womens",
+        "running-routes-carlton-fitzroy"
       ]
     },
     {
@@ -478,6 +496,7 @@
       "id": "north-east-shrub-planters",
       "path": "docs/research/north-east-shrub-planters-2026-07-05.md",
       "sourceIds": [
+        "osm-way-api",
         "edinburgh-gardens-cmp",
         "edinburgh-gardens-cmp-2021-3068",
         "captain-cook-society-edinburgh-gardens"
@@ -665,6 +684,18 @@
         "cits-australian-rules-dimensions",
         "afl-line-marking",
         "mcc-laws-cricket-2026"
+      ]
+    },
+    {
+      "id": "cricket-net-cage-refresh",
+      "path": "docs/research/cricket-net-cage-refresh-2026-07-06.md",
+      "requiredHeadings": ["## Sources", "## Findings", "## Implementation Translation", "## Uncertainty", "## Validation"],
+      "sourceIds": [
+        "osm-way-api",
+        "osm-cricket-nets-tag",
+        "edinburgh-gardens-cmp",
+        "edinburgh-cricket-club-senior-womens",
+        "running-routes-carlton-fitzroy"
       ]
     },
     {

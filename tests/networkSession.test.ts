@@ -140,9 +140,11 @@ describe("NetworkSession", () => {
     expect(observed.statuses).toEqual(["Connecting to LAN host", "Joined LAN game"]);
     expect(session.sendAction("jump", { yaw: 1, pitch: -0.2 })).toBe(true);
     expect(session.sendAction("equipSlot", { yaw: 1, pitch: -0.2, slot: 2 })).toBe(true);
+    expect(session.sendAction("take", { yaw: 1, pitch: -0.2 })).toBe(true);
     expect(transport.actions.map((action) => [action.type, action.sequence, action.slot])).toEqual([
       ["jump", 1, undefined],
-      ["equipSlot", 2, 2]
+      ["equipSlot", 2, 2],
+      ["take", 3, undefined]
     ]);
 
     expect(session.sendInputFrame(1, "playing", inputFrame)).toBe(true);

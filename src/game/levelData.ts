@@ -106,18 +106,24 @@ const footprintFromPolygon = (polygon: readonly Vec2[]): { center: Vec2; halfX: 
   return { center, halfX, halfZ, angle };
 };
 
-const raisedCircle = (center: Vec2, radius: number): InteractableRaisedFootprint => ({
+const raisedCircle = (center: Vec2, radius: number): Extract<InteractableRaisedFootprint, { shape: "circle" }> => ({
   shape: "circle",
   center,
   radius
 });
 
-const raisedBox = (center: Vec2, halfX: number, halfZ: number, angle: number): InteractableRaisedFootprint => ({
+const raisedBox = (center: Vec2, halfX: number, halfZ: number, angle: number): Extract<InteractableRaisedFootprint, { shape: "box" }> => ({
   shape: "box",
   center,
   halfX,
   halfZ,
   angle
+});
+
+const raisedPolygon = (polygon: readonly Vec2[], center = polygonCentroid(polygon)): Extract<InteractableRaisedFootprint, { shape: "polygon" }> => ({
+  shape: "polygon",
+  center,
+  polygon: polygon.map((point) => ({ ...point }))
 });
 
 const polygonEdgePointFromLocal = (
@@ -490,9 +496,13 @@ const RAINGARDEN_SOURCE =
   "Lovell Chen 2021 CMP Figure 96 and stormwater filtration garden description; Landezine/GHD and Atlan design notes; OSM way 655160878 used only for east-side underground storage footprint";
 const ST_GEORGES_DISPLAY_BED_ANGLE = 1.84;
 const SHRUB_PLANTER_SOURCE =
-  "Edinburgh Gardens CMP 2004 sections 4.2.18-4.2.19; Lovell Chen 2021 CMP sections 3.8.2-3.8.3; hand-placed from Rowe Street and north-east Elm Circle context";
+  "Edinburgh Gardens CMP 2004 sections 4.2.18-4.2.19; Lovell Chen 2021 CMP sections 3.8.2-3.8.3; hand-placed from Rowe Street, north-east Elm Circle and current OSM path-corridor context because no public GIS vertices were available";
 const BLUESTONE_PLANTER_RADIUS = 5 * WORLD_SCALE;
 const ROWE_ENTRANCE_PLANTER_RADIUS = 2.5 * WORLD_SCALE;
+const CRICKET_NET_LANE_COUNT = 4;
+const CRICKET_NET_CAGE_WIDTH = 12.4;
+const CRICKET_NET_CAGE_LENGTH = 14.8;
+const CRICKET_NET_FRONT_LOBBY_LENGTH = 2.55;
 
 const NORTH_TOILETS_GEO = [
   g(-37.7859240, 144.9821748),
@@ -3103,6 +3113,46 @@ function sportsFixtureObstacles(fixture: SportsFixture): CircularObstacle[] {
   }));
 }
 
+function cricketNetCageObstacles(detail: ParkLifeDetail): BoxObstacle[] {
+  const wallThickness = 0.24;
+  const halfWidth = CRICKET_NET_CAGE_WIDTH * 0.5;
+  const halfLength = CRICKET_NET_CAGE_LENGTH * 0.5;
+  const laneWidth = CRICKET_NET_CAGE_WIDTH / CRICKET_NET_LANE_COUNT;
+  const dividerStartZ = -halfLength + CRICKET_NET_FRONT_LOBBY_LENGTH;
+  const dividerHalfLength = (halfLength - dividerStartZ) * 0.5;
+  const dividerCenterZ = (halfLength + dividerStartZ) * 0.5;
+  const obstacle = (id: string, label: string, localX: number, localZ: number, halfX: number, halfZ: number): BoxObstacle => ({
+    id: `${detail.id}-${id}`,
+    label: `${detail.label} ${label}`,
+    sourceObjectId: detail.id,
+    sourceObjectKind: "park-life-detail",
+    shape: "box",
+    center: offsetPoint(detail.position, detail.angle, localX, localZ),
+    halfX,
+    halfZ,
+    angle: detail.angle,
+    blocksSight: false
+  });
+
+  return [
+    obstacle("side-west", "west cage side", -halfWidth, 0, wallThickness * 0.5, halfLength),
+    obstacle("side-east", "east cage side", halfWidth, 0, wallThickness * 0.5, halfLength),
+    obstacle("rear", "rear cage wall", 0, halfLength, halfWidth, wallThickness * 0.5),
+    ...Array.from({ length: CRICKET_NET_LANE_COUNT - 1 }, (_, index) =>
+      obstacle(`lane-divider-${index + 1}`, `lane ${index + 1} divider net`, -halfWidth + laneWidth * (index + 1), dividerCenterZ, wallThickness * 0.18, dividerHalfLength)
+    )
+  ];
+}
+
+function cricketNetCageObstacleIds(detailId: string): string[] {
+  return [
+    `${detailId}-side-west`,
+    `${detailId}-side-east`,
+    `${detailId}-rear`,
+    ...Array.from({ length: CRICKET_NET_LANE_COUNT - 1 }, (_, index) => `${detailId}-lane-divider-${index + 1}`)
+  ];
+}
+
 function pathFromGeo(
   id: string,
   label: string,
@@ -3352,9 +3402,9 @@ export function createLevelData(): LevelData {
   const chandlerFountain = geoToWorld(g(-37.789505, 144.980304));
   const cookMemorial = geoToWorld(g(-37.7873520, 144.9855420));
   const sportsmansMemorial = geoToWorld(g(-37.78754, 144.98066));
-  const northEastBluestonePlanter = geoToWorld(g(-37.78718, 144.98533));
-  const roweStreetNorthPlanter = geoToWorld(g(-37.78730, 144.98541));
-  const roweStreetSouthPlanter = geoToWorld(g(-37.78742, 144.98537));
+  const northEastBluestonePlanter = geoToWorld(g(-37.7872483, 144.9852198));
+  const roweStreetNorthPlanter = geoToWorld(g(-37.7872974, 144.9853708));
+  const roweStreetSouthPlanter = geoToWorld(g(-37.7874553, 144.9853974));
   const stGeorgesDisplayBedNorth = geoToWorld(g(-37.78688, 144.98105));
   const stGeorgesDisplayBedCentral = geoToWorld(g(-37.78725, 144.98082));
   const stGeorgesDisplayBedSouth = geoToWorld(g(-37.78772, 144.98064));
@@ -3385,7 +3435,7 @@ export function createLevelData(): LevelData {
     northToiletsFootprint.halfX * 0.78,
     northToiletsFootprint.halfZ + 0.1
   );
-  const tennisLadderAccess = exteriorPointFromPolygon(geoToWorld(g(-37.787955, 144.982030)), tennis, tennisCenter, 1.25);
+  const tennisLadderAccess = exteriorPointFromPolygon(geoToWorld(g(-37.787955, 144.982030)), tennis, tennisCenter, 0.28);
   const tennisLadderLanding = {
     x: tennisLadderAccess.x + (tennisCenter.x - tennisLadderAccess.x) * 0.16,
     z: tennisLadderAccess.z + (tennisCenter.z - tennisLadderAccess.z) * 0.16
@@ -3988,7 +4038,13 @@ export function createLevelData(): LevelData {
       kind: "cricket-nets",
       position: geoToWorld(g(-37.7896906, 144.9819917)),
       angle: -0.18,
-      source: "OpenStreetMap node 249041533 sport=cricket_nets; W.T. Peterson Oval sports context"
+      cricketNetLanes: 4,
+      cricketNetEntranceCount: 1,
+      cricketNetEnclosure: "galvanised-pipe-cyclone-wire-cage",
+      cricketNetSurface: "concrete-artificial-turf",
+      cricketNetRearMuralWall: true,
+      source:
+        "OpenStreetMap node 249041533 sport=cricket_nets; Edinburgh Gardens CMP 2004 section 3.4.4 records four concrete and artificial turf wickets with a galvanised pipe and cyclone wire enclosure plus a remnant concrete boundary-wall mural; Edinburgh Cricket Club confirms Brunswick Street Oval nets training; public 2014 route photo shows multi-lane netted cricket practice in Edinburgh Gardens"
     },
     {
       id: "rail-trail-flat-tyre-bike",
@@ -4143,6 +4199,13 @@ export function createLevelData(): LevelData {
       "OSM natural=tree node suppressed by the Brunswick Street Oval Tree Protection and Management Plan; Yarra redevelopment notes 39 removals and 2026-2027 replacement planting"
   }));
   const parkLifeDetails = [...baseParkLifeDetails, ...removedTreeStumpDetails].filter((detail) => pointInPolygon(detail.position, boundary));
+  const cricketNetDetail = parkLifeDetails.find((detail) => detail.id === "oval-cricket-nets");
+  const cricketNetFrameAccess = cricketNetDetail
+    ? offsetPoint(cricketNetDetail.position, cricketNetDetail.angle, -CRICKET_NET_CAGE_WIDTH * 0.5 - 0.82, -CRICKET_NET_CAGE_LENGTH * 0.12)
+    : null;
+  const cricketNetFrameLanding = cricketNetDetail
+    ? offsetPoint(cricketNetDetail.position, cricketNetDetail.angle, -CRICKET_NET_CAGE_WIDTH * 0.5 + 0.72, -CRICKET_NET_CAGE_LENGTH * 0.12)
+    : null;
   const vicmapTreeRecords = VICMAP_TREE_GEO.map((tree) => ({
     ...tree,
     position: geoToWorld(tree.point)
@@ -4563,7 +4626,7 @@ export function createLevelData(): LevelData {
     { id: "sportsmans-war-memorial", label: "Sportsman's War Memorial", kind: "memorial", position: sportsmansMemorial, radius: 4.5 },
     { id: "cook-memorial-site", label: "Captain James Cook memorial site", kind: "memorial", position: cookMemorial, radius: 4 }
   ];
-  const structuralTreeExclusionKinds = new Set<Landmark["kind"]>(["basketball", "bowls", "court", "grandstand", "playground", "rotunda", "skate", "tennis", "toilets"]);
+  const structuralTreeExclusionKinds = new Set<Landmark["kind"]>(["basketball", "bowls", "court", "grandstand", "oval", "playground", "rotunda", "skate", "tennis", "toilets"]);
   const treeExclusionZones: TreeExclusionZone[] = [
     ...mappedBuildings.map((building) => ({
       id: building.id,
@@ -4629,7 +4692,7 @@ export function createLevelData(): LevelData {
   };
   let replacementTreeIndex = 0;
   for (const row of REDEVELOPMENT_REPLACEMENT_PLANTING_ROWS_GEO) {
-    for (const point of sampleGeoPolyline(row.points, row.count).map(geoToWorld)) {
+    for (const point of sampleGeoPolyline(row.points, row.count).map((geoPoint) => geoToWorld(geoPoint))) {
       const species = REPLACEMENT_TREE_SPECIES[replacementTreeIndex % REPLACEMENT_TREE_SPECIES.length];
       appendMappedTree(
         trees,
@@ -4831,6 +4894,7 @@ export function createLevelData(): LevelData {
         ),
       ...mappedFences.flatMap(fenceObstacles),
       ...sportsFixtures.flatMap(sportsFixtureObstacles),
+      ...parkLifeDetails.filter((detail) => detail.kind === "cricket-nets").flatMap(cricketNetCageObstacles),
       ...treeColliders.map((tree) => ({
         id: tree.id,
         label: tree.label,
@@ -4983,7 +5047,7 @@ export function createLevelData(): LevelData {
         accessHeading: tennisFootprint.angle,
         radius: Math.max(tennisFootprint.halfX, tennisFootprint.halfZ),
         height: 0.22,
-        raisedFootprint: raisedBox(tennisCenter, tennisFootprint.halfX + 0.6, tennisFootprint.halfZ + 0.6, tennisFootprint.angle),
+        raisedFootprint: raisedPolygon(tennis, tennisCenter),
         prompt: "E: place ladder at tennis fence",
         mode: "toggle",
         bypassObstacleIds: ["tennis"]
@@ -5010,6 +5074,28 @@ export function createLevelData(): LevelData {
             bypassObstacleIds: [`${fixture.id}-post`]
           };
         }),
+      ...(cricketNetDetail && cricketNetFrameAccess && cricketNetFrameLanding
+        ? [
+            {
+              id: "oval-cricket-nets-frame",
+              label: "Oval cricket nets cage",
+              kind: "cricket-nets" as const,
+              position: cricketNetDetail.position,
+              accessPosition: cricketNetFrameAccess,
+              landingPosition: cricketNetFrameLanding,
+              exitPosition: cricketNetFrameAccess,
+              accessRadius: 4.2,
+              accessKind: "cage-frame" as const,
+              accessHeading: cricketNetDetail.angle,
+              radius: Math.max(CRICKET_NET_CAGE_WIDTH, CRICKET_NET_CAGE_LENGTH) * 0.5,
+              height: 3.2,
+              raisedFootprint: raisedBox(cricketNetDetail.position, CRICKET_NET_CAGE_WIDTH * 0.5, CRICKET_NET_CAGE_LENGTH * 0.5, cricketNetDetail.angle),
+              prompt: "E: climb the cricket-net cage",
+              mode: "toggle" as const,
+              bypassObstacleIds: cricketNetCageObstacleIds(cricketNetDetail.id)
+            }
+          ]
+        : []),
       {
         id: "skate-ramp",
         label: "Fitzy Bowl concrete deck",

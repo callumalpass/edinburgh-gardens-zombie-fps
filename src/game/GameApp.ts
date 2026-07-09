@@ -24,7 +24,7 @@ import {
   findMeleeHits as findMeleeTargetHits,
   findZombieHits as findZombieTargetHits
 } from "./combat/targeting";
-import { clampToPolygon, distance } from "./geo";
+import { clampToPolygon, distance, nearestPointOnPolygon, pointInPolygon } from "./geo";
 import { pointInInteractableRaisedFootprint, pointInRaisedFootprint } from "./interactables";
 import { createLevelData } from "./levelData";
 import {
@@ -140,6 +140,7 @@ import type {
   AmenityPoint,
   CollisionObstacle,
   InteractableFixture,
+  InteractableRaisedFootprint,
   LevelData,
   ParkLifeDetail,
   StructureShelter,
@@ -162,9 +163,11 @@ const STRUCTURE_LIGHT_EXPOSURE_RADIUS = 28;
 const SCREAMER_RALLY_RADIUS = 94;
 const SCREAMER_RALLY_SEARCH_RADIUS = 28;
 const PLACED_LADDER_PICKUP_RADIUS = 4.8;
-const PLACED_LADDER_LEAN_RADIANS = -1.36;
-const PLACED_LADDER_LENGTH_SCALE = 1.5;
-const PLACED_LADDER_CENTER_HEIGHT = 1.8;
+const HIT_FLASH_SECONDS = 0.12;
+const HIT_SPARK_SECONDS = 0.075;
+const HIT_SPARK_BASE_SIZE = 0.42;
+const HIT_SPARK_POOL_SIZE = 12;
+const MAX_HIT_SPARKS_PER_SHOT = 2;
 
 interface StructureUtilityEffect {
   root: THREE.Group;
@@ -180,6 +183,15 @@ interface ActiveFlareBeacon {
   pulseTimer: number;
 }
 
+interface HitSpark {
+  sprite: THREE.Sprite;
+  material: THREE.SpriteMaterial;
+  ttl: number;
+  active: boolean;
+}
+
+type ConditionClassKey = "bleeding" | "limping" | "blurred";
+
 export class GameApp {
   private readonly root: HTMLElement;
   private readonly level: LevelData;
@@ -193,6 +205,12 @@ export class GameApp {
   private readonly inventoryCapacity = INVENTORY_CAPACITY;
   private readonly activeStructureUtilityEffects = new Map<string, StructureUtilityEffect>();
   private readonly activeFlareBeacons: ActiveFlareBeacon[] = [];
+  private readonly hitSparks: HitSpark[] = [];
+  private readonly conditionClassState = {
+    bleeding: false,
+    limping: false,
+    blurred: false
+  };
   private readonly entities = new GameEntityStore();
   private readonly noise = new NoiseSystem();
   private readonly rng = new SeededRandom(0xed1b97);
@@ -228,6 +246,9 @@ export class GameApp {
   private elevatedNoiseTimer = 0;
   private testCrouchOverride: boolean | null = null;
   private lastDamageAt = 0;
+  private hitFlashTimer = 0;
+  private hitFlashActive = false;
+  private hitSparkCursor = 0;
   private nearestStation: UpgradeStation | null = null;
   private nearestFixture: InteractableFixture | null = null;
   private nearestAmenity: AmenityPoint | null = null;
@@ -261,11 +282,14 @@ export class GameApp {
   private renderedLampSpillCount = 0;
   private miniMapVisibleZombieCount = 0;
   private lastHitZone: HitZone | null = null;
+  private readonly plinthClockMaterials: THREE.MeshBasicMaterial[] = [];
+  private readonly plinthClockLights: THREE.PointLight[] = [];
   private materials!: GameMaterials;
   private bike: RideableBike | null = null;
   private bikes: RideableBike[] = [];
   private bikePedalPhase = 0;
   private inventory: InventoryItemId[] = [];
+  private inventoryMenuOpen = false;
   private carriedItem: LargeCarryItemId | null = null;
   private placedLadders: PlacedLadder[] = [];
   private skateboardMounted = false;
@@ -441,6 +465,7 @@ export class GameApp {
     this.createWorld();
     this.world.createUpgradeStations();
     freezeStaticScene(this.scene, [this.camera, this.atmosphere.root, this.atmosphere.worldWeatherRoot]);
+    this.collectPlinthClockFlashTargets();
     this.spawnRideableBikes();
     this.spawnWorldItems();
     this.spawnInitialWeapons();
@@ -527,12 +552,16 @@ export class GameApp {
         toggleFlashlight: () => this.handleToggleFlashlightInput(),
         throwDistraction: () => this.handleThrowDistractionInput(),
         takeItem: () => this.handleTakeInput(),
-        inspectInventory: () => this.inspectInventory(),
+        toggleInventory: () => this.toggleInventoryMenu(),
         dropItem: () => this.dropItem(),
         jump: () => this.handleJumpInput(),
+        toggleSkateboard: () => this.toggleSkateboard(),
         equipSlot: (index) => this.handleEquipSlotInput(index),
         look: (movementX, movementY) => this.handleLook(movementX, movementY),
         cancel: () => {
+          if (this.closeInventoryMenu()) {
+            return;
+          }
           if (this.state === "playing") {
             document.exitPointerLock?.();
           }
@@ -613,6 +642,9 @@ export class GameApp {
   }
 
   private handleTakeInput(): boolean {
+    if (this.nearestWeaponDrop && !this.nearestWorldItem && this.sendNetworkAction("take")) {
+      return true;
+    }
     return this.handleTakeOrRemove();
   }
 
@@ -679,6 +711,7 @@ export class GameApp {
     this.condition = createInitialPlayerCondition();
     this.applyFlashlightVisibility();
     this.testCrouchOverride = null;
+    this.clearTransientEffects();
     this.entities.clearSceneEntities(this.scene);
     this.clearStructureUtilityEffects();
     this.clearActiveFlareBeacons();
@@ -693,15 +726,14 @@ export class GameApp {
     this.lastHitZone = null;
     this.root.classList.remove("is-scoped");
     this.root.classList.remove("is-crouched");
-    this.root.classList.remove("is-bleeding");
-    this.root.classList.remove("is-limping");
-    this.root.classList.remove("is-blurred");
-    document.body.classList.remove("is-bleeding", "is-limping", "is-blurred");
+    this.clearConditionClasses();
+    this.clearHitFlash();
     this.noise.clear();
     this.activeAmenitySearch = null;
     this.activeAmenityRest = null;
     this.entities.clearInteractionMemory();
     this.inventory = [];
+    this.inventoryMenuOpen = false;
     this.carriedItem = null;
     this.skateboardMounted = false;
     this.syncSkateboardMesh();
@@ -739,6 +771,7 @@ export class GameApp {
     this.currentWeather = weather;
     this.currentTimeOfDay = timeOfDay;
     this.world.updateTimeOfDay(timeOfDay, weather);
+    this.updatePlinthClockFlash(now);
     this.postProcessing.setTimeOfDay(timeOfDay);
     this.postProcessing.setWeather(weather);
     this.renderer.toneMappingExposure = timeOfDay.exposure * weather.exposureMultiplier;
@@ -773,6 +806,8 @@ export class GameApp {
     this.updateTracers(dt);
     this.updateShells(dt);
     this.updateSmokePuffs(dt);
+    this.updateHitSparks(dt);
+    this.updateHitFlash(dt);
     this.updateNearestStation();
     this.updateNearestAmenity();
     this.updateNearestWorldItem();
@@ -811,6 +846,8 @@ export class GameApp {
     this.updateTracers(dt);
     this.updateShells(dt);
     this.updateSmokePuffs(dt);
+    this.updateHitSparks(dt);
+    this.updateHitFlash(dt);
     this.updateNearestStation();
     this.updateNearestAmenity();
     this.updateNearestWorldItem();
@@ -1091,6 +1128,7 @@ export class GameApp {
     if (action.type === "shoot") this.shootNetworkPlayer(player, now);
     if (action.type === "reload") this.reloadNetworkPlayer(player, now);
     if (action.type === "interact") this.interactNetworkPlayer(player);
+    if (action.type === "take") this.takeNetworkPlayer(player);
     if (action.type === "toggleFlashlight") this.toggleNetworkPlayerFlashlight(player);
     if (action.type === "throwDistraction") this.throwNetworkPlayerDistraction(player);
     if (action.type === "jump") this.jumpNetworkPlayer(player);
@@ -1256,14 +1294,6 @@ export class GameApp {
   }
 
   private interactNetworkPlayer(player: NetworkRemotePlayer): boolean {
-    const drop = this.nearestWeaponDropForPoint(player.position, 8.2);
-    if (drop) {
-      player.loadout = addWeapon(player.loadout, drop.weaponId);
-      this.scene.remove(drop.mesh);
-      this.weaponDrops = this.weaponDrops.filter((candidate) => candidate !== drop);
-      return true;
-    }
-
     const station = this.nearestStationForPoint(player.position, 10);
     if (station) {
       return this.buyUpgradeForNetworkPlayer(player, station);
@@ -1274,6 +1304,17 @@ export class GameApp {
       return this.useAmenityForNetworkPlayer(player, amenity);
     }
     return false;
+  }
+
+  private takeNetworkPlayer(player: NetworkRemotePlayer): boolean {
+    const drop = this.nearestWeaponDropForPoint(player.position, 8.2);
+    if (!drop) {
+      return false;
+    }
+    player.loadout = addWeapon(player.loadout, drop.weaponId);
+    this.scene.remove(drop.mesh);
+    this.weaponDrops = this.weaponDrops.filter((candidate) => candidate !== drop);
+    return true;
   }
 
   private buyUpgradeForNetworkPlayer(player: NetworkRemotePlayer, station: UpgradeStation): boolean {
@@ -1855,12 +1896,27 @@ export class GameApp {
     const bleeding = this.condition.bleedTimer > 0;
     const limping = this.condition.limpTimer > 0;
     const blurred = this.condition.blurTimer > 0;
-    this.root.classList.toggle("is-bleeding", bleeding);
-    this.root.classList.toggle("is-limping", limping);
-    this.root.classList.toggle("is-blurred", blurred);
-    document.body.classList.toggle("is-bleeding", bleeding);
-    document.body.classList.toggle("is-limping", limping);
-    document.body.classList.toggle("is-blurred", blurred);
+    this.applyConditionClasses(bleeding, limping, blurred);
+  }
+
+  private applyConditionClasses(bleeding: boolean, limping: boolean, blurred: boolean): void {
+    this.applyConditionClass("bleeding", bleeding);
+    this.applyConditionClass("limping", limping);
+    this.applyConditionClass("blurred", blurred);
+  }
+
+  private applyConditionClass(condition: ConditionClassKey, active: boolean): void {
+    if (this.conditionClassState[condition] === active) {
+      return;
+    }
+    this.conditionClassState[condition] = active;
+    const className = `is-${condition}`;
+    this.root.classList.toggle(className, active);
+    document.body.classList.toggle(className, active);
+  }
+
+  private clearConditionClasses(): void {
+    this.applyConditionClasses(false, false, false);
   }
 
   private throwDistraction(): boolean {
@@ -2620,8 +2676,35 @@ export class GameApp {
     if (!combatant.isLocal) {
       return;
     }
-    document.body.classList.add("hit");
-    window.setTimeout(() => document.body.classList.remove("hit"), 120);
+    this.triggerHitFlash();
+  }
+
+  private triggerHitFlash(): void {
+    this.hitFlashTimer = HIT_FLASH_SECONDS;
+    this.applyHitFlash(true);
+  }
+
+  private updateHitFlash(dt: number): void {
+    if (this.hitFlashTimer <= 0) {
+      return;
+    }
+    this.hitFlashTimer = Math.max(0, this.hitFlashTimer - dt);
+    if (this.hitFlashTimer === 0) {
+      this.applyHitFlash(false);
+    }
+  }
+
+  private clearHitFlash(): void {
+    this.hitFlashTimer = 0;
+    this.applyHitFlash(false);
+  }
+
+  private applyHitFlash(active: boolean): void {
+    if (this.hitFlashActive === active) {
+      return;
+    }
+    this.hitFlashActive = active;
+    document.body.classList.toggle("hit", active);
   }
 
   private updateZombieAudio(zombie: Zombie, _dt: number, distanceToPlayer: number, distanceToTarget: number): void {
@@ -2975,6 +3058,7 @@ export class GameApp {
     }
     let registeredHit = false;
     let playedImpact = false;
+    let hitSparksThisShot = 0;
     for (let pellet = 0; pellet < stats.pellets; pellet += 1) {
       const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion);
       direction.x += this.rng.range(-totalSpread, totalSpread);
@@ -2990,7 +3074,10 @@ export class GameApp {
         });
         this.lastHitZone = hit.zone;
         registeredHit = true;
-        this.createHitSpark(endPoint);
+        if (hitSparksThisShot < MAX_HIT_SPARKS_PER_SHOT) {
+          this.createHitSpark(hit.point);
+          hitSparksThisShot += 1;
+        }
         if (!playedImpact) {
           this.audio.playWorld("bulletHit", { x: hit.point.x, z: hit.point.z }, { volume: hit.zone === "head" ? 1.12 : 0.9 });
           playedImpact = true;
@@ -3505,7 +3592,7 @@ export class GameApp {
   }
 
   private updateNearestWorldItem(): void {
-    if (this.mountedBike() || this.skateboardMounted) {
+    if (this.mountedBike()) {
       this.nearestWorldItem = null;
       return;
     }
@@ -3548,6 +3635,11 @@ export class GameApp {
         return false;
       }
     } else {
+      if (this.skateboardMounted) {
+        this.flashStatus("Step off skateboard before carrying that");
+        this.audio.playWorld("deny");
+        return false;
+      }
       if (this.carriedItem) {
         this.flashStatus(`Already carrying ${ITEM_DEFINITIONS[this.carriedItem].label}`);
         this.audio.playWorld("deny");
@@ -3586,14 +3678,14 @@ export class GameApp {
   }
 
   private handleTakeOrRemove(): boolean {
-    if (this.skateboardMounted) {
-      return this.toggleSkateboard();
+    if (this.nearestWorldItem) {
+      return this.pickupWorldItem(this.nearestWorldItem);
+    }
+    if (this.nearestWeaponDrop) {
+      return this.pickupWeapon(this.nearestWeaponDrop);
     }
     if (this.nearestPlacedLadder) {
       return this.pickupPlacedLadder(this.nearestPlacedLadder);
-    }
-    if (this.nearestWorldItem) {
-      return this.pickupWorldItem(this.nearestWorldItem);
     }
     this.flashStatus("Nothing to take");
     this.audio.playWorld("deny");
@@ -3622,9 +3714,6 @@ export class GameApp {
   }
 
   private dropItem(): boolean {
-    if (this.skateboardMounted) {
-      this.toggleSkateboard();
-    }
     const forward = this.forwardPoint(3.2);
     if (this.carriedItem) {
       const itemId = this.carriedItem;
@@ -3653,7 +3742,26 @@ export class GameApp {
     const carried = this.carriedItem ? ITEM_DEFINITIONS[this.carriedItem].label : "hands free";
     const message = `Inventory ${this.inventory.length}/${this.inventoryCapacity}: ${slots}. Carrying: ${carried}.`;
     this.flashStatus(message);
+    this.inventoryMenuOpen = true;
     return message;
+  }
+
+  private toggleInventoryMenu(): boolean {
+    if (this.state !== "playing") {
+      return false;
+    }
+    this.inventoryMenuOpen = !this.inventoryMenuOpen;
+    this.flashStatus(this.inventoryMenuOpen ? "Inventory open" : "Inventory closed");
+    return true;
+  }
+
+  private closeInventoryMenu(): boolean {
+    if (!this.inventoryMenuOpen) {
+      return false;
+    }
+    this.inventoryMenuOpen = false;
+    this.flashStatus("Inventory closed");
+    return true;
   }
 
   private forwardPoint(range: number): Vec2 {
@@ -3691,15 +3799,6 @@ export class GameApp {
   private handleInteract(): boolean {
     if (this.mountedBike()) {
       return this.toggleBike();
-    }
-    if (this.skateboardMounted) {
-      return this.toggleSkateboard();
-    }
-    if (this.carriedItem === "skateboard") {
-      return this.toggleSkateboard();
-    }
-    if (this.nearestWeaponDrop) {
-      return this.pickupWeapon(this.nearestWeaponDrop);
     }
     if (this.nearestBike) {
       return this.toggleBike();
@@ -4114,7 +4213,7 @@ export class GameApp {
   }
 
   private updateNearestBrokenBike(): void {
-    if (this.mountedBike() || this.skateboardMounted) {
+    if (this.mountedBike()) {
       this.nearestBrokenBike = null;
       return;
     }
@@ -4149,38 +4248,170 @@ export class GameApp {
       this.flashStatus("Ladder already placed");
       return true;
     }
-    const accessPosition = { x: this.player.position.x, z: this.player.position.z };
-    const target = fixture.position;
-    const dx = target.x - accessPosition.x;
-    const dz = target.z - accessPosition.z;
-    const length = Math.hypot(dx, dz) || 1;
-    const projectedLanding = {
-      x: accessPosition.x + (dx / length) * (fixture.kind === "tennis" ? 4.2 : 3.1),
-      z: accessPosition.z + (dz / length) * (fixture.kind === "tennis" ? 4.2 : 3.1)
-    };
-    const landingPosition = pointInInteractableRaisedFootprint(projectedLanding, fixture, 0.45)
-      ? projectedLanding
-      : fixture.landingPosition ?? fixture.position;
-    const angle = Math.atan2(dx, dz);
-    const mesh = this.meshFactory.createLadderMesh();
+    const placement = this.ladderPlacementForFixture(fixture);
+    const mesh = this.meshFactory.createPlacedLadderMesh();
     mesh.userData.dynamic = true;
-    mesh.position.set(accessPosition.x, this.groundY(accessPosition) + PLACED_LADDER_CENTER_HEIGHT, accessPosition.z);
-    mesh.rotation.set(PLACED_LADDER_LEAN_RADIANS, angle, 0);
-    mesh.scale.set(1, 1, PLACED_LADDER_LENGTH_SCALE);
+    mesh.position.set(placement.accessPosition.x, this.groundY(placement.accessPosition), placement.accessPosition.z);
+    mesh.rotation.set(0, placement.angle, 0);
     this.scene.add(mesh);
     this.placedLadders.push({
       id: `placed-ladder-${fixture.id}`,
       fixtureId: fixture.id,
       mesh,
-      accessPosition,
-      landingPosition,
-      angle
+      accessPosition: placement.accessPosition,
+      landingPosition: placement.landingPosition,
+      angle: placement.angle
     });
     this.carriedItem = null;
-    this.emitNoise("climb", accessPosition, 0.58, { volume: 0.5 });
+    this.emitNoise("climb", placement.accessPosition, 0.58, { volume: 0.5 });
     this.flashStatus(`Placed ladder at ${fixture.label}`);
-    this.audio.playWorld("equip", accessPosition);
+    this.audio.playWorld("equip", placement.accessPosition);
     return true;
+  }
+
+  private ladderPlacementForFixture(fixture: InteractableFixture): { accessPosition: Vec2; landingPosition: Vec2; angle: number } {
+    const playerPoint = { x: this.player.position.x, z: this.player.position.z };
+    if (fixture.raisedFootprint?.shape === "polygon") {
+      return this.polygonFootprintLadderPlacement(fixture, fixture.raisedFootprint, playerPoint);
+    }
+    if (fixture.raisedFootprint?.shape === "box") {
+      return this.boxFootprintLadderPlacement(fixture, fixture.raisedFootprint, playerPoint);
+    }
+
+    const target = fixture.position;
+    const dx = target.x - playerPoint.x;
+    const dz = target.z - playerPoint.z;
+    const length = Math.hypot(dx, dz) || 1;
+    const accessPosition = {
+      x: playerPoint.x + (dx / length) * 0.85,
+      z: playerPoint.z + (dz / length) * 0.85
+    };
+    const landingPosition = fixture.landingPosition ?? {
+      x: accessPosition.x + (dx / length) * 3.1,
+      z: accessPosition.z + (dz / length) * 3.1
+    };
+    return {
+      accessPosition,
+      landingPosition,
+      angle: Math.atan2(landingPosition.x - accessPosition.x, landingPosition.z - accessPosition.z)
+    };
+  }
+
+  private boxFootprintLadderPlacement(
+    fixture: InteractableFixture,
+    footprint: Extract<InteractableRaisedFootprint, { shape: "box" }>,
+    playerPoint: Vec2
+  ): { accessPosition: Vec2; landingPosition: Vec2; angle: number } {
+    const local = this.footprintLocalPoint(playerPoint, footprint);
+    const distanceToXSide = Math.abs(Math.abs(local.x) - footprint.halfX);
+    const distanceToZSide = Math.abs(Math.abs(local.z) - footprint.halfZ);
+    const useXSide = distanceToXSide <= distanceToZSide;
+    const sideMargin = fixture.kind === "tennis" ? 1.3 : 0.75;
+    const outsideOffset = fixture.kind === "tennis" ? 0.95 : 0.72;
+    const insideOffset = fixture.kind === "tennis" ? 1.1 : 0.82;
+
+    const edgeLocal = useXSide
+      ? {
+          x: (local.x >= 0 ? 1 : -1) * footprint.halfX,
+          z: THREE.MathUtils.clamp(local.z, -Math.max(0, footprint.halfZ - sideMargin), Math.max(0, footprint.halfZ - sideMargin))
+        }
+      : {
+          x: THREE.MathUtils.clamp(local.x, -Math.max(0, footprint.halfX - sideMargin), Math.max(0, footprint.halfX - sideMargin)),
+          z: (local.z >= 0 ? 1 : -1) * footprint.halfZ
+        };
+    const normalLocal = useXSide
+      ? { x: edgeLocal.x >= 0 ? 1 : -1, z: 0 }
+      : { x: 0, z: edgeLocal.z >= 0 ? 1 : -1 };
+    const edge = this.footprintWorldPoint(edgeLocal, footprint);
+    const normal = this.footprintWorldVector(normalLocal, footprint);
+    const accessPosition = {
+      x: edge.x + normal.x * outsideOffset,
+      z: edge.z + normal.z * outsideOffset
+    };
+    const landingPosition = {
+      x: edge.x - normal.x * insideOffset,
+      z: edge.z - normal.z * insideOffset
+    };
+    return {
+      accessPosition,
+      landingPosition,
+      angle: Math.atan2(landingPosition.x - accessPosition.x, landingPosition.z - accessPosition.z)
+    };
+  }
+
+  private polygonFootprintLadderPlacement(
+    fixture: InteractableFixture,
+    footprint: Extract<InteractableRaisedFootprint, { shape: "polygon" }>,
+    playerPoint: Vec2
+  ): { accessPosition: Vec2; landingPosition: Vec2; angle: number } {
+    const edge = nearestPointOnPolygon(playerPoint, footprint.polygon);
+    const center = footprint.center;
+    const playerOutside = !pointInPolygon(playerPoint, footprint.polygon);
+    let normal = playerOutside
+      ? {
+          x: playerPoint.x - edge.x,
+          z: playerPoint.z - edge.z
+        }
+      : {
+          x: edge.x - center.x,
+          z: edge.z - center.z
+        };
+    let normalLength = Math.hypot(normal.x, normal.z);
+    if (normalLength < 0.001) {
+      normal = {
+        x: edge.x - center.x,
+        z: edge.z - center.z
+      };
+      normalLength = Math.hypot(normal.x, normal.z) || 1;
+    }
+    const outward = {
+      x: normal.x / normalLength,
+      z: normal.z / normalLength
+    };
+    const outsideOffset = fixture.kind === "tennis" ? 0.18 : 0.72;
+    const insideOffset = fixture.kind === "tennis" ? 0.95 : 0.82;
+    const accessPosition = {
+      x: edge.x + outward.x * outsideOffset,
+      z: edge.z + outward.z * outsideOffset
+    };
+    const landingPosition = {
+      x: edge.x - outward.x * insideOffset,
+      z: edge.z - outward.z * insideOffset
+    };
+    return {
+      accessPosition,
+      landingPosition,
+      angle: Math.atan2(landingPosition.x - accessPosition.x, landingPosition.z - accessPosition.z)
+    };
+  }
+
+  private footprintLocalPoint(point: Vec2, footprint: Extract<InteractableRaisedFootprint, { shape: "box" }>): Vec2 {
+    const dx = point.x - footprint.center.x;
+    const dz = point.z - footprint.center.z;
+    const cos = Math.cos(footprint.angle);
+    const sin = Math.sin(footprint.angle);
+    return {
+      x: dx * cos + dz * sin,
+      z: -dx * sin + dz * cos
+    };
+  }
+
+  private footprintWorldPoint(local: Vec2, footprint: Extract<InteractableRaisedFootprint, { shape: "box" }>): Vec2 {
+    const cos = Math.cos(footprint.angle);
+    const sin = Math.sin(footprint.angle);
+    return {
+      x: footprint.center.x + local.x * cos - local.z * sin,
+      z: footprint.center.z + local.x * sin + local.z * cos
+    };
+  }
+
+  private footprintWorldVector(local: Vec2, footprint: Extract<InteractableRaisedFootprint, { shape: "box" }>): Vec2 {
+    const cos = Math.cos(footprint.angle);
+    const sin = Math.sin(footprint.angle);
+    return {
+      x: local.x * cos - local.z * sin,
+      z: local.x * sin + local.z * cos
+    };
   }
 
   private clearPlacedLadders(): void {
@@ -4699,6 +4930,7 @@ export class GameApp {
       hydration: this.condition.hydration,
       throwables: this.condition.throwables,
       flashlightOn: this.condition.flashlightOn,
+      inventoryOpen: this.inventoryMenuOpen,
       inventory: this.inventory,
       inventoryCapacity: this.inventoryCapacity,
       carriedItem: this.carriedItem,
@@ -4780,6 +5012,40 @@ export class GameApp {
     this.renderedWetPathSheenCount = this.world.getRenderedWetPathSheenCount();
     this.renderedLampSpillCount = this.world.getRenderedLampSpillCount();
     new SceneDecals(this.scene, this.level, this.rng, (point) => this.groundY(point)).addWorldDecals();
+  }
+
+  private collectPlinthClockFlashTargets(): void {
+    this.plinthClockMaterials.length = 0;
+    this.plinthClockLights.length = 0;
+    this.scene.traverse((object) => {
+      if (object.userData.kind === "plinth-apocalypse-clock" && object instanceof THREE.Mesh) {
+        const materials = Array.isArray(object.material) ? object.material : [object.material];
+        for (const material of materials) {
+          if (material instanceof THREE.MeshBasicMaterial && !this.plinthClockMaterials.includes(material)) {
+            material.transparent = true;
+            material.depthWrite = false;
+            this.plinthClockMaterials.push(material);
+          }
+        }
+      }
+      if (object.userData.kind === "plinth-apocalypse-clock-light" && object instanceof THREE.PointLight) {
+        this.plinthClockLights.push(object);
+      }
+    });
+  }
+
+  private updatePlinthClockFlash(now: number): void {
+    if (this.plinthClockMaterials.length === 0 && this.plinthClockLights.length === 0) {
+      return;
+    }
+    const bright = Math.sin(now * Math.PI * 4.2) > -0.18;
+    const opacity = bright ? 1 : 0.22;
+    for (const material of this.plinthClockMaterials) {
+      material.opacity = opacity;
+    }
+    for (const light of this.plinthClockLights) {
+      light.intensity = bright ? 0.9 : 0.08;
+    }
   }
 
   private addPlayerTorch(): void {
@@ -4948,7 +5214,9 @@ export class GameApp {
   }
 
   private updateShells(dt: number): void {
-    for (const shell of [...this.shells]) {
+    const shells = this.shells;
+    for (let index = shells.length - 1; index >= 0; index -= 1) {
+      const shell = shells[index];
       shell.ttl -= dt;
       shell.velocity.y -= 8.8 * dt;
       shell.mesh.position.addScaledVector(shell.velocity, dt);
@@ -4960,14 +5228,16 @@ export class GameApp {
         shell.velocity.multiplyScalar(0.38);
       }
       if (shell.ttl <= 0) {
-        this.scene.remove(shell.mesh);
-        this.shells = this.shells.filter((candidate) => candidate !== shell);
+        this.removeAndDisposeTransient(shell.mesh);
+        shells.splice(index, 1);
       }
     }
   }
 
   private updateSmokePuffs(dt: number): void {
-    for (const puff of [...this.smokePuffs]) {
+    const puffs = this.smokePuffs;
+    for (let index = puffs.length - 1; index >= 0; index -= 1) {
+      const puff = puffs[index];
       puff.ttl -= dt;
       puff.velocity.y += dt * 0.18;
       puff.mesh.position.addScaledVector(puff.velocity, dt);
@@ -4975,8 +5245,8 @@ export class GameApp {
       const material = puff.mesh.material as THREE.MeshBasicMaterial;
       material.opacity = Math.max(0, 0.28 * (puff.ttl / puff.maxTtl));
       if (puff.ttl <= 0) {
-        this.scene.remove(puff.mesh);
-        this.smokePuffs = this.smokePuffs.filter((candidate) => candidate !== puff);
+        this.removeAndDisposeTransient(puff.mesh);
+        puffs.splice(index, 1);
       }
     }
   }
@@ -5013,22 +5283,108 @@ export class GameApp {
   }
 
   private updateTracers(dt: number): void {
-    for (const tracer of [...this.tracers]) {
+    const tracers = this.tracers;
+    for (let index = tracers.length - 1; index >= 0; index -= 1) {
+      const tracer = tracers[index];
       tracer.ttl -= dt;
       const material = tracer.mesh.material as THREE.LineBasicMaterial;
       material.opacity = Math.max(0, tracer.ttl / 0.08);
       if (tracer.ttl <= 0) {
-        this.scene.remove(tracer.mesh);
-        this.tracers = this.tracers.filter((candidate) => candidate !== tracer);
+        this.removeAndDisposeTransient(tracer.mesh);
+        tracers.splice(index, 1);
       }
     }
   }
 
   private createHitSpark(position: THREE.Vector3): void {
-    const spark = new THREE.PointLight(0xf0c96a, 3.4, 12);
-    spark.position.copy(position);
-    this.scene.add(spark);
-    window.setTimeout(() => this.scene.remove(spark), 65);
+    const spark = this.acquireHitSpark();
+    spark.sprite.position.copy(position);
+    spark.sprite.scale.setScalar(HIT_SPARK_BASE_SIZE);
+    spark.material.opacity = 0.86;
+    spark.sprite.visible = true;
+    spark.ttl = HIT_SPARK_SECONDS;
+    spark.active = true;
+  }
+
+  private updateHitSparks(dt: number): void {
+    for (const spark of this.hitSparks) {
+      if (!spark.active) {
+        continue;
+      }
+      spark.ttl = Math.max(0, spark.ttl - dt);
+      const progress = spark.ttl / HIT_SPARK_SECONDS;
+      spark.material.opacity = 0.86 * progress;
+      spark.sprite.scale.setScalar(HIT_SPARK_BASE_SIZE * (1 + (1 - progress) * 0.65));
+      if (spark.ttl === 0) {
+        spark.active = false;
+        spark.sprite.visible = false;
+      }
+    }
+  }
+
+  private acquireHitSpark(): HitSpark {
+    const inactive = this.hitSparks.find((spark) => !spark.active);
+    if (inactive) {
+      return inactive;
+    }
+    if (this.hitSparks.length < HIT_SPARK_POOL_SIZE) {
+      const spark = this.createHitSparkPoolEntry();
+      this.hitSparks.push(spark);
+      return spark;
+    }
+    const spark = this.hitSparks[this.hitSparkCursor];
+    this.hitSparkCursor = (this.hitSparkCursor + 1) % this.hitSparks.length;
+    return spark;
+  }
+
+  private createHitSparkPoolEntry(): HitSpark {
+    const material = new THREE.SpriteMaterial({
+      color: 0xf0c96a,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false
+    });
+    const sprite = new THREE.Sprite(material);
+    sprite.visible = false;
+    sprite.scale.setScalar(HIT_SPARK_BASE_SIZE);
+    this.scene.add(sprite);
+    return {
+      sprite,
+      material,
+      ttl: 0,
+      active: false
+    };
+  }
+
+  private clearHitSparks(): void {
+    this.hitSparkCursor = 0;
+    for (const spark of this.hitSparks) {
+      spark.ttl = 0;
+      spark.active = false;
+      spark.material.opacity = 0;
+      spark.sprite.visible = false;
+    }
+  }
+
+  private clearTransientEffects(): void {
+    for (const tracer of this.tracers) {
+      this.removeAndDisposeTransient(tracer.mesh);
+    }
+    for (const shell of this.shells) {
+      this.removeAndDisposeTransient(shell.mesh);
+    }
+    for (const puff of this.smokePuffs) {
+      this.removeAndDisposeTransient(puff.mesh);
+    }
+    this.tracers = [];
+    this.shells = [];
+    this.smokePuffs = [];
+    this.clearHitSparks();
+  }
+
+  private removeAndDisposeTransient(object: THREE.Object3D): void {
+    this.scene.remove(object);
+    disposeThreeResources(object);
   }
 
 }

@@ -47,7 +47,7 @@ export interface Landmark {
   source?: string;
 }
 
-export type CollisionSourceKind = "landmark" | "mapped-building" | "mapped-fence" | "sports-fixture" | "tree-collider";
+export type CollisionSourceKind = "landmark" | "mapped-building" | "mapped-fence" | "park-life-detail" | "sports-fixture" | "tree-collider";
 
 export interface CollisionSourceRef {
   sourceObjectId: string;
@@ -227,11 +227,13 @@ export interface MappedFence {
   }>;
 }
 
+export type StructureShelterFootprint = Extract<InteractableRaisedFootprint, { shape: "circle" | "box" }>;
+
 export interface StructureShelter {
   id: string;
   label: string;
   kind: "roof" | "verandah" | "shade-sail" | "grandstand-cover";
-  footprint: InteractableRaisedFootprint;
+  footprint: StructureShelterFootprint;
   weatherProtection: number;
   linkedStructureId: string;
   source?: string;
@@ -301,18 +303,23 @@ export type InteractableRaisedFootprint =
       halfX: number;
       halfZ: number;
       angle: number;
+    }
+  | {
+      shape: "polygon";
+      center: Vec2;
+      polygon: Vec2[];
     };
 
 export interface InteractableFixture {
   id: string;
   label: string;
-  kind: "rotunda" | "grandstand" | "playground" | "skate" | "basketball" | "toilets" | "tennis";
+  kind: "rotunda" | "grandstand" | "playground" | "skate" | "basketball" | "toilets" | "tennis" | "cricket-nets";
   position: Vec2;
   accessPosition?: Vec2;
   landingPosition?: Vec2;
   exitPosition?: Vec2;
   accessRadius?: number;
-  accessKind?: "stairs" | "ladder" | "play-structure" | "frame" | "ramp";
+  accessKind?: "stairs" | "ladder" | "play-structure" | "frame" | "ramp" | "cage-frame";
   accessHeading?: number;
   radius: number;
   height: number;
@@ -379,6 +386,11 @@ export interface ParkLifeDetail {
   position: Vec2;
   angle: number;
   bikeIssue?: "flat-tyres" | "broken-chain" | "locked";
+  cricketNetLanes?: number;
+  cricketNetEntranceCount?: number;
+  cricketNetEnclosure?: "galvanised-pipe-cyclone-wire-cage";
+  cricketNetSurface?: "concrete-artificial-turf";
+  cricketNetRearMuralWall?: boolean;
   rule?: "dogs-on-leash" | "alcohol-hours" | "rotunda-stairs-no-power" | "access-friendly";
   source?: string;
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { resolveObstacle, shouldBypassObstacle } from "../src/game/collision";
-import { distance, pointInPolygon, polygonCentroid } from "../src/game/geo";
+import { distance, nearestPointOnPolygon, pointInPolygon, polygonCentroid } from "../src/game/geo";
 import { createLevelData } from "../src/game/levelData";
 import type { BoxObstacle } from "../src/game/types";
 
@@ -42,6 +42,37 @@ describe("collision system", () => {
     ).toBe(false);
   });
 
+  it("only bypasses the active tennis fence while the point remains inside the court footprint", () => {
+    const fixture = level.interactables.find((candidate) => candidate.id === "tennis-court-ladder");
+    if (!fixture?.raisedFootprint || fixture.raisedFootprint.shape !== "polygon") {
+      throw new Error("Missing tennis ladder fixture footprint");
+    }
+    const footprint = fixture.raisedFootprint;
+    const edge = nearestPointOnPolygon(footprint.center, footprint.polygon);
+    const outward = {
+      x: edge.x - footprint.center.x,
+      z: edge.z - footprint.center.z
+    };
+    const outwardLength = Math.hypot(outward.x, outward.z) || 1;
+    const pointFromEdge = (offset: number) => ({
+      x: edge.x + (outward.x / outwardLength) * offset,
+      z: edge.z + (outward.z / outwardLength) * offset
+    });
+
+    expect(
+      shouldBypassObstacle("tennis", pointFromEdge(-0.7), {
+        activeFixtureId: fixture.id,
+        interactables: level.interactables
+      })
+    ).toBe(true);
+    expect(
+      shouldBypassObstacle("tennis", pointFromEdge(0.25), {
+        activeFixtureId: fixture.id,
+        interactables: level.interactables
+      })
+    ).toBe(false);
+  });
+
   it("keeps fixture bypass ids tied to actual obstacles", () => {
     const obstacleIds = new Set(level.obstacles.map((obstacle) => obstacle.id));
     const missing = level.interactables.flatMap((fixture) =>
@@ -57,6 +88,7 @@ describe("collision system", () => {
     const landmarks = new Set(level.landmarks.map((source) => source.id));
     const mappedBuildings = new Set(level.mappedBuildings.map((source) => source.id));
     const mappedFences = new Set(level.mappedFences.map((source) => source.id));
+    const parkLifeDetails = new Set(level.parkLifeDetails.map((source) => source.id));
     const sportsFixtures = new Set(level.sportsFixtures.map((source) => source.id));
     const treeColliders = new Set(level.treeColliders.map((source) => source.id));
     const fixtureIds = new Set(level.interactables.map((fixture) => fixture.id));
@@ -65,6 +97,7 @@ describe("collision system", () => {
         if (obstacle.sourceObjectKind === "landmark") return !landmarks.has(obstacle.sourceObjectId);
         if (obstacle.sourceObjectKind === "mapped-building") return !mappedBuildings.has(obstacle.sourceObjectId);
         if (obstacle.sourceObjectKind === "mapped-fence") return !mappedFences.has(obstacle.sourceObjectId);
+        if (obstacle.sourceObjectKind === "park-life-detail") return !parkLifeDetails.has(obstacle.sourceObjectId);
         if (obstacle.sourceObjectKind === "sports-fixture") return !sportsFixtures.has(obstacle.sourceObjectId);
         return !treeColliders.has(obstacle.sourceObjectId);
       })

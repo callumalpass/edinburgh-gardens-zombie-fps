@@ -28,6 +28,7 @@ export type NetworkActionType =
   | "shoot"
   | "reload"
   | "interact"
+  | "take"
   | "toggleFlashlight"
   | "throwDistraction"
   | "jump"
