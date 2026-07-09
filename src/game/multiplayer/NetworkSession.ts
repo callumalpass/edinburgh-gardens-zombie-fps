@@ -152,13 +152,17 @@ export class NetworkSession {
     this.client = null;
   }
 
-  sendAction(type: NetworkAction["type"], frame: { yaw: number; pitch: number; slot?: number }): boolean {
+  sendAction(
+    type: NetworkAction["type"],
+    frame: { yaw: number; pitch: number; slot?: number; upgradeId?: NetworkAction["upgradeId"] }
+  ): boolean {
     if (!this.isClient || !this.client) {
       return false;
     }
     this.client.sendAction({
       type,
       slot: frame.slot,
+      upgradeId: frame.upgradeId,
       sequence: ++this.actionSequence,
       yaw: frame.yaw,
       pitch: frame.pitch

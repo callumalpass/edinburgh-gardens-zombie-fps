@@ -47,6 +47,36 @@ test("renders a nonblank, varied Three.js scene", async ({ page }, testInfo) => 
   expect(signal.varied).toBeGreaterThan(2);
 });
 
+test("terrain and trees survive live shadow-quality changes", async ({ page }, testInfo) => {
+  const renderingErrors: string[] = [];
+  page.on("console", (message) => {
+    const text = message.text();
+    if (/GL_INVALID_OPERATION|texture format and sampler type/i.test(text)) {
+      renderingErrors.push(text);
+    }
+  });
+
+  await page.goto("/");
+  await page.getByRole("button", { name: /play solo/i }).click();
+  await page.waitForFunction(() => window.__EGAME__?.ready === true);
+
+  const high = await page.evaluate(() => window.__EGAME__!.testSetRenderQuality("high"));
+  await page.waitForFunction((frame) => window.__EGAME__!.snapshot().frame > frame + 2, high.frame);
+  const highSignal = await readCanvasSignal(page);
+
+  const low = await page.evaluate(() => window.__EGAME__!.testSetRenderQuality("low"));
+  await page.waitForFunction((frame) => window.__EGAME__!.snapshot().frame > frame + 2, low.frame);
+  const lowSignal = await readCanvasSignal(page);
+  await page.screenshot({ path: testInfo.outputPath("quality-transition.png"), fullPage: false });
+
+  expect(high.renderQuality).toBe("high");
+  expect(low.renderQuality).toBe("low");
+  expect(highSignal.nonBlank).toBeGreaterThan(36);
+  expect(lowSignal.nonBlank).toBeGreaterThan(36);
+  expect(lowSignal.varied).toBeGreaterThan(2);
+  expect(renderingErrors).toEqual([]);
+});
+
 test("game loop advances and gameplay helpers mutate state", async ({ page }) => {
   test.setTimeout(105_000);
   await page.goto("/?smoke=1");
@@ -264,4 +294,45 @@ test("desktop and mobile layouts keep controls visible", async ({ page, viewport
   expect(weaponBox?.x).toBeGreaterThanOrEqual(0);
   expect(minimapBox?.x).toBeGreaterThanOrEqual(0);
   expect((minimapBox?.x ?? 0) + (minimapBox?.width ?? 0)).toBeLessThanOrEqual(viewport!.width + 1);
+});
+
+test("startup prioritizes solo play and progressively reveals co-op setup", async ({ page }, testInfo) => {
+  await page.goto("/");
+  await expect(page.getByRole("button", { name: /play solo/i })).toBeVisible();
+  await expect(page.locator(".network-field").first()).toBeHidden();
+  await page.screenshot({ path: testInfo.outputPath("startup.png"), fullPage: false });
+  await page.getByRole("button", { name: /join co-op/i }).click();
+  await expect(page.locator('[name="playerName"]')).toBeVisible();
+  await expect(page.locator('[name="serverUrl"]')).toBeVisible();
+  await expect(page.getByRole("button", { name: /join game/i })).toBeVisible();
+});
+
+test("pause settings and intermission field modifications are playable", async ({ page }, testInfo) => {
+  await page.goto("/?smoke=1");
+  await page.waitForFunction(() => window.__EGAME__?.ready === true);
+
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".pause-menu")).toBeVisible();
+  expect((await page.evaluate(() => window.__EGAME__!.snapshot())).paused).toBe(true);
+  await expect(page.locator('[data-setting="mouseSensitivity"]')).toBeVisible();
+  await expect(page.locator('[data-setting="fieldOfView"]')).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("pause.png"), fullPage: false });
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".pause-menu")).toBeHidden();
+
+  await page.evaluate(() => window.__EGAME__!.testAddTeammate("Merri Creek Scout"));
+  await expect(page.locator(".team-hud")).toContainText("Merri Creek Scout");
+  await expect(page.locator(".team-hud")).toContainText("Emergency knife");
+
+  await page.evaluate(() => window.__EGAME__!.testStartIntermission());
+  await expect(page.locator(".intermission-panel")).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("intermission.png"), fullPage: false });
+  const before = await page.evaluate(() => window.__EGAME__!.snapshot());
+  await page.keyboard.press("Digit1");
+  await expect(page.locator(".intermission-panel")).toBeHidden();
+  const after = await page.evaluate(() => window.__EGAME__!.snapshot());
+  expect(Object.values(after.upgrades).reduce((sum, level) => sum + level, 0)).toBe(
+    Object.values(before.upgrades).reduce((sum, level) => sum + level, 0) + 1
+  );
+  expect(after.intermissionUpgradeWave).toBe(after.wave);
 });

@@ -15,6 +15,7 @@ interface DecalSpec {
 
 export class SceneDecals {
   private readonly materials = new Map<string, THREE.MeshBasicMaterial>();
+  private readonly textures = new Map<DecalKind, THREE.CanvasTexture>();
 
   constructor(
     private readonly scene: THREE.Scene,
@@ -24,14 +25,45 @@ export class SceneDecals {
   ) {}
 
   addWorldDecals(): void {
+    const batches = new Map<string, { kind: DecalKind; opacity: number; specs: DecalSpec[] }>();
     for (const spec of this.collectDecals()) {
-      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(spec.length, spec.width, 1, 1), this.materialFor(spec.kind, spec.opacity));
-      mesh.position.set(spec.position.x, this.groundYAt(spec.position) + 0.128, spec.position.z);
-      mesh.rotation.set(-Math.PI / 2, 0, spec.angle);
+      const opacity = this.opacityBucket(spec.opacity);
+      const key = `${spec.kind}-${opacity.toFixed(2)}`;
+      const batch = batches.get(key) ?? { kind: spec.kind, opacity, specs: [] };
+      batch.specs.push(spec);
+      batches.set(key, batch);
+    }
+
+    const geometry = new THREE.PlaneGeometry(1, 1, 1, 1);
+    const matrix = new THREE.Matrix4();
+    const quaternion = new THREE.Quaternion();
+    const scale = new THREE.Vector3();
+    for (const batch of batches.values()) {
+      const mesh = new THREE.InstancedMesh(geometry, this.materialFor(batch.kind, batch.opacity), batch.specs.length);
+      batch.specs.forEach((spec, index) => {
+        quaternion.setFromEuler(new THREE.Euler(-Math.PI / 2, 0, spec.angle));
+        scale.set(spec.length, spec.width, 1);
+        matrix.compose(
+          new THREE.Vector3(spec.position.x, this.groundYAt(spec.position) + 0.128, spec.position.z),
+          quaternion,
+          scale
+        );
+        mesh.setMatrixAt(index, matrix);
+      });
+      mesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+      mesh.instanceMatrix.needsUpdate = true;
       mesh.renderOrder = 12;
-      mesh.userData.kind = `decal-${spec.kind}`;
+      mesh.userData.kind = `decal-batch-${batch.kind}`;
+      mesh.userData.count = batch.specs.length;
+      mesh.computeBoundingSphere();
       this.scene.add(mesh);
     }
+  }
+
+  private opacityBucket(opacity: number): number {
+    if (opacity < 0.27) return 0.23;
+    if (opacity < 0.37) return 0.32;
+    return 0.42;
   }
 
   private collectDecals(): DecalSpec[] {
@@ -140,7 +172,7 @@ export class SceneDecals {
     const cached = this.materials.get(key);
     if (cached) return cached;
     const material = new THREE.MeshBasicMaterial({
-      map: this.createTexture(kind),
+      map: this.textureFor(kind),
       transparent: true,
       opacity,
       depthWrite: false,
@@ -150,6 +182,14 @@ export class SceneDecals {
     });
     this.materials.set(key, material);
     return material;
+  }
+
+  private textureFor(kind: DecalKind): THREE.CanvasTexture {
+    const cached = this.textures.get(kind);
+    if (cached) return cached;
+    const texture = this.createTexture(kind);
+    this.textures.set(kind, texture);
+    return texture;
   }
 
   private createTexture(kind: DecalKind): THREE.CanvasTexture {

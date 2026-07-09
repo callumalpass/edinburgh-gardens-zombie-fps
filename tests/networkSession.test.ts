@@ -141,10 +141,12 @@ describe("NetworkSession", () => {
     expect(session.sendAction("jump", { yaw: 1, pitch: -0.2 })).toBe(true);
     expect(session.sendAction("equipSlot", { yaw: 1, pitch: -0.2, slot: 2 })).toBe(true);
     expect(session.sendAction("take", { yaw: 1, pitch: -0.2 })).toBe(true);
-    expect(transport.actions.map((action) => [action.type, action.sequence, action.slot])).toEqual([
-      ["jump", 1, undefined],
-      ["equipSlot", 2, 2],
-      ["take", 3, undefined]
+    expect(session.sendAction("chooseIntermissionUpgrade", { yaw: 1, pitch: -0.2, upgradeId: "damage" })).toBe(true);
+    expect(transport.actions.map((action) => [action.type, action.sequence, action.slot, action.upgradeId])).toEqual([
+      ["jump", 1, undefined, undefined],
+      ["equipSlot", 2, 2, undefined],
+      ["take", 3, undefined, undefined],
+      ["chooseIntermissionUpgrade", 4, undefined, "damage"]
     ]);
 
     expect(session.sendInputFrame(1, "playing", inputFrame)).toBe(true);

@@ -1,6 +1,6 @@
 import type { GameStateName, WavePhase, ZombieAiState } from "../state";
 import type { WeaponDrop } from "../state";
-import type { Loadout, WeaponId } from "../weapons";
+import type { Loadout, UpgradeId, WeaponId } from "../weapons";
 import type { ZombieType } from "../waves";
 
 export type MultiplayerRole = "single" | "host" | "client";
@@ -32,7 +32,8 @@ export type NetworkActionType =
   | "toggleFlashlight"
   | "throwDistraction"
   | "jump"
-  | "equipSlot";
+  | "equipSlot"
+  | "chooseIntermissionUpgrade";
 
 export interface NetworkAction {
   type: NetworkActionType;
@@ -40,6 +41,7 @@ export interface NetworkAction {
   yaw: number;
   pitch: number;
   slot?: number;
+  upgradeId?: UpgradeId;
 }
 
 export interface NetworkPlayerSnapshot {
@@ -68,6 +70,7 @@ export interface NetworkPlayerSnapshot {
   loadout: Loadout;
   bikeMounted: boolean;
   alive: boolean;
+  intermissionUpgradeWave: number;
 }
 
 export interface NetworkZombieSnapshot {

@@ -73,6 +73,7 @@ describe("RemotePlayerRoster", () => {
     player.scrap = 0;
     player.input.moveX = 1;
     player.crouching = true;
+    player.intermissionUpgradeWave = 4;
 
     roster.reset();
 
@@ -84,6 +85,7 @@ describe("RemotePlayerRoster", () => {
     expect(player.scrap).toBe(START_SCRAP);
     expect(player.input.moveX).toBe(0);
     expect(player.crouching).toBe(false);
+    expect(player.intermissionUpgradeWave).toBe(0);
     expect(player.loadout.weaponId).toBe("knife");
   });
 

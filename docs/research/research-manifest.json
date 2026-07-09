@@ -699,6 +699,18 @@
       ]
     },
     {
+      "id": "current-osm-object-audit",
+      "path": "docs/research/current-osm-object-audit-2026-07-09.md",
+      "requiredHeadings": ["## Sources", "## Findings", "## Implementation Translation", "## Uncertainty", "## Validation"],
+      "sourceIds": ["osm-map-bbox", "yarra-northern-precinct", "yarra-edinburgh-gardens"]
+    },
+    {
+      "id": "2030-brunswick-street-oval-completion",
+      "path": "docs/research/2030-brunswick-street-oval-completion-2026-07-09.md",
+      "requiredHeadings": ["## Sources", "## Findings", "## Implementation Translation", "## Uncertainty", "## Validation"],
+      "sourceIds": ["yarra-brunswick-street-oval", "osm-map-bbox"]
+    },
+    {
       "id": "data-pipeline-automation",
       "path": "docs/research/data-pipeline-automation-2026-07-05.md",
       "sourceIds": [
@@ -744,6 +756,13 @@
       "pathPattern": "docs/research/raw/2026-07-06/osm-*-map.xml",
       "format": "osm-xml",
       "sourceId": "osm-playground-fence-map-api",
+      "optional": true
+    },
+    {
+      "id": "osm-current-object-audit-map-xml",
+      "pathPattern": "docs/research/raw/2026-07-09/osm-map-bbox.xml",
+      "format": "osm-xml",
+      "sourceId": "osm-map-bbox",
       "optional": true
     },
     {

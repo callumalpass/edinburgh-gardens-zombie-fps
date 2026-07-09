@@ -37,3 +37,11 @@ When comparing runs, use the `hz` and `mean` columns together. Vitest benchmarks
 ## Runtime Hot Paths
 
 Movement, bike movement, thrown-distraction placement, zombie steering, cover checks and skate-bowl settling should use `ObstacleIndex` rather than scanning `level.obstacles` directly. Player and bike surface checks should use `MovementSurfaceSampler` rather than calling the linear `movementSurfaceAt` helper in frame-time paths. Compact bounded spatial grids should use `gridCellKey` where benchmarks show it beats nested map buckets. Visibility and minimap checks should reuse a visibility context within a frame when possible. Terrain sampling should avoid string-keyed per-point cache lookups in frame-time paths.
+
+## Runtime Rendering Budget
+
+The renderer uses high, medium and low quality tiers with hysteresis rather than reacting to isolated frame spikes. The tiers cap device pixel ratio and progressively reduce grass instances, visible low-mist banks, shadow-map resolution, shadow coverage and ink strength. Sustained slow frames step down faster than sustained fast frames step up, preventing quality oscillation.
+
+Static tree trunks, branches and canopy masses are instanced by geometry and material. Ground colour variation is stored in vertex colours instead of separate transparent lawn-wash meshes, and world decals are grouped into opacity/material instance batches. Dynamic zombies use one instanced painted contact-shadow mesh; only their largest silhouette parts retain real shadow casters and inverted-hull ink outlines.
+
+The game test snapshot exposes `renderQuality`, `renderPixelRatio`, `rendererCalls` and `rendererTriangles` for headed or Playwright profiling. These values describe the most recently completed frame. Compare the same camera position, weather, quality tier and active-zombie count when using them as a regression signal.

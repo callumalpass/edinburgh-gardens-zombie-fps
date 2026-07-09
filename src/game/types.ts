@@ -41,7 +41,7 @@ export interface Landmark {
   polygon?: Vec2[];
   position?: Vec2;
   radius?: number;
-  courtStatus?: "renovating-existing";
+  courtStatus?: "active-clay" | "under-construction";
   gardenStyle?: "stormwater-filtration" | "stormwater-storage" | "ornamental-floral" | "ornamental-shrub" | "agapanthus";
   cover?: "dense-shrub";
   source?: string;
@@ -261,6 +261,15 @@ export interface PathSurfacePatch {
   source?: string;
 }
 
+export interface GroundSurfacePolygon {
+  id: string;
+  label: string;
+  kind: "parking-apron" | "paved-area";
+  material: "asphalt" | "concrete" | "gravel";
+  polygon: Vec2[];
+  source?: string;
+}
+
 export interface StreetEdge {
   id: string;
   label: string;
@@ -336,6 +345,7 @@ export type AmenityKind =
   | "bicycle_parking"
   | "bbq"
   | "toilets"
+  | "post_box"
   | "picnic_table"
   | "table_tennis"
   | "clubroom"
@@ -379,7 +389,7 @@ export interface ParkLifeDetail {
     | "removed-tree-stump"
     | "park-rule-sign"
     | "heritage-gas-lamp"
-    | "heritage-bollards"
+    | "heritage-bollard"
     | "heritage-seat"
     | "interpretive-sign"
     | "chandler-fountain";
@@ -441,6 +451,7 @@ export interface LevelData {
   mappedFences: MappedFence[];
   hardscapeLines: HardscapeLine[];
   pathSurfacePatches: PathSurfacePatch[];
+  groundSurfacePolygons: GroundSurfacePolygon[];
   streetEdges: StreetEdge[];
   sportsFixtures: SportsFixture[];
   obstacles: CollisionObstacle[];

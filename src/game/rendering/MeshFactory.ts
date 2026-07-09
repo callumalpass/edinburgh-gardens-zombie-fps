@@ -1221,6 +1221,7 @@ export class MeshFactory {
     group.userData.arms = arms;
     group.userData.head = head;
     this.groundObject(group);
+    this.limitShadowCasters(group, 6);
     this.applyAnimeMeshStyle(group, 1.035);
     return group;
   }
@@ -1405,6 +1406,7 @@ export class MeshFactory {
     group.userData.arms = arms;
     group.userData.head = head;
     this.groundObject(group);
+    this.limitShadowCasters(group, 6);
     this.applyAnimeMeshStyle(group, 1.035);
     return group;
   }
@@ -2121,7 +2123,8 @@ export class MeshFactory {
       }
     });
 
-    for (const mesh of meshes) {
+    meshes.sort((left, right) => this.outlineImportance(right) - this.outlineImportance(left));
+    for (const mesh of meshes.slice(0, 6)) {
       const outline = new THREE.Mesh(mesh.geometry, outlineMaterial);
       outline.position.copy(mesh.position);
       outline.quaternion.copy(mesh.quaternion);
@@ -2134,6 +2137,38 @@ export class MeshFactory {
 
   private shouldOutline(mesh: THREE.Mesh): boolean {
     const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-    return materials.every((material) => !(material instanceof THREE.MeshBasicMaterial) && (!material.transparent || material.opacity >= 0.9));
+    if (!materials.every((material) => !(material instanceof THREE.MeshBasicMaterial) && (!material.transparent || material.opacity >= 0.9))) {
+      return false;
+    }
+    if (!mesh.geometry.boundingSphere) {
+      mesh.geometry.computeBoundingSphere();
+    }
+    const radius = mesh.geometry.boundingSphere?.radius ?? 1;
+    const scale = Math.max(Math.abs(mesh.scale.x), Math.abs(mesh.scale.y), Math.abs(mesh.scale.z));
+    return radius * scale >= 0.11;
+  }
+
+  private outlineImportance(mesh: THREE.Mesh): number {
+    if (!mesh.geometry.boundingSphere) {
+      mesh.geometry.computeBoundingSphere();
+    }
+    const radius = mesh.geometry.boundingSphere?.radius ?? 0;
+    const scale = Math.max(Math.abs(mesh.scale.x), Math.abs(mesh.scale.y), Math.abs(mesh.scale.z));
+    const semanticBoost = mesh.name === "body" ? 4 : mesh.name === "head" ? 3 : mesh.userData.zombieSilhouetteMarker ? 1.5 : 1;
+    return radius * scale * semanticBoost;
+  }
+
+  private limitShadowCasters(root: THREE.Object3D, limit: number): void {
+    const casters: THREE.Mesh[] = [];
+    root.traverse((object) => {
+      if (object instanceof THREE.Mesh && object.castShadow) {
+        casters.push(object);
+        object.castShadow = false;
+      }
+    });
+    casters.sort((left, right) => this.outlineImportance(right) - this.outlineImportance(left));
+    for (const caster of casters.slice(0, limit)) {
+      caster.castShadow = true;
+    }
   }
 }

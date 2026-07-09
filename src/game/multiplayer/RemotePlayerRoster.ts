@@ -77,6 +77,7 @@ export class RemotePlayerRoster {
       pitch: START_PITCH,
       health: START_HEALTH,
       scrap: START_SCRAP,
+      intermissionUpgradeWave: 0,
       loadout,
       condition: createInitialPlayerCondition(),
       input: {
@@ -134,6 +135,7 @@ export class RemotePlayerRoster {
       player.pitch = START_PITCH;
       player.health = START_HEALTH;
       player.scrap = START_SCRAP;
+      player.intermissionUpgradeWave = 0;
       player.loadout = createInitialLoadout();
       player.condition = createInitialPlayerCondition();
       player.lastShotAt = 0;

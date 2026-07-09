@@ -87,7 +87,7 @@ window.addEventListener("beforeunload", () => game?.dispose(), { once: true });
 async function renderLaunchMenu(container: HTMLElement): Promise<void> {
   const runtime = await window.edinburghLan?.runtime().catch(() => null);
   const params = new URLSearchParams(window.location.search);
-  const defaultMode = runtime ? "host" : "single";
+  const defaultMode = "single";
   const defaultName = localStorageValue("egll.playerName") || params.get("name") || (runtime ? "Host" : "Player");
   const defaultRoom = params.get("room") || "edinburgh-gardens";
   const defaultServer = params.get("server") || runtime?.relay?.lanUrls[0] || defaultLanServer();
@@ -137,6 +137,9 @@ async function renderLaunchMenu(container: HTMLElement): Promise<void> {
     }
     if (target.dataset.mode) {
       setMode(target.dataset.mode);
+      if (target.dataset.launchSingle !== undefined) {
+        form.requestSubmit();
+      }
       return;
     }
     if (target.dataset.copy) {
@@ -223,14 +226,19 @@ function launchMenuMarkup(options: {
   return `
     <main class="launch-screen">
       <section class="launch-panel" aria-label="Launch game">
-        <p class="kicker">${desktop ? "Desktop LAN" : "Web build"}</p>
+        <p class="kicker">${desktop ? "Desktop edition" : "Web edition"} · Fitzroy North</p>
         <h1>Edinburgh Gardens 2030</h1>
+        <p class="launch-deck">A survival FPS across a rain-soaked, research-built Edinburgh Gardens. Stay quiet, scavenge the park, and outlast the horde alone or over LAN.</p>
         <form class="launch-form" data-launch-form data-mode="${escapeAttr(options.mode)}">
           <input type="hidden" name="mode" value="${escapeAttr(options.mode)}" data-launch-mode>
-          <div class="mode-segments" aria-label="Play mode">
-            <button type="button" data-mode="single">Single</button>
-            <button type="button" data-mode="host">Host LAN</button>
-            <button type="button" data-mode="join">Join LAN</button>
+          <div class="play-mode-list" aria-label="Play mode">
+            <button class="solo-launch" type="button" data-mode="single" data-launch-single>
+              <span>Play solo</span><small>Start immediately</small>
+            </button>
+            <div class="coop-launch-options">
+              <button type="button" data-mode="host"><span>Host co-op</span><small>Open a LAN game</small></button>
+              <button type="button" data-mode="join"><span>Join co-op</span><small>Find a nearby host</small></button>
+            </div>
           </div>
           <div class="launch-fields">
             <label class="network-field">

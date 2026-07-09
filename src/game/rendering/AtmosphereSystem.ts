@@ -2,6 +2,7 @@ import * as THREE from "three";
 import type { RandomSource, Vec2 } from "../types";
 import { timeOfDayFromElapsed, type TimeOfDayState } from "./timeOfDay";
 import { weatherFromElapsed, type WeatherState } from "./weather";
+import { RENDER_QUALITY_SETTINGS, type RenderQualityLevel } from "./renderQuality";
 
 const SKY_RADIUS = 920;
 const RAIN_ANCHOR_RADIUS = 42;
@@ -157,6 +158,7 @@ export class AtmosphereSystem {
     });
     const mistWeather = THREE.MathUtils.clamp(0.34 + weather.fog * 0.82 + weather.wetness * 0.22, 0.24, 1.32);
     this.groundMistBanks.forEach((bank, index) => {
+      if (!bank.visible) return;
       const baseX = bank.userData.baseX as number;
       const baseZ = bank.userData.baseZ as number;
       const drift = bank.userData.drift as number;
@@ -187,6 +189,13 @@ export class AtmosphereSystem {
 
   getGroundMistBankCount(): number {
     return this.groundMistBanks.length;
+  }
+
+  setQualityLevel(level: RenderQualityLevel): void {
+    const visibleCount = Math.ceil(this.groundMistBanks.length * RENDER_QUALITY_SETTINGS[level].mistFraction);
+    this.groundMistBanks.forEach((bank, index) => {
+      bank.visible = index < visibleCount;
+    });
   }
 
   getRainDropCount(): number {

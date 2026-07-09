@@ -166,7 +166,7 @@ export function worldSoundBaseGain(kind: WorldSoundKind, options: WorldSoundOpti
 
 export class GameAudio {
   private readonly enabled: boolean;
-  private readonly masterVolume: number;
+  private masterVolume: number;
   private context: AudioContext | null = null;
   private master: GainNode | null = null;
   private ambientGain: GainNode | null = null;
@@ -185,6 +185,13 @@ export class GameAudio {
 
   get active(): boolean {
     return Boolean(this.context && this.context.state === "running");
+  }
+
+  setMasterVolume(volume: number): void {
+    this.masterVolume = Math.max(0, Math.min(1, volume));
+    if (this.context && this.master) {
+      this.master.gain.setTargetAtTime(this.masterVolume, this.context.currentTime, 0.04);
+    }
   }
 
   async unlock(): Promise<boolean> {

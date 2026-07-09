@@ -1,5 +1,6 @@
 import { playerForward2D } from "../visibility";
-import type { LevelData, Vec2 } from "../types";
+import { pointInPolygon } from "../geo";
+import type { Landmark, LevelData, Vec2 } from "../types";
 
 export interface MiniMapZombie {
   position: Vec2;
@@ -10,11 +11,17 @@ export interface MiniMapWeaponDrop {
   position: Vec2;
 }
 
+export interface MiniMapTeammate {
+  position: Vec2;
+  alive: boolean;
+}
+
 export interface MiniMapRenderState {
   playerPosition: Vec2;
   playerYaw: number;
   zombies: readonly MiniMapZombie[];
   weaponDrops: readonly MiniMapWeaponDrop[];
+  teammates?: readonly MiniMapTeammate[];
   isVisible: (point: Vec2, padding?: number) => boolean;
 }
 
@@ -23,6 +30,8 @@ export class MiniMapRenderer {
   private readonly maxX: number;
   private readonly minZ: number;
   private readonly maxZ: number;
+  private readonly discoveredAmenityIds = new Set<string>();
+  private readonly discoveredStationIds = new Set<string>();
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -40,6 +49,7 @@ export class MiniMapRenderer {
 
     const w = this.canvas.width;
     const h = this.canvas.height;
+    this.discoverNearby(state.playerPosition);
     ctx.clearRect(0, 0, w, h);
     this.paintMapGround(ctx, w, h);
 
@@ -76,6 +86,8 @@ export class MiniMapRenderer {
     });
     ctx.closePath();
     ctx.stroke();
+
+    this.paintLandmarks(ctx, w, h);
 
     for (const path of this.level.paths) {
       const stroke =
@@ -121,18 +133,20 @@ export class MiniMapRenderer {
     }
 
     ctx.fillStyle = "rgba(231, 192, 104, 0.94)";
-    for (const station of this.level.upgradeStations) {
+    for (const station of this.level.upgradeStations.filter((candidate) => this.discoveredStationIds.has(candidate.id))) {
       const mapped = this.mapPoint(station.position, w, h);
       ctx.fillRect(mapped.x - 2, mapped.y - 2, 4, 4);
     }
 
-    for (const amenity of this.level.amenities) {
+    for (const amenity of this.level.amenities.filter((candidate) => this.discoveredAmenityIds.has(candidate.id) && isMapAmenity(candidate.kind))) {
       const mapped = this.mapPoint(amenity.position, w, h);
       ctx.fillStyle =
         amenity.kind === "drinking_water" || amenity.kind === "toilets"
           ? "rgba(103, 184, 198, 0.78)"
           : amenity.kind === "bench"
             ? "rgba(112, 180, 139, 0.68)"
+            : amenity.kind === "post_box"
+              ? "rgba(190, 72, 58, 0.78)"
             : amenity.kind === "clubroom" ||
                 amenity.kind === "changeroom" ||
                 amenity.kind === "umpire_room" ||
@@ -151,6 +165,17 @@ export class MiniMapRenderer {
       ctx.fill();
     }
 
+    for (const teammate of state.teammates ?? []) {
+      const mapped = this.mapPoint(teammate.position, w, h);
+      ctx.fillStyle = teammate.alive ? "rgba(102, 196, 210, 0.98)" : "rgba(142, 149, 148, 0.8)";
+      ctx.beginPath();
+      ctx.arc(mapped.x, mapped.y, teammate.alive ? 3.4 : 2.8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(7, 18, 24, 0.9)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+
     ctx.fillStyle = "rgba(103, 184, 198, 0.95)";
     for (const drop of state.weaponDrops) {
       const mapped = this.mapPoint(drop.position, w, h);
@@ -165,6 +190,18 @@ export class MiniMapRenderer {
     ctx.fill();
 
     return visibleZombieCount;
+  }
+
+  currentAreaLabel(point: Vec2): string {
+    const containing = this.level.landmarks
+      .filter((landmark) => landmark.id !== "park" && landmarkContains(landmark, point))
+      .sort((a, b) => landmarkArea(a) - landmarkArea(b));
+    return containing[0]?.label ?? "Edinburgh Gardens";
+  }
+
+  resetDiscovery(): void {
+    this.discoveredAmenityIds.clear();
+    this.discoveredStationIds.clear();
   }
 
   private mapPoint(point: Vec2, width: number, height: number): { x: number; y: number } {
@@ -190,6 +227,39 @@ export class MiniMapRenderer {
       ctx.fill();
     }
     ctx.restore();
+  }
+
+  private paintLandmarks(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+    const importantKinds = new Set(["oval", "grandstand", "tennis", "bowls", "playground", "skate", "basketball", "rotunda"]);
+    for (const landmark of this.level.landmarks) {
+      if (!importantKinds.has(landmark.kind) || !landmark.polygon) continue;
+      const fill = landmark.kind === "oval"
+        ? "rgba(105, 137, 91, 0.22)"
+        : landmark.kind === "playground" || landmark.kind === "skate"
+          ? "rgba(190, 151, 83, 0.16)"
+          : "rgba(106, 128, 132, 0.18)";
+      ctx.fillStyle = fill;
+      ctx.strokeStyle = "rgba(180, 196, 184, 0.24)";
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      landmark.polygon.forEach((point, index) => {
+        const mapped = this.mapPoint(point, width, height);
+        if (index === 0) ctx.moveTo(mapped.x, mapped.y);
+        else ctx.lineTo(mapped.x, mapped.y);
+      });
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+  }
+
+  private discoverNearby(player: Vec2): void {
+    for (const amenity of this.level.amenities) {
+      if (distanceSquared(player, amenity.position) <= 58 * 58) this.discoveredAmenityIds.add(amenity.id);
+    }
+    for (const station of this.level.upgradeStations) {
+      if (distanceSquared(player, station.position) <= 72 * 72) this.discoveredStationIds.add(station.id);
+    }
   }
 
   private drawFacingIndicator(ctx: CanvasRenderingContext2D, player: { x: number; y: number }, playerYaw: number): void {
@@ -222,4 +292,31 @@ export class MiniMapRenderer {
     ctx.closePath();
     ctx.fill();
   }
+}
+
+function isMapAmenity(kind: string): boolean {
+  return kind === "drinking_water" || kind === "toilets" || kind === "first_aid_room" || kind === "utility_box" || kind === "kiosk_hatch";
+}
+
+function landmarkContains(landmark: Landmark, point: Vec2): boolean {
+  if (landmark.polygon) return pointInPolygon(point, landmark.polygon);
+  if (!landmark.position || !landmark.radius) return false;
+  return distanceSquared(point, landmark.position) <= landmark.radius * landmark.radius;
+}
+
+function landmarkArea(landmark: Landmark): number {
+  if (!landmark.polygon) return Math.PI * Math.pow(landmark.radius ?? 999, 2);
+  let area = 0;
+  for (let index = 0; index < landmark.polygon.length; index += 1) {
+    const current = landmark.polygon[index];
+    const next = landmark.polygon[(index + 1) % landmark.polygon.length];
+    area += current.x * next.z - next.x * current.z;
+  }
+  return Math.abs(area) * 0.5;
+}
+
+function distanceSquared(a: Vec2, b: Vec2): number {
+  const dx = a.x - b.x;
+  const dz = a.z - b.z;
+  return dx * dx + dz * dz;
 }

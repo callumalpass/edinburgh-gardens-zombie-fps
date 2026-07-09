@@ -93,6 +93,7 @@ export function createGameMaterials(rng: RandomSource): GameMaterials {
     emissive: 0x15100b,
     emissiveIntensity: 0.12,
     gradientMap: TOON_RAMP,
+    vertexColors: true,
     transparent: true,
     opacity: 0.62
   });
@@ -102,6 +103,7 @@ export function createGameMaterials(rng: RandomSource): GameMaterials {
     emissive: 0x161207,
     emissiveIntensity: 0.12,
     gradientMap: TOON_RAMP,
+    vertexColors: true,
     transparent: true,
     opacity: 0.56
   });
@@ -111,6 +113,7 @@ export function createGameMaterials(rng: RandomSource): GameMaterials {
     emissive: 0x191b10,
     emissiveIntensity: 0.12,
     gradientMap: TOON_RAMP,
+    vertexColors: true,
     transparent: true,
     opacity: 0.48
   });
@@ -206,12 +209,11 @@ interface ToonMaterialOptions {
 function createToonMaterial(kind: TextureKind, rng: RandomSource, options: ToonMaterialOptions): THREE.MeshToonMaterial {
   return new THREE.MeshToonMaterial({
     map: createCanvasTexture(kind, rng),
-    bumpMap: createBumpTexture(kind, rng),
-    bumpScale: options.bumpScale,
     color: options.color,
     emissive: options.emissive,
     emissiveIntensity: options.emissiveIntensity,
-    gradientMap: TOON_RAMP
+    gradientMap: TOON_RAMP,
+    vertexColors: true
   });
 }
 
@@ -237,9 +239,9 @@ function createCanvasTexture(kind: TextureKind, rng: RandomSource): THREE.Canvas
   ctx.fillStyle = spec.base;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  drawPaperGrain(ctx, rng);
   drawTransparentWash(ctx, rng, spec);
   drawQuietPaintPlanes(ctx, rng, spec, kind);
+  drawBroadBrushFields(ctx, rng, spec, kind);
 
   for (let i = 0; i < 18; i += 1) {
     ctx.fillStyle = i % 2 === 0 ? `${spec.wash}${toAlphaHex(rng.range(0.06, 0.14))}` : `${spec.shade}${toAlphaHex(rng.range(0.045, 0.11))}`;
@@ -254,12 +256,19 @@ function createCanvasTexture(kind: TextureKind, rng: RandomSource): THREE.Canvas
   drawBrokenInkEdges(ctx, rng, spec, kind);
   drawMelbourneMaterialMarks(ctx, rng, kind);
 
-  for (let i = 0; i < spec.count; i += 1) {
-    const alpha = rng.range(0.04, 0.16);
+  const fleckCount = Math.round(spec.count * (kind === "gravel" || kind === "asphalt" || kind === "basalt" ? 0.72 : 0.56));
+  for (let i = 0; i < fleckCount; i += 1) {
+    const alpha = rng.range(0.025, kind === "gravel" || kind === "basalt" ? 0.13 : 0.105);
     const [r, g, b] = spec.fleck;
     ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
     const size = kind === "asphalt" || kind === "gravel" ? rng.range(1, 3) : rng.range(1, 4);
-    ctx.fillRect(rng.range(0, 256), rng.range(0, 256), size, size);
+    if (rng.next() > 0.72) {
+      ctx.beginPath();
+      ctx.ellipse(rng.range(0, 256), rng.range(0, 256), size * rng.range(1.2, 2.8), size * rng.range(0.35, 0.9), rng.range(-0.7, 0.7), 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.fillRect(rng.range(0, 256), rng.range(0, 256), size, size);
+    }
   }
 
   ctx.lineCap = "round";
@@ -308,13 +317,6 @@ function createCanvasTexture(kind: TextureKind, rng: RandomSource): THREE.Canvas
   return texture;
 }
 
-function drawPaperGrain(ctx: CanvasRenderingContext2D, rng: RandomSource): void {
-  for (let i = 0; i < 112; i += 1) {
-    ctx.fillStyle = rng.next() > 0.5 ? `rgba(246, 226, 178, ${rng.range(0.01, 0.025)})` : `rgba(20, 34, 32, ${rng.range(0.008, 0.022)})`;
-    ctx.fillRect(rng.range(0, 256), rng.range(0, 256), rng.range(1, 2.4), rng.range(1, 2.4));
-  }
-}
-
 function drawTransparentWash(ctx: CanvasRenderingContext2D, rng: RandomSource, spec: CanvasTextureSpec): void {
   ctx.save();
   ctx.globalCompositeOperation = "source-over";
@@ -351,6 +353,35 @@ function drawQuietPaintPlanes(ctx: CanvasRenderingContext2D, rng: RandomSource, 
       Math.PI * 2
     );
     ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawBroadBrushFields(ctx: CanvasRenderingContext2D, rng: RandomSource, spec: CanvasTextureSpec, kind: TextureKind): void {
+  const count = kind === "grass" || kind === "path" || kind === "asphalt" ? 9 : 6;
+  ctx.save();
+  ctx.translate(128, 128);
+  ctx.rotate(spec.angle + rng.range(-0.08, 0.08));
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  for (let i = 0; i < count; i += 1) {
+    const y = rng.range(-146, 146);
+    const x = rng.range(-188, -40);
+    const length = rng.range(190, 340);
+    const alpha = rng.range(0.028, kind === "grass" || kind === "path" ? 0.082 : 0.064);
+    ctx.strokeStyle = `${i % 2 === 0 ? spec.brushLight : spec.brushDark}${toAlphaHex(alpha)}`;
+    ctx.lineWidth = rng.range(7, kind === "grass" || kind === "path" ? 22 : 16);
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.bezierCurveTo(
+      x + length * 0.25,
+      y + rng.range(-18, 18),
+      x + length * 0.68,
+      y + rng.range(-22, 22),
+      x + length,
+      y + rng.range(-14, 14)
+    );
+    ctx.stroke();
   }
   ctx.restore();
 }
@@ -432,11 +463,11 @@ function drawDryBrush(
   ctx.translate(128, 128);
   ctx.rotate(spec.angle);
   ctx.lineCap = "round";
-  for (let i = 0; i < 34; i += 1) {
+  for (let i = 0; i < 26; i += 1) {
     const y = rng.range(-156, 156);
     const x = rng.range(-172, 118);
     const length = rng.range(52, 188);
-    ctx.strokeStyle = i % 3 === 0 ? `${spec.brushDark}${toAlphaHex(rng.range(0.028, 0.082))}` : `${spec.brushLight}${toAlphaHex(rng.range(0.035, 0.1))}`;
+    ctx.strokeStyle = i % 3 === 0 ? `${spec.brushDark}${toAlphaHex(rng.range(0.022, 0.068))}` : `${spec.brushLight}${toAlphaHex(rng.range(0.028, 0.088))}`;
     ctx.lineWidth = rng.range(1.2, 5.4);
     ctx.beginPath();
     ctx.moveTo(x, y);
@@ -549,12 +580,6 @@ function drawGumLeafMarks(ctx: CanvasRenderingContext2D, rng: RandomSource, coun
     ctx.stroke();
   }
   ctx.restore();
-}
-
-function createBumpTexture(kind: TextureKind, rng: RandomSource): THREE.CanvasTexture {
-  const texture = createCanvasTexture(kind, rng);
-  texture.colorSpace = THREE.NoColorSpace;
-  return texture;
 }
 
 function toAlphaHex(alpha: number): string {

@@ -17,6 +17,7 @@ export function createInitialPlayerState(groundY = START_POSITION.y): PlayerRunt
     health: START_HEALTH,
     scrap: START_SCRAP,
     kills: 0,
+    intermissionUpgradeWave: 0,
     height: 0,
     heightTarget: 0,
     jumpHeight: 0,
@@ -36,6 +37,7 @@ export function resetPlayerState(player: PlayerRuntimeState, groundY = START_POS
   player.health = initial.health;
   player.scrap = initial.scrap;
   player.kills = initial.kills;
+  player.intermissionUpgradeWave = initial.intermissionUpgradeWave;
   player.height = initial.height;
   player.heightTarget = initial.heightTarget;
   player.jumpHeight = initial.jumpHeight;

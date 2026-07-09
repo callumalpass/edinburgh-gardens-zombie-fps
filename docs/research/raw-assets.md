@@ -32,6 +32,14 @@ Current local assets:
   - Source: attempted Overpass query for playground/fence/gate objects around Edinburgh Gardens.
   - Purpose: record that the targeted query returned busy-server HTML and was not used for implementation geometry.
   - Validation: searched with `rg`; no derived constants are based on this failed response.
+- `docs/research/raw/2026-07-09/osm-map-bbox.xml`
+  - Source: OpenStreetMap map API bounded extract for Edinburgh Gardens and immediate surrounding streets.
+  - Purpose: current fixed-object audit for OSM trees, amenities, table tennis, paths, buildings and mapped park features.
+  - Validation: parsed with Python against OSM boundary way `13815924`; also validated by `npm run research:check` when the local ignored XML file is present.
+- `docs/research/raw/2026-07-09/osm-overpass-bbox-all-body-geom-failed.html`
+  - Source: attempted Overpass all-body/geometry bbox query on 2026-07-09.
+  - Purpose: record that the attempted Overpass mirror response was XML/HTML, not usable JSON. No geometry was derived from this file.
+  - Validation: not registered as a parsed raw asset because it is a failure artifact.
 - `docs/research/raw/vicmap/2026-07-05/further-realism/edinburgh-gardens-ground-surface-points.json`
   - Source: Vicmap Elevation metro 1-5 m FeatureServer layer 0 query over the Edinburgh Gardens bounding box.
   - Purpose: raw ground-surface point response used to recheck broad elevation source context.

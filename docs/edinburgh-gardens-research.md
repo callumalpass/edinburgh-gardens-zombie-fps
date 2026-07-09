@@ -13,11 +13,13 @@ These notes record the real-world sources and implementation decisions used to s
   - OSM data is available under ODbL. Derived coordinates in `src/game/levelData.ts` should keep OSM attribution in user-facing or published material.
 - OpenStreetMap bounded tree-node extract: https://api.openstreetmap.org/api/0.6/map?bbox=144.9798,-37.7903,144.9860,-37.7853
   - Used on 2026-07-05 to refresh `OSM_TREE_GEO` as 126 in-boundary `natural=tree` node IDs before current works exclusions.
+  - Re-parsed on 2026-07-09 as a full current OSM fixed-object audit; OSM tree, bench, bin, fountain, toilet, BBQ and bike-rack IDs still matched the code, while the Freeman Street post box, table-tennis way centroid, visible raingarden way `655160879`, small garden way `715802699`, parking apron way `1392352940`, south-east pitch way `242003500` and several small current connector ways required updates.
 - Vicmap Vegetation Tree Urban REST API: https://discover.data.vic.gov.au/dataset/vicmap-vegetation-tree-urban-rest-api
   - Used on 2026-07-05 as the primary non-significant tree source after the OSM tree layer proved sparse around the Queen Victoria plinth and eastern/northern lawns.
   - The source is aerial-photo/LiDAR-derived individual tree points with canopy radius and height fields.
 - OpenStreetMap feature ways fetched individually through the OSM API:
   - `22673070`, `22768137`, `22760900`, `22760908`, `75488632`, `22760904`, `22760905`, `210387722`, `403753751`, `403753754`, `22760906`, `715802681` to `715802690`, `1340465893`, `1340465894`, `1361307046`, `1361307049` path/service/step connectors added after bounded path inventories.
+  - `22662822`, `1103672695`, `1361301428`, `1361301429`, `403753760`, `403758220`, `1006838305`, `1340462807`, `1533381669` and `1533381670` current connector/rail/plinth path ways added or re-sourced in the 2026-07-09 OSM object audit.
   - `403753786` Kevin Murray Stand
   - `403753784` Fitzroy Tennis Club rooms
   - `543505702` Emely Baker Centre
@@ -25,6 +27,10 @@ These notes record the real-world sources and implementation decisions used to s
   - `242003562` south service/amenities building
   - `543505638`, `543505640`, `1475006767` to `1475006773` smaller park and sports-club buildings
   - `655160878` raingarden covered reservoir
+  - `655160879` visible Edinburgh Gardens Raingarden water/garden footprint
+  - `715802699` small central garden bed
+  - `1392352940` Kevin Murray Stand parking apron
+  - `242003500` south-east open grass pitch
   - `715802679` tennis-side storage tank
   - `715802680` mapped fence segment
   - Node `249041533` cricket nets
@@ -99,7 +105,7 @@ These notes record the real-world sources and implementation decisions used to s
 - City of Yarra significant trees dataset metadata: https://data.gov.au/data/dataset/yarra-significant-trees
   - Used for notable tree species, diameter and height context already represented by `YARRA_SIGNIFICANT_TREE_GEO`.
 - Brunswick Street Oval Redevelopment updates: https://www.yarracity.vic.gov.au/planning-and-building/our-projects-and-initiatives/brunswick-street-oval
-  - Used for current 2026 tennis works, tree-removal and replacement context around the oval/tennis precinct.
+  - Used for 2030 completion-state tennis, sports-pavilion, grandstand, tree-removal and replacement context around the oval/tennis precinct.
 - Brisbane Lions, Brunswick Street Oval upgrade is now underway: https://www.lions.com.au/news/2058912/brunswick-street-oval-upgrade-is-now-underway
   - Used for the current sports-pavilion first-aid room, kiosk, social space, kitchen, two-storey pavilion and energy-efficient lighting context.
 - Yarra News April-May 2025 Fitzroy Bowls roof upgrade: https://www.yarracity.vic.gov.au/sites/default/files/2025-04/yarranews_aprmay25_fa_web_nicholls_ward.pdf
@@ -137,8 +143,8 @@ These notes record the real-world sources and implementation decisions used to s
 - The north-east shrub planter review added the 10 m bluestone circular planter north of Rowe Street and the two 5 m Rowe Street entrance planters as dense crouch-cover garden landmarks.
 - The 2026-07-06 north-east planter placement audit moved those hand-placed raised shrub beds off the OSM-mapped path corridors while keeping the CMP-described Rowe Street and Elm Circle relationships.
 - The ornamental gardens review split the visible stormwater filtration garden south of the skate park and west of the rail trail from the east-side underground reservoir footprint, then added St Georges display beds, Rotunda Lawn shrub beds, the Queen Victoria circular display bed and the tennis Agapanthus strip.
-- The 2026-07-06 realism audit adds source-backed current-works details around the tennis/grandstand precinct, visible low stumps for OSM trees already suppressed by the redevelopment footprint, more legible mapped-building facades, and weather-aware wet material and night-light states.
-- The follow-up 2026-07-06 facade/court pass adds source-backed frontage points for the major mapped buildings so facade details face the documented use side, and tags the six OSM-mapped existing tennis courts with renovation-surface cues from Yarra's 2026-2027 Brunswick Street Oval works page. The two new courts are documented but not drawn as new footprints until public vertices are available.
+- The 2026-07-06 realism audit added source-backed works details around the tennis/grandstand precinct, visible low stumps for OSM trees already suppressed by the redevelopment footprint, more legible mapped-building facades, and weather-aware wet material and night-light states.
+- The 2026-07-09 2030 Brunswick Street Oval completion pass supersedes the temporary tennis/grandstand works cues: the six OSM-mapped existing courts are treated as completed renovations, two source-backed approximate new synthetic courts are added for the eight-court 2030 precinct, and the temporary mesh/rolls are replaced by completed-facility wayfinding, secure-gate and social-space cues.
 - The 2026-07-06 playground/fence pass models the south playground as fenced with gate gaps, leaves the relocated north playground unfenced after current-source review, adds the oval perimeter as a gated low rail blocker, makes only the low oval fence jumpable, and replaces the generic playground prop with separate south/north equipment layouts derived from public playground evidence.
 - The 2026-07-06 Fitzy Bowl correction removes the invisible full-footprint skatepark blocker and rebuilds the skatepark with lowered enterable bowls, visible coping gaps, ledges, rail, banks, quarter-pipe and seating.
 - The 2026-07-06 building access pass adds source-linked searchable structure access points at the grandstand changerooms, tennis clubroom, bowling club gate, Freeman Street gatehouse, Emely Baker Centre and south amenities service room, with distinct loot profiles and visible access hardware.
@@ -151,6 +157,8 @@ These notes record the real-world sources and implementation decisions used to s
 - The 2026-07-06 oval sports-marking pass replaces the old generic circular oval cue with an OSM-footprint-aware W. T. Peterson Oval overlay: mapped-polygon boundary markers, AFL 50 m arcs, centre square/circles, goal squares, a scaled MCC cricket pitch/crease/stump set, wet run-up sheen and spectator-side benches/scoreboard.
 - The 2026-07-06 cricket-net pass remodels the OSM cricket-nets point as a four-lane concrete/artificial-turf cage with cyclone-wire/pipe enclosure, rear mural-wall cue, internal divider nets and one front entrance.
 - The 2026-07-06 winter daylight/tree/zombie pass retunes the time-of-day cycle to Melbourne July 2026 sunrise/sunset, positions the key light from winter azimuth/altitude, makes elm/oak profiles sparser and branchier with heavier leaf litter, keeps gum-like profiles evergreen and adds modest weather/time zombie perception and footing modifiers.
+- The 2026-07-09 current OSM object audit adds the missing Freeman Street post box, moves the northern table-tennis object to OSM way `715659039`, replaces the simplified stormwater filtration garden with current OSM way `655160879`, adds small garden way `715802699`, adds the Kevin Murray Stand parking apron from OSM way `1392352940`, adds the south-east open pitch from OSM way `242003500`, refreshes small current connector paths, confirms that OSM tree/bin/fountain/bench/toilet/BBQ IDs still match the level, adds OSM way provenance to exact-matching landmarks/paths, and adds explicit uncertainty metadata for picnic-table points without public per-table GIS.
+- 2030 Brunswick Street Oval completion research is stored in `docs/research/2030-brunswick-street-oval-completion-2026-07-09.md`.
 - Tree placement refresh research is stored in `docs/research/tree-placement-refresh-2026-07-05.md`.
 - Detailed OSM path/service research is stored in `docs/research/osm-path-service-inventory-2026-07-05.md`.
 - Hardscape and terrain-edge research is stored in `docs/research/hardscape-terrain-edges-2026-07-05.md`.
@@ -184,6 +192,7 @@ These notes record the real-world sources and implementation decisions used to s
 - Oval sports-marking research is stored in `docs/research/oval-sports-markings-2026-07-06.md`.
 - Cricket-net cage research is stored in `docs/research/cricket-net-cage-refresh-2026-07-06.md`.
 - Winter daylight, tree silhouette and zombie-environment research is stored in `docs/research/winter-daylight-tree-zombie-realism-2026-07-06.md`.
+- Current OSM fixed-object audit research is stored in `docs/research/current-osm-object-audit-2026-07-09.md`.
 - Local raw research asset guidance is stored in `docs/research/raw-assets.md`.
 - Research/data pipeline automation is stored in `docs/research/data-pipeline-automation-2026-07-05.md` and `docs/research/research-manifest.json`.
 
@@ -198,6 +207,8 @@ These notes record the real-world sources and implementation decisions used to s
 - No public measured cricket-net cage polygon was found. The cricket nets retain the OSM node anchor and use approximate four-lane cage dimensions from CMP/photo evidence.
 - No public GIS vertices were found for the north-east bluestone planter or Rowe Street entrance planters. Their in-game centers are therefore CMP/context hand placements constrained by current OSM path clearances.
 - No public GIS point layer was found for each individual heritage furniture item. The Chandler Fountain, gas lamps, bollards, reproduction seats and interpretive signs are hand-placed from CMP setting descriptions and nearby mapped landmarks.
+- No public per-table picnic-table GIS nodes were found in the 2026-07-09 OSM extract. The table-tennis object is source-backed by OSM way `715659039`; individual picnic tables remain approximate within documented picnic/BBQ lawns.
+- OSM parking way `1392352940` beside the Kevin Murray Stand is rendered as a source-backed asphalt polygon; bay paint, kerb detail and any associated small fixtures remain unresolved because public GIS subfeatures were not available.
 - Raw API responses are kept locally under ignored `docs/research/raw/` when useful. The durable checked-in artifacts are source notes plus compact derived constants in `src/game/levelData.ts`.
 - The Vicmap elevation samples are sparse. They are appropriate for broad park slope and local rise/fall, not for fine kerbs, gutters, steps or detailed drainage modelling.
 - Fine ground details such as crowns, shoulders, root mounds, swales and oval banking are represented as deterministic local terrain modifiers layered over the broad Vicmap interpolation.

@@ -62,6 +62,7 @@ export function lootNoiseMultiplier(kind: AmenityPoint["kind"], context: LootSea
 function lootNoiseBase(kind: AmenityPoint["kind"]): number {
   if (kind === "bbq") return 1.05;
   if (kind === "waste_basket") return 0.8;
+  if (kind === "post_box") return 0.72;
   if (kind === "gatehouse") return 0.82;
   if (kind === "umpire_room") return 0.9;
   if (kind === "first_aid_room") return 0.92;
@@ -323,6 +324,7 @@ function amenityLootBias(kind: AmenityPoint["kind"]): number {
   if (kind === "bicycle_parking") return 0.05;
   if (kind === "toilets") return 0.03;
   if (kind === "waste_basket") return -0.02;
+  if (kind === "post_box") return -0.04;
   return -0.08;
 }
 

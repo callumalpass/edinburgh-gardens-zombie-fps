@@ -110,6 +110,21 @@ function boxExtentsFromPolygon(polygon: readonly { x: number; z: number }[]): { 
   return { halfX, halfZ, angle };
 }
 
+function longestEdgeAngle(polygon: readonly { x: number; z: number }[]): number {
+  let angle = 0;
+  let longest = 0;
+  for (let index = 0; index < polygon.length; index += 1) {
+    const start = polygon[index];
+    const end = polygon[(index + 1) % polygon.length];
+    const edgeLength = distance(start, end);
+    if (edgeLength > longest) {
+      longest = edgeLength;
+      angle = Math.atan2(end.z - start.z, end.x - start.x);
+    }
+  }
+  return angle;
+}
+
 function averageRadius(polygon: readonly { x: number; z: number }[]): number {
   const center = polygonCentroid(polygon);
   return polygon.reduce((sum, point) => sum + distance(point, center), 0) / polygon.length;
@@ -192,10 +207,10 @@ describe("map geometry", () => {
   });
 
   it("uses mapped tree points inside the park for more accurate placement", () => {
-    expect(level.treePoints.length).toBeGreaterThanOrEqual(340);
+    expect(level.treePoints.length).toBeGreaterThanOrEqual(330);
     expect(level.treeLines.length).toBeGreaterThanOrEqual(5);
     expect(level.significantTrees.length).toBe(19);
-    expect(level.trees.length).toBeGreaterThanOrEqual(360);
+    expect(level.trees.length).toBeGreaterThanOrEqual(350);
     expect(level.trees.length).toBe(level.treeColliders.length);
     expect(level.treePoints.filter((tree) => pointInPolygon(tree, level.boundary)).length).toBe(level.treePoints.length);
     expect(level.significantTrees.filter((tree) => pointInPolygon(tree.position, level.boundary)).length).toBe(level.significantTrees.length);
@@ -224,12 +239,26 @@ describe("map geometry", () => {
     for (const removedNodeId of [5365392008, 5365392009, 5365392010, 5365392011, 5365393282, 5365393283, 5365393284]) {
       expect(level.trees.some((tree) => tree.id === `osm-tree-${removedNodeId}`)).toBe(false);
     }
+
+    const removedTreePlanNumbers = [
+      8, 9, 10, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 52, 53, 54, 55, 56, 58, 60, 61, 62, 63, 64, 65, 66
+    ];
+    const removedTreeStumps = level.parkLifeDetails.filter((detail) => detail.kind === "removed-tree-stump");
+    expect(removedTreeStumps).toHaveLength(39);
+    expect(removedTreeStumps.map((detail) => Number(detail.id.match(/tree-(\d+)-stump$/)?.[1]))).toEqual(removedTreePlanNumbers);
+    expect(removedTreeStumps.every((detail) => detail.source?.includes("0.766 game-unit RMS"))).toBe(true);
+    for (const stump of removedTreeStumps) {
+      expect(
+        level.trees.every((tree) => distance(tree.position, stump.position) > 5 * WORLD_SCALE),
+        `${stump.id} still has an active mapped tree within the removal exclusion radius`
+      ).toBe(true);
+    }
   });
 
   it("derives solid trunk colliders from mapped and researched trees", () => {
     const obstacleIds = new Set(level.obstacles.map((obstacle) => obstacle.id));
     expect(level.treeColliders.length).toBe(level.trees.length);
-    expect(level.treeColliders.length).toBeGreaterThanOrEqual(360);
+    expect(level.treeColliders.length).toBeGreaterThanOrEqual(350);
     expect(level.treeColliders.every((tree) => pointInPolygon(tree.position, level.boundary))).toBe(true);
     expect(level.treeColliders.every((tree) => tree.radius >= 0.34 && tree.radius <= 1.05)).toBe(true);
     expect(level.treeColliders.some((tree) => tree.source?.includes("Yarra significant trees"))).toBe(true);
@@ -447,15 +476,28 @@ describe("map geometry", () => {
 
     expect(level.mappedBuildings.find((building) => building.id === "osm-building-403753784")?.facade?.source).toContain("Brunswick Street Oval");
     expect(level.mappedBuildings.find((building) => building.id === "osm-building-543505702")?.facade?.source).toContain("Emely Baker Centre");
-    expect(level.mappedBuildings.find((building) => building.id === "osm-building-543505639")?.facade?.source).toContain("Memorial Wall");
+    expect(level.mappedBuildings.find((building) => building.id === "osm-building-543505639")?.facade?.source).toContain("Hannah memorial gates");
   });
 
-  it("marks the six existing tennis courts as current renovation surfaces", () => {
+  it("keeps the physical tennis precinct in its July 2026 active-works state", () => {
+    const tennisPrecinct = level.landmarks.find((landmark) => landmark.id === "tennis");
     const tennisCourts = level.landmarks.filter((landmark) => landmark.id.startsWith("tennis-court-"));
+    expect(tennisPrecinct?.polygon).toBeTruthy();
     expect(tennisCourts.length).toBe(6);
-    expect(tennisCourts.every((court) => court.courtStatus === "renovating-existing")).toBe(true);
-    expect(tennisCourts.every((court) => court.source?.includes("full renovation of six existing courts"))).toBe(true);
+    const activeCourts = tennisCourts.filter((court) => court.courtStatus === "active-clay");
+    const worksCourts = tennisCourts.filter((court) => court.courtStatus === "under-construction");
+    expect(activeCourts.map((court) => court.id)).toEqual(["tennis-court-1", "tennis-court-2", "tennis-court-3"]);
+    expect(worksCourts.map((court) => court.id)).toEqual(["tennis-court-4", "tennis-court-5", "tennis-court-6"]);
+    expect(activeCourts.every((court) => court.source?.includes("operating on three clay courts"))).toBe(true);
+    expect(worksCourts.every((court) => court.source?.includes("Northern Courts construction"))).toBe(true);
+    expect(Math.max(...worksCourts.map((court) => polygonCentroid(court.polygon!).z)))
+      .toBeLessThan(Math.min(...activeCourts.map((court) => polygonCentroid(court.polygon!).z)));
     expect(tennisCourts.every((court) => court.polygon?.every((point) => pointInPolygon(point, level.boundary)))).toBe(true);
+    expect(pointInPolygon(geoToWorld({ lat: -37.78760, lon: 144.98220 }), tennisPrecinct!.polygon!)).toBe(false);
+    for (const unsupportedWorksProp of ["tennis-works-mesh-fence", "grandstand-secure-gate-works", "tennis-synthetic-court-rolls"]) {
+      expect(level.parkLifeDetails.some((detail) => detail.id === unsupportedWorksProp)).toBe(false);
+    }
+    expect(level.trees.some((tree) => tree.id.startsWith("yarra-replacement-tree-"))).toBe(false);
   });
 
   it("adds source-backed deeper structure affordances", () => {
@@ -466,25 +508,27 @@ describe("map geometry", () => {
     expect(amenitiesById.get("emely-baker-kitchenette")?.kind).toBe("kitchenette");
     expect(amenitiesById.get("emely-baker-kitchenette")?.source).toContain("microwave");
     expect(amenitiesById.get("bowling-green-service-locker")?.linkedStructureId).toBe("osm-building-1475006770");
-    expect(amenitiesById.get("north-toilets-service-room")?.source).toContain("flat concrete roof");
     expect(amenitiesById.get("rotunda-memorial-plaque")?.kind).toBe("memorial_plaque");
     expect(amenitiesById.get("rotunda-memorial-plaque")?.source).toContain("memorial plaques");
-    expect(amenitiesById.get("grandstand-external-public-toilets")?.kind).toBe("toilets");
-    expect(amenitiesById.get("grandstand-external-public-toilets")?.source).toContain("externally accessible public toilets");
-    expect(amenitiesById.get("grandstand-kiosk-hatch")?.kind).toBe("kiosk_hatch");
-    expect(amenitiesById.get("grandstand-kiosk-hatch")?.source).toContain("kiosk terrace");
-    expect(amenitiesById.get("grandstand-first-aid-room")?.kind).toBe("first_aid_room");
-    expect(amenitiesById.get("grandstand-first-aid-room")?.source).toContain("first aid room");
-    expect(amenitiesById.get("grandstand-sports-kitchen")?.kind).toBe("kitchenette");
-    expect(amenitiesById.get("grandstand-sports-kitchen")?.source).toContain("kitchen");
+    for (const futureObjectId of [
+      "grandstand-external-public-toilets",
+      "grandstand-kiosk-hatch",
+      "grandstand-first-aid-room",
+      "grandstand-sports-kitchen",
+      "grandstand-switchboard",
+      "tennis-switchboard",
+      "south-amenities-switchboard",
+      "north-toilets-service-room"
+    ]) {
+      expect(amenitiesById.has(futureObjectId), `${futureObjectId} should not exist in the 2026 physical baseline`).toBe(false);
+    }
     expect(amenitiesById.get("bowling-roof-gutter-maintenance")?.source).toContain("zincalume");
     expect(amenitiesById.get("bowling-roof-gutter-maintenance")?.source).toContain("gutters");
+    expect(amenitiesById.get("timber-entrance-pavilion-passage")?.source).toContain("open central passage");
 
     const utilityBoxes = level.amenities.filter((amenity) => amenity.kind === "utility_box");
-    expect(utilityBoxes.map((amenity) => amenity.id).sort()).toEqual(
-      ["emely-baker-switchboard", "grandstand-switchboard", "south-amenities-switchboard", "tennis-switchboard"].sort()
-    );
-    expect(utilityBoxes.every((amenity) => amenity.source?.includes("no-current-power constraint"))).toBe(true);
+    expect(utilityBoxes.map((amenity) => amenity.id)).toEqual(["emely-baker-exterior-service-cabinet"]);
+    expect(utilityBoxes[0]?.source).toContain("Figure 144 visibly documents");
     expect(utilityBoxes.some((amenity) => amenity.linkedStructureId === "osm-building-543505640")).toBe(false);
   });
 
@@ -531,6 +575,11 @@ describe("map geometry", () => {
     expect(hardscapeIds.has("hardscape-alfred-crescent-retaining-wall")).toBe(true);
     expect(level.hardscapeLines.every((line) => line.source?.includes("CMP"))).toBe(true);
     expect(level.hardscapeLines.filter((line) => line.points.some((point) => pointInPolygon(point, level.boundary))).length).toBe(level.hardscapeLines.length);
+    const parkingApron = level.groundSurfacePolygons.find((surface) => surface.id === "osm-1392352940-grandstand-parking");
+    expect(parkingApron?.kind).toBe("parking-apron");
+    expect(parkingApron?.material).toBe("asphalt");
+    expect(parkingApron?.source).toContain("1392352940");
+    expect(parkingApron?.polygon.every((point) => pointInPolygon(point, level.boundary))).toBe(true);
   });
 
   it("adds sourceable path material transition patches without collision", () => {
@@ -592,7 +641,7 @@ describe("map geometry", () => {
     expect(distance(grandstand!.accessPosition!, grandstand!.landingPosition!)).toBeGreaterThan(3);
 
     const roofFixtures = level.interactables.filter((fixture) => fixture.kind === "toilets" && fixture.id.endsWith("-roof"));
-    expect(roofFixtures.length).toBeGreaterThanOrEqual(2);
+    expect(roofFixtures).toHaveLength(1);
     expect(roofFixtures.every((fixture) => fixture.accessPosition && fixture.landingPosition && fixture.accessKind === "ladder" && fixture.prompt.includes("ladder"))).toBe(true);
     const southRoof = roofFixtures.find((fixture) => fixture.id === "south-toilets-roof");
     const southAmenitiesBuilding = level.mappedBuildings.find((building) => building.id === "osm-building-242003562");
@@ -603,11 +652,7 @@ describe("map geometry", () => {
     expect(distance(southRoof!.position, polygonCentroid(southAmenitiesBuilding!.polygon))).toBeLessThan(0.01);
     expect(distanceToPolygonEdge(southRoof!.accessPosition!, southAmenitiesBuilding!.polygon)).toBeLessThan(0.85);
 
-    const northRoof = roofFixtures.find((fixture) => fixture.id === "north-toilets-roof");
-    const northToilets = level.landmarks.find((landmark) => landmark.id === "north-toilets");
-    expect(northRoof).toBeTruthy();
-    expect(northToilets?.polygon).toBeTruthy();
-    expect(distanceToPolygonEdge(northRoof!.accessPosition!, northToilets!.polygon!)).toBeLessThan(1.5);
+    expect(roofFixtures.some((fixture) => fixture.id === "north-toilets-roof")).toBe(false);
 
     const basketballFrames = level.interactables.filter((fixture) => fixture.kind === "basketball" && fixture.id.endsWith("-frame"));
     const basketballHoops = level.sportsFixtures.filter((fixture) => fixture.kind === "basketball-hoop");
@@ -725,9 +770,19 @@ describe("map geometry", () => {
     expect(level.paths.filter((path) => path.source?.startsWith("OpenStreetMap way")).length).toBeGreaterThanOrEqual(24);
     expect(level.amenities.length).toBeGreaterThan(40);
     expect(level.amenities.filter((amenity) => amenity.kind === "drinking_water").length).toBeGreaterThanOrEqual(3);
-    expect(level.amenities.filter((amenity) => amenity.kind === "picnic_table").length).toBeGreaterThanOrEqual(4);
+    expect(level.amenities.filter((amenity) => amenity.kind === "post_box").length).toBe(1);
+    expect(level.amenities.filter((amenity) => amenity.kind === "picnic_table")).toHaveLength(0);
     expect(level.amenities.filter((amenity) => amenity.kind === "table_tennis").length).toBeGreaterThanOrEqual(1);
     expect(level.amenities.filter((amenity) => pointInPolygon(amenity.position, level.boundary)).length).toBe(level.amenities.length);
+
+    const postBox = level.amenities.find((amenity) => amenity.id === "osm-220390942");
+    expect(postBox?.kind).toBe("post_box");
+    expect(postBox?.source).toContain("OpenStreetMap amenity node 220390942");
+    expect(distance(postBox!.position, geoToWorld({ lat: -37.7895612, lon: 144.9800662 }))).toBeLessThan(0.1);
+
+    const tableTennis = level.amenities.find((amenity) => amenity.id === "north-table-tennis");
+    expect(tableTennis?.source).toContain("OpenStreetMap way 715659039");
+    expect(distance(tableTennis!.position, geoToWorld({ lat: -37.7858855, lon: 144.9825441 }))).toBeLessThan(0.6);
   });
 
   it("does not render an unsupported Emely Baker to south playground diagonal path", () => {
@@ -761,26 +816,92 @@ describe("map geometry", () => {
     const skate = level.landmarks.find((landmark) => landmark.id === "skate");
     const raingarden = level.landmarks.find((landmark) => landmark.id === "stormwater-filtration-garden");
     const reservoir = level.landmarks.find((landmark) => landmark.id === "raingarden-reservoir");
+    const centralGarden = level.landmarks.find((landmark) => landmark.id === "osm-715802699-central-garden-bed");
     const railTrail = level.paths.find((path) => path.id === "inner-circle-rail-trail");
     expect(skate?.polygon).toBeDefined();
     expect(raingarden?.polygon).toBeDefined();
     expect(reservoir?.polygon).toBeDefined();
+    expect(centralGarden?.polygon).toBeDefined();
     expect(railTrail).toBeDefined();
     expect(raingarden?.gardenStyle).toBe("stormwater-filtration");
     expect(reservoir?.gardenStyle).toBe("stormwater-storage");
+    expect(raingarden?.source).toContain("655160879");
+    expect(raingarden?.source).toContain("not used as the whole terrace envelope");
+    expect(centralGarden?.source).toContain("715802699");
     const skateCenter = polygonCentroid(skate!.polygon!);
     const raingardenCenter = polygonCentroid(raingarden!.polygon!);
     const reservoirCenter = polygonCentroid(reservoir!.polygon!);
     const landezineMapMarker = geoToWorld({ lat: -37.787301, lon: 144.983139 });
     const raingardenAreaSquareMeters = Math.abs(polygonArea(raingarden!.polygon!)) / (WORLD_SCALE * WORLD_SCALE);
+    const raingardenLongAxis = longestEdgeAngle(raingarden!.polygon!);
     expect(raingardenCenter.z).toBeGreaterThan(skateCenter.z);
     expect(distance(raingardenCenter, skateCenter)).toBeLessThan(130);
     expect(signedSideOfNearestPolylineSegment(raingardenCenter, railTrail!.points)).toBeLessThan(-4);
     expect(signedSideOfNearestPolylineSegment(landezineMapMarker, railTrail!.points)).toBeGreaterThan(4);
-    expect(raingardenAreaSquareMeters).toBeGreaterThan(600);
-    expect(raingardenAreaSquareMeters).toBeLessThan(800);
+    expect(Math.abs(Math.sin(raingardenLongAxis))).toBeGreaterThan(0.95);
+    expect(raingardenAreaSquareMeters).toBeGreaterThan(650);
+    expect(raingardenAreaSquareMeters).toBeLessThan(725);
     expect(reservoirCenter.x).toBeGreaterThan(raingardenCenter.x);
     expect(distance(reservoirCenter, raingardenCenter)).toBeGreaterThan(25);
+  });
+
+  it("keeps current OSM way provenance attached to audited feature geometry", () => {
+    const landmarksById = new Map(level.landmarks.map((landmark) => [landmark.id, landmark]));
+    const pathsById = new Map(level.paths.map((path) => [path.id, path]));
+    const surfacesById = new Map(level.groundSurfacePolygons.map((surface) => [surface.id, surface]));
+
+    for (const [id, wayId] of [
+      ["oval", "14946934"],
+      ["grandstand", "403753786"],
+      ["tennis", "24489878"],
+      ["bowling", "24489838"],
+      ["skate", "231049925"],
+      ["basketball", "500981577"],
+      ["north-toilets", "307404819"],
+      ["osm-242003500-south-east-open-pitch", "242003500"]
+    ] as const) {
+      expect(landmarksById.get(id)?.source, `${id} source`).toContain(wayId);
+    }
+
+    for (let index = 0; index < 6; index += 1) {
+      expect(landmarksById.get(`tennis-court-${index + 1}`)?.source).toContain(`${715802691 + index}`);
+    }
+    expect(landmarksById.has("tennis-court-7")).toBe(false);
+    expect(landmarksById.has("tennis-court-8")).toBe(false);
+    for (let index = 0; index < 2; index += 1) {
+      expect(landmarksById.get(`bowling-green-${index + 1}`)?.source).toContain(`${715802677 + index}`);
+    }
+
+    for (const [id, wayId] of [
+      ["inner-circle-rail-trail", "22760903"],
+      ["osm-north-curve", "22662822"],
+      ["osm-east-outer-connector", "22760897"],
+      ["osm-1103672695-rail-east-connector", "1103672695"],
+      ["osm-west-to-central-spine", "22760899"],
+      ["osm-north-playground-link", "22760901"],
+      ["osm-rotunda-to-north-playground", "22760902"],
+      ["osm-central-cross-path", "22760907"],
+      ["osm-east-crescent-spine", "22760909"],
+      ["osm-south-rail-curve-link", "146166231"],
+      ["osm-1361301428-south-cycle-slip-northbound", "1361301428"],
+      ["osm-1361301429-south-cycle-slip-southbound", "1361301429"],
+      ["osm-south-playground-path", "242003530"],
+      ["osm-western-perimeter-walk", "599677908"],
+      ["osm-northern-perimeter-walk", "981948921"],
+      ["osm-rail-trail-north", "1006838304"],
+      ["osm-rail-trail-north", "1006838305"],
+      ["osm-north-south-spine", "1103672693"],
+      ["osm-rail-trail-central", "1103672694"],
+      ["osm-403753760-oval-north-rail-link", "403753760"],
+      ["osm-western-edge", "1340462807"],
+      ["osm-plinth-garden-loop", "1533381669"],
+      ["osm-plinth-garden-loop", "1533381670"],
+      ["osm-403758220-south-east-footway", "403758220"]
+    ] as const) {
+      expect(pathsById.get(id)?.source, `${id} source`).toContain(wayId);
+    }
+
+    expect(surfacesById.get("osm-1392352940-grandstand-parking")?.source).toContain("1392352940");
   });
 
   it("adds source-backed ornamental garden beds without marking them as cover", () => {
@@ -845,9 +966,8 @@ describe("map geometry", () => {
 
   it("keeps small park furniture interactive without adding collision blockers", () => {
     const amenityIds = new Set(level.amenities.map((amenity) => amenity.id));
-    for (const id of ["north-table-tennis", "north-bbq-picnic-table-1", "south-picnic-table-1"]) {
-      expect(amenityIds.has(id)).toBe(true);
-    }
+    expect(amenityIds.has("north-table-tennis")).toBe(true);
+    expect(level.amenities.find((amenity) => amenity.id === "north-table-tennis")?.source).toContain("715659039");
 
     const obstacleIds = new Set(level.obstacles.map((obstacle) => obstacle.id));
     expect(obstacleIds.has("north-activity-precinct")).toBe(false);
@@ -1129,8 +1249,10 @@ describe("map geometry", () => {
     allow("grandstand-shotgun", "grandstand");
     allow("tennis-smg", "tennis", "osm-building-403753784");
     allow("tennis-locker", "tennis", "osm-building-403753784");
-    allow("tennis-synthetic-court-rolls", "tennis");
-    allow("brunswick-removed-tree-stump-5", "tennis");
+    for (const treePlanNumber of [9, 10, 12, 18]) {
+      allow(`brunswick-removed-tree-${treePlanNumber}-stump`, "tennis");
+    }
+    allow("brunswick-removed-tree-62-stump", "oval-fence-segment-5-1");
     allow("osm-6280110915", "skate");
     allow("osm-8464870016", "skate");
     allow("skate-chalk-mark", "skate");

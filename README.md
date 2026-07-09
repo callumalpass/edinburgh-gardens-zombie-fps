@@ -69,6 +69,23 @@ This runs one Vite build, stages the static web artifact in `release/web`, and p
 - `V`: mount or step off a carried skateboard
 - `X`: take loose weapons and world items, or remove placed ladders
 - Number keys: switch discovered weapons
+- `1-3` during intermission: choose one free field modification
+- `Esc`: pause solo play or release local controls during a LAN session
+
+The pause menu includes mouse sensitivity, field of view, volume and high-contrast HUD settings. In LAN play the world continues while an individual player has the menu open.
+
+## CLI Game Automation
+
+The game exposes a browser-side debug bridge at `window.__EGAME_TOOLS__` when the app is running. Use the Playwright-backed CLI to launch a controlled game session, inspect state, and run gameplay commands:
+
+```bash
+npm run game:cli -- snapshot
+npm run game:cli -- spawn 5
+npm run game:cli -- teleport x=0 z=0
+npm run game:cli -- --headed repl
+```
+
+The CLI defaults to `http://127.0.0.1:5480/?smoke=1`, starts Vite automatically when needed, and cleans up the browser/server after one-shot commands. Run `npm run game:cli -- list` for the available command surface.
 
 ## Current Mechanics
 

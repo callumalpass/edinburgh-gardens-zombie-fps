@@ -2,16 +2,17 @@ import * as THREE from "three";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
-import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import type { TimeOfDayState } from "./timeOfDay";
 import type { WeatherState } from "./weather";
+import { RENDER_QUALITY_SETTINGS, type RenderQualityLevel } from "./renderQuality";
 
 const ANIME_GRADE_SHADER = {
   uniforms: {
     tDiffuse: { value: null },
     resolution: { value: new THREE.Vector2(1, 1) },
     strength: { value: 1 },
+    inkStrength: { value: 1 },
     nightAmount: { value: 1 },
     daylight: { value: 0 },
     precipitation: { value: 0 },
@@ -30,6 +31,7 @@ const ANIME_GRADE_SHADER = {
     uniform sampler2D tDiffuse;
     uniform vec2 resolution;
     uniform float strength;
+    uniform float inkStrength;
     uniform float nightAmount;
     uniform float daylight;
     uniform float precipitation;
@@ -42,29 +44,37 @@ const ANIME_GRADE_SHADER = {
     }
 
     void main() {
-      vec2 pixel = 1.0 / resolution;
       vec4 base = texture2D(tDiffuse, vUv);
       vec3 color = base.rgb;
-
       float center = animeLuminance(color);
-      float right = animeLuminance(texture2D(tDiffuse, vUv + vec2(pixel.x, 0.0)).rgb);
-      float left = animeLuminance(texture2D(tDiffuse, vUv - vec2(pixel.x, 0.0)).rgb);
-      float up = animeLuminance(texture2D(tDiffuse, vUv + vec2(0.0, pixel.y)).rgb);
-      float down = animeLuminance(texture2D(tDiffuse, vUv - vec2(0.0, pixel.y)).rgb);
-      float edge = smoothstep(0.14, 0.38, abs(center - right) + abs(center - left) + abs(center - up) + abs(center - down));
+      float edge = smoothstep(0.035, 0.125, fwidth(center));
+      float skyProtection = smoothstep(0.5, 0.9, vUv.y);
+      float worldGrade = strength * (1.0 - skyProtection * 0.72);
 
-      vec3 shadowLift = vec3(0.05, 0.078, 0.073);
-      vec3 mids = vec3(1.018, 1.012, 0.96);
-      vec3 highlights = vec3(1.1, 1.045, 0.84);
-      color = color * mids + shadowLift * (1.0 - smoothstep(0.08, 0.62, center)) * 0.48;
-      color = mix(color, color * highlights + vec3(0.006, 0.003, 0.0), smoothstep(0.56, 0.98, center) * 0.16);
-      color = mix(color, floor(color * 14.0 + 0.28) / 14.0, 0.052 * strength);
-      color = mix(color, vec3(0.024, 0.054, 0.057), edge * 0.105 * strength);
-      color = mix(color, color * vec3(0.74, 0.86, 0.94) + vec3(0.004, 0.016, 0.022), nightAmount * 0.18 * strength);
-      color = mix(color, color * vec3(1.048, 1.03, 0.952) + vec3(0.014, 0.008, 0.0), daylight * 0.095 * strength);
+      vec3 shadowLift = vec3(0.064, 0.105, 0.1);
+      float shadowMask = 1.0 - smoothstep(0.055, 0.48, center);
+      color = mix(color, max(color, shadowLift), shadowMask * 0.34 * worldGrade);
+      color = mix(color, color * vec3(1.035, 1.018, 0.95) + vec3(0.008, 0.004, 0.0), smoothstep(0.5, 0.96, center) * 0.12 * worldGrade);
+
+      float gradedLuma = max(0.018, animeLuminance(color));
+      float bandedLuma = floor(gradedLuma * 9.0 + 0.42) / 9.0;
+      vec3 bandedColor = color * (bandedLuma / gradedLuma);
+      color = mix(color, bandedColor, 0.055 * worldGrade);
+      color = mix(color, color * vec3(0.78, 0.9, 0.96) + vec3(0.008, 0.022, 0.026), nightAmount * 0.16 * worldGrade);
+      color = mix(color, color * vec3(1.04, 1.026, 0.966) + vec3(0.012, 0.007, 0.0), daylight * 0.085 * worldGrade);
       float weatherAmount = clamp(precipitation * 0.72 + weatherFog * 0.36 + cloudCover * 0.22, 0.0, 1.0);
-      color = mix(color, color * vec3(0.8, 0.9, 1.0) + vec3(0.004, 0.014, 0.024), weatherAmount * 0.2 * strength);
-      color = mix(color, vec3(animeLuminance(color)) * vec3(0.92, 1.0, 1.06), weatherFog * 0.075 * strength);
+      color = mix(color, color * vec3(0.82, 0.92, 1.0) + vec3(0.006, 0.016, 0.022), weatherAmount * 0.17 * worldGrade);
+      color = mix(color, vec3(animeLuminance(color)) * vec3(0.9, 1.0, 1.055), weatherFog * 0.065 * worldGrade);
+
+      float horizonBand = smoothstep(0.16, 0.54, vUv.y) * (1.0 - smoothstep(0.76, 0.98, vUv.y));
+      float aerialWash = clamp(horizonBand * (0.18 + weatherFog * 0.62 + cloudCover * 0.18 + precipitation * 0.16), 0.0, 1.0);
+      vec3 distanceWash = vec3(animeLuminance(color)) * vec3(0.82, 0.96, 1.02) + vec3(0.018, 0.032, 0.028);
+      color = mix(color, distanceWash, aerialWash * 0.09 * worldGrade);
+
+      float foregroundInk = smoothstep(0.82, 0.18, vUv.y);
+      float darkInk = 1.0 - smoothstep(0.2, 0.58, center);
+      float inkWeight = clamp(0.18 + foregroundInk * 0.42 + darkInk * 0.52 - weatherFog * 0.2 - cloudCover * 0.06, 0.1, 1.0);
+      color = mix(color, vec3(0.028, 0.062, 0.061), edge * inkWeight * 0.12 * inkStrength * (1.0 - skyProtection * 0.62));
 
       float vignette = smoothstep(0.88, 0.18, distance(vUv, vec2(0.5)));
       float vignetteFloor = mix(0.935, 0.968, daylight);
@@ -92,9 +102,6 @@ export class PostProcessingPipeline {
     this.composer.setPixelRatio(renderer.getPixelRatio());
     this.composer.addPass(new RenderPass(scene, camera));
 
-    const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), smokeMode ? 0.04 : 0.08, 0.26, 0.84);
-    this.composer.addPass(bloom);
-
     this.gradePass = new ShaderPass(ANIME_GRADE_SHADER);
     this.gradePass.uniforms.strength.value = smokeMode ? 0.45 : 1;
     this.composer.addPass(this.gradePass);
@@ -104,6 +111,14 @@ export class PostProcessingPipeline {
   setSize(width: number, height: number): void {
     this.composer.setSize(width, height);
     this.gradePass.uniforms.resolution.value.set(Math.max(1, width), Math.max(1, height));
+  }
+
+  setPixelRatio(pixelRatio: number): void {
+    this.composer.setPixelRatio(pixelRatio);
+  }
+
+  setQualityLevel(level: RenderQualityLevel): void {
+    this.gradePass.uniforms.inkStrength.value = RENDER_QUALITY_SETTINGS[level].inkStrength;
   }
 
   setTimeOfDay(timeOfDay: TimeOfDayState): void {

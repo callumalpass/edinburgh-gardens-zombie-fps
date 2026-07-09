@@ -1,5 +1,5 @@
 import { boundingRadius, distance, polygonCentroid } from "../geo";
-import type { LevelData, LevelPath, PathSurfacePatch, Vec2 } from "../types";
+import type { GroundSurfacePolygon, LevelData, LevelPath, PathSurfacePatch, Vec2 } from "../types";
 import { WEAPON_DEFINITIONS, type WeaponId } from "../weapons";
 import type { ZombieType } from "../waves";
 import type { WorldItemId } from "../items";
@@ -12,6 +12,7 @@ export type ObjectPreviewTargetKind =
   | "hardscape-line"
   | "path"
   | "path-surface-patch"
+  | "ground-surface-polygon"
   | "street-edge"
   | "sports-fixture"
   | "amenity"
@@ -122,6 +123,19 @@ export function createObjectPreviewTargets(level: LevelData): ObjectPreviewTarge
       label: patch.label,
       position: patch.position,
       radius: pathSurfacePatchRadius(patch),
+      height: 0.8
+    });
+  }
+
+  for (const [sourceIndex, surface] of level.groundSurfacePolygons.entries()) {
+    const position = polygonCentroid(surface.polygon);
+    add({
+      sourceId: surface.id,
+      sourceIndex,
+      kind: "ground-surface-polygon",
+      label: surface.label,
+      position,
+      radius: groundSurfacePolygonRadius(surface),
       height: 0.8
     });
   }
@@ -355,6 +369,10 @@ function parkLifeRadius(kind: LevelData["parkLifeDetails"][number]["kind"]): num
 
 function pathSurfacePatchRadius(patch: PathSurfacePatch): number {
   return Math.max(1.8, Math.hypot(patch.length, patch.width) * 0.55);
+}
+
+function groundSurfacePolygonRadius(surface: GroundSurfacePolygon): number {
+  return Math.max(1.8, boundingRadius(surface.polygon, polygonCentroid(surface.polygon)) + 0.8);
 }
 
 export function pathPreviewMaterialKey(path: LevelPath): "asphalt" | "concrete" | "gravel" | "path" {

@@ -4,6 +4,8 @@ Date: 2026-07-06
 
 Purpose: document the source-backed realism pass that tightened runtime artifact silhouettes, building facade placement and preview evidence without changing the project's minimalist anime style.
 
+Supersession note: the 2026-07-09 2030 Brunswick Street Oval completion pass replaces this note's temporary tennis/grandstand works-state implementation with completed 2030 court and facility cues. Keep the facade, material and building-detail findings here, but use `docs/research/2030-brunswick-street-oval-completion-2026-07-09.md` for the current tennis-court state.
+
 ## Sources
 
 - Yarra City Council Edinburgh Gardens page: https://www.yarracity.vic.gov.au/things-to-do/parks-reserves-and-playgrounds/edinburgh-gardens

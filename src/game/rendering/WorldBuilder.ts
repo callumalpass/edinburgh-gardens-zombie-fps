@@ -20,6 +20,7 @@ import {
 } from "../sportsFixtures";
 import type {
   AmenityPoint,
+  GroundSurfacePolygon,
   HardscapeLine,
   LevelData,
   LevelPath,
@@ -48,6 +49,7 @@ import {
 } from "./terrainOverlay";
 import type { TimeOfDayState } from "./timeOfDay";
 import type { WeatherState } from "./weather";
+import { RENDER_QUALITY_SETTINGS, type RenderQualityLevel } from "./renderQuality";
 import {
   TerrainSupport,
   cleanPolygon as cleanWorldPolygon,
@@ -82,7 +84,17 @@ interface TreeMaterialSet {
   trunk: THREE.Material;
   leaf: THREE.Material;
   leafHighlight: THREE.Material;
+  leafShadow: THREE.Material;
   paleBark: THREE.Material;
+}
+
+interface TreeInstanceBucket {
+  geometry: THREE.BufferGeometry;
+  material: THREE.Material;
+  matrices: THREE.Matrix4[];
+  castShadow: boolean;
+  receiveShadow: boolean;
+  kind: string;
 }
 
 interface ParkEntrance {
@@ -139,9 +151,17 @@ export class WorldBuilder {
   private readonly treeBranchGeometry = new THREE.CylinderGeometry(0.55, 1, 1, 6);
   private readonly treeRootGeometry = new THREE.BoxGeometry(1, 1, 1);
   private readonly treeCanopyGeometry = new THREE.IcosahedronGeometry(1, 2);
+  private readonly treeCanopyCoreGeometry = new THREE.IcosahedronGeometry(1, 1);
   private readonly treePaleBarkGeometry = new THREE.CylinderGeometry(0.74, 0.88, 1, 8);
+  private readonly lightPoolGeometry = new THREE.CircleGeometry(1, 26);
+  private grassClumpMesh: THREE.InstancedMesh | null = null;
   private ambientLight: THREE.HemisphereLight | null = null;
   private keyLight: THREE.DirectionalLight | null = null;
+  private readonly keyLightOffset = new THREE.Vector3(-150, 205, 75);
+  private readonly shadowFocus = new THREE.Vector3();
+  private readonly lastShadowLightOffset = new THREE.Vector3(Number.POSITIVE_INFINITY, 0, 0);
+  private lastShadowRefreshAt = Number.NEGATIVE_INFINITY;
+  private shadowQuality: RenderQualityLevel = "high";
   private emergencyLight: THREE.PointLight | null = null;
   private readonly ambientNightSky = new THREE.Color(0x849eb4);
   private readonly ambientDaySky = new THREE.Color(0xc9d6cf);
@@ -190,13 +210,13 @@ export class WorldBuilder {
     this.scene.add(this.ambientLight);
     const moon = new THREE.DirectionalLight(0xc9ddff, 2.95);
     this.keyLight = moon;
+    moon.userData.dynamic = true;
+    moon.target.userData.dynamic = true;
     moon.position.set(-150, 205, 75);
     moon.castShadow = true;
-    moon.shadow.camera.left = -360;
-    moon.shadow.camera.right = 360;
-    moon.shadow.camera.top = 360;
-    moon.shadow.camera.bottom = -360;
-    moon.shadow.mapSize.set(2048, 2048);
+    this.configureShadowCamera("high");
+    moon.target.position.copy(this.shadowFocus);
+    this.scene.add(moon.target);
     this.scene.add(moon);
 
     const emergency = new THREE.PointLight(0xe34b43, 5.2, 145);
@@ -208,15 +228,13 @@ export class WorldBuilder {
     this.addStreetEdges();
     this.addMownLawnBands();
     this.addLawnWearPatches();
-    this.addPaintedLawnWashes();
-    this.addDistantGroundBreakup();
     this.addPaths();
+    this.addGroundSurfacePolygons();
     this.addPathSurfacePatches();
     this.addHardscapeLines();
     this.addDampGroundDetails();
     this.addWetPathSheen();
     this.addGrassClumps();
-    this.addRailTrailRemnants();
     this.addLandmarks();
     this.addSportsFixtures();
     this.addMappedBuildings();
@@ -224,10 +242,10 @@ export class WorldBuilder {
     this.addMappedFences();
     this.addAmenities();
     this.addParkLifeDetails();
-    this.addPathLights();
-    this.addParkEntranceDetails();
-    this.addMelbourneMarkers();
-    this.addBoundaryFence();
+    // Fixed furniture must come from the audited level register. Earlier
+    // renderer-generated boundary fencing, path lamps, entrance furniture and
+    // transit markers had no per-object 2026 coordinates and are deliberately
+    // not emitted.
     this.addUnderCanopyGroundWear();
     this.addTrees();
   }
@@ -255,6 +273,9 @@ export class WorldBuilder {
     } else if (target.kind === "path-surface-patch") {
       const patch = this.level.pathSurfacePatches.find((candidate) => candidate.id === target.sourceId);
       if (patch) this.addPathSurfacePatchPreview(patch);
+    } else if (target.kind === "ground-surface-polygon") {
+      const surface = this.level.groundSurfacePolygons.find((candidate) => candidate.id === target.sourceId);
+      if (surface) this.addGroundSurfacePolygonPreview(surface);
     } else if (target.kind === "street-edge") {
       const street = this.level.streetEdges.find((candidate) => candidate.id === target.sourceId);
       if (street) this.addStreetEdgePreview(street);
@@ -349,13 +370,9 @@ export class WorldBuilder {
     if (landmark.kind === "grandstand" && landmark.polygon) this.addGrandstand(landmark);
     if (landmark.kind === "tennis" && landmark.polygon) {
       this.addFenceAround(landmark.polygon, 2.2, 0x93a59a);
-      this.addTennisClubDetails(landmark.polygon);
     }
     if (landmark.kind === "court" && landmark.polygon) {
-      this.addFlatPolygon(landmark.polygon, this.materials.court, 0.09);
-      this.addTennisCourtLines(landmark.polygon);
-      this.addTennisNet(landmark.polygon);
-      this.addTennisCourtWorksCues(landmark);
+      this.addTennisCourt(landmark);
     }
     if (landmark.kind === "bowls" && landmark.polygon) {
       this.addFlatPolygon(landmark.polygon, this.materials.court, 0.08, landmark.id.startsWith("bowling-green") ? 0.86 : 0.6);
@@ -430,6 +447,10 @@ export class WorldBuilder {
     this.scene.add(mesh);
   }
 
+  private addGroundSurfacePolygonPreview(surface: GroundSurfacePolygon): void {
+    this.addFlatPolygon(surface.polygon, this.groundSurfacePolygonMaterial(surface), PATH_SURFACE_Y + 0.024, surface.kind === "parking-apron" ? 0.88 : 0.76);
+  }
+
   private addStreetEdgePreview(street: StreetEdge): void {
     const asphalt = new THREE.MeshStandardMaterial({ color: 0x252a26, roughness: 0.88 });
     const residential = new THREE.MeshStandardMaterial({ color: 0x2d302c, roughness: 0.9 });
@@ -476,6 +497,9 @@ export class WorldBuilder {
     } else if (amenity.kind === "toilets") {
       this.addToiletSign(amenity.position, angle);
       this.addAmenityHalo(amenity.position, 0x61a8d3, 0.52);
+    } else if (amenity.kind === "post_box") {
+      this.addPostBox(amenity.position, angle);
+      this.addAmenityHalo(amenity.position, 0xb43a32, 0.48);
     } else if (amenity.kind === "memorial_plaque") {
       this.addMemorialPlaqueCue(amenity.position, angle);
       this.addAmenityHalo(amenity.position, 0xd0a343, 0.52);
@@ -514,8 +538,8 @@ export class WorldBuilder {
       this.addCricketNets(detail);
     } else if (detail.kind === "heritage-gas-lamp") {
       this.addHeritageGasLamp(detail);
-    } else if (detail.kind === "heritage-bollards") {
-      this.addHeritageBollards(detail);
+    } else if (detail.kind === "heritage-bollard") {
+      this.addHeritageBollard(detail);
     } else if (detail.kind === "heritage-seat") {
       this.addHeritageSeat(detail);
     } else if (detail.kind === "interpretive-sign") {
@@ -547,11 +571,12 @@ export class WorldBuilder {
       const sunX = Math.sin(azimuth) * Math.cos(altitude) * sunRadius;
       const sunY = Math.sin(altitude) * sunRadius + 72;
       const sunZ = -Math.cos(azimuth) * Math.cos(altitude) * sunRadius;
-      this.keyLight.position.set(
+      this.keyLightOffset.set(
         THREE.MathUtils.lerp(-150, sunX, daylightInfluence),
         THREE.MathUtils.lerp(205, sunY, daylightInfluence),
         THREE.MathUtils.lerp(75, sunZ, daylightInfluence)
       );
+      this.applyKeyLightTransform();
     }
 
     if (this.emergencyLight) {
@@ -567,7 +592,8 @@ export class WorldBuilder {
       light.intensity = 0.04 + lampT * 1.28;
     }
     for (const material of this.lampSpillMaterials) {
-      material.opacity = (0.035 + lampT * 0.15) * (0.86 + wetness * 0.38);
+      const baseOpacity = (material.userData.baseOpacity as number | undefined) ?? 1;
+      material.opacity = baseOpacity * (0.035 + lampT * 0.15) * (0.86 + wetness * 0.38);
     }
     for (const material of this.wallLightMaterials) {
       material.emissive.setHex(0xf0a64d);
@@ -593,6 +619,64 @@ export class WorldBuilder {
 
   private tintMaterial(material: { color: THREE.Color }, base: THREE.Color, wet: THREE.Color, amount: number): void {
     material.color.copy(this.scratchColor.copy(base).lerp(wet, THREE.MathUtils.clamp(amount, 0, 1)));
+  }
+
+  updateShadowFocus(position: Vec2, now: number): boolean {
+    if (!this.keyLight) return false;
+    const snappedX = Math.round(position.x / 12) * 12;
+    const snappedZ = Math.round(position.z / 12) * 12;
+    const focusChanged = Math.abs(this.shadowFocus.x - snappedX) > 0.01 || Math.abs(this.shadowFocus.z - snappedZ) > 0.01;
+    const lightChanged = this.lastShadowLightOffset.distanceToSquared(this.keyLightOffset) > 0.16;
+    const timedRefresh = now - this.lastShadowRefreshAt >= 0.34;
+
+    if (focusChanged) {
+      this.shadowFocus.set(snappedX, 0, snappedZ);
+      this.applyKeyLightTransform();
+    }
+    if (focusChanged || (lightChanged && timedRefresh) || this.lastShadowRefreshAt === Number.NEGATIVE_INFINITY) {
+      this.keyLight.shadow.needsUpdate = true;
+      this.lastShadowLightOffset.copy(this.keyLightOffset);
+      this.lastShadowRefreshAt = now;
+      return true;
+    }
+    return false;
+  }
+
+  setQualityLevel(level: RenderQualityLevel): void {
+    this.shadowQuality = level;
+    this.configureShadowCamera(level);
+    if (this.grassClumpMesh) {
+      const settings = RENDER_QUALITY_SETTINGS[level];
+      this.grassClumpMesh.count = Math.max(1, Math.round(this.renderedGrassClumpCount * settings.grassFraction));
+    }
+  }
+
+  private configureShadowCamera(level: RenderQualityLevel): void {
+    if (!this.keyLight) return;
+    const settings = RENDER_QUALITY_SETTINGS[level];
+    const camera = this.keyLight.shadow.camera;
+    camera.left = -settings.shadowRadius;
+    camera.right = settings.shadowRadius;
+    camera.top = settings.shadowRadius;
+    camera.bottom = -settings.shadowRadius;
+    camera.near = 28;
+    camera.far = 520;
+    camera.updateProjectionMatrix();
+    if (this.keyLight.shadow.mapSize.x !== settings.shadowMapSize) {
+      this.keyLight.shadow.map?.dispose();
+      this.keyLight.shadow.map = null;
+      this.keyLight.shadow.mapSize.set(settings.shadowMapSize, settings.shadowMapSize);
+    }
+    this.keyLight.shadow.bias = -0.00032;
+    this.keyLight.shadow.normalBias = 0.034;
+    this.keyLight.shadow.needsUpdate = true;
+  }
+
+  private applyKeyLightTransform(): void {
+    if (!this.keyLight) return;
+    this.keyLight.target.position.copy(this.shadowFocus);
+    this.keyLight.position.copy(this.shadowFocus).add(this.keyLightOffset);
+    this.keyLight.target.updateMatrixWorld();
   }
 
   createUpgradeStations(): void {
@@ -711,9 +795,12 @@ export class WorldBuilder {
     const maxZ = Math.max(...this.level.boundary.map((point) => point.z)) + TERRAIN_EDGE_PAD;
     const vertices: number[] = [];
     const uvs: number[] = [];
+    const colors: number[] = [];
     const addVertex = (point: Vec2) => {
       vertices.push(point.x, this.groundY(point), point.z);
       uvs.push((point.x - minX) / 26, (point.z - minZ) / 26);
+      const color = this.painterlyVertexColorAt(point);
+      colors.push(color.r, color.g, color.b);
     };
 
     for (let x = minX; x < maxX; x += TERRAIN_GRID_STEP) {
@@ -738,6 +825,7 @@ export class WorldBuilder {
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
     geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+    geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
     geometry.computeVertexNormals();
     const mesh = new THREE.Mesh(geometry, this.materials.grass);
     mesh.receiveShadow = true;
@@ -1057,6 +1145,7 @@ export class WorldBuilder {
     mesh.frustumCulled = false;
     mesh.userData.kind = "grass-clumps";
     mesh.userData.count = clumps.length;
+    this.grassClumpMesh = mesh;
     this.renderedGrassClumpCount = clumps.length;
     this.scene.add(mesh);
   }
@@ -1119,11 +1208,23 @@ export class WorldBuilder {
     }
   }
 
+  private addGroundSurfacePolygons(): void {
+    for (const surface of this.level.groundSurfacePolygons) {
+      this.addFlatPolygon(surface.polygon, this.groundSurfacePolygonMaterial(surface), PATH_SURFACE_Y + 0.018, surface.kind === "parking-apron" ? 0.84 : 0.72);
+    }
+  }
+
   private pathSurfacePatchMaterial(patch: PathSurfacePatch): THREE.Material {
     if (patch.material === "worn-grass") return this.materials.wornGrass;
     if (patch.material === "gravel") return this.materials.gravel;
     if (patch.material === "leaf-litter") return this.materials.leafLitter;
     return this.materials.dirt;
+  }
+
+  private groundSurfacePolygonMaterial(surface: GroundSurfacePolygon): THREE.Material {
+    if (surface.material === "concrete") return this.materials.concrete;
+    if (surface.material === "gravel") return this.materials.gravel;
+    return this.materials.asphalt;
   }
 
   private addPathMarkings(path: LevelPath): void {
@@ -1305,44 +1406,6 @@ export class WorldBuilder {
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     this.scene.add(mesh);
-  }
-
-  private addRailTrailRemnants(): void {
-    const sleeperMaterial = new THREE.MeshStandardMaterial({ color: 0x5c4731, roughness: 0.86 });
-    const markerMaterial = new THREE.MeshStandardMaterial({ color: 0xb7af98, roughness: 0.78 });
-    let markerCount = 0;
-
-    for (const path of this.level.paths.filter((candidate) => candidate.kind === "rail")) {
-      for (let i = 0; i < path.points.length - 1; i += 1) {
-        const a = path.points[i];
-        const b = path.points[i + 1];
-        const segmentLength = distance(a, b);
-        if (segmentLength < 6) continue;
-        const dx = b.x - a.x;
-        const dz = b.z - a.z;
-        const angle = Math.atan2(dz, dx);
-        const sleeperCount = Math.floor(segmentLength / 10);
-
-        for (let step = 1; step <= sleeperCount; step += 1) {
-          const t = step / (sleeperCount + 1);
-          const sleeper = new THREE.Mesh(new THREE.BoxGeometry(path.width * 0.92, 0.065, 0.28), sleeperMaterial);
-          const point = { x: a.x + dx * t, z: a.z + dz * t };
-          sleeper.rotation.y = -angle + Math.PI / 2;
-          sleeper.position.set(point.x, this.boxSupportY(point, sleeper.rotation.y, path.width * 0.46, 0.14) + 0.145, point.z);
-          sleeper.castShadow = true;
-          sleeper.receiveShadow = true;
-          this.scene.add(sleeper);
-        }
-
-        if (markerCount % 2 === 0) {
-          const marker = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.13, 0.9, 8), markerMaterial);
-          marker.position.set(a.x, this.groundY(a) + 0.45, a.z);
-          marker.castShadow = true;
-          this.scene.add(marker);
-        }
-        markerCount += 1;
-      }
-    }
   }
 
   private addGardenZone(landmark: Landmark): void {
@@ -1676,13 +1739,9 @@ export class WorldBuilder {
       if (landmark.kind === "grandstand" && landmark.polygon) this.addGrandstand(landmark);
       if (landmark.kind === "tennis" && landmark.polygon) {
         this.addFenceAround(landmark.polygon, 2.2, 0x93a59a);
-        this.addTennisClubDetails(landmark.polygon);
       }
       if (landmark.kind === "court" && landmark.polygon) {
-        this.addFlatPolygon(landmark.polygon, this.materials.court, 0.09);
-        this.addTennisCourtLines(landmark.polygon);
-        this.addTennisNet(landmark.polygon);
-        this.addTennisCourtWorksCues(landmark);
+        this.addTennisCourt(landmark);
       }
       if (landmark.kind === "bowls" && landmark.polygon) {
         this.addFlatPolygon(landmark.polygon, this.materials.court, 0.08, landmark.id.startsWith("bowling-green") ? 0.86 : 0.6);
@@ -1771,6 +1830,15 @@ export class WorldBuilder {
       return;
     }
 
+    // Figure 61 of the 2021 CMP records this object as an open timber
+    // entrance pavilion, not a solid gatehouse. Its framing and roof are
+    // built by the detail profile below, so a generic prism would close the
+    // real passage bays.
+    if (building.detailProfile === "gatehouse") {
+      this.addMappedBuildingDetails(building, polygonCentroid(building.polygon));
+      return;
+    }
+
     const material =
       building.material === "brick" ? this.materials.brick : building.material === "timber" ? this.materials.timber : this.materials.concrete;
     const mesh = this.addPrismPolygon(building.polygon, building.height, material);
@@ -1831,37 +1899,31 @@ export class WorldBuilder {
     const rearZ = -footprint.halfZ - 0.08;
 
     if (building.detailProfile === "tennis-pavilion") {
-      this.addBuildingApron(center, rotation, 0, frontZ + 0.9, footprint.halfX * 1.45, 1.55);
-      this.addBuildingAwning(center, rotation, 0, frontZ + 0.72, footprint.halfX * 1.5, 1.28, building.height + 0.1, this.materials.metal);
-      for (const x of [-0.42, 0, 0.42]) {
-        this.addLocalCylinder(center, rotation, x * footprint.halfX * 2, frontZ + 0.42, 0.055, 0.07, 2.7, this.materials.metal);
+      const ochreWeatherboard = this.standardDetailMaterial("tennis-pavilion-ochre-weatherboards", 0xc7a45d, 0.82, 0.01);
+      const redTimber = this.standardDetailMaterial("tennis-pavilion-red-timber", 0x6f3427, 0.76, 0.01);
+      const paleRoof = this.standardDetailMaterial("tennis-pavilion-corrugated-roof", 0xbfc0ad, 0.68, 0.16);
+      this.addBuildingApron(center, rotation, 0, frontZ + 0.88, footprint.halfX * 1.62, 1.62);
+      this.addLocalBox(center, rotation, 0, frontZ + 0.015, footprint.halfX * 1.86, 2.85, 0.08, ochreWeatherboard, 1.46, false);
+      this.addBuildingAwning(center, rotation, 0, frontZ + 0.7, footprint.halfX * 1.72, 1.42, building.height - 0.42, paleRoof, 0.14);
+      for (const x of [-0.78, -0.39, 0, 0.39, 0.78]) {
+        this.addLocalCylinder(center, rotation, x * footprint.halfX, frontZ + 0.48, 0.055, 0.07, 2.58, redTimber);
       }
       this.addBuildingGutter(center, rotation, 0, frontZ + 0.03, footprint.halfX * 1.86, building.height);
-      this.addBuildingWallLight(center, rotation, -footprint.halfX * 0.72, frontZ + 0.06, 2.32);
-      this.addBuildingSign(center, rotation, -footprint.halfX * 0.28, frontZ + 0.04, footprint.halfX * 0.36, 0.34, 2.28, 0x2f735c);
-      this.addBuildingTextSign(center, rotation, footprint.halfX * 0.28, frontZ + 0.055, footprint.halfX * 0.54, 0.38, 2.34, "TENNIS", "#2f735c", "#f4e7b8");
-      this.addBuildingTextSign(center, rotation, -footprint.halfX * 0.7, frontZ + 0.055, footprint.halfX * 0.34, 0.3, 1.56, "SOCIAL", "#315d67", "#f2e6a8", 0.065);
-      this.addBuildingDoor(center, rotation, -footprint.halfX * 0.7, frontZ + 0.035, footprint.halfX * 0.32, 1.08, 0.86, 0.06);
-      this.addBuildingTextSign(center, rotation, footprint.halfX * 0.68, frontZ + 1.62, footprint.halfX * 0.34, 0.34, 1.58, "WORKS", "#e36e2f", "#18110b");
-      this.addLocalBox(center, rotation, -footprint.halfX * 0.62, frontZ + 1.42, footprint.halfX * 0.58, 0.07, 1.12, this.materials.concrete, 0.16, false);
-      for (const side of [-1, 1]) {
-        this.addLocalBox(center, rotation, -footprint.halfX * 0.62 + side * footprint.halfX * 0.34, frontZ + 1.42, 0.055, 0.72, 1.08, this.materials.metal, 0.52);
+      for (const x of [-0.68, -0.34, 0.18, 0.58]) {
+        this.addBuildingWindow(center, rotation, x * footprint.halfX, frontZ + 0.06, footprint.halfX * 0.22, 1.18, 1.46);
       }
-      const worksMesh = this.standardDetailMaterial("tennis-works-mesh", 0xd06a2c, 0.68, 0.02, true, 0.58);
-      for (const x of [0.42, 0.82]) {
-        this.addLocalBox(center, rotation, x * footprint.halfX, frontZ + 1.58, 0.08, 1.28, 0.08, this.materials.metal, 0.74);
+      this.addBuildingDoor(center, rotation, -footprint.halfX * 0.08, frontZ + 0.07, footprint.halfX * 0.2, 1.82, 1.03, 0.08);
+      for (let board = 0; board < 7; board += 1) {
+        this.addLocalBox(center, rotation, 0, frontZ + 0.085, footprint.halfX * 1.84, 0.035, 0.035, redTimber, 0.34 + board * 0.34, false);
       }
-      this.addLocalBox(center, rotation, footprint.halfX * 0.62, frontZ + 1.58, footprint.halfX * 0.62, 0.78, 0.045, worksMesh, 0.78, false);
-      for (const x of [-0.55, 0, 0.55]) {
-        this.addBuildingWindow(center, rotation, x * footprint.halfX * 1.15, rearZ - 0.03, footprint.halfX * 0.3, 1.15, 1.45);
+      for (const x of [-0.74, -0.28, 0.24, 0.72]) {
+        this.addBuildingWindow(center, rotation, x * footprint.halfX, rearZ - 0.03, footprint.halfX * 0.22, 1.12, 1.42);
       }
-      for (const x of [-0.48, 0.36]) {
-        this.addBuildingRoofVent(center, rotation, x * footprint.halfX, -footprint.halfZ * 0.2, building.height, 0.52, 0.32);
+      this.addLocalBox(center, rotation, 0, 0, footprint.halfX * 1.86, 0.12, footprint.halfZ * 1.92, paleRoof, building.height + 0.22);
+      this.addLocalBox(center, rotation, -footprint.halfX * 0.1, frontZ * 0.18, footprint.halfX * 0.64, 0.52, footprint.halfZ * 0.94, paleRoof, building.height + 0.48);
+      for (const x of [-0.62, 0.52]) {
+        this.addBuildingDownpipe(center, rotation, x * footprint.halfX, frontZ + 0.06, building.height);
       }
-      for (const x of [0.42, 0.7]) {
-        this.addLocalBox(center, rotation, x * footprint.halfX, rearZ - 0.42, 0.52, 0.82, 0.42, this.materials.metal, 0.5);
-      }
-      this.addLocalBox(center, rotation, 0, rearZ - 0.08, footprint.halfX * 1.35, 1.55, 0.12, this.materials.hedge, 1.1);
       this.addLabel("Fitzroy Tennis Club", center, building.height + 1.45);
       return;
     }
@@ -1909,21 +1971,29 @@ export class WorldBuilder {
     }
 
     if (building.detailProfile === "gatehouse") {
-      this.addBuildingAwning(center, rotation, 0, 0, footprint.halfX * 2.3, footprint.halfZ * 2.45, building.height + 0.16, this.materials.timber, 0.42);
-      this.addBuildingApron(center, rotation, 0, frontZ + 0.7, footprint.halfX * 1.15, 0.72, 0.08);
-      this.addBuildingDoor(center, rotation, 0, frontZ + 0.02, footprint.halfX * 0.82, 1.65, 1.08);
-      this.addBuildingGutter(center, rotation, 0, frontZ + 0.02, footprint.halfX * 2.05, building.height);
-      this.addBuildingWindow(center, rotation, 0, rearZ - 0.02, footprint.halfX * 0.72, 0.46, 1.48, 0.08);
-      this.addBuildingSign(center, rotation, 0, rearZ - 0.035, footprint.halfX * 0.9, 0.32, 1.95, 0x5c4630);
-      this.addBuildingTextSign(center, rotation, 0, frontZ + 0.035, footprint.halfX * 1.05, 0.3, 2.18, "GATE", "#5c4630", "#f2e6a8");
-      for (const x of [-0.72, 0.72]) {
-        this.addBuildingSign(center, rotation, x * footprint.halfX, frontZ + 0.015, footprint.halfX * 0.42, 0.62, 1.78, 0xe8e0b6);
+      const creamPanel = this.standardDetailMaterial("entrance-pavilion-cream-panel", 0xd9c994, 0.82, 0);
+      const redFrame = this.standardDetailMaterial("entrance-pavilion-red-frame", 0x684034, 0.72, 0.02);
+      const corrugatedRoof = this.standardDetailMaterial("entrance-pavilion-corrugated-roof", 0xc0c2b7, 0.64, 0.16);
+      this.addLocalBox(center, rotation, 0, 0, footprint.halfX * 2.06, 0.09, footprint.halfZ * 2.1, this.materials.concrete, 0.08, false);
+      for (const x of [-0.84, 0.84]) {
+        this.addLocalBox(center, rotation, x * footprint.halfX, 0, footprint.halfX * 0.3, 2.36, footprint.halfZ * 1.78, creamPanel, 1.22);
+        for (const frameX of [-0.97, -0.71]) {
+          this.addLocalBox(center, rotation, Math.sign(x) * Math.abs(frameX) * footprint.halfX, frontZ - 0.08, 0.07, 2.44, 0.08, redFrame, 1.24);
+          this.addLocalBox(center, rotation, Math.sign(x) * Math.abs(frameX) * footprint.halfX, rearZ + 0.08, 0.07, 2.44, 0.08, redFrame, 1.24);
+        }
       }
-      for (const x of [-0.92, 0.92]) {
-        this.addLocalBox(center, rotation, x * footprint.halfX, frontZ + 0.72, 0.12, 0.88, 0.12, this.materials.metal, 0.5);
+      for (const x of [-0.62, -0.22, 0.22, 0.62]) {
+        for (const z of [frontZ - 0.08, rearZ + 0.08]) {
+          this.addLocalBox(center, rotation, x * footprint.halfX, z, 0.09, 2.48, 0.09, redFrame, 1.26);
+        }
       }
-      this.addLocalBox(center, rotation, 0, frontZ + 0.72, footprint.halfX * 1.85, 0.08, 0.08, this.materials.metal, 0.74);
-      this.addLabel("Freeman Street gatehouse", center, building.height + 1.15);
+      for (const z of [frontZ - 0.08, rearZ + 0.08]) {
+        this.addLocalBox(center, rotation, 0, z, footprint.halfX * 2.02, 0.16, 0.1, redFrame, 2.42);
+      }
+      this.addBuildingAwning(center, rotation, 0, 0, footprint.halfX * 2.18, footprint.halfZ * 2.36, building.height + 0.15, corrugatedRoof, 0.16);
+      this.addBuildingGutter(center, rotation, 0, frontZ + 0.08, footprint.halfX * 2.08, building.height + 0.04);
+      this.addBuildingGutter(center, rotation, 0, rearZ - 0.08, footprint.halfX * 2.08, building.height + 0.04);
+      this.addLabel("Timber entrance pavilion", center, building.height + 1.15);
       return;
     }
 
@@ -2173,6 +2243,9 @@ export class WorldBuilder {
     geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
     geometry.setIndex(indices);
     geometry.computeVertexNormals();
+    if (this.usesPainterlyVertexWash(material)) {
+      this.applyPainterlyVertexColors(geometry);
+    }
     const meshMaterial = opacity < 1 ? material.clone() : material;
     const mesh = new THREE.Mesh(geometry, meshMaterial);
     if (opacity < 1) {
@@ -2251,21 +2324,26 @@ export class WorldBuilder {
   }
 
   private createTerrainOverlayRect(center: Vec2, angle: number, length: number, width: number, yOffset: number, material: THREE.Material): THREE.Mesh {
-    return new THREE.Mesh(
-      createTerrainOverlayRectGeometry({
-        center,
-        angle,
-        length,
-        width,
-        yOffset,
-        groundYAt: (point) => this.groundY(point)
-      }),
-      material
-    );
+    const geometry = createTerrainOverlayRectGeometry({
+      center,
+      angle,
+      length,
+      width,
+      yOffset,
+      groundYAt: (point) => this.groundY(point)
+    });
+    if (this.usesPainterlyVertexWash(material)) {
+      this.applyPainterlyVertexColors(geometry);
+    }
+    return new THREE.Mesh(geometry, material);
   }
 
   private createTerrainOverlayDisc(center: Vec2, radius: number, yOffset: number, material: THREE.Material): THREE.Mesh {
-    return new THREE.Mesh(createTerrainOverlayDiscGeometry(center, radius, yOffset, (point) => this.groundY(point)), material);
+    const geometry = createTerrainOverlayDiscGeometry(center, radius, yOffset, (point) => this.groundY(point));
+    if (this.usesPainterlyVertexWash(material)) {
+      this.applyPainterlyVertexColors(geometry);
+    }
+    return new THREE.Mesh(geometry, material);
   }
 
   private createTerrainOverlayEllipse(
@@ -2276,17 +2354,65 @@ export class WorldBuilder {
     yOffset: number,
     material: THREE.Material
   ): THREE.Mesh {
-    return new THREE.Mesh(
-      createTerrainOverlayEllipseGeometry({
-        center,
-        angle,
-        radiusX,
-        radiusZ,
-        yOffset,
-        groundYAt: (point) => this.groundY(point)
-      }),
-      material
-    );
+    const geometry = createTerrainOverlayEllipseGeometry({
+      center,
+      angle,
+      radiusX,
+      radiusZ,
+      yOffset,
+      groundYAt: (point) => this.groundY(point)
+    });
+    if (this.usesPainterlyVertexWash(material)) {
+      this.applyPainterlyVertexColors(geometry);
+    }
+    return new THREE.Mesh(geometry, material);
+  }
+
+  private usesPainterlyVertexWash(material: THREE.Material): boolean {
+    return [
+      this.materials.grass,
+      this.materials.path,
+      this.materials.gravel,
+      this.materials.asphalt,
+      this.materials.concrete,
+      this.materials.court,
+      this.materials.rubber,
+      this.materials.mulch,
+      this.materials.dirt,
+      this.materials.leafLitter,
+      this.materials.wornGrass,
+      this.materials.timber,
+      this.materials.brick,
+      this.materials.basalt
+    ].includes(material as StyledSurfaceMaterial);
+  }
+
+  private applyPainterlyVertexColors(geometry: THREE.BufferGeometry): void {
+    const positions = geometry.getAttribute("position");
+    const colors = new Float32Array(positions.count * 3);
+    for (let index = 0; index < positions.count; index += 1) {
+      const color = this.painterlyVertexColorAt({ x: positions.getX(index), z: positions.getZ(index) });
+      colors[index * 3] = color.r;
+      colors[index * 3 + 1] = color.g;
+      colors[index * 3 + 2] = color.b;
+    }
+    geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+  }
+
+  private painterlyVertexColorAt(point: Vec2): THREE.Color {
+    const broad = this.stableNoise(point.x * 0.075, point.z * 0.075, 901);
+    const crossWash = this.stableNoise((point.x + point.z) * 0.038, (point.z - point.x) * 0.038, 902);
+    const warm = this.stableNoise(point.x * 0.026, point.z * 0.026, 903);
+    const color = new THREE.Color(1, 1, 1);
+    if (warm > 0.64) {
+      color.setRGB(1.055, 1.018, 0.89);
+    } else if (crossWash < 0.34) {
+      color.setRGB(0.86, 0.985, 0.965);
+    } else {
+      color.setRGB(0.965, 1.01, 0.94);
+    }
+    color.multiplyScalar(0.94 + broad * 0.12);
+    return color;
   }
 
   private createTerrainRect(
@@ -2556,6 +2682,37 @@ export class WorldBuilder {
       this.detailMaterialCache.set(cacheKey, material);
     }
     return material as THREE.MeshBasicMaterial;
+  }
+
+  private paintedLightPoolMaterial(color: number, baseOpacity: number): THREE.MeshBasicMaterial {
+    const material = new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity: baseOpacity,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending
+    });
+    material.userData.baseOpacity = baseOpacity;
+    this.lampSpillMaterials.push(material);
+    return material;
+  }
+
+  private addPaintedLightPool(group: THREE.Group, radiusX: number, radiusZ: number, offsetZ = 0, rotation = 0, kind = "painted-light-pool"): void {
+    const layers = [
+      { color: 0xc49a55, opacity: 1.02, scaleX: 1, scaleZ: 1, y: 0.046, rotation: 0 },
+      { color: 0xf0c66f, opacity: 0.54, scaleX: 0.72, scaleZ: 0.42, y: 0.052, rotation: 0.18 },
+      { color: 0x789096, opacity: 0.28, scaleX: 1.16, scaleZ: 0.62, y: 0.044, rotation: -0.14 }
+    ];
+    for (const layer of layers) {
+      const spill = new THREE.Mesh(this.lightPoolGeometry, this.paintedLightPoolMaterial(layer.color, layer.opacity));
+      spill.position.set(0, layer.y, offsetZ);
+      spill.rotation.set(-Math.PI / 2, 0, rotation + layer.rotation);
+      spill.scale.set(radiusX * layer.scaleX, radiusZ * layer.scaleZ, 1);
+      spill.renderOrder = 2;
+      spill.userData.kind = kind;
+      group.add(spill);
+    }
+    this.renderedLampSpillCount += 1;
   }
 
   private addLocalBrushShadow(
@@ -2900,6 +3057,19 @@ export class WorldBuilder {
     glow.position.set(position.x, this.groundY(position) + y, position.z);
     this.facadeLights.push(glow);
     this.scene.add(glow);
+    const spill = this.createTerrainOverlayEllipse(
+      position,
+      rotation + 0.16,
+      2.8,
+      0.74,
+      0.158,
+      this.paintedLightPoolMaterial(0xe0a85c, 0.48)
+    );
+    spill.receiveShadow = false;
+    spill.renderOrder = 3;
+    spill.userData.kind = "wall-light-painted-spill";
+    this.scene.add(spill);
+    this.renderedLampSpillCount += 1;
     return mesh;
   }
 
@@ -3030,6 +3200,9 @@ export class WorldBuilder {
     this.addBlockPolygon(landmark.polygon, 5.8, this.materials.brick, frontSign, { openFront: true });
 
     const frontScreenMaterial = this.standardDetailMaterial("grandstand-front-transparent-screen", 0x0b1718, 0.5, 0.06, true, 0.24);
+    const grandstandCream = this.standardDetailMaterial("grandstand-painted-cream", 0xd8c99b, 0.8, 0.01);
+    const grandstandRedTimber = this.standardDetailMaterial("grandstand-red-timber", 0x6e3028, 0.74, 0.02);
+    const grandstandWhiteSeats = this.standardDetailMaterial("grandstand-white-seats", 0xd9d6c5, 0.82, 0.01);
     frontScreenMaterial.depthWrite = false;
     this.addLocalBox(center, rotation, 0, frontZ, footprint.halfX * 1.36, 1.18, 0.045, frontScreenMaterial, 1.72, false);
     for (const x of [-0.58, 0, 0.58]) {
@@ -3038,22 +3211,9 @@ export class WorldBuilder {
     }
     this.addBuildingTextSign(center, rotation, -footprint.halfX * 0.54, frontOut(0.08), footprint.halfX * 0.36, 0.3, 2.72, "CHANGE", "#5b4632", "#f2e6a8", 0.06);
     this.addBuildingTextSign(center, rotation, footprint.halfX * 0.54, frontOut(0.08), footprint.halfX * 0.32, 0.3, 2.72, "UMPIRE", "#5b4632", "#f2e6a8", 0.06);
-    this.addBuildingTextSign(center, rotation, -footprint.halfX * 0.18, frontOut(0.1), footprint.halfX * 0.26, 0.28, 3.04, "AID", "#e8e0c6", "#9f2f2f", 0.064);
-    this.addBuildingTextSign(center, rotation, footprint.halfX * 0.18, frontOut(0.1), footprint.halfX * 0.34, 0.28, 3.04, "KITCHEN", "#6f5635", "#f2e6a8", 0.064);
-    const firstAidWhite = this.basicDetailMaterial("grandstand-first-aid-white", 0xf0ead7);
-    const firstAidRed = this.basicDetailMaterial("grandstand-first-aid-red", 0xb84a3e);
-    this.addLocalBox(center, rotation, -footprint.halfX * 0.34, frontOut(0.16), 0.42, 0.42, 0.06, firstAidWhite, 1.42, false);
-    this.addLocalBox(center, rotation, -footprint.halfX * 0.34, frontOut(0.19), 0.26, 0.06, 0.065, firstAidRed, 1.42, false);
-    this.addLocalBox(center, rotation, -footprint.halfX * 0.34, frontOut(0.195), 0.06, 0.26, 0.067, firstAidRed, 1.42, false);
-    const kitchenShutter = this.standardDetailMaterial("grandstand-kitchen-shutter", 0xa6a697, 0.68, 0.18);
-    this.addLocalBox(center, rotation, footprint.halfX * 0.18, frontOut(0.16), footprint.halfX * 0.3, 0.54, 0.06, kitchenShutter, 1.32, false);
-    this.addLocalBox(center, rotation, footprint.halfX * 0.18, frontOut(0.28), footprint.halfX * 0.34, 0.13, 0.34, this.materials.timber, 0.6);
-    const gateMaterial = this.standardDetailMaterial("grandstand-secure-access-gates", 0x2f3b38, 0.54, 0.34);
-    for (const x of [-0.68, 0.68]) {
-      this.addLocalBox(center, rotation, x * footprint.halfX, frontOut(0.2), footprint.halfX * 0.42, 1.05, 0.06, gateMaterial, 0.72, false);
-      for (const bar of [-0.24, 0, 0.24]) {
-        this.addLocalBox(center, rotation, x * footprint.halfX + bar * footprint.halfX, frontOut(0.24), 0.035, 0.96, 0.06, gateMaterial, 0.72, false);
-      }
+    for (const x of [-0.78, -0.39, 0, 0.39, 0.78]) {
+      this.addLocalBox(center, rotation, x * footprint.halfX, frontOut(0.055), footprint.halfX * 0.26, 1.02, 0.055, grandstandCream, 1.0, false);
+      this.addLocalBox(center, rotation, x * footprint.halfX, frontOut(0.09), 0.08, 2.72, 0.07, grandstandRedTimber, 2.34, false);
     }
     for (const y of [1.16, 2.34]) {
       this.addLocalBox(center, rotation, 0, frontOut(0.02), footprint.halfX * 1.42, 0.08, 0.08, this.materials.metal, y, false);
@@ -3069,7 +3229,7 @@ export class WorldBuilder {
       this.addLocalBox(center, rotation, (i / 4) * footprint.halfX * 0.9, 0, 0.08, 0.09, footprint.halfZ * 2 + 2.3, this.materials.metal, 6.12);
     }
     for (let row = 0; row < 5; row += 1) {
-      this.addLocalBox(center, rotation, 0, frontIn(0.84 + row * 0.48), footprint.halfX * 1.32, 0.12, 0.24, this.materials.timber, 2.08 + row * 0.34);
+      this.addLocalBox(center, rotation, 0, frontIn(0.84 + row * 0.48), footprint.halfX * 1.32, 0.12, 0.24, grandstandWhiteSeats, 2.08 + row * 0.34);
     }
     for (let step = 0; step < 5; step += 1) {
       this.addLocalBox(
@@ -3087,13 +3247,13 @@ export class WorldBuilder {
     for (const side of [-1, 1]) {
       this.addLocalBox(center, rotation, side * footprint.halfX * 0.31, frontIn(0.62), 0.07, 0.08, 2.35, this.materials.metal, 0.82);
     }
-    for (let step = 0; step < 4; step += 1) {
-      this.addLocalBox(center, rotation, footprint.halfX + 0.55, frontIn(0.55 + step * 0.42), 1.1, 0.16, 0.32, this.materials.concrete, 0.18 + step * 0.18);
-    }
     for (const side of [-1, 1]) {
-      this.addLocalBox(center, rotation, footprint.halfX + 0.55 + side * 0.64, frontIn(1.16), 0.08, 0.08, 2.4, this.materials.metal, 0.9);
-      for (const z of [0.24, 1.16, 2.08]) {
-        this.addLocalBox(center, rotation, footprint.halfX + 0.55 + side * 0.64, frontIn(z), 0.08, 0.85, 0.08, this.materials.metal, 0.48);
+      const stairX = side * (footprint.halfX + 0.55);
+      for (let step = 0; step < 5; step += 1) {
+        this.addLocalBox(center, rotation, stairX, frontIn(0.42 + step * 0.42), 1.08, 0.16, 0.32, grandstandRedTimber, 0.18 + step * 0.18);
+      }
+      for (const railSide of [-1, 1]) {
+        this.addLocalBox(center, rotation, stairX + railSide * 0.62, frontIn(1.28), 0.07, 0.08, 2.2, grandstandRedTimber, 0.86);
       }
     }
     this.addLabel("Kevin Murray Stand", center, 6.7);
@@ -3209,19 +3369,6 @@ export class WorldBuilder {
       hedge.castShadow = true;
       hedge.receiveShadow = true;
       this.scene.add(hedge);
-    }
-  }
-
-  private addTennisClubDetails(polygon: Vec2[]): void {
-    const footprint = this.fitBoxFromPolygon(polygon, 0, 0);
-    const rotation = -footprint.angle;
-    const apronZ = footprint.halfZ + 1.1;
-    this.addLocalBox(footprint.center, rotation, 0, apronZ, footprint.halfX * 1.72, 0.055, 1.3, this.materials.concrete, 0.12, false);
-    for (const x of [-0.7, 0.7]) {
-      for (const z of [-0.82, 0.82]) {
-        const point = this.localPoint(footprint.center, rotation, x * footprint.halfX, z * footprint.halfZ);
-        this.addLampPost(point, rotation, false);
-      }
     }
   }
 
@@ -3500,40 +3647,19 @@ export class WorldBuilder {
     }
   }
 
-  private addTennisCourtWorksCues(landmark: Landmark): void {
-    if (!landmark.polygon || landmark.courtStatus !== "renovating-existing") return;
-
-    const footprint = this.fitBoxFromPolygon(landmark.polygon, 0, 0);
-    const rotation = -footprint.angle;
-    const center = footprint.center;
-    const courtLength = footprint.halfX * 1.7;
-    const courtWidth = footprint.halfZ * 1.7;
-    const patchedSurface = this.standardDetailMaterial("tennis-renovation-patched-synthetic", 0x65a17e, 0.78, 0.02, true, 0.34);
-    const scuffedSurface = this.standardDetailMaterial("tennis-renovation-scuffed-existing", 0x2f715f, 0.82, 0.02, true, 0.24);
-    const tapeMaterial = this.standardDetailMaterial("tennis-renovation-layout-tape", 0xe8ddad, 0.66, 0.02);
-    const worksOchre = this.standardDetailMaterial("tennis-renovation-works-ochre", 0xd8783c, 0.7, 0.02);
-
-    for (const patch of [
-      { localX: -footprint.halfX * 0.42, material: scuffedSurface },
-      { localX: footprint.halfX * 0.42, material: patchedSurface }
-    ]) {
-      const patchCenter = this.localPoint(center, rotation, patch.localX, 0);
-      const overlay = this.createTerrainOverlayRect(patchCenter, rotation, courtLength * 0.48, courtWidth, PATH_PATCH_SURFACE_Y + 0.018, patch.material);
-      overlay.receiveShadow = true;
-      this.scene.add(overlay);
+  private addTennisCourt(landmark: Landmark): void {
+    if (!landmark.polygon) return;
+    if (landmark.courtStatus === "under-construction") {
+      // The public 2026 sources establish the closed northern work zone, but not
+      // day-specific plant/material locations. Keep the stripped surface free of
+      // speculative nets, line tape, machinery and stockpiles.
+      this.addFlatPolygon(landmark.polygon, this.materials.dirt, 0.09);
+      return;
     }
-
-    this.addLocalBox(center, rotation, 0, 0, 0.09, 0.018, courtWidth * 0.92, tapeMaterial, 0.155, false);
-    this.addLocalBox(center, rotation, -footprint.halfX * 0.84, 0, 0.08, 0.018, courtWidth * 0.9, tapeMaterial, 0.153, false);
-    this.addLocalBox(center, rotation, footprint.halfX * 0.84, 0, 0.08, 0.018, courtWidth * 0.9, tapeMaterial, 0.153, false);
-
-    const courtNumber = Number(landmark.id.match(/\d+$/)?.[0] ?? 0);
-    if (courtNumber % 3 === 1) {
-      for (const localZ of [-footprint.halfZ * 0.62, footprint.halfZ * 0.62]) {
-        this.addLocalCylinder(center, rotation, footprint.halfX * 0.78, localZ, 0.11, 0.12, 0.28, worksOchre, 0.08);
-        this.addLocalBox(center, rotation, footprint.halfX * 0.6, localZ, 0.52, 0.08, 0.22, worksOchre, 0.12);
-      }
-    }
+    const clay = this.standardDetailMaterial("fitzroy-existing-red-clay", 0xa6543b, 0.94, 0.01);
+    this.addFlatPolygon(landmark.polygon, clay, 0.09);
+    this.addTennisCourtLines(landmark.polygon);
+    this.addTennisNet(landmark.polygon);
   }
 
   private addBowlingRinkLines(polygon: Vec2[]): void {
@@ -4083,32 +4209,29 @@ export class WorldBuilder {
     const rotation = landmark.polygon ? -footprint.angle : 0;
     const width = Math.max(5.4, footprint.halfX * 2);
     const depth = Math.max(4.6, footprint.halfZ * 2);
-    const wallMaterial = this.standardDetailMaterial("toilet-block-wall", 0xb8a072, 0.82, 0);
-    const roofMaterial = this.standardDetailMaterial("toilet-block-roof", 0x6f7567, 0.8, 0.02);
+    const wallMaterial = this.standardDetailMaterial("north-toilet-corrugated-wall", 0x506c72, 0.72, 0.08);
+    const roofMaterial = this.standardDetailMaterial("north-toilet-sheet-metal-roof", 0x7e8c8a, 0.64, 0.18);
+    const clearRoofMaterial = this.standardDetailMaterial("north-toilet-clear-roof-sheet", 0xc4d8d4, 0.42, 0.02, true, 0.46);
+    const muralYellow = this.basicDetailMaterial("north-toilet-mural-yellow", 0xd5a532);
+    const muralPurple = this.basicDetailMaterial("north-toilet-mural-purple", 0x5a4178);
+    const muralBlue = this.basicDetailMaterial("north-toilet-mural-blue", 0x315e73);
 
     this.addLocalBox(center, rotation, 0, 0, width + 1.1, 0.08, depth + 1.2, this.materials.concrete, 0.07, false);
-    this.addLocalBox(center, rotation, 0, 0, width, 3.2, depth, wallMaterial, 1.6);
-    this.addLocalBox(center, rotation, 0, 0, width + 0.7, 0.34, depth + 0.7, roofMaterial, 3.38);
-    const frontZ = -depth * 0.5 - 0.045;
-    for (const x of [-1.65, 0, 1.65]) {
-      this.addLocalBox(center, rotation, x, frontZ, 0.84, 1.72, 0.08, this.materials.darkOpening, 1.08, false);
-    }
-    for (const x of [-2.15, 2.15]) {
-      this.addLocalBox(center, rotation, x, frontZ - 0.02, 0.75, 0.18, 0.1, this.materials.metal, 2.62, false);
-    }
-    this.addLocalBox(center, rotation, 0, frontZ - 0.02, 2.2, 0.7, 0.1, this.basicDetailMaterial("toilet-sign", 0x2e6c79), 2.7, false);
-    this.addBuildingGutter(center, rotation, 0, frontZ - 0.02, width * 0.84, 3.2);
-    this.addBuildingGutter(center, rotation, 0, depth * 0.5 + 0.04, width * 0.78, 3.2);
-    this.addLocalBox(center, rotation, -width * 0.34, frontZ - 0.035, 0.42, 0.36, 0.1, this.basicDetailMaterial("toilet-accessible-sign", 0x246ca8), 2.28, false);
-    this.addBuildingWallLight(center, rotation, width * 0.34, frontZ - 0.04, 2.38);
-    this.addBuildingRoofVent(center, rotation, width * 0.22, 0, 3.2, 0.42, 0.28);
-    this.addLocalBox(center, rotation, width * 0.54, 0, 0.1, 1.1, depth * 0.76, this.materials.hedge, 0.72);
-    if (landmark.polygon) {
-      const ladderBracket = this.localPointOnPolygonEdge(center, rotation, landmark.polygon, footprint.halfX * 0.78, footprint.halfZ + 0.1);
-      for (const side of [-1, 1]) {
-        this.addLocalBox(center, rotation, ladderBracket.x + side * 0.18, ladderBracket.z, 0.045, 0.38, 0.055, this.materials.metal, 2.14, false);
+    this.addLocalBox(center, rotation, 0, 0, width, 2.5, depth, wallMaterial, 1.29);
+    this.addLocalBox(center, rotation, -width * 0.22, 0, width * 0.58, 0.16, depth + 1.5, roofMaterial, 3.0);
+    this.addLocalBox(center, rotation, width * 0.29, 0, width * 0.32, 0.12, depth + 1.5, clearRoofMaterial, 3.02, false);
+    for (const x of [-width * 0.45, width * 0.12, width * 0.45]) {
+      for (const z of [-depth * 0.58, depth * 0.58]) {
+        this.addLocalCylinder(center, rotation, x, z, 0.055, 0.07, 3.0, this.materials.metal);
       }
     }
+    const frontZ = -depth * 0.5 - 0.045;
+    for (const [index, x] of [-width * 0.32, 0, width * 0.32].entries()) {
+      this.addLocalBox(center, rotation, x, frontZ, width * 0.26, 1.9, 0.08, index === 0 ? muralYellow : index === 1 ? muralPurple : muralBlue, 1.08, false);
+      this.addLocalBox(center, rotation, x, frontZ - 0.045, width * 0.12, 1.48, 0.08, this.materials.darkOpening, 1.02, false);
+    }
+    this.addLocalBox(center, rotation, -width * 0.43, frontZ - 0.035, 0.38, 0.34, 0.1, this.basicDetailMaterial("toilet-accessible-sign", 0x246ca8), 2.18, false);
+    this.addBuildingGutter(center, rotation, 0, depth * 0.5 + 0.68, width * 0.92, 2.98);
   }
 
   private addBbq(position: Vec2): void {
@@ -4127,7 +4250,6 @@ export class WorldBuilder {
     shelter.rotation.y = Math.PI / 4;
     shelter.castShadow = true;
     this.scene.add(shelter);
-    this.addPicnicTable({ x: position.x + 3.1, z: position.z + 1.2 }, -0.28);
   }
 
   private addAmenities(): void {
@@ -4154,12 +4276,15 @@ export class WorldBuilder {
       } else if (amenity.kind === "bbq") {
         this.addSupplyCrate(amenity.position, angle);
         this.addAmenityHalo(amenity.position, 0xd0a343, 0.64);
-      } else if (amenity.kind === "toilets") {
-        this.addToiletSign(amenity.position, angle);
-        this.addAmenityHalo(amenity.position, 0x61a8d3, 0.52);
-      } else if (amenity.kind === "memorial_plaque") {
-        this.addMemorialPlaqueCue(amenity.position, angle);
-        this.addAmenityHalo(amenity.position, 0xd0a343, 0.52);
+    } else if (amenity.kind === "toilets") {
+      this.addToiletSign(amenity.position, angle);
+      this.addAmenityHalo(amenity.position, 0x61a8d3, 0.52);
+    } else if (amenity.kind === "post_box") {
+      this.addPostBox(amenity.position, angle);
+      this.addAmenityHalo(amenity.position, 0xb43a32, 0.48);
+    } else if (amenity.kind === "memorial_plaque") {
+      this.addMemorialPlaqueCue(amenity.position, angle);
+      this.addAmenityHalo(amenity.position, 0xd0a343, 0.52);
       } else if (this.isStructureAmenity(amenity)) {
         this.addStructureAccessCue(amenity, angle);
         this.addAmenityHalo(amenity.position, 0xe3a84a, 0.58);
@@ -4197,8 +4322,8 @@ export class WorldBuilder {
         this.addCricketNets(detail);
       } else if (detail.kind === "heritage-gas-lamp") {
         this.addHeritageGasLamp(detail);
-      } else if (detail.kind === "heritage-bollards") {
-        this.addHeritageBollards(detail);
+      } else if (detail.kind === "heritage-bollard") {
+        this.addHeritageBollard(detail);
       } else if (detail.kind === "heritage-seat") {
         this.addHeritageSeat(detail);
       } else if (detail.kind === "interpretive-sign") {
@@ -4313,50 +4438,82 @@ export class WorldBuilder {
 
   private addChandlerFountain(detail: ParkLifeDetail): void {
     const group = new THREE.Group();
-    const stone = this.standardDetailMaterial("chandler-fountain-stone", 0xb9ae92, 0.72, 0.03);
-    const darkStone = this.standardDetailMaterial("chandler-fountain-dark-stone", 0x766f61, 0.82, 0.02);
+    const pinkGranite = this.standardDetailMaterial("chandler-polished-harcourt-granite", 0x9b7468, 0.7, 0.03);
+    const rockGranite = this.standardDetailMaterial("chandler-rock-faced-harcourt-granite", 0x77756d, 0.88, 0.02);
+    const bluestone = this.standardDetailMaterial("chandler-bluestone-plinth", 0x59666a, 0.9, 0.02);
     const bronze = this.standardDetailMaterial("chandler-fountain-bronze", 0x575f58, 0.44, 0.34);
     const water = this.materials.puddle;
 
-    const plinth = new THREE.Mesh(new THREE.BoxGeometry(1.65, 0.22, 1.65), stone);
-    plinth.position.y = 0.11;
+    const plinth = new THREE.Mesh(new THREE.BoxGeometry(1.55, 0.16, 1.55), bluestone);
+    plinth.position.y = 0.08;
     plinth.castShadow = true;
     plinth.receiveShadow = true;
     group.add(plinth);
 
-    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.64, 0.78, 0.48, 8), darkStone);
-    base.position.y = 0.46;
-    base.rotation.y = Math.PI / 8;
+    const base = new THREE.Mesh(new THREE.BoxGeometry(0.84, 0.82, 0.84), rockGranite);
+    base.position.y = 0.57;
     base.castShadow = true;
     group.add(base);
 
-    const column = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.34, 1.55, 12), stone);
-    column.position.y = 1.42;
-    column.castShadow = true;
-    group.add(column);
+    const basin = new THREE.Mesh(new THREE.BoxGeometry(0.76, 0.34, 0.76), pinkGranite);
+    basin.position.y = 1.08;
+    basin.castShadow = true;
+    group.add(basin);
 
-    for (const angle of [0, Math.PI / 2, Math.PI, Math.PI * 1.5]) {
-      const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.24, 0.16, 14), bronze);
-      bowl.position.set(Math.cos(angle) * 0.52, 1.12, Math.sin(angle) * 0.52);
-      bowl.scale.z = 0.7;
-      bowl.rotation.y = -angle;
+    // The CMP records two, not four, semicircular bowls. They project from the
+    // opposite sides of the square basin and carry small replacement bubblers.
+    for (const side of [-1, 1]) {
+      const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.27, 0.17, 16), pinkGranite);
+      bowl.position.set(side * 0.49, 1.12, 0);
+      bowl.scale.z = 0.72;
       bowl.castShadow = true;
       group.add(bowl);
       const basinWater = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.26, 0.018, 14), water);
-      basinWater.position.set(Math.cos(angle) * 0.52, 1.22, Math.sin(angle) * 0.52);
+      basinWater.position.set(side * 0.49, 1.215, 0);
       group.add(basinWater);
+      const bubbler = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.045, 0.13, 8), bronze);
+      bubbler.position.set(side * 0.63, 1.3, 0);
+      bubbler.castShadow = true;
+      group.add(bubbler);
     }
 
-    const plaque = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.22, 0.045), this.materials.metal);
-    plaque.position.set(0, 1.52, -0.295);
-    group.add(plaque);
+    const templeBase = new THREE.Mesh(new THREE.BoxGeometry(0.78, 0.12, 0.78), pinkGranite);
+    templeBase.position.y = 1.31;
+    templeBase.castShadow = true;
+    group.add(templeBase);
+    for (const x of [-0.25, 0.25]) {
+      for (const z of [-0.25, 0.25]) {
+        const column = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.075, 0.7, 10), pinkGranite);
+        column.position.set(x, 1.7, z);
+        column.castShadow = true;
+        group.add(column);
+      }
+    }
+    const archMaterial = pinkGranite;
+    for (const z of [-0.29, 0.29]) {
+      const arch = new THREE.Mesh(new THREE.TorusGeometry(0.25, 0.055, 6, 18, Math.PI), archMaterial);
+      arch.position.set(0, 2.02, z);
+      arch.castShadow = true;
+      group.add(arch);
+    }
+    for (const x of [-0.29, 0.29]) {
+      const arch = new THREE.Mesh(new THREE.TorusGeometry(0.25, 0.055, 6, 18, Math.PI), archMaterial);
+      arch.position.set(x, 2.02, 0);
+      arch.rotation.y = Math.PI / 2;
+      arch.castShadow = true;
+      group.add(arch);
+    }
 
-    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.45, 0.18, 12), stone);
-    cap.position.y = 2.26;
+    const cap = new THREE.Mesh(new THREE.BoxGeometry(0.78, 0.14, 0.78), pinkGranite);
+    cap.position.y = 2.12;
     cap.castShadow = true;
     group.add(cap);
-    const finial = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 8), bronze);
-    finial.position.y = 2.48;
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(0.43, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), pinkGranite);
+    dome.position.y = 2.19;
+    dome.castShadow = true;
+    group.add(dome);
+    const finial = new THREE.Mesh(new THREE.SphereGeometry(0.105, 12, 8), pinkGranite);
+    finial.position.y = 2.68;
     finial.castShadow = true;
     group.add(finial);
 
@@ -4409,44 +4566,28 @@ export class WorldBuilder {
     group.add(glow);
     this.lampLights.push(glow);
 
-    const spillMaterial = new THREE.MeshBasicMaterial({
-      color: 0xc49a55,
-      transparent: true,
-      opacity: 0.16,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending
-    });
-    const spill = new THREE.Mesh(new THREE.CircleGeometry(5.2, 26), spillMaterial);
-    spill.position.y = 0.045;
-    spill.rotation.x = -Math.PI / 2;
-    spill.userData.kind = "heritage-lamp-ground-spill";
-    group.add(spill);
-    this.lampSpillMaterials.push(spillMaterial);
-    this.renderedLampSpillCount += 1;
+    this.addPaintedLightPool(group, 5.2, 3.15, 0, 0.08, "heritage-lamp-ground-spill");
 
     group.position.set(detail.position.x, this.groundY(detail.position), detail.position.z);
     group.rotation.y = detail.angle;
     this.scene.add(group);
   }
 
-  private addHeritageBollards(detail: ParkLifeDetail): void {
+  private addHeritageBollard(detail: ParkLifeDetail): void {
     const group = new THREE.Group();
     const iron = this.standardDetailMaterial("fitzroy-cast-iron-bollard", 0x202622, 0.52, 0.36);
-    for (let index = -2; index <= 2; index += 1) {
-      const x = index * 0.82;
-      const bollard = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.13, 0.72, 10), iron);
-      bollard.position.set(x, 0.36, 0);
-      bollard.castShadow = true;
-      group.add(bollard);
-      const cap = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 7), iron);
-      cap.position.set(x, 0.78, 0);
-      cap.castShadow = true;
-      group.add(cap);
-      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.13, 0.012, 6, 16), iron);
-      ring.position.set(x, 0.55, 0);
-      ring.rotation.x = Math.PI / 2;
-      group.add(ring);
-    }
+    const bollard = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.13, 0.72, 10), iron);
+    bollard.position.y = 0.36;
+    bollard.castShadow = true;
+    group.add(bollard);
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 7), iron);
+    cap.position.y = 0.78;
+    cap.castShadow = true;
+    group.add(cap);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.13, 0.012, 6, 16), iron);
+    ring.position.y = 0.55;
+    ring.rotation.x = Math.PI / 2;
+    group.add(ring);
     group.position.set(detail.position.x, this.groundY(detail.position), detail.position.z);
     group.rotation.y = detail.angle;
     this.scene.add(group);
@@ -5004,23 +5145,7 @@ export class WorldBuilder {
       group.add(glow);
       this.lampLights.push(glow);
 
-      const spillMaterial = new THREE.MeshBasicMaterial({
-        color: 0xc49a55,
-        transparent: true,
-        opacity: 0.16,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending
-      });
-      const spill = new THREE.Mesh(
-        new THREE.CircleGeometry(6.2, 28),
-        spillMaterial
-      );
-      spill.position.set(0, 0.045, -0.9);
-      spill.rotation.x = -Math.PI / 2;
-      spill.userData.kind = "lamp-ground-spill";
-      group.add(spill);
-      this.lampSpillMaterials.push(spillMaterial);
-      this.renderedLampSpillCount += 1;
+      this.addPaintedLightPool(group, 6.2, 3.55, -0.9, -0.12, "lamp-ground-spill");
     }
     group.position.set(position.x, this.groundY(position), position.z);
     group.rotation.y = -angle;
@@ -5156,6 +5281,36 @@ export class WorldBuilder {
     this.addLocalPaintStroke(group, MELBOURNE_ANIME_PALETTE.weatheredWhite, -0.05, 0.78, -0.37, 0.48, 0.018, 0.18, 0, -0.04);
     group.position.set(position.x, this.groundY(position), position.z);
     group.rotation.y = this.angleFromPoint(position);
+    this.scene.add(group);
+  }
+
+  private addPostBox(position: Vec2, angle: number): void {
+    const group = new THREE.Group();
+    this.addLocalBrushShadow(group, MELBOURNE_ANIME_PALETTE.brick, 0.7, 0.52, 0.18);
+    const red = this.standardDetailMaterial("park-post-box-red", 0xb43a32, 0.66, 0.08);
+    const dark = this.basicDetailMaterial("park-post-box-slot", 0x201a18);
+    const label = this.canvasSignMaterial("park-post-box-label", "POST", "#f0e2b8", "#7a2621");
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.58, 1.12, 0.42), red);
+    body.position.y = 0.58;
+    body.castShadow = true;
+    body.receiveShadow = true;
+    group.add(body);
+    const cap = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.16, 0.54), red);
+    cap.position.y = 1.22;
+    cap.castShadow = true;
+    group.add(cap);
+    const slot = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.055, 0.035), dark);
+    slot.position.set(0, 0.98, -0.235);
+    group.add(slot);
+    const plate = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.2, 0.028), label);
+    plate.position.set(0, 0.75, -0.258);
+    group.add(plate);
+    const foot = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.08, 0.54), this.materials.basalt);
+    foot.position.y = 0.04;
+    foot.receiveShadow = true;
+    group.add(foot);
+    group.position.set(position.x, this.boxSupportY(position, angle, 0.42, 0.32), position.z);
+    group.rotation.y = angle;
     this.scene.add(group);
   }
 
@@ -5439,13 +5594,16 @@ export class WorldBuilder {
     lowerStorey.castShadow = true;
     lowerStorey.receiveShadow = true;
     group.add(lowerStorey);
-    for (let i = 0; i < 8; i += 1) {
-      const angle = (i / 8) * Math.PI * 2;
+    for (let i = 0; i < 4; i += 1) {
+      const angle = (i / 4) * Math.PI * 2;
       const vent = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.28, 0.06), this.materials.darkOpening);
       vent.position.set(Math.cos(angle) * 4.48, 1.12, Math.sin(angle) * 4.48);
       vent.rotation.y = -angle;
       group.add(vent);
     }
+    const baseDoor = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.42, 0.08), this.materials.darkOpening);
+    baseDoor.position.set(0, 0.86, -4.47);
+    group.add(baseDoor);
     const platform = new THREE.Mesh(new THREE.CylinderGeometry(4.8, 5.05, 0.28, 36), this.materials.path);
     platform.position.y = 1.86;
     platform.castShadow = true;
@@ -5493,14 +5651,8 @@ export class WorldBuilder {
       group.add(stair);
     }
     for (const side of [-1, 1]) {
-      const handrail = this.createBranch(new THREE.Vector3(side * 1.48, 0.92, -7.1), new THREE.Vector3(side * 1.24, 1.78, -4.92), 0.045, this.materials.metal);
-      group.add(handrail);
-      for (const z of [-6.85, -5.95, -5.05]) {
-        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 0.92, 8), this.materials.metal);
-        post.position.set(side * 1.38, 0.56, z);
-        post.castShadow = true;
-        group.add(post);
-      }
+      const balustrade = this.createBranch(new THREE.Vector3(side * 1.62, 0.82, -7.1), new THREE.Vector3(side * 1.34, 1.82, -4.78), 0.24, renderStone);
+      group.add(balustrade);
     }
     const landingStrip = new THREE.Mesh(new THREE.BoxGeometry(2.9, 0.08, 0.22), plaque);
     landingStrip.position.set(0, 1.94, -4.35);
@@ -5519,26 +5671,17 @@ export class WorldBuilder {
       plate.position.set(side * 1.05, 1.55, -4.48);
       group.add(plate);
     }
-    const palisade = new THREE.MeshStandardMaterial({ color: 0x26302d, metalness: 0.38, roughness: 0.48 });
-    const planting = new THREE.MeshStandardMaterial({ color: 0x49673f, roughness: 0.96 });
-    const plantingRing = new THREE.Mesh(new THREE.TorusGeometry(6.35, 0.18, 8, 42), planting);
-    plantingRing.position.y = 0.16;
-    plantingRing.rotation.x = Math.PI / 2;
-    plantingRing.receiveShadow = true;
-    group.add(plantingRing);
-    for (let i = 0; i < 28; i += 1) {
-      const angle = (i / 28) * Math.PI * 2;
-      if (Math.abs(angle - Math.PI * 1.5) < 0.28) continue;
-      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.045, 0.62, 6), palisade);
-      post.position.set(Math.cos(angle) * 6.55, 0.46, Math.sin(angle) * 6.55);
-      post.castShadow = true;
-      group.add(post);
-      if (i % 2 === 0) {
-        const rail = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.045, 0.045), palisade);
-        rail.position.set(Math.cos(angle + 0.055) * 6.55, 0.6, Math.sin(angle + 0.055) * 6.55);
-        rail.rotation.y = -angle;
-        group.add(rail);
-      }
+    const stairGate = new THREE.MeshStandardMaterial({ color: 0x26302d, metalness: 0.38, roughness: 0.48 });
+    for (const x of [-0.72, -0.36, 0, 0.36, 0.72]) {
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.8, 0.055), stairGate);
+      bar.position.set(x, 0.62, -7.58);
+      bar.castShadow = true;
+      group.add(bar);
+    }
+    for (const y of [0.36, 0.76]) {
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(1.58, 0.055, 0.06), stairGate);
+      rail.position.set(0, y, -7.58);
+      group.add(rail);
     }
     group.position.set(position.x, this.radialSupportY(position, 5.7), position.z);
     group.rotation.y = -0.34;
@@ -5627,58 +5770,78 @@ export class WorldBuilder {
   }
 
   private addSportsmansMemorial(position: Vec2): void {
-    const groundY = this.boxSupportY(position, 0, 1.9, 1.1);
+    const rotation = -0.18;
+    const groundY = this.boxSupportY(position, rotation, 3.2, 1.55);
     const stone = new THREE.MeshStandardMaterial({ color: 0xd0c2a2, roughness: 0.68 });
     const bronze = new THREE.MeshStandardMaterial({ color: 0x8a5d2d, metalness: 0.35, roughness: 0.5 });
-    const base = new THREE.Mesh(new THREE.BoxGeometry(3.8, 0.35, 2.2), stone);
-    base.position.set(position.x, groundY + 0.22, position.z);
-    base.castShadow = true;
-    this.scene.add(base);
-    for (const x of [-1.25, 1.25]) {
-      const column = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, 2.6, 10), stone);
-      column.position.set(position.x + x, groundY + 1.5, position.z);
-      column.castShadow = true;
-      this.scene.add(column);
+    const group = new THREE.Group();
+    const base = new THREE.Mesh(new THREE.BoxGeometry(6.4, 0.18, 3.1), this.materials.concrete);
+    base.position.y = 0.1;
+    base.receiveShadow = true;
+    group.add(base);
+    for (const x of [-2.35, 0, 2.35]) {
+      for (const z of [-1.05, 1.05]) {
+        const pedestal = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.62, 0.58), stone);
+        pedestal.position.set(x, 0.42, z);
+        pedestal.castShadow = true;
+        group.add(pedestal);
+        const column = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.25, 2.45, 12), stone);
+        column.position.set(x, 1.92, z);
+        column.castShadow = true;
+        group.add(column);
+        const capital = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.16, 0.48), stone);
+        capital.position.set(x, 3.19, z);
+        group.add(capital);
+      }
     }
-    const lintel = new THREE.Mesh(new THREE.BoxGeometry(3.1, 0.28, 0.38), stone);
-    lintel.position.set(position.x, groundY + 2.88, position.z);
-    lintel.castShadow = true;
-    this.scene.add(lintel);
-    const panel = new THREE.Mesh(new THREE.BoxGeometry(1.25, 1.4, 0.12), bronze);
-    panel.position.set(position.x, groundY + 1.45, position.z - 0.16);
-    panel.castShadow = true;
-    this.scene.add(panel);
-    const wreath = new THREE.Mesh(new THREE.TorusGeometry(0.36, 0.045, 8, 24), bronze);
-    wreath.position.set(position.x, groundY + 2.15, position.z - 0.24);
-    this.scene.add(wreath);
+    for (const z of [-1.05, 1.05]) {
+      const beam = new THREE.Mesh(new THREE.BoxGeometry(6.2, 0.48, 0.42), stone);
+      beam.position.set(0, 3.48, z);
+      beam.castShadow = true;
+      group.add(beam);
+    }
+    for (const x of [-2.65, 2.65]) {
+      const beam = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.48, 2.52), stone);
+      beam.position.set(x, 3.48, 0);
+      beam.castShadow = true;
+      group.add(beam);
+    }
+    for (const x of [-2.55, -1.7, -0.85, 0, 0.85, 1.7, 2.55]) {
+      const rafter = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.16, 2.72), stone);
+      rafter.position.set(x, 3.78, 0);
+      rafter.castShadow = true;
+      group.add(rafter);
+    }
+    const inscription = new THREE.Mesh(
+      new THREE.BoxGeometry(2.45, 0.34, 0.055),
+      this.canvasSignMaterial("sportsmans-in-memoriam", "IN MEMORIAM", "#d0c2a2", "#5a4630")
+    );
+    inscription.position.set(0, 3.52, -1.285);
+    group.add(inscription);
+    const wreathCabinet = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.9, 0.08), bronze);
+    wreathCabinet.position.set(-2.35, 1.82, -1.33);
+    wreathCabinet.castShadow = true;
+    group.add(wreathCabinet);
+    group.position.set(position.x, groundY, position.z);
+    group.rotation.y = rotation;
+    this.scene.add(group);
     this.addLabel("Sportsman's Memorial", position, 4.5);
   }
 
   private addCookMemorialSite(position: Vec2): void {
-    const groundY = this.radialSupportY(position, 1.95);
-    const stone = new THREE.MeshStandardMaterial({ color: 0xaea58e, roughness: 0.78 });
-    const metal = new THREE.MeshStandardMaterial({ color: 0x39403c, metalness: 0.25, roughness: 0.46 });
-    const pad = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 1.95, 0.22, 18), stone);
-    pad.position.set(position.x, groundY + 0.12, position.z);
-    pad.castShadow = true;
-    pad.receiveShadow = true;
-    this.scene.add(pad);
-    const remnant = new THREE.Mesh(new THREE.BoxGeometry(1.45, 0.38, 0.72), stone);
-    remnant.position.set(position.x, groundY + 0.48, position.z);
-    remnant.rotation.y = 0.35;
-    remnant.castShadow = true;
-    this.scene.add(remnant);
-    const plaque = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.05, 0.48), this.materials.metal);
-    plaque.position.set(position.x + 0.08, groundY + 0.71, position.z - 0.08);
-    plaque.rotation.set(-0.22, 0.35, 0);
-    this.scene.add(plaque);
-    for (const angle of [0, Math.PI / 2, Math.PI, Math.PI * 1.5]) {
-      const bollard = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 0.9, 8), metal);
-      const point = { x: position.x + Math.cos(angle) * 2.4, z: position.z + Math.sin(angle) * 2.4 };
-      bollard.position.set(point.x, this.groundY(point) + 0.45, point.z);
-      bollard.castShadow = true;
-      this.scene.add(bollard);
-    }
+    const rotation = 0.35;
+    const groundY = this.boxSupportY(position, rotation, 0.72, 0.46);
+    const granite = new THREE.MeshStandardMaterial({ color: 0xb9b6aa, roughness: 0.78 });
+    const bronze = new THREE.MeshStandardMaterial({ color: 0x765438, metalness: 0.42, roughness: 0.5 });
+    const base = this.addLocalBox(position, rotation, 0, 0, 1.55, 0.22, 0.92, granite, 0.12);
+    base.position.y = groundY + 0.12;
+    const plinth = this.addLocalBox(position, rotation, 0, 0, 1.12, 2.62, 0.7, granite, 1.5);
+    plinth.position.y = groundY + 1.5;
+    this.addLocalBox(position, rotation, 0, -0.37, 0.72, 0.82, 0.055, bronze, groundY + 1.94, false).position.y = groundY + 1.94;
+    this.addLocalBox(position, rotation, 0, -0.375, 0.62, 0.22, 0.06, bronze, groundY + 1.2, false).position.y = groundY + 1.2;
+    this.addLocalBox(position, rotation, 0, -0.375, 0.38, 0.15, 0.06, bronze, groundY + 0.72, false).position.y = groundY + 0.72;
+    const cap = this.addLocalBox(position, rotation, 0, 0, 1.2, 0.2, 0.76, granite, groundY + 2.9);
+    cap.position.y = groundY + 2.9;
     this.addLabel("Cook memorial site", position, 3.2);
   }
 
@@ -5912,13 +6075,248 @@ export class WorldBuilder {
 
   private addTrees(): void {
     this.renderedTreeCount = 0;
+    const buckets = new Map<string, TreeInstanceBucket>();
     this.level.trees.forEach((tree, index) => {
       if (!pointInPolygon(tree.position, this.level.boundary)) {
         return;
       }
-      this.addRealisticTree(tree, index);
+      this.addBatchedTree(tree, index, buckets);
       this.renderedTreeCount += 1;
     });
+
+    for (const bucket of buckets.values()) {
+      if (bucket.matrices.length === 0) continue;
+      const mesh = new THREE.InstancedMesh(bucket.geometry, bucket.material, bucket.matrices.length);
+      bucket.matrices.forEach((matrix, index) => mesh.setMatrixAt(index, matrix));
+      mesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+      mesh.instanceMatrix.needsUpdate = true;
+      mesh.castShadow = bucket.castShadow;
+      mesh.receiveShadow = bucket.receiveShadow;
+      mesh.userData.kind = bucket.kind;
+      mesh.userData.count = bucket.matrices.length;
+      mesh.computeBoundingSphere();
+      this.scene.add(mesh);
+    }
+  }
+
+  private addBatchedTree(tree: MappedTree, index: number, buckets: Map<string, TreeInstanceBucket>): void {
+    const profile = tree.profile;
+    const isAvenueTree = tree.canopyGroup === "avenue" || (tree.source?.includes("avenue") ?? false);
+    const isReplacementTree = this.isYoungReplacementTree(tree);
+    const winterRetention = this.winterCanopyRetention(profile);
+    const heritageScale = tree.height ? THREE.MathUtils.clamp(tree.height / 20, 0.72, 1.45) : isAvenueTree ? 1.08 : 1;
+    const scale = this.rng.range(0.9, 1.35) * heritageScale * TREE_SCALE_MULTIPLIER * (isReplacementTree ? 0.68 : 1);
+    const trunkHeight =
+      profile === "gum"
+        ? this.rng.range(6.8, 9.8) * scale
+        : profile === "oak"
+          ? this.rng.range(4.5, 6.8) * scale
+          : profile === "jacaranda"
+            ? this.rng.range(4.1, 5.8) * scale
+            : profile === "kurrajong"
+              ? this.rng.range(4.4, 6.2) * scale
+              : this.rng.range(5.2, 8.4) * scale;
+    const trunkRadius = this.rng.range(0.3, 0.54) * scale * (tree.dbh ? THREE.MathUtils.clamp(tree.dbh / 95, 0.8, 1.45) : isAvenueTree ? 1.08 : 1);
+    const materials = this.getTreeMaterials(profile, index);
+    const parentQuaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, this.rng.range(0, Math.PI * 2), 0));
+    const parentMatrix = new THREE.Matrix4().compose(
+      new THREE.Vector3(tree.position.x, this.groundY(tree.position), tree.position.z),
+      parentQuaternion,
+      new THREE.Vector3(1, 1, 1)
+    );
+
+    this.addTreeInstance(
+      buckets,
+      "tree-trunks",
+      this.treeTrunkGeometry,
+      materials.trunk,
+      this.treeWorldMatrix(
+        parentMatrix,
+        new THREE.Vector3(0, trunkHeight * 0.5, 0),
+        new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, this.rng.range(-0.05, 0.05))),
+        new THREE.Vector3(trunkRadius, trunkHeight, trunkRadius)
+      ),
+      true,
+      true
+    );
+
+    const branchCount = profile === "gum" || profile === "kurrajong" ? 3 : 4;
+    for (let branchIndex = 0; branchIndex < branchCount; branchIndex += 1) {
+      const angle = (branchIndex / branchCount) * Math.PI * 2 + this.rng.range(-0.28, 0.28);
+      const reach = this.rng.range(profile === "gum" ? 1 : 1.3, profile === "oak" || profile === "jacaranda" ? 2.9 : 2.35) * scale;
+      const start = new THREE.Vector3(0, trunkHeight * this.rng.range(0.58, 0.76), 0);
+      const end = new THREE.Vector3(
+        Math.cos(angle) * reach,
+        trunkHeight * this.rng.range(profile === "gum" ? 0.74 : 0.7, 0.96),
+        Math.sin(angle) * reach
+      );
+      this.addTreeInstance(
+        buckets,
+        "tree-branches",
+        this.treeBranchGeometry,
+        materials.trunk,
+        this.treeBranchWorldMatrix(parentMatrix, start, end, trunkRadius * this.rng.range(0.28, 0.4)),
+        false,
+        true
+      );
+    }
+
+    const twigCount = Math.min(1, this.winterTwigCount(tree, index));
+    for (let twigIndex = 0; twigIndex < twigCount; twigIndex += 1) {
+      const angle = this.rng.range(0, Math.PI * 2);
+      const reach = tree.canopyRadius * this.rng.range(0.44, 0.66);
+      const start = new THREE.Vector3(Math.cos(angle) * reach * 0.22, trunkHeight * 0.78, Math.sin(angle) * reach * 0.22);
+      const end = new THREE.Vector3(Math.cos(angle) * reach, trunkHeight + scale * 1.35, Math.sin(angle) * reach);
+      this.addTreeInstance(
+        buckets,
+        "tree-winter-twigs",
+        this.treeBranchGeometry,
+        materials.trunk,
+        this.treeBranchWorldMatrix(parentMatrix, start, end, trunkRadius * 0.1),
+        false,
+        true
+      );
+    }
+
+    this.addBatchedCanopyCore(tree, profile, trunkHeight, scale, winterRetention, materials, parentMatrix, buckets);
+    const baseLobeCount = profile === "gum" || profile === "kurrajong" ? 3 : 4;
+    const lobeCount = Math.max(2, Math.min(4, Math.round(baseLobeCount * (0.72 + tree.canopyDensity * winterRetention * 0.46))));
+    for (let lobeIndex = 0; lobeIndex < lobeCount; lobeIndex += 1) {
+      const angle = (lobeIndex / lobeCount) * Math.PI * 2 + this.rng.range(-0.32, 0.32);
+      const canopyRadius =
+        tree.canopyRadius *
+        this.rng.range(profile === "gum" ? 0.24 : profile === "jacaranda" ? 0.22 : 0.27, profile === "oak" ? 0.44 : profile === "kurrajong" ? 0.36 : 0.39) *
+        (profile === "gum" || profile === "kurrajong" ? 1 : 0.84 + winterRetention * 0.22);
+      const spread = tree.canopyRadius * (profile === "gum" ? 0.28 : profile === "oak" || profile === "jacaranda" ? 0.48 : profile === "kurrajong" ? 0.36 : 0.42);
+      const position = new THREE.Vector3(
+        Math.cos(angle) * this.rng.range(spread * 0.42, spread),
+        trunkHeight + this.rng.range(profile === "gum" ? -0.42 : 0.02, profile === "oak" ? 0.9 : 1.35) * scale,
+        Math.sin(angle) * this.rng.range(spread * 0.42, spread)
+      );
+      const rotation = new THREE.Quaternion().setFromEuler(
+        new THREE.Euler(this.rng.range(-0.18, 0.18), this.rng.range(0, Math.PI), this.rng.range(-0.18, 0.18))
+      );
+      const lobeScale = new THREE.Vector3(
+        canopyRadius * this.rng.range(1, profile === "oak" || profile === "jacaranda" ? 1.68 : 1.48),
+        canopyRadius * this.rng.range(profile === "gum" || profile === "kurrajong" ? 1.02 : 0.68, profile === "oak" ? 0.9 : 1.04),
+        canopyRadius * this.rng.range(1, profile === "oak" || profile === "jacaranda" ? 1.68 : 1.48)
+      );
+      this.addTreeInstance(
+        buckets,
+        lobeIndex === 0 ? "tree-highlight-masses" : "tree-canopy-masses",
+        this.treeCanopyGeometry,
+        lobeIndex === 0 ? materials.leafHighlight : materials.leaf,
+        this.treeWorldMatrix(parentMatrix, position, rotation, lobeScale),
+        false,
+        true
+      );
+    }
+
+    if (profile === "gum") {
+      this.addTreeInstance(
+        buckets,
+        "tree-pale-bark",
+        this.treePaleBarkGeometry,
+        materials.paleBark,
+        this.treeWorldMatrix(
+          parentMatrix,
+          new THREE.Vector3(0, trunkHeight * 0.52, 0),
+          new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, this.rng.range(-0.05, 0.05))),
+          new THREE.Vector3(trunkRadius, trunkHeight * 0.38, trunkRadius)
+        ),
+        false,
+        true
+      );
+    }
+
+    if (isReplacementTree) {
+      const detailGroup = new THREE.Group();
+      this.addYoungReplacementTreeDetails(detailGroup, trunkRadius, trunkHeight);
+      detailGroup.position.set(tree.position.x, this.groundY(tree.position), tree.position.z);
+      detailGroup.quaternion.copy(parentQuaternion);
+      detailGroup.userData.kind = "replacement-tree-details";
+      this.scene.add(detailGroup);
+    }
+  }
+
+  private addBatchedCanopyCore(
+    tree: MappedTree,
+    profile: TreeProfile,
+    trunkHeight: number,
+    scale: number,
+    winterRetention: number,
+    materials: TreeMaterialSet,
+    parentMatrix: THREE.Matrix4,
+    buckets: Map<string, TreeInstanceBucket>
+  ): void {
+    const replacementScale = this.isYoungReplacementTree(tree) ? 0.68 : 1;
+    const retentionScale = THREE.MathUtils.lerp(0.5, 1, winterRetention);
+    const avenueScale = tree.canopyGroup === "avenue" ? 0.86 : tree.canopyGroup === "specimen" ? 1.06 : 1;
+    const width = profile === "gum" ? 0.62 : profile === "oak" ? 0.98 : profile === "jacaranda" ? 0.84 : profile === "kurrajong" ? 0.72 : 0.86;
+    const height = profile === "gum" ? 0.5 : profile === "oak" ? 0.34 : profile === "jacaranda" ? 0.3 : profile === "kurrajong" ? 0.44 : 0.32;
+    const depth = profile === "gum" || profile === "kurrajong" ? width * 0.82 : width * 1.14;
+    this.addTreeInstance(
+      buckets,
+      "tree-canopy-cores",
+      this.treeCanopyCoreGeometry,
+      materials.leafShadow,
+      this.treeWorldMatrix(
+        parentMatrix,
+        new THREE.Vector3(0, trunkHeight + (profile === "gum" ? 0.18 : profile === "oak" ? 0.56 : 0.42) * scale, 0),
+        new THREE.Quaternion().setFromEuler(new THREE.Euler(this.rng.range(-0.08, 0.08), this.rng.range(0, Math.PI), this.rng.range(-0.08, 0.08))),
+        new THREE.Vector3(
+          tree.canopyRadius * width * retentionScale * avenueScale * replacementScale,
+          tree.canopyRadius * height * retentionScale * replacementScale,
+          tree.canopyRadius * depth * retentionScale * avenueScale * replacementScale
+        )
+      ),
+      true,
+      false
+    );
+  }
+
+  private addTreeInstance(
+    buckets: Map<string, TreeInstanceBucket>,
+    kind: string,
+    geometry: THREE.BufferGeometry,
+    material: THREE.Material,
+    matrix: THREE.Matrix4,
+    castShadow: boolean,
+    receiveShadow: boolean
+  ): void {
+    const key = `${kind}:${geometry.uuid}:${material.uuid}`;
+    let bucket = buckets.get(key);
+    if (!bucket) {
+      bucket = { geometry, material, matrices: [], castShadow, receiveShadow, kind };
+      buckets.set(key, bucket);
+    }
+    bucket.matrices.push(matrix);
+  }
+
+  private treeWorldMatrix(
+    parentMatrix: THREE.Matrix4,
+    position: THREE.Vector3,
+    quaternion: THREE.Quaternion,
+    scale: THREE.Vector3
+  ): THREE.Matrix4 {
+    return parentMatrix.clone().multiply(new THREE.Matrix4().compose(position, quaternion, scale));
+  }
+
+  private treeBranchWorldMatrix(
+    parentMatrix: THREE.Matrix4,
+    start: THREE.Vector3,
+    end: THREE.Vector3,
+    radius: number
+  ): THREE.Matrix4 {
+    const direction = end.clone().sub(start);
+    const length = direction.length();
+    const quaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize());
+    return this.treeWorldMatrix(
+      parentMatrix,
+      start.clone().add(end).multiplyScalar(0.5),
+      quaternion,
+      new THREE.Vector3(radius, length, radius)
+    );
   }
 
   private addUnderCanopyGroundWear(): void {
@@ -6037,6 +6435,7 @@ export class WorldBuilder {
 
     const baseLobeCount = profile === "gum" ? 5 : profile === "oak" ? 8 : profile === "elm" || profile === "jacaranda" ? 7 : profile === "kurrajong" ? 6 : 6;
     const lobeCount = Math.max(profile === "gum" || profile === "kurrajong" ? 4 : 2, Math.round(baseLobeCount * tree.canopyDensity * winterRetention + (tree.canopyGroup === "specimen" ? 1 : 0)));
+    this.addCanopySilhouetteCore(group, tree, profile, trunkHeight, scale, winterRetention, materials);
     for (let lobeIndex = 0; lobeIndex < lobeCount; lobeIndex += 1) {
       const angle = (lobeIndex / lobeCount) * Math.PI * 2 + this.rng.range(-0.3, 0.3);
       const canopyRadius =
@@ -6083,6 +6482,53 @@ export class WorldBuilder {
     group.userData.treeSource = tree.source ?? "mapped";
     group.userData.treeSpecies = tree.label;
     this.scene.add(group);
+  }
+
+  private addCanopySilhouetteCore(
+    group: THREE.Group,
+    tree: MappedTree,
+    profile: TreeProfile,
+    trunkHeight: number,
+    scale: number,
+    winterRetention: number,
+    materials: TreeMaterialSet
+  ): void {
+    const replacementScale = this.isYoungReplacementTree(tree) ? 0.68 : 1;
+    const retentionScale = THREE.MathUtils.lerp(0.5, 1, winterRetention);
+    const avenueScale = tree.canopyGroup === "avenue" ? 0.86 : tree.canopyGroup === "specimen" ? 1.06 : 1;
+    const width =
+      profile === "gum"
+        ? 0.62
+        : profile === "oak"
+          ? 0.98
+          : profile === "jacaranda"
+            ? 0.84
+            : profile === "kurrajong"
+              ? 0.72
+              : 0.86;
+    const height =
+      profile === "gum"
+        ? 0.5
+        : profile === "oak"
+          ? 0.34
+          : profile === "jacaranda"
+            ? 0.3
+            : profile === "kurrajong"
+              ? 0.44
+              : 0.32;
+    const depth = profile === "gum" || profile === "kurrajong" ? width * 0.82 : width * 1.14;
+    const core = new THREE.Mesh(this.treeCanopyCoreGeometry, materials.leafShadow);
+    core.position.y = trunkHeight + (profile === "gum" ? 0.18 : profile === "oak" ? 0.56 : 0.42) * scale;
+    core.scale.set(
+      tree.canopyRadius * width * retentionScale * avenueScale * replacementScale,
+      tree.canopyRadius * height * retentionScale * replacementScale,
+      tree.canopyRadius * depth * retentionScale * avenueScale * replacementScale
+    );
+    core.rotation.set(this.rng.range(-0.08, 0.08), this.rng.range(0, Math.PI), this.rng.range(-0.08, 0.08));
+    core.castShadow = true;
+    core.receiveShadow = false;
+    core.userData.kind = "tree-canopy-silhouette-core";
+    group.add(core);
   }
 
   private isYoungReplacementTree(tree: MappedTree): boolean {
@@ -6161,7 +6607,7 @@ export class WorldBuilder {
   }
 
   private getTreeMaterials(profile: TreeProfile, index: number): TreeMaterialSet {
-    const variant = index % 8;
+    const variant = index % 4;
     const key = `${profile}-${variant}`;
     const cached = this.treeMaterialCache.get(key);
     if (cached) return cached;
@@ -6192,7 +6638,19 @@ export class WorldBuilder {
               : profile === "kurrajong"
                 ? 0x9aa27b
                 : 0x81925b;
-    const hueOffset = (variant - 3.5) * 0.004;
+    const shadowLeafColor =
+      profile === "gum"
+        ? 0x385653
+        : profile === "oak"
+          ? 0x34321f
+          : profile === "elm"
+            ? 0x363923
+            : profile === "jacaranda"
+              ? 0x343443
+              : profile === "kurrajong"
+                ? 0x3b4c37
+                : 0x2f462e;
+    const hueOffset = (variant - 1.5) * 0.007;
     const saturationOffset = ((variant % 3) - 1) * 0.02;
     const lightOffset = ((variant % 5) - 2) * 0.018;
     const materials = {
@@ -6212,6 +6670,12 @@ export class WorldBuilder {
         color: new THREE.Color(highlightLeafColor).offsetHSL(hueOffset, saturationOffset * 0.5, lightOffset * 0.7),
         emissive: 0x17281c,
         emissiveIntensity: 0.1,
+        gradientMap: WORLD_TOON_RAMP
+      }),
+      leafShadow: new THREE.MeshToonMaterial({
+        color: new THREE.Color(shadowLeafColor).offsetHSL(hueOffset * 0.8, saturationOffset * 0.45, lightOffset * 0.35),
+        emissive: 0x07130f,
+        emissiveIntensity: 0.16,
         gradientMap: WORLD_TOON_RAMP
       }),
       paleBark: new THREE.MeshToonMaterial({

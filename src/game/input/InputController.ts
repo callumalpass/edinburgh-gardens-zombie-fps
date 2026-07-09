@@ -32,6 +32,7 @@ const CROUCH_KEYS = ["KeyC", "ControlLeft", "ControlRight"] as const;
 export class InputController {
   private readonly keys = new Set<string>();
   private aimHeldValue = false;
+  private enabled = true;
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -43,6 +44,7 @@ export class InputController {
 
   install(): void {
     this.canvas.addEventListener("mousedown", (event) => {
+      if (!this.enabled) return;
       if (event.button === 0) {
         if (document.pointerLockElement !== this.canvas) {
           this.canvas.requestPointerLock?.();
@@ -58,12 +60,14 @@ export class InputController {
 
     this.canvas.addEventListener("contextmenu", (event) => event.preventDefault(), { signal: this.signal });
     this.target.addEventListener("pointerdown", (event) => {
+      if (!this.enabled) return;
       if (event.button === 2) this.aimHeldValue = true;
     }, { signal: this.signal });
     this.target.addEventListener("pointerup", (event) => {
       if (event.button === 2) this.aimHeldValue = false;
     }, { signal: this.signal });
     this.target.addEventListener("mousemove", (event) => {
+      if (!this.enabled) return;
       if (document.pointerLockElement !== this.canvas && !this.options.allowUnlockedLook) return;
       this.actions.look(event.movementX, event.movementY);
     }, { signal: this.signal });
@@ -72,19 +76,19 @@ export class InputController {
   }
 
   isDown(code: string): boolean {
-    return this.keys.has(code);
+    return this.enabled && this.keys.has(code);
   }
 
   isMoving(): boolean {
-    return MOVEMENT_KEYS.some((code) => this.keys.has(code));
+    return this.enabled && MOVEMENT_KEYS.some((code) => this.keys.has(code));
   }
 
   isSprinting(): boolean {
-    return sprintInputFromKeys((code) => this.keys.has(code));
+    return this.enabled && sprintInputFromKeys((code) => this.keys.has(code));
   }
 
   isCrouching(): boolean {
-    return crouchInputFromKeys((code) => this.keys.has(code));
+    return this.enabled && crouchInputFromKeys((code) => this.keys.has(code));
   }
 
   get aimHeld(): boolean {
@@ -95,7 +99,13 @@ export class InputController {
     this.aimHeldValue = aimHeld;
   }
 
+  setEnabled(enabled: boolean): void {
+    this.enabled = enabled;
+    if (!enabled) this.clear();
+  }
+
   movement(): MovementInput {
+    if (!this.enabled) return { x: 0, z: 0, length: 0 };
     return movementInputFromKeys((code) => this.keys.has(code));
   }
 
@@ -105,6 +115,10 @@ export class InputController {
   }
 
   private handleKeyDown(event: KeyboardEvent): void {
+    if (!this.enabled) {
+      if (!event.repeat && event.code === "Escape") this.actions.cancel();
+      return;
+    }
     this.keys.add(event.code);
     this.actions.unlockAudio();
 

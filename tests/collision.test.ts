@@ -131,22 +131,15 @@ describe("collision system", () => {
     const expectedIds = [
       "grandstand-changeroom-access",
       "grandstand-umpire-room-access",
-      "grandstand-kiosk-hatch",
-      "grandstand-first-aid-room",
-      "grandstand-sports-kitchen",
-      "grandstand-switchboard",
       "tennis-clubroom-access",
-      "tennis-switchboard",
       "bowling-clubroom-access",
       "bowling-roof-gutter-maintenance",
       "bowling-green-service-locker",
-      "oval-gatehouse-window",
+      "timber-entrance-pavilion-passage",
       "emely-baker-community-room",
       "emely-baker-kitchenette",
-      "emely-baker-switchboard",
+      "emely-baker-exterior-service-cabinet",
       "south-amenities-service-room",
-      "south-amenities-switchboard",
-      "north-toilets-service-room",
       "rotunda-memorial-plaque"
     ];
     const accessPoints = level.amenities.filter((amenity) => structureKinds.has(amenity.kind));

@@ -1,8 +1,9 @@
 import type * as THREE from "three";
+import type { RenderQualityLevel } from "./rendering/renderQuality";
 import type { WeatherKind } from "./rendering/weather";
 import type { AmenityPoint } from "./types";
 import type { InventoryItemId, LargeCarryItemId } from "./items";
-import type { WeaponId } from "./weapons";
+import type { UpgradeId, WeaponId } from "./weapons";
 import type { ZombieType } from "./waves";
 
 export type GameStateName = "ready" | "playing" | "gameover";
@@ -75,12 +76,18 @@ export interface Snapshot {
   ready: boolean;
   state: string;
   frame: number;
+  playerX: number;
+  playerZ: number;
+  playerYaw: number;
+  playerPitch: number;
   wave: number;
+  paused: boolean;
   zombies: number;
   ammo: number;
   health: number;
   scrap: number;
   weapon: WeaponId;
+  upgrades: Record<UpgradeId, number>;
   weaponDrops: number;
   elevation: number;
   jumpHeight: number;
@@ -88,6 +95,10 @@ export interface Snapshot {
   renderedGrassClumps: number;
   renderedWetPathSheens: number;
   renderedLampSpills: number;
+  renderQuality: "low" | "medium" | "high";
+  renderPixelRatio: number;
+  rendererCalls: number;
+  rendererTriangles: number;
   renderedMistBanks: number;
   renderedRainDrops: number;
   renderedWeatherAnchors: number;
@@ -105,9 +116,12 @@ export interface Snapshot {
   scope: number;
   fov: number;
   miniMapVisibleZombies: number;
+  visibility: number;
+  noise: number;
   crouching: boolean;
   wavePhase: WavePhase;
   intermissionTimer: number;
+  intermissionUpgradeWave: number;
   amenityAction: "rest" | "search" | null;
   amenityActionRemaining: number;
   stamina: number;
@@ -136,6 +150,8 @@ export interface Snapshot {
 export interface GameTestApi {
   ready: boolean;
   snapshot: () => Snapshot;
+  testSetRenderQuality: (level: RenderQualityLevel) => Snapshot;
+  testTeleport: (position: { x: number; z: number; yaw?: number; pitch?: number }) => Snapshot;
   testShoot: () => void;
   testUpgrade: (stationId?: string) => boolean;
   testSpawn: () => void;
@@ -165,6 +181,8 @@ export interface GameTestApi {
   testZombieFacing: () => Array<{ id: number; faceAlignment: number; targetDistance: number }>;
   testSetCrouching: (crouching: boolean) => boolean;
   testStartIntermission: () => boolean;
+  testChooseIntermissionUpgrade: (upgradeId?: UpgradeId) => boolean;
+  testAddTeammate: (name?: string) => boolean;
   testToggleBike: () => boolean;
   dispose: () => void;
 }
