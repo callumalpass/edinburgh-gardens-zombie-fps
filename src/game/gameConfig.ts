@@ -14,6 +14,8 @@ export const WALK_SPEED = 7.6;
 export const SPRINT_SPEED = 11.4;
 export const CROUCH_SPEED = 3.9;
 export const INTERMISSION_SECONDS = 24;
+export const INTERMISSION_REVIVE_HEALTH = 50;
+export const INTERMISSION_REVIVE_PROTECTION_SECONDS = 4;
 export const REST_SECONDS = 5;
 
 export const DISTRACTION_STAMINA_COST = 8;

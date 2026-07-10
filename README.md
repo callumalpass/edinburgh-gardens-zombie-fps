@@ -46,6 +46,8 @@ http://HOST_LAN_IP:5480/?lan=join&server=ws://HOST_LAN_IP:5488&name=Player
 
 The host browser is authoritative for zombies, waves, pickups, weapon drops, damage and loot. Joined browsers send movement/actions to the host and render host snapshots.
 
+If at least one player survives a wave, fallen teammates revive when intermission begins with 50 health, cleared injuries and four seconds of damage protection. A full-squad wipe still ends the run.
+
 A public HTTPS web deployment is intended for single-player and demos. Browser LAN joining works best from the host machine's HTTP-served URL; public HTTPS pages cannot reliably connect to a plain `ws://` LAN relay.
 
 ## Release Packaging

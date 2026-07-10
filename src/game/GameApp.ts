@@ -126,7 +126,7 @@ import {
   ZOMBIE_SEPARATION_ITERATIONS,
   ZOMBIE_STATIC_COLLISION_PASSES
 } from "./gameConfig";
-import { createInitialPlayerState, resetPlayerState } from "./playerState";
+import { createInitialPlayerState, resetPlayerState, reviveFallenSquadForIntermission } from "./playerState";
 import type {
   AmenityRest,
   AmenitySearch,
@@ -1120,7 +1120,8 @@ export class GameApp {
       loadout: this.loadout,
       bikeMounted: this.mountedBike() !== null,
       alive: this.player.health > 0,
-      intermissionUpgradeWave: this.player.intermissionUpgradeWave
+      intermissionUpgradeWave: this.player.intermissionUpgradeWave,
+      reviveProtectionTimer: this.player.reviveProtectionTimer
     };
   }
 
@@ -1151,7 +1152,8 @@ export class GameApp {
       loadout: player.loadout,
       bikeMounted: false,
       alive: player.health > 0,
-      intermissionUpgradeWave: player.intermissionUpgradeWave
+      intermissionUpgradeWave: player.intermissionUpgradeWave,
+      reviveProtectionTimer: player.reviveProtectionTimer
     };
   }
 
@@ -1212,6 +1214,7 @@ export class GameApp {
   }
 
   private updateNetworkPlayerCondition(player: NetworkRemotePlayer, dt: number): void {
+    player.reviveProtectionTimer = Math.max(0, player.reviveProtectionTimer - dt);
     player.condition.bleedTimer = Math.max(0, player.condition.bleedTimer - dt);
     player.condition.limpTimer = Math.max(0, player.condition.limpTimer - dt);
     player.condition.blurTimer = Math.max(0, player.condition.blurTimer - dt);
@@ -1584,6 +1587,7 @@ export class GameApp {
     this.player.jumpHeight = snapshot.jumpHeight;
     this.player.activeFixtureId = snapshot.activeFixtureId;
     this.player.intermissionUpgradeWave = snapshot.intermissionUpgradeWave ?? 0;
+    this.player.reviveProtectionTimer = snapshot.reviveProtectionTimer ?? 0;
     this.loadout = snapshot.loadout;
     this.condition.stamina = snapshot.stamina;
     this.condition.hydration = snapshot.hydration;
@@ -1593,6 +1597,10 @@ export class GameApp {
     this.condition.bikePumpTimer = snapshot.bikePumpTimer;
     this.condition.throwables = snapshot.throwables;
     this.condition.flashlightOn = snapshot.flashlightOn;
+    if (previousHealth <= 0 && snapshot.health > 0) {
+      this.clearHitFlash();
+      this.flashStatus(`Revived — regroup for wave ${this.wave + 1}`);
+    }
     if (snapshot.health < previousHealth) {
       const nearestThreat = [...this.zombies].sort((a, b) => a.position.distanceTo(this.player.position) - b.position.distanceTo(this.player.position))[0];
       if (nearestThreat) this.showDamageDirection({ x: nearestThreat.position.x, z: nearestThreat.position.z });
@@ -1629,6 +1637,7 @@ export class GameApp {
       player.jumpHeight = snapshot.jumpHeight;
       player.activeFixtureId = snapshot.activeFixtureId;
       player.intermissionUpgradeWave = snapshot.intermissionUpgradeWave ?? 0;
+      player.reviveProtectionTimer = snapshot.reviveProtectionTimer ?? 0;
       player.input.aim = snapshot.aim;
       this.remotePlayers.updateMesh(player);
     }
@@ -1790,8 +1799,7 @@ export class GameApp {
     });
 
     if (update.startedIntermission) {
-      this.beginIntermissionThreats();
-      this.flashStatus(`Regroup before wave ${this.wave + 1}`);
+      this.onIntermissionStarted();
     }
 
     if (update.startedWave) {
@@ -1844,10 +1852,46 @@ export class GameApp {
   private startIntermission(): boolean {
     const started = this.waveDirector.startIntermission();
     if (started) {
-      this.beginIntermissionThreats();
-      this.flashStatus(`Regroup before wave ${this.wave + 1}`);
+      this.onIntermissionStarted();
     }
     return this.wavePhase === "intermission";
+  }
+
+  private onIntermissionStarted(): void {
+    this.beginIntermissionThreats();
+    const revivedNames = this.reviveFallenPlayersForIntermission();
+    const status = revivedNames.length === 0
+      ? `Regroup before wave ${this.wave + 1}`
+      : revivedNames.length === 1
+        ? `${revivedNames[0]} revived — regroup before wave ${this.wave + 1}`
+        : `${revivedNames.length} survivors revived — regroup before wave ${this.wave + 1}`;
+    this.flashStatus(status);
+    this.sendNetworkSnapshotNow();
+  }
+
+  private reviveFallenPlayersForIntermission(): string[] {
+    if (!this.isNetworkHost) {
+      return [];
+    }
+
+    const remotePlayers = [...this.remotePlayers.values()];
+    const localWasFallen = this.player.health <= 0;
+    const revivedNames = reviveFallenSquadForIntermission([
+      {
+        name: this.network.config.playerName,
+        player: this.player,
+        condition: this.condition
+      },
+      ...remotePlayers.map((player) => ({ name: player.name, player, condition: player.condition }))
+    ]);
+    if (localWasFallen && this.player.health > 0) {
+      this.activeAmenityRest = null;
+      this.activeAmenitySearch = null;
+    }
+    for (const player of remotePlayers) {
+      this.remotePlayers.updateMesh(player);
+    }
+    return revivedNames;
   }
 
   private currentIntermissionChoices() {
@@ -2042,6 +2086,7 @@ export class GameApp {
   }
 
   private updatePlayerCondition(dt: number): void {
+    this.player.reviveProtectionTimer = Math.max(0, this.player.reviveProtectionTimer - dt);
     this.condition.bleedTimer = Math.max(0, this.condition.bleedTimer - dt);
     this.condition.limpTimer = Math.max(0, this.condition.limpTimer - dt);
     this.condition.blurTimer = Math.max(0, this.condition.blurTimer - dt);
@@ -2701,10 +2746,10 @@ export class GameApp {
       this.updateZombieAudio(zombie, dt, localDistance, distanceToTarget);
       const attackTarget = this.attackableCombatantForZombie(zombie, zombiePoint, combatants);
       if (attackTarget && zombie.attackCooldown <= 0) {
-        this.applyZombieHit(zombie, profile, now, attackTarget);
+        const hitApplied = this.applyZombieHit(zombie, profile, now, attackTarget);
         zombie.attackCooldown = profile.attackCooldown;
         this.audio.playWorld("zombieAttack", zombiePoint, { zombieType: zombie.type });
-        if (attackTarget.isLocal) {
+        if (hitApplied && attackTarget.isLocal) {
           this.audio.playWorld("playerHit");
         }
       }
@@ -2855,7 +2900,10 @@ export class GameApp {
     return zombie.position.y + (Math.sin(now * 7 + zombie.walkOffset) + 1) * 0.035;
   }
 
-  private applyZombieHit(zombie: Zombie, profile: ReturnType<typeof zombieProfile>, now: number, combatant: CombatantRef): void {
+  private applyZombieHit(zombie: Zombie, profile: ReturnType<typeof zombieProfile>, now: number, combatant: CombatantRef): boolean {
+    if (combatant.reviveProtectionTimer > 0) {
+      return false;
+    }
     if (combatant.isLocal) {
       this.player.health -= profile.attackDamage;
       combatant.health = this.player.health;
@@ -2877,10 +2925,11 @@ export class GameApp {
       condition.blurTimer = Math.max(condition.blurTimer, this.rng.range(2.5, 6.5) * severity);
     }
     if (!combatant.isLocal) {
-      return;
+      return true;
     }
     this.showDamageDirection({ x: zombie.position.x, z: zombie.position.z });
     this.triggerHitFlash();
+    return true;
   }
 
   private showDamageDirection(source: Vec2): void {
@@ -2975,6 +3024,7 @@ export class GameApp {
         height: this.player.height,
         jumpHeight: this.player.jumpHeight,
         activeFixtureId: this.player.activeFixtureId,
+        reviveProtectionTimer: this.player.reviveProtectionTimer,
         condition: this.condition,
         loadout: this.loadout
       });
@@ -2997,6 +3047,7 @@ export class GameApp {
         height: player.height,
         jumpHeight: player.jumpHeight,
         activeFixtureId: player.activeFixtureId,
+        reviveProtectionTimer: player.reviveProtectionTimer,
         condition: player.condition,
         loadout: player.loadout
       });
@@ -3019,6 +3070,7 @@ export class GameApp {
       height: player.height,
       jumpHeight: player.jumpHeight,
       activeFixtureId: player.activeFixtureId,
+      reviveProtectionTimer: player.reviveProtectionTimer,
       condition: player.condition,
       loadout: player.loadout
     };
@@ -4335,6 +4387,7 @@ export class GameApp {
       height: this.player.height,
       jumpHeight: this.player.jumpHeight,
       activeFixtureId: this.player.activeFixtureId,
+      reviveProtectionTimer: this.player.reviveProtectionTimer,
       condition: this.condition,
       loadout: this.loadout
     });
@@ -4388,6 +4441,7 @@ export class GameApp {
     if (amenity.kind === "bicycle_parking") return this.searchedAmenityIds.has(amenity.id) ? "Bike racks searched" : "E: search bike racks";
     if (amenity.kind === "bbq") return this.searchedAmenityIds.has(amenity.id) ? "BBQ searched" : "E: search BBQ";
     if (amenity.kind === "post_box") return this.searchedAmenityIds.has(amenity.id) ? "Post box searched" : "E: search post box";
+    if (amenity.kind === "toilets") return this.searchedAmenityIds.has(amenity.id) ? "Toilets searched" : `E: search ${amenity.label}`;
     if (isStructureAmenityKind(amenity.kind)) {
       return this.searchedAmenityIds.has(amenity.id) ? "Structure searched" : `E: search ${amenity.label}`;
     }
@@ -5330,6 +5384,7 @@ export class GameApp {
       height: this.player.height,
       jumpHeight: this.player.jumpHeight,
       activeFixtureId: this.player.activeFixtureId,
+      reviveProtectionTimer: this.player.reviveProtectionTimer,
       condition: this.condition,
       loadout: this.loadout
     });

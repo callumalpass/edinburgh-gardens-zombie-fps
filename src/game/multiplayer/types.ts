@@ -71,6 +71,7 @@ export interface NetworkPlayerSnapshot {
   bikeMounted: boolean;
   alive: boolean;
   intermissionUpgradeWave: number;
+  reviveProtectionTimer: number;
 }
 
 export interface NetworkZombieSnapshot {

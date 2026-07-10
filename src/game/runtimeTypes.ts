@@ -14,6 +14,7 @@ export interface PlayerRuntimeState {
   scrap: number;
   kills: number;
   intermissionUpgradeWave: number;
+  reviveProtectionTimer: number;
   height: number;
   heightTarget: number;
   jumpHeight: number;
@@ -106,6 +107,7 @@ export interface NetworkRemotePlayer {
   jumpVelocity: number;
   activeFixtureId: string | null;
   intermissionUpgradeWave: number;
+  reviveProtectionTimer: number;
 }
 
 export interface CombatantRef {
@@ -122,6 +124,7 @@ export interface CombatantRef {
   height: number;
   jumpHeight: number;
   activeFixtureId: string | null;
+  reviveProtectionTimer: number;
   condition: PlayerCondition;
   loadout: Loadout;
 }
