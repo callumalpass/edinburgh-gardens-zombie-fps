@@ -4,6 +4,10 @@ Date: 2026-07-06
 
 Purpose: improve Edinburgh Gardens buildings and structures as recognisable, source-backed places with more useful interactions, without inventing unsourced interiors or survey-grade doorway locations.
 
+## 2026-07-10 Supersession
+
+The original pass inferred a searchable `north-toilets-service-room` without a current door plan and treated a service label as public gameplay access. The later City of Yarra plan documents a rear service-access leaf but the public interactions are the two external toilet banks. The unsupported service-room interaction is removed and superseded by `north-toilets-south-west-stall-bank` and `north-toilets-north-east-stall-bank`; see `docs/research/north-public-toilets-blender-asset-2026-07-10.md`.
+
 ## Sources
 
 - City of Yarra, Edinburgh Gardens: https://www.yarracity.vic.gov.au/things-to-do/parks-reserves-and-playgrounds/edinburgh-gardens
@@ -29,7 +33,7 @@ Purpose: improve Edinburgh Gardens buildings and structures as recognisable, sou
   - Grandstand umpire areas were documented but not interactive.
   - Emely Baker's kitchenette, tables/chairs and booked-room capacity were documented but not visible or searchable.
   - The bowling support sheds were visible but not useful as service-locker interactions.
-  - The north toilet block was visually functional but lacked a service/search interaction.
+  - The north toilet block was visually functional but lacked a service/search interaction. This was the original inference; the 10 July supersession above records the later evidence correction.
   - The rotunda memorial plaques were visible as facade detail but not directly interactive.
 - The sources support exterior, abstracted interactions rather than full interiors. Public doorway locations and room plans are not available, so positions are placed on reachable exterior frontage points derived from existing OSM/building polygons.
 
@@ -43,7 +47,7 @@ Purpose: improve Edinburgh Gardens buildings and structures as recognisable, sou
   - `grandstand-umpire-room-access`
   - `bowling-green-service-locker`
   - `emely-baker-kitchenette`
-  - `north-toilets-service-room`
+  - `north-toilets-service-room` (later removed as unsupported and replaced by the two documented external stall-bank interactions)
   - `rotunda-memorial-plaque`
 - Updated gameplay behavior:
   - Umpire rooms now bias toward ammo/scrap plus some medicine.
@@ -53,7 +57,7 @@ Purpose: improve Edinburgh Gardens buildings and structures as recognisable, sou
   - Added tennis social-space door/sign cues.
   - Added Emely Baker capacity sign, kitchenette/service vent, outdoor furniture stacks and service detail.
   - Added grandstand secure-gate panels to the oval-facing changeroom/umpire frontage.
-  - Added rear louvres and service panel details to the south amenities building.
+  - The original pass added generic louvres/service panels to what it misidentified as a south amenities building. Those unsupported cues were later removed and superseded by the evidence-based Alfred Crescent Sports Pavilion asset.
   - Added an unfenced visual-only planting/palisade ring around the rotunda to echo the documented historical setting without changing collision.
   - Added distinct rendered cues for umpire rooms, kitchenettes and memorial plaques.
 - Updated minimap and object-preview support so the new interaction types use structure-style markers and preview scale.

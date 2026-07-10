@@ -21,7 +21,7 @@ Purpose: make Edinburgh Gardens buildings more interactive and tactical while ke
 
 - The previous passes made buildings recognizable and searchable, but the documented structure uses still did not change the tactical state of the park.
 - Yarra's Brunswick Street Oval redevelopment evidence supports a kiosk/terrace and externally accessible public toilets at the grandstand/sports-pavilion works. These are playable as an exterior kiosk hatch and public-toilet access, not as interior rooms.
-- Powered public or bookable buildings are supported by evidence: Emely Baker has kitchen appliances, the tennis redevelopment has social/amenity space, the sports pavilion has kiosk/public-toilet functions and the south amenities building is a public toilet/service structure.
+- Powered public or bookable buildings are supported by evidence: Emely Baker has kitchen appliances, the tennis redevelopment has social/amenity space, the future Brunswick Street sports pavilion has kiosk/public-toilet functions, and the existing Alfred Crescent Sports Pavilion integrates clubroom, kiosk and public-toilet/service functions. The earlier separate “south amenities building” identity was incorrect.
 - The rotunda source explicitly says no current power is available. The game now preserves that as a constraint by excluding the rotunda from utility-box/floodlight affordances.
 
 ## Implementation Translation

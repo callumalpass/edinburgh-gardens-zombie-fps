@@ -6,6 +6,7 @@ const failures = [];
 const manifestPath = "docs/research/research-manifest.json";
 let checkedJson = 0;
 let checkedXml = 0;
+let checkedFiles = 0;
 const manifest = readJsonFile(manifestPath);
 
 if (manifest) {
@@ -20,7 +21,7 @@ if (failures.length > 0) {
 console.log(
   `Research manifest OK; validated ${manifest.documents.length} document${manifest.documents.length === 1 ? "" : "s"}, ` +
     `${manifest.sources.length} source${manifest.sources.length === 1 ? "" : "s"}, ${checkedJson} local raw JSON file${checkedJson === 1 ? "" : "s"} ` +
-    `and ${checkedXml} local raw XML file${checkedXml === 1 ? "" : "s"}.`
+    `${checkedXml} local raw XML file${checkedXml === 1 ? "" : "s"} and ${checkedFiles} local binary/text artifact${checkedFiles === 1 ? "" : "s"}.`
 );
 
 function readJsonFile(relativePath) {
@@ -135,6 +136,10 @@ function validateRawAssets(rawAssets, sourceIds) {
     for (const filePath of matches) {
       if (asset.format === "osm-xml") {
         validateRawXml(filePath);
+      } else if (asset.format === "xml") {
+        validateGenericXml(filePath);
+      } else if (asset.format === "file") {
+        validateNonEmptyFile(filePath);
       } else {
         validateRawJson(filePath, asset.format);
       }
@@ -189,6 +194,22 @@ function validateRawXml(filePath) {
   }
   if (!/<(node|way|relation)\b/.test(text)) {
     failures.push(`Missing OSM elements in XML: ${relativePath}`);
+  }
+}
+
+function validateGenericXml(filePath) {
+  checkedXml += 1;
+  const relativePath = path.relative(root, filePath);
+  const text = readFileSync(filePath, "utf8");
+  if (!/<\?xml\b|<[A-Za-z_][\w:.-]*(?:\s|>)/.test(text)) {
+    failures.push(`Missing XML root element: ${relativePath}`);
+  }
+}
+
+function validateNonEmptyFile(filePath) {
+  checkedFiles += 1;
+  if (statSync(filePath).size === 0) {
+    failures.push(`Empty raw research artifact: ${path.relative(root, filePath)}`);
   }
 }
 

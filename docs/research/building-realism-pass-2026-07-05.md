@@ -4,6 +4,12 @@ Date: 2026-07-05
 
 Purpose: track the building-by-building realism pass for every structure currently present on the Edinburgh Gardens map.
 
+## 2026-07-10 Supersession
+
+The original pass misidentified OSM way `242003562` as a generic south service/amenities building and invented a door bank, signs, vents, roof equipment and ladder cues without facade evidence. Later CMP, council asset/toilet documents and architect photography identify it as Alfred Crescent Sports Pavilion and resolve its real architecture. Those old cues are removed and superseded by `docs/research/alfred-crescent-pavilion-blender-asset-2026-07-10.md`; no fixed real-world roof ladder is asserted.
+
+The original north-toilet pass also invented decorative panels, a service ladder, roof vent and screened planting. City of Yarra's later-located dimensioned plan and current as-built photograph now resolve the actual external stall banks, accessible ramp, twin basins, charcoal corrugated finish, perforated screens and mixed roof sheets. The old generic cues are removed and superseded by `docs/research/north-public-toilets-blender-asset-2026-07-10.md`.
+
 ## Source Strategy
 
 - OSM full-way JSON remains the source of truth for mapped footprint scale and orientation.
@@ -27,7 +33,7 @@ Purpose: track the building-by-building realism pass for every structure current
 
 | Map id | Real-world identity | Source cues | Modelling target |
 | --- | --- | --- | --- |
-| `osm-building-242003562` | South service and amenities building | OSM footprint, Yarra public-toilet/accessibility facilities | Public toilet/service door bank, accessible sign, vents, roof equipment, wall light, service-ladder read |
+| `osm-building-242003562` | Alfred Crescent Sports Pavilion | Current OSM footprint; CMP Figure 145; City asset/toilet documents; architect photography | Black wraparound roof, curved green end, clerestories, west canopy/paired doors, east shutters/kiosk, completed toilet extension, retained tank and south accessible toilets |
 | `osm-building-403753784` | Fitzroy Tennis Club rooms | OSM footprint, CMP tennis pavilion, Yarra Brunswick Street Oval works | Clubroom windows, awning, court-side apron, secure gate/construction-era access cues, accessible/social room context |
 | `osm-man-made-715802679` | Tennis-side storage tank | OSM `man_made=storage_tank` full JSON | Round tank body rather than generic prism, top hatch, ladder/pipe and low service fencing context |
 | `osm-building-543505638` | Freeman Street / oval gatehouse | OSM footprint, CMP hard-landscaping schedule | Heritage gatehouse massing, ticket/gate window, interpretive sign, bollards and gate threshold |
@@ -43,16 +49,15 @@ Purpose: track the building-by-building realism pass for every structure current
 | `osm-building-1475006773` | Bowling green shed | OSM footprint, bowling green context | Long shed with doors, storage rack and green-side service cue |
 | `grandstand` | Kevin Murray Stand | CMP, Yarra Brunswick Street Oval works | Refreshed changeroom/umpire doors, secure gates, external stairs, roof/truss and seating detail |
 | `rotunda` | Edinburgh Gardens Rotunda | CMP, Yarra venue page | Raised ceremony platform, stairs/rail, no-power/non-accessible cues, columns/dome details, realistic climb only via stairs |
-| `north-toilets` | North public toilet block | OSM/Yarra facilities | Functional toilet block with doors, accessible signage, vents, roof service details and screened planting |
+| `north-toilets` | North public toilet block | OSM way `307404819`; City north-block plan/as-built photograph; CMP Figure 146 | Exact-footprint charcoal corrugated facility with two external door banks, accessible ramp, twin basins, perforated upper screens and exposed mixed-sheet skillion |
 | `south-toilets` | South public toilet block | OSM/Yarra facilities | Functional public-toilet rendering aligned with the mapped south facilities and service access cues |
 
 ## Building Pass Log
 
-- `osm-building-242003562` / South service and amenities building:
-  - Implemented public-toilet door bank with high louvre vents, a blue accessible-facility sign, front/rear gutters, multiple roof vents, wall light, short bollards and a rear service ladder.
-  - Follow-up visual correction: rendered the door bank as solid painted metal panels and made mapped building prism materials double-sided, because the irregular OSM footprint and black opening panels made the block read as partially see-through from some walking angles.
-  - This footprint is also the south-toilets building representation in the current level data.
-  - Source basis: OSM way `242003562` for the irregular footprint; Yarra Edinburgh Gardens facility/accessibility listing for public toilets and accessible park context; CMP guidance that toilet blocks are functional facilities rather than heritage showpieces.
+- `osm-building-242003562` / Alfred Crescent Sports Pavilion:
+  - The July 5 generic toilet/service treatment was unsupported and has been removed.
+  - The current pass uses the exact 2026 OSM shell plus an editable Blender/optimized GLB asset for the documented 2010 pavilion and completed 2021 toilet expansion.
+  - Source basis and remaining proposal/as-built uncertainty are recorded in `docs/research/alfred-crescent-pavilion-blender-asset-2026-07-10.md`.
 - `osm-building-403753784` / Fitzroy Tennis Club rooms:
   - Added court-side guttering, wall light, social-room sign, accessible ramp with rails, secure-access/works mesh, roof vents and rear court-equipment lockers.
   - Source basis: OSM way `403753784` for the L-shaped rooms footprint; CMP tennis pavilion context for the long-running club/pavilion identity; current Yarra Brunswick Street Oval project notes for accessible facilities, social/community-room context and secure-access works around the tennis precinct.
@@ -80,8 +85,9 @@ Purpose: track the building-by-building realism pass for every structure current
   - Rendered the climbable raised platform with lower storey vents, Tuscan-style columns, copper dome, lantern, finial, stairs, handrails, plaques and a capped service plate rather than powered lighting.
   - Source basis: OSM way `543505640` for center/footprint alignment; CMP rotunda feature description; Yarra venue page for bookable, not-wheelchair-accessible and no-power operation.
 - `north-toilets` / North public toilet block:
-  - Added a footprint-aligned toilet block with door bank, vents, public-toilet sign, gutters, accessible sign cue, wall light, roof vent, screened planting and service ladder.
-  - Source basis: OSM north-toilets footprint, Yarra Edinburgh Gardens facility/accessibility listing and CMP guidance that toilet blocks are functional facilities rather than heritage features.
+  - The July 5 generic door/vent/ladder/planting treatment was unsupported and has been removed.
+  - The current pass uses the exact OSM footprint plus an editable Blender/optimized GLB asset for the completed facility. The City plan controls the two external functional banks and ramp; the as-built photograph controls the charcoal corrugation, grey signed doors, twin basins, perforated upper screens, exposed steel and mixed roof sheets.
+  - Source basis, proposal/as-built distinction and remaining elevation uncertainty are recorded in `docs/research/north-public-toilets-blender-asset-2026-07-10.md`.
 - `osm-building-1475006767` / Bowling club outbuilding:
   - Added guttering, a roller-door slat, metal service crate and hose reel to read as a small greenkeeper/plant outbuilding attached to the bowling club service edge.
   - Source basis: OSM way `1475006767` for footprint; bowling precinct context from CMP and the current mapped cluster of club support sheds.
@@ -104,7 +110,7 @@ Purpose: track the building-by-building realism pass for every structure current
   - Added long front/rear guttering, paired shed doors, rear timber storage rack and metal rack uprights to match the longer green-side footprint.
   - Source basis: OSM way `1475006773` for the long skewed footprint; Fitzroy Bowls official site for active greens/BBQ operation; bowling-club precinct context from CMP.
 - Follow-up 2026-07-06 building access pass:
-  - Added source-linked searchable access points at the grandstand changerooms, tennis clubroom, park-side bowling club gate, Freeman Street gatehouse, Emely Baker Centre and south amenities service room.
+  - Added source-linked searchable access points at the grandstand changerooms, tennis clubroom, park-side bowling club gate, Freeman Street entrance pavilion and Emely Baker Centre. The original generic south-amenities access was superseded by Alfred Crescent Pavilion-specific clubroom, kiosk and toilet interactions.
   - Added visible access hardware plus grandstand changeroom/umpire doors, timber seat rows and a bowling memorial-gate cue.
   - Detailed research is stored in `docs/research/building-access-interactions-2026-07-06.md`.
 

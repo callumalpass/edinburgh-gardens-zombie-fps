@@ -4,6 +4,10 @@ Date: 2026-07-06
 
 Purpose: make Edinburgh Gardens structures more usable in play while keeping each new interaction tied to a documented building, facility or precinct role.
 
+## 2026-07-10 Supersession
+
+The original `south-amenities-service-room` interaction inherited a mistaken generic-building identity. OSM way `242003562` is Alfred Crescent Sports Pavilion. The current baseline replaces that interaction with the photographed west clubroom entrance, documented oval-side kiosk, completed expanded public toilets and retained south accessible toilets. See `docs/research/alfred-crescent-pavilion-blender-asset-2026-07-10.md`.
+
 ## Sources
 
 - Yarra City Council, Edinburgh Gardens: https://www.yarracity.vic.gov.au/things-to-do/parks-reserves-and-playgrounds/edinburgh-gardens
@@ -30,7 +34,7 @@ Purpose: make Edinburgh Gardens structures more usable in play while keeping eac
   - Bowling clubrooms and service gates are documented through the CMP and current club use.
   - The Freeman Street gatehouse is a real oval-entry structure, so its ticket-window side can support a small low-noise search.
   - Emely Baker Centre is a community venue, so a first-aid/community-room interaction is appropriate.
-  - South amenities are public/service facilities, so a maintenance-room search fits the functional toilet-block treatment.
+  - The earlier assumption that the southern building was merely a functional toilet/service block was later disproved by CMP Figure 145 and pavilion-specific sources.
 
 ## Implementation Translation
 
@@ -40,7 +44,7 @@ Purpose: make Edinburgh Gardens structures more usable in play while keeping eac
   - `bowling-clubroom-access`
   - `oval-gatehouse-window`
   - `emely-baker-community-room`
-  - `south-amenities-service-room`
+  - `south-amenities-service-room` (superseded on 2026-07-10 by the Alfred Crescent Pavilion-specific interactions above)
 - Extended amenity kinds with `clubroom`, `changeroom`, `gatehouse`, `maintenance_room` and `community_room`.
 - Reused the existing amenity search state machine instead of adding a parallel interaction system.
   - Clubrooms bias toward ammo/scrap and occasional attachments.

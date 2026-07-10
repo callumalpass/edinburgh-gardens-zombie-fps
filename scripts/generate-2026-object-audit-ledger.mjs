@@ -2,6 +2,7 @@ import { writeFile } from "node:fs/promises";
 import { createServer } from "vite";
 
 const OUTPUT_PATH = "docs/research/edinburgh-gardens-2026-object-audit-ledger.json";
+const PUBLIC_DATA_GAP_PATTERN = /approximate|approximat|inferred|hand-placed|no public|no current public|unavailable|not public|do(?:es)? not resolve|context placement|translated/i;
 const server = await createServer({ server: { middlewareMode: true }, appType: "custom" });
 
 try {
@@ -10,20 +11,37 @@ try {
     server.ssrLoadModule("/src/game/geo.ts")
   ]);
   const level = createLevelData();
+  const scenographyKinds = new Set(["picnic-blanket", "broken-bike", "training-cones", "dog-water-bowl", "picnic-cooler", "sports-bag", "chalk-mark"]);
+  const semanticGroundZoneIds = new Set([
+    "north-open-lawn",
+    "north-activity-precinct",
+    "alfred-crescent-open-lawn",
+    "south-picnic-lawn",
+    "tennis",
+    "bowling"
+  ]);
+  const semanticAmenityKinds = new Set(["toilets", "bbq"]);
+  const physicalParkLifeDetails = level.parkLifeDetails.filter((detail) => !scenographyKinds.has(detail.kind));
+  const movableScenography = level.parkLifeDetails.filter((detail) => scenographyKinds.has(detail.kind));
+  const semanticGroundZones = level.landmarks.filter((landmark) => landmark.kind === "park" || semanticGroundZoneIds.has(landmark.id));
+  const physicalLandmarks = level.landmarks.filter(
+    (landmark) => landmark.kind !== "park" && !semanticGroundZoneIds.has(landmark.id) && landmark.id !== "rotunda"
+  );
+  const physicalAmenities = level.amenities.filter((amenity) => !semanticAmenityKinds.has(amenity.kind));
+  const semanticAmenities = level.amenities.filter((amenity) => semanticAmenityKinds.has(amenity.kind));
   const physicalCollections = [
     ["path", level.paths],
-    ["landmark", level.landmarks],
+    ["landmark", physicalLandmarks],
     ["tree", level.trees],
     ["building", level.mappedBuildings],
-    ["structure-shelter", level.structureShelters],
     ["fence", level.mappedFences],
     ["hardscape", level.hardscapeLines],
     ["ground-surface", level.groundSurfacePolygons],
     ["street-edge", level.streetEdges],
     ["sports-fixture", level.sportsFixtures],
     ["skate-bowl", level.skateBowls],
-    ["amenity", level.amenities],
-    ["park-detail", level.parkLifeDetails]
+    ["amenity", physicalAmenities],
+    ["park-detail", physicalParkLifeDetails]
   ];
   const gameplayCollections = [
     ["upgrade-station", level.upgradeStations],
@@ -33,7 +51,13 @@ try {
     ["interaction-zone", level.interactables]
   ];
   const renderTreatmentCollections = [
-    ["path-surface-treatment", level.pathSurfacePatches]
+    ["path-surface-treatment", level.pathSurfacePatches],
+    ["semantic-ground-zone", semanticGroundZones],
+    ["semantic-amenity-node", semanticAmenities],
+    ["weather-shelter-envelope", level.structureShelters]
+  ];
+  const scenographyCollections = [
+    ["movable-scenography", movableScenography]
   ];
   const physicalObjects = physicalCollections.flatMap(([category, objects]) =>
     objects.map((object, index) => ledgerEntry(category, object, index, geo))
@@ -44,9 +68,13 @@ try {
   const renderTreatmentObjects = renderTreatmentCollections.flatMap(([category, objects]) =>
     objects.map((object, index) => ledgerEntry(category, object, index, geo, false, true))
   );
+  const scenographyObjects = scenographyCollections.flatMap(([category, objects]) =>
+    objects.map((object, index) => ledgerEntry(category, object, index, geo, false, false, true))
+  );
   assertUniqueIds(physicalObjects, "physical");
   assertUniqueIds(gameplayObjects, "gameplay");
   assertUniqueIds(renderTreatmentObjects, "render treatment");
+  assertUniqueIds(scenographyObjects, "scenography");
 
   const statusCounts = countBy(physicalObjects, (entry) => entry.auditStatus);
   const categoryCounts = countBy(physicalObjects, (entry) => entry.category);
@@ -68,6 +96,7 @@ try {
       physicalObjectCount: physicalObjects.length,
       gameplayObjectCount: gameplayObjects.length,
       renderTreatmentCount: renderTreatmentObjects.length,
+      scenographyObjectCount: scenographyObjects.length,
       categoryCounts,
       statusCounts,
       unresolvedObjectCount: unresolvedObjects.length,
@@ -85,18 +114,19 @@ try {
     unresolvedObjects,
     physicalObjects,
     gameplayObjects,
-    renderTreatmentObjects
+    renderTreatmentObjects,
+    scenographyObjects
   };
   await writeFile(OUTPUT_PATH, `${JSON.stringify(ledger, null, 2)}\n`);
-  console.log(`Wrote ${OUTPUT_PATH}: ${physicalObjects.length} physical objects, ${unresolvedObjects.length} unresolved, ${gameplayObjects.length} gameplay objects, ${renderTreatmentObjects.length} render treatments.`);
+  console.log(`Wrote ${OUTPUT_PATH}: ${physicalObjects.length} physical objects, ${unresolvedObjects.length} unresolved, ${gameplayObjects.length} gameplay objects, ${renderTreatmentObjects.length} render treatments, ${scenographyObjects.length} movable scenic objects.`);
 } finally {
   await server.close();
 }
 
-function ledgerEntry(category, object, index, geo, gameplay = false, renderTreatment = false) {
+function ledgerEntry(category, object, index, geo, gameplay = false, renderTreatment = false, scenography = false) {
   const id = object.id ?? `${category}-${index + 1}`;
   const source = object.source ?? null;
-  const evidence = classifyEvidence(id, category, source, gameplay, renderTreatment);
+  const evidence = classifyEvidence(id, category, source, gameplay, renderTreatment, scenography);
   return {
     id,
     category,
@@ -111,7 +141,14 @@ function ledgerEntry(category, object, index, geo, gameplay = false, renderTreat
   };
 }
 
-function classifyEvidence(id, category, source, gameplay, renderTreatment) {
+function classifyEvidence(id, category, source, gameplay, renderTreatment, scenography) {
+  if (scenography) {
+    return {
+      auditStatus: "transient-scenography",
+      evidenceClass: "contextual-movable-object",
+      uncertainty: "Movable lived-in scene detail; its presence is context-supported but its momentary position is not asserted as a permanent surveyed park asset."
+    };
+  }
   if (renderTreatment) {
     return {
       auditStatus: "render-style-treatment",
@@ -140,7 +177,7 @@ function classifyEvidence(id, category, source, gameplay, renderTreatment) {
       uncertainty: "Plan-to-map calibration RMS is 0.766 game units (approximately 0.6 m); not a cadastral survey."
     };
   }
-  if (/approximate|approximat|inferred|hand-placed|no public|unavailable|not public|context placement|translated/i.test(source)) {
+  if (PUBLIC_DATA_GAP_PATTERN.test(source)) {
     return {
       auditStatus: "unresolved-public-data-gap",
       evidenceClass: evidenceClass(source),
@@ -192,7 +229,7 @@ function evidenceClass(source) {
 
 function uncertaintySentence(source) {
   const sentences = source.split(/(?<=[.;])\s+/);
-  return sentences.find((sentence) => /approximate|inferred|hand-placed|no public|unavailable|not public|translated/i.test(sentence)) ?? "Exact public geometry or design evidence is unavailable."
+  return sentences.find((sentence) => PUBLIC_DATA_GAP_PATTERN.test(sentence)) ?? "Exact public geometry or design evidence is unavailable."
 }
 
 function geometrySummary(object, geo) {

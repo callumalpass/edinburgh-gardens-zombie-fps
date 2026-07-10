@@ -193,9 +193,29 @@
       "url": "https://www.yarracity.vic.gov.au/planning-and-building/our-projects-and-initiatives/brunswick-street-oval"
     },
     {
+      "id": "yoursay-brunswick-grandstand",
+      "label": "Yarra Your Say Brunswick Street Oval grandstand",
+      "url": "https://yoursayyarra.com.au/brunswickstoval/grandstand"
+    },
+    {
+      "id": "heritage-victoria-fitzroy-grandstand-h0751",
+      "label": "Victorian Heritage Database Fitzroy Football Club Grandstand H0751",
+      "url": "https://vhd-dr.heritage.vic.gov.au/places/447/download-report"
+    },
+    {
+      "id": "fitzroy-fc-kevin-murray-stand-sign",
+      "label": "Fitzroy Football Club Kevin Murray Stand sign launch",
+      "url": "https://www.fitzroyfc.com.au/latest-news/kevin-s-come-home"
+    },
+    {
       "id": "yarra-emely-baker-centre",
       "label": "Yarra Emely Baker Centre venue page",
       "url": "https://www.yarracity.vic.gov.au/things-to-do/find-a-venue/emely-baker-centre"
+    },
+    {
+      "id": "yarra-emely-baker-venue-manual",
+      "label": "Yarra Emely Baker Centre venue manual",
+      "url": "https://www.yarracity.vic.gov.au/sites/default/files/2024-11/Emely%20Baker%20Venue%20Manual.pdf"
     },
     {
       "id": "yarra-edinburgh-gardens-rotunda",
@@ -206,6 +226,36 @@
       "id": "yarra-fitzroy-bowls-mural",
       "label": "Yarra Fitzroy Bowls 150 Years Memorial Wall",
       "url": "https://www.yarracity.vic.gov.au/things-to-do/arts/gallery/public-art/fitzroy-bowls-150-years-memorial-wall"
+    },
+    {
+      "id": "flickr-bowls-current-55297636202",
+      "label": "Colour Our City current Fitzroy Bowls mural street overview, 28 May 2026",
+      "url": "https://www.flickr.com/photos/colourourcity/55297636202/"
+    },
+    {
+      "id": "flickr-bowls-current-55298958435",
+      "label": "Colour Our City current Fitzroy Bowls mural still-life detail, 28 May 2026",
+      "url": "https://www.flickr.com/photos/colourourcity/55298958435/"
+    },
+    {
+      "id": "flickr-bowls-current-55298958440",
+      "label": "Colour Our City current Fitzroy Bowls mural full elevation, 28 May 2026",
+      "url": "https://www.flickr.com/photos/colourourcity/55298958440/"
+    },
+    {
+      "id": "flickr-bowls-makatron-24264579119",
+      "label": "Colour Our City earlier Fitzroy Bowls 150-year mural flora detail, 26 January 2016",
+      "url": "https://www.flickr.com/photos/colourourcity/24264579119/"
+    },
+    {
+      "id": "flickr-bowls-makatron-24523952342",
+      "label": "Colour Our City earlier Fitzroy Bowls 150-year mural flora/150 detail, 26 January 2016",
+      "url": "https://www.flickr.com/photos/colourourcity/24523952342/"
+    },
+    {
+      "id": "flickr-bowls-makatron-24550092411",
+      "label": "Colour Our City earlier Fitzroy Bowls 150-year mural lion detail, 26 January 2016",
+      "url": "https://www.flickr.com/photos/colourourcity/24550092411/"
     },
     {
       "id": "fitzroy-bowls-official",
@@ -271,6 +321,71 @@
       "id": "dimensions-basketball-hoop",
       "label": "Dimensions.com basketball hoop reference",
       "url": "https://www.dimensions.com/element/basketball-hoop"
+    },
+    {
+      "id": "vicmap-basemap-wms",
+      "label": "Victorian Government Vicmap Basemap WMS",
+      "url": "https://base.maps.vic.gov.au/service?service=WMS&request=GetCapabilities"
+    },
+    {
+      "id": "vicmap-web-services-change",
+      "label": "Victorian Government Vicmap web-services endpoint guidance",
+      "url": "https://www.data.vic.gov.au/changes-coming-vicmap-web-services"
+    },
+    {
+      "id": "yarra-council-2026-05-12",
+      "label": "City of Yarra Ordinary Council Meeting reports 12 May 2026",
+      "url": "https://www.yarracity.vic.gov.au/sites/default/files/2026-05/ordinary_council_meeting_reports_-_tuesday_12_may_2026.pdf"
+    },
+    {
+      "id": "yarra-first-sod-2026-05-29",
+      "label": "Yarra Minister for Community Sport breaks ground at Brunswick Street Oval",
+      "url": "https://www.yarracity.vic.gov.au/about-us/news-and-media/minister-community-sport-breaks-ground-brunswick-street-oval"
+    },
+    {
+      "id": "fitzroy-tennis-2026-works",
+      "label": "Fitzroy Tennis Club 2026 works update",
+      "url": "https://www.fitzroytc.net/"
+    },
+    {
+      "id": "heritage-victoria-brunswick-street-oval-his",
+      "label": "Heritage Victoria Brunswick Street Oval Heritage Impact Statement",
+      "url": "https://www.heritage.vic.gov.au/__data/assets/pdf_file/0040/757849/Heritage-Impact-Statement.pdf"
+    },
+    {
+      "id": "awm-sportsmans-memorial",
+      "label": "Australian War Memorial Places of Pride Sportsman's Memorial",
+      "url": "https://placesofpride.awm.gov.au/memorials/241121"
+    },
+    {
+      "id": "yarra-annual-report-2021-22",
+      "label": "City of Yarra Annual Report 2021-22",
+      "url": "https://www.yarracity.vic.gov.au/sites/default/files/2024-04/annual_report_2021_to_2022_accessible_version.pdf"
+    },
+    {
+      "id": "yarra-buildings-asset-management-plan-2017",
+      "label": "City of Yarra Buildings Asset Management Plan Revision 2017",
+      "url": "https://www.yarracity.vic.gov.au/sites/default/files/2024-06/buildings_asset_management_plan_revision_2017.pdf"
+    },
+    {
+      "id": "yarra-new-public-toilets",
+      "label": "City of Yarra New Public Toilets consultation",
+      "url": "https://yoursayyarra.com.au/newtoilets"
+    },
+    {
+      "id": "archipro-alfred-crescent-pavilion",
+      "label": "ClarkeHopkinsClarke Edinburgh Gardens Cricket Pavilion portfolio",
+      "url": "https://archipro.com.au/project/edinburgh-gardens-cricket-pavilion-clarkehopkinsclarke"
+    },
+    {
+      "id": "yarra-street-park-trees",
+      "label": "City of Yarra street and park trees dataset",
+      "url": "https://data.gov.au/data/dataset/f3c88ce7-504b-4ef7-907f-686037f7420c"
+    },
+    {
+      "id": "blender-4-5-10-linux",
+      "label": "Blender 4.5.10 LTS Linux x64 release",
+      "url": "https://download.blender.org/release/Blender4.5/blender-4.5.10-linux-x64.tar.xz"
     }
   ],
   "documents": [
@@ -314,9 +429,13 @@
         "yarra-wsud-guidelines",
         "yarra-significant-trees-data",
         "yarra-brunswick-street-oval",
+        "yoursay-brunswick-grandstand",
+        "heritage-victoria-fitzroy-grandstand-h0751",
+        "fitzroy-fc-kevin-murray-stand-sign",
         "brisbane-lions-brunswick-oval-upgrade",
         "yarra-news-bowling-roof",
         "yarra-emely-baker-centre",
+        "yarra-emely-baker-venue-manual",
         "yarra-edinburgh-gardens-rotunda",
         "yarra-fitzroy-bowls-mural",
         "fitzroy-bowls-official",
@@ -326,7 +445,17 @@
         "mcc-laws-cricket-2026",
         "osm-cricket-nets-tag",
         "edinburgh-cricket-club-senior-womens",
-        "running-routes-carlton-fitzroy"
+        "running-routes-carlton-fitzroy",
+        "vicmap-basemap-wms",
+        "vicmap-web-services-change",
+        "yarra-council-2026-05-12",
+        "fitzroy-tennis-2026-works",
+        "heritage-victoria-brunswick-street-oval-his",
+        "yarra-buildings-asset-management-plan-2017",
+        "yarra-new-public-toilets",
+        "archipro-alfred-crescent-pavilion",
+        "yarra-street-park-trees",
+        "blender-4-5-10-linux"
       ]
     },
     {
@@ -341,7 +470,12 @@
         "edinburgh-gardens-cmp-2021-3068",
         "landezine-edinburgh-gardens-raingarden",
         "atlan-stormtech-edinburgh-gardens-raingarden",
-        "yarra-edinburgh-gardens-plinth-program"
+        "yarra-edinburgh-gardens-plinth-program",
+        "vicmap-basemap-wms",
+        "brunswick-tree-protection-plan",
+        "yarra-council-2026-05-12",
+        "yarra-street-park-trees",
+        "yarra-emely-baker-venue-manual"
       ]
     },
     {
@@ -695,7 +829,10 @@
         "osm-cricket-nets-tag",
         "edinburgh-gardens-cmp",
         "edinburgh-cricket-club-senior-womens",
-        "running-routes-carlton-fitzroy"
+        "running-routes-carlton-fitzroy",
+        "yarra-buildings-asset-management-plan-2017",
+        "yarra-new-public-toilets",
+        "archipro-alfred-crescent-pavilion"
       ]
     },
     {
@@ -709,6 +846,133 @@
       "path": "docs/research/2030-brunswick-street-oval-completion-2026-07-09.md",
       "requiredHeadings": ["## Sources", "## Findings", "## Implementation Translation", "## Uncertainty", "## Validation"],
       "sourceIds": ["yarra-brunswick-street-oval", "osm-map-bbox"]
+    },
+    {
+      "id": "2026-physical-baseline-object-audit",
+      "path": "docs/research/2026-physical-baseline-object-audit-2026-07-10.md",
+      "requiredHeadings": ["## Sources", "## Findings", "## Implementation Translation", "## Uncertainty", "## Validation"],
+      "sourceIds": [
+        "yarra-edinburgh-gardens",
+        "yarra-brunswick-street-oval",
+        "yarra-council-2026-05-12",
+        "yarra-first-sod-2026-05-29",
+        "fitzroy-tennis-2026-works",
+        "heritage-victoria-brunswick-street-oval-his",
+        "edinburgh-gardens-cmp",
+        "edinburgh-gardens-cmp-2021-3068",
+        "yarra-emely-baker-centre",
+        "yarra-emely-baker-venue-manual",
+        "yarra-fitzroy-bowls-mural",
+        "yarra-annual-report-2021-22",
+        "awm-sportsmans-memorial",
+        "vicmap-basemap-wms",
+        "vicmap-web-services-change",
+        "osm-map-bbox",
+        "osm-way-api",
+        "yarra-street-park-trees",
+        "brunswick-tree-protection-plan",
+        "yarra-buildings-asset-management-plan-2017",
+        "yarra-new-public-toilets",
+        "archipro-alfred-crescent-pavilion"
+      ]
+    },
+    {
+      "id": "rotunda-blender-asset-pilot",
+      "path": "docs/research/rotunda-blender-asset-pilot-2026-07-10.md",
+      "requiredHeadings": ["## Sources", "## Findings", "## Implementation Translation", "## Uncertainty", "## Validation"],
+      "sourceIds": ["edinburgh-gardens-cmp-2021-3068", "yarra-edinburgh-gardens-rotunda", "osm-way-api", "blender-4-5-10-linux"]
+    },
+    {
+      "id": "entrance-pavilion-blender-asset",
+      "path": "docs/research/entrance-pavilion-blender-asset-2026-07-10.md",
+      "requiredHeadings": ["## Sources", "## Findings", "## Implementation Translation", "## Uncertainty", "## Validation"],
+      "sourceIds": ["edinburgh-gardens-cmp-2021-3068", "osm-way-api", "blender-4-5-10-linux"]
+    },
+    {
+      "id": "bowling-club-blender-asset",
+      "path": "docs/research/bowling-club-blender-asset-2026-07-10.md",
+      "requiredHeadings": ["## Sources", "## Findings", "## Implementation Translation", "## Uncertainty", "## Validation"],
+      "sourceIds": [
+        "edinburgh-gardens-cmp-2021-3068",
+        "osm-way-api",
+        "yarra-news-bowling-roof",
+        "yarra-fitzroy-bowls-mural",
+        "flickr-bowls-current-55297636202",
+        "flickr-bowls-current-55298958435",
+        "flickr-bowls-current-55298958440",
+        "flickr-bowls-makatron-24264579119",
+        "flickr-bowls-makatron-24523952342",
+        "flickr-bowls-makatron-24550092411",
+        "fitzroy-bowls-official",
+        "blender-4-5-10-linux"
+      ]
+    },
+    {
+      "id": "kevin-murray-stand-blender-asset",
+      "path": "docs/research/kevin-murray-stand-blender-asset-2026-07-10.md",
+      "requiredHeadings": ["## Sources", "## Findings", "## Implementation Translation", "## Uncertainty", "## Validation"],
+      "sourceIds": [
+        "edinburgh-gardens-cmp-2021-3068",
+        "osm-way-api",
+        "heritage-victoria-fitzroy-grandstand-h0751",
+        "yarra-brunswick-street-oval",
+        "yoursay-brunswick-grandstand",
+        "yoursay-brunswick-street-oval",
+        "fitzroy-fc-kevin-murray-stand-sign",
+        "blender-4-5-10-linux"
+      ]
+    },
+    {
+      "id": "tennis-clubhouse-2026-condition-audit",
+      "path": "docs/research/tennis-clubhouse-2026-condition-audit-2026-07-10.md",
+      "requiredHeadings": ["## Sources", "## Findings", "## Implementation Translation", "## Uncertainty", "## Validation"],
+      "sourceIds": [
+        "edinburgh-gardens-cmp-2021-3068",
+        "osm-way-api",
+        "fitzroy-tennis-2026-works",
+        "yarra-council-2026-05-12",
+        "yarra-first-sod-2026-05-29",
+        "heritage-victoria-brunswick-street-oval-his"
+      ]
+    },
+    {
+      "id": "emely-baker-centre-blender-asset",
+      "path": "docs/research/emely-baker-centre-blender-asset-2026-07-10.md",
+      "requiredHeadings": ["## Sources", "## Findings", "## Implementation Translation", "## Uncertainty", "## Validation"],
+      "sourceIds": [
+        "edinburgh-gardens-cmp-2021-3068",
+        "osm-way-api",
+        "yarra-emely-baker-centre",
+        "yarra-emely-baker-venue-manual",
+        "blender-4-5-10-linux"
+      ]
+    },
+    {
+      "id": "alfred-crescent-pavilion-blender-asset",
+      "path": "docs/research/alfred-crescent-pavilion-blender-asset-2026-07-10.md",
+      "requiredHeadings": ["## Sources", "## Findings", "## Implementation Translation", "## Uncertainty", "## Validation"],
+      "sourceIds": [
+        "edinburgh-gardens-cmp-2021-3068",
+        "osm-way-api",
+        "yarra-buildings-asset-management-plan-2017",
+        "yarra-new-public-toilets",
+        "yarra-annual-report-2021-22",
+        "archipro-alfred-crescent-pavilion",
+        "blender-4-5-10-linux"
+      ]
+    },
+    {
+      "id": "north-public-toilets-blender-asset",
+      "path": "docs/research/north-public-toilets-blender-asset-2026-07-10.md",
+      "requiredHeadings": ["## Sources", "## Findings", "## Implementation Translation", "## Uncertainty", "## Validation"],
+      "sourceIds": [
+        "osm-way-api",
+        "yarra-new-public-toilets",
+        "yarra-annual-report-2021-22",
+        "edinburgh-gardens-cmp-2021-3068",
+        "vicmap-basemap-wms",
+        "blender-4-5-10-linux"
+      ]
     },
     {
       "id": "data-pipeline-automation",
@@ -728,6 +992,41 @@
       "pathPattern": "docs/research/raw/osm/2026-07-05/way-*-full.json",
       "format": "osm-elements",
       "sourceId": "osm-way-api",
+      "optional": true
+    },
+    {
+      "id": "yarra-emely-baker-venue-manual-pdf",
+      "pathPattern": "docs/research/raw/gardens/2026-07-10/yarra-emely-baker-venue-manual.pdf",
+      "format": "file",
+      "sourceId": "yarra-emely-baker-venue-manual",
+      "optional": true
+    },
+    {
+      "id": "yarra-alfred-pavilion-buildings-asset-plan-pdf",
+      "pathPattern": "docs/research/raw/gardens/2026-07-10/alfred-crescent-pavilion/yarra-buildings-asset-management-plan-2017.pdf",
+      "format": "file",
+      "sourceId": "yarra-buildings-asset-management-plan-2017",
+      "optional": true
+    },
+    {
+      "id": "yarra-alfred-pavilion-toilet-upgrade-render",
+      "pathPattern": "docs/research/raw/gardens/2026-07-10/alfred-crescent-pavilion/yarra-alfred-pavilion-toilet-upgrade-render.png",
+      "format": "file",
+      "sourceId": "yarra-new-public-toilets",
+      "optional": true
+    },
+    {
+      "id": "yarra-alfred-pavilion-toilet-plan",
+      "pathPattern": "docs/research/raw/gardens/2026-07-10/alfred-crescent-pavilion/yarra-pavilion-toilets-plan-view.png",
+      "format": "file",
+      "sourceId": "yarra-new-public-toilets",
+      "optional": true
+    },
+    {
+      "id": "archipro-alfred-pavilion-photographs",
+      "pathPattern": "docs/research/raw/gardens/2026-07-10/alfred-crescent-pavilion/archipro-cricket-pavilion-*.jpg",
+      "format": "file",
+      "sourceId": "archipro-alfred-crescent-pavilion",
       "optional": true
     },
     {
@@ -784,6 +1083,104 @@
       "pathPattern": "docs/research/raw/vicmap/2026-07-05/further-realism/edinburgh-gardens-vicmap-tree-urban.json",
       "format": "arcgis-features",
       "sourceId": "vicmap-vegetation-tree-urban-feature-server",
+      "optional": true
+    },
+    {
+      "id": "vicmap-basemap-wms-capabilities",
+      "pathPattern": "docs/research/raw/2026-07-10/vicmap-basemap-wms-capabilities.xml",
+      "format": "xml",
+      "sourceId": "vicmap-basemap-wms",
+      "optional": true
+    },
+    {
+      "id": "vicmap-basemap-aerial",
+      "pathPattern": "docs/research/raw/2026-07-10/vicmap-basemap-aerial-edinburgh-gardens.png",
+      "format": "file",
+      "sourceId": "vicmap-basemap-wms",
+      "optional": true
+    },
+    {
+      "id": "vicmap-aerial-audit-overlays",
+      "pathPattern": "docs/research/raw/2026-07-10/vicmap-aerial-*.svg",
+      "format": "file",
+      "sourceId": "vicmap-basemap-wms",
+      "optional": true
+    },
+    {
+      "id": "brunswick-tree-management-plan",
+      "pathPattern": "docs/research/raw/2026-07-10/brunswick-street-oval-tree-management-plan.pdf",
+      "format": "file",
+      "sourceId": "brunswick-tree-protection-plan",
+      "optional": true
+    },
+    {
+      "id": "brunswick-removed-tree-georeference",
+      "pathPattern": "docs/research/raw/2026-07-10/brunswick-street-oval-removed-tree-georeference.json",
+      "format": "json",
+      "sourceId": "brunswick-tree-protection-plan",
+      "optional": true
+    },
+    {
+      "id": "yarra-council-2026-05-12-pdf",
+      "pathPattern": "docs/research/raw/2026-07-10/yarra-council-meeting-2026-05-12.pdf",
+      "format": "file",
+      "sourceId": "yarra-council-2026-05-12",
+      "optional": true
+    },
+    {
+      "id": "yarra-street-park-trees-geojson",
+      "pathPattern": "docs/research/raw/2026-07-10/yarra-street-and-park-trees.geojson",
+      "format": "json",
+      "sourceId": "yarra-street-park-trees",
+      "optional": true
+    },
+    {
+      "id": "bowling-club-current-mural-overview",
+      "pathPattern": "docs/research/raw/2026-07-10/bowling-club-murals/current-2026-01-55297636202.jpg",
+      "format": "file",
+      "sourceId": "flickr-bowls-current-55297636202",
+      "optional": true
+    },
+    {
+      "id": "bowling-club-current-mural-detail",
+      "pathPattern": "docs/research/raw/2026-07-10/bowling-club-murals/current-2026-02-55298958435.jpg",
+      "format": "file",
+      "sourceId": "flickr-bowls-current-55298958435",
+      "optional": true
+    },
+    {
+      "id": "bowling-club-current-mural-elevation",
+      "pathPattern": "docs/research/raw/2026-07-10/bowling-club-murals/current-2026-03-55298958440.jpg",
+      "format": "file",
+      "sourceId": "flickr-bowls-current-55298958440",
+      "optional": true
+    },
+    {
+      "id": "bowling-club-makatron-mural-flora",
+      "pathPattern": "docs/research/raw/2026-07-10/bowling-club-murals/makatron-2016-01-24264579119.jpg",
+      "format": "file",
+      "sourceId": "flickr-bowls-makatron-24264579119",
+      "optional": true
+    },
+    {
+      "id": "bowling-club-makatron-mural-150",
+      "pathPattern": "docs/research/raw/2026-07-10/bowling-club-murals/makatron-2016-02-24523952342.jpg",
+      "format": "file",
+      "sourceId": "flickr-bowls-makatron-24523952342",
+      "optional": true
+    },
+    {
+      "id": "bowling-club-makatron-mural-lion",
+      "pathPattern": "docs/research/raw/2026-07-10/bowling-club-murals/makatron-2016-03-24550092411.jpg",
+      "format": "file",
+      "sourceId": "flickr-bowls-makatron-24550092411",
+      "optional": true
+    },
+    {
+      "id": "yarra-north-public-toilets-visual-evidence",
+      "pathPattern": "docs/research/raw/gardens/2026-07-10/north-public-toilets/*",
+      "format": "file",
+      "sourceId": "yarra-new-public-toilets",
       "optional": true
     }
   ]

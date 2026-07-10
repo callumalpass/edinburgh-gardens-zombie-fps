@@ -60,6 +60,26 @@ Current local assets:
   - Source: Lovell Chen 2021 CMP copy archived by the 3068 Group.
   - Purpose: raw source for current ornamental display-bed renewal, stormwater filtration garden/tank split, Queen Victoria display garden and Rowe Street planter status.
   - Validation: converted to text with `pdftotext` and searched with `rg`.
+- `docs/research/raw/gardens/2026-07-10/yarra-emely-baker-venue-manual.pdf`
+  - Source: City of Yarra current Emely Baker Centre venue-manual link.
+  - Purpose: current exterior/interior photographs and floor-plan evidence for the Emely Baker Centre Blender asset, play-yard facade, western side gate, dark shade sail and external interaction points.
+  - Validation: checked with `pdfinfo`; pages 9–11 were rasterized at 180 dpi with `pdftoppm` and visually inspected against CMP Figure 144 and the current venue page.
+- `docs/research/raw/gardens/2026-07-10/alfred-crescent-pavilion/yarra-buildings-asset-management-plan-2017.pdf`
+  - Source: City of Yarra *Buildings Asset Management Plan, Revision 2017*.
+  - Purpose: official asset identity/condition and page-172 council photograph for Alfred Crescent Pavilion asset B000163.
+  - Validation: checked with `pdfinfo`; page 172 was rasterized with `pdftoppm` and visually inspected for the pavilion name, service category, green panels and clerestory.
+- `docs/research/raw/gardens/2026-07-10/alfred-crescent-pavilion/yarra-alfred-pavilion-toilet-upgrade-render.png` and `yarra-pavilion-toilets-plan-view.png`
+  - Source: City of Yarra Your Say *New public toilets* page.
+  - Purpose: proposal-stage visual/plan evidence for the later pavilion toilet extension, cubicle groups, exterior basins, screened canopy, retained tank, service gate and two existing southern accessible toilets. The annual report is required separately to establish completion.
+  - Validation: checked with `file`/`identify` and manually inspected at original resolution; plan dimensions and labels were cross-checked against the page text and 2026 OSM shell.
+- `docs/research/raw/gardens/2026-07-10/north-public-toilets/yarra-north-toilets-as-built-context.jpg`, `yarra-north-toilets-upgrade-plan.png` and `yarra-north-toilets-proposal-render.png`
+  - Source: City of Yarra Your Say *New public toilets* page.
+  - Purpose: dedicated current-condition evidence family for the north public-toilet asset. The context photograph controls the completed charcoal/grey finish, twin basins, accessible ramp, perforated screens, exposed frame and mixed roof sheets; the dimensioned plan controls functional groups and both external stall banks; the red proposal render is retained only to document the finish that the as-built photograph supersedes.
+  - Validation: `file`/`identify`; manual original-resolution comparison; `python -m py_compile scripts/blender/build_north_toilets.py`; regenerate the editable/runtime/render artifacts with the command recorded in the asset note; validate registration with `npm run research:check`.
+- `docs/research/raw/gardens/2026-07-10/alfred-crescent-pavilion/archipro-cricket-pavilion-*.jpg`
+  - Source: ClarkeHopkinsClarke project portfolio hosted by ArchiPro; photographs credited on the page to Will Belcher.
+  - Purpose: pre-extension visual reference for the original pavilion's west/east elevations, black wraparound corrugated roof, curved end, green/lime panels, clerestory, shutters, doors, timber soffits and interior permeability. The files are ignored visual-research references and are not shipped as game textures.
+  - Validation: `file` confirms six readable JPEGs (four 1920 × 1280 and two 972 × 1459); every photograph was inspected at original resolution and treated as pre-extension evidence.
 - `docs/research/raw/gardens/2026-07-05/landezine-raingarden.html`
   - Source: Landezine Edinburgh Gardens Raingarden by GHD.
   - Purpose: raw page snapshot for the raingarden project marker, 700 sqm area and visible terrace/channel/filter-media design.
@@ -92,3 +112,36 @@ Current local assets:
   - Source: attempted Overpass query for garden/flowerbed/scrub tags in the Edinburgh Gardens bounding box.
   - Purpose: record that this API attempt did not provide usable garden vertices for the ornamental-bed pass.
   - Validation: the endpoint returned HTTP 406 HTML rather than JSON, so no geometry was derived from it.
+- `docs/research/raw/2026-07-10/vicmap-basemap-wms-capabilities.xml`
+  - Source: `https://base.maps.vic.gov.au/service?service=WMS&request=GetCapabilities`.
+  - Purpose: records the supported Vicmap Basemap WMS layers and confirms use of `AERIAL_WM_256` in EPSG:3857.
+  - Validation: `file` plus `rg '<Name>AERIAL_WM_256</Name>'`; `npm run research:check` validates the non-empty XML root.
+- `docs/research/raw/2026-07-10/vicmap-basemap-aerial-edinburgh-gardens.png`
+  - Source: Vicmap Basemap WMS `GetMap`, layer `AERIAL_WM_256`, EPSG:3857 bounding box `16139044.113216834,-4549858.529134399,16139801.085754123,-4549041.545366765`, output 1898 by 2048 PNG.
+  - Purpose: whole-park orthophoto for persistent path/building/roof/court/fence registration and bench-heading inspection. Its visible pre-works trees and six operational courts mean it is not used as July 2026 vegetation/construction-state evidence.
+  - Validation: `file`, `identify`, `sha256sum`; `npm run research:check` checks that the ignored artifact is non-empty.
+- `docs/research/raw/2026-07-10/vicmap-aerial-object-overlay.svg` and `vicmap-aerial-bench-audit-contact-sheet.svg`
+  - Source: generated locally by `node scripts/generate-aerial-audit-overlay.mjs` from the current level register and Vicmap PNG.
+  - Purpose: object-by-object visual audit of projected paths, buildings, open fence runs, trees, amenities and park details; the contact sheet provides a consistent 36-pixel crop around every OSM bench.
+  - Validation: regenerate with `node scripts/generate-aerial-audit-overlay.mjs`, inspect with `file`, and rasterise with ImageMagick for manual review.
+- `docs/research/raw/2026-07-10/brunswick-street-oval-tree-management-plan.pdf`
+  - Source: `https://www.yarracity.vic.gov.au/sites/default/files/2026-02/Tree_protection_management_plan_brunswick_street_oval.pdf`.
+  - Purpose: official numbered April/May 2026 removal plan for the 39 trees affected by tennis and sports-pavilion works.
+  - Validation: `pdfinfo`, `pdftotext`, page rendering and manual comparison of numbered removal symbols.
+- `docs/research/raw/2026-07-10/brunswick-street-oval-removed-tree-georeference.json`
+  - Source: derived from the official tree-management plan, OSM court/building control points and Vicmap tree candidates.
+  - Purpose: retains the affine registration, candidate matching and final plan-number-to-world-coordinate evidence used for the 39 suppressed trees/stumps.
+  - Validation: `jq -e '.page22Registration.rmsGameUnits == 0.766'` and `npm run research:check`.
+- `docs/research/raw/2026-07-10/yarra-council-meeting-2026-05-12.pdf`
+  - Source: City of Yarra ordinary Council meeting reports, 12 May 2026.
+  - Purpose: current tennis pavilion/clubhouse contract scope, concurrent construction/access requirements and the 26 plus 13 tree-removal counts.
+  - Validation: `pdfinfo`, `pdftotext` and `rg 'Tennis Pavilion|26 trees|13 trees'`.
+- `docs/research/raw/2026-07-10/yarra-street-and-park-trees.geojson`
+  - Source: City of Yarra street and park trees dataset on data.gov.au.
+  - Purpose: checked as a possible current replacement for the older tree source. The 20,782-citywide record snapshot contains no points inside the project boundary under the current polygon test, so no game tree is derived from it.
+  - Validation: `jq -e '.type == "FeatureCollection" and (.features | length > 0)'`; the boundary-filter result is recorded in the 2026 audit note.
+- `docs/research/raw/2026-07-10/bowling-club-murals/current-2026-*.jpg` and `makatron-2016-*.jpg`
+  - Source: six public Colour Our City Flickr photographs linked from the Fitzroy Bowls Club tags and individual photo pages. The current group reports 28 May 2026 capture dates; the earlier Makatron group reports 26 January 2016.
+  - Purpose: distinguish the current Melanie Caple St Georges Road mural from the superseded 150-year artwork, then control the current wall's subject order and palette without embedding the photographs as game textures.
+  - Rights: the Flickr pages mark the photographs All Rights Reserved. These ignored local copies are visual-research references only and are not distributed in the game asset.
+  - Validation: `identify docs/research/raw/2026-07-10/bowling-club-murals/*.jpg` confirms six readable 1024-pixel JPEGs; dates, geotags and titles were checked in each Flickr page's exported metadata.

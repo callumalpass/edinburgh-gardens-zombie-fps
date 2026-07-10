@@ -39,7 +39,7 @@ Purpose: make Edinburgh Gardens buildings work as believable wet-weather structu
   - tennis pavilion verandah
   - bowling club verandah
   - Emely Baker shade-sail yard
-  - south amenities roof/eaves
+  - Alfred Crescent Pavilion roof/eaves and completed public-toilet canopy (the original generic “south amenities” identity was corrected on 2026-07-10)
   - north toilet block roof/eaves
   - Freeman Street gatehouse roof
 - Rendered subtle dry patches and drip-edge strips from the shelter data so the zones read as physical shelter, not UI-only buffs.

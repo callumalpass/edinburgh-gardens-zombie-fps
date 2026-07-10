@@ -30,7 +30,7 @@ Supersession note: the 2026-07-09 2030 Brunswick Street Oval completion pass rep
   - `WorldBuilder.fitBoxFromPolygon()` now uses the longest footprint edge so preview and gameplay facades share the same Three.js building axis.
   - This reduces incorrect preview facades on OSM ways whose first coordinate edge is not the main building axis.
 - Major mapped buildings now carry explicit source-backed frontage points.
-  - `MappedBuilding.facade.frontagePoint` is assigned for the south amenities building, Fitzroy Tennis Club rooms, Freeman Street gatehouse, Fitzroy Victoria Bowling Club rooms and Emely Baker Centre.
+  - `MappedBuilding.facade.frontagePoint` is assigned for Alfred Crescent Sports Pavilion (originally mislabelled south amenities), Fitzroy Tennis Club rooms, Freeman Street entrance pavilion, Fitzroy Victoria Bowling Club rooms and Emely Baker Centre.
   - `WorldBuilder.fitBoxFromPolygon()` accepts that point and flips the fitted axis when needed so doors, awnings, wall lights, ramps, windows, service ladders and courtyard details face the documented use side rather than an arbitrary OSM vertex order.
   - The frontage evidence is intentionally coarse: it identifies the correct side of the mapped footprint, not the exact centimetre position of every window or vent.
 - The tennis precinct now shows the documented 2026-2027 court renovation state.
