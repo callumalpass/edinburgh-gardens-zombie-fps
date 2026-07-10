@@ -46,7 +46,8 @@ const clientConfig: MultiplayerConfig = {
   role: "client",
   serverUrl: "ws://localhost:5488",
   roomId: "test-room",
-  playerName: "Client"
+  playerName: "Client",
+  avatarId: "asha"
 };
 
 const inputFrame: NetworkInputFrame = {
@@ -81,7 +82,7 @@ function createSnapshot(roomId = "test-room"): NetworkGameSnapshot {
 function handlers() {
   const observed = {
     statuses: [] as string[],
-    joined: [] as string[],
+    joined: [] as Array<{ playerId: string; avatarId: string }>,
     left: [] as string[],
     inputs: [] as NetworkInputState[],
     actions: [] as NetworkAction[],
@@ -91,7 +92,7 @@ function handlers() {
     ...observed,
     callbacks: {
       status: (message: string) => observed.statuses.push(message),
-      peerJoined: (playerId: string) => observed.joined.push(playerId),
+      peerJoined: (playerId: string, _name: string, avatarId: MultiplayerConfig["avatarId"]) => observed.joined.push({ playerId, avatarId }),
       peerLeft: (playerId: string) => observed.left.push(playerId),
       input: (_playerId: string, input: NetworkInputState) => observed.inputs.push(input),
       action: (_playerId: string, action: NetworkAction) => observed.actions.push(action),
@@ -169,13 +170,13 @@ describe("NetworkSession", () => {
 
     expect(session.connect(observed.callbacks)).toBe(true);
     transport.emit("welcome", { kind: "welcome", playerId: "host-1", role: "host", roomId: "test-room" });
-    transport.emit("peerJoined", { kind: "peerJoined", playerId: "peer-1", name: "Peer" });
+    transport.emit("peerJoined", { kind: "peerJoined", playerId: "peer-1", name: "Peer", avatarId: "jules" });
     transport.emit("input", { kind: "input", playerId: "peer-1", input: { sequence: 1, ...inputFrame } });
     transport.emit("action", { kind: "action", playerId: "peer-1", action: { type: "shoot", sequence: 1, yaw: 0, pitch: 0 } });
     transport.emit("snapshot", { kind: "snapshot", snapshot: createSnapshot() });
 
     expect(observed.statuses).toEqual(["Starting LAN host", "LAN host ready"]);
-    expect(observed.joined).toEqual(["peer-1"]);
+    expect(observed.joined).toEqual([{ playerId: "peer-1", avatarId: "jules" }]);
     expect(observed.inputs).toHaveLength(1);
     expect(observed.actions.map((action) => action.type)).toEqual(["shoot"]);
     expect(observed.snapshots).toEqual([]);

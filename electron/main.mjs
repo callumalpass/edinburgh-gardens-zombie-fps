@@ -206,10 +206,12 @@ ipcMain.handle("lan:runtime", () => runtimeInfo());
 ipcMain.handle("lan:start-host", async (_event, options = {}) => {
   const roomId = String(options.roomId || "edinburgh-gardens").slice(0, 48);
   const playerName = String(options.playerName || "Host").slice(0, 32);
+  const avatarId = ["milo", "asha", "jules", "maeve"].includes(options.avatarId) ? options.avatarId : "milo";
   const info = await ensureRelay();
   hostSession = {
     roomId,
     playerName,
+    avatarId,
     startedAt: Date.now()
   };
   startHostBeacon();
@@ -218,7 +220,8 @@ ipcMain.handle("lan:start-host", async (_event, options = {}) => {
     lan: "host",
     server: info.localUrl,
     room: roomId,
-    name: playerName
+    name: playerName,
+    avatar: avatarId
   });
   const hostCodes = lanAddresses();
   return {

@@ -39,7 +39,7 @@ export interface NetworkTransport {
 
 export interface NetworkSessionHandlers {
   status: (message: string) => void;
-  peerJoined: (playerId: string, name: string) => void;
+  peerJoined: (playerId: string, name: string, avatarId: MultiplayerConfig["avatarId"]) => void;
   peerLeft: (playerId: string) => void;
   input: (playerId: string, input: NetworkInputState) => void;
   action: (playerId: string, action: NetworkAction) => void;
@@ -122,7 +122,7 @@ export class NetworkSession {
     this.client.on("status", (message) => handlers.status(message));
     this.client.on("peerJoined", (message) => {
       if (this.isHost) {
-        handlers.peerJoined(message.playerId, message.name);
+        handlers.peerJoined(message.playerId, message.name, message.avatarId);
       }
     });
     this.client.on("peerLeft", (message) => handlers.peerLeft(message.playerId));

@@ -1,4 +1,13 @@
 import { GameApp } from "./game/GameApp";
+import {
+  AVATAR_DEFINITIONS,
+  AVATAR_IDS,
+  avatarDefinition,
+  loadSelectedAvatar,
+  normalizeAvatarId,
+  saveSelectedAvatar,
+  type AvatarId
+} from "./game/characters";
 import "./styles/main.css";
 
 interface ElectronLanRuntime {
@@ -41,7 +50,7 @@ interface ElectronDiscoveredHost {
 
 interface ElectronLanApi {
   runtime: () => Promise<ElectronLanRuntime>;
-  startHost: (options: { roomId: string; playerName: string }) => Promise<ElectronLanHostInfo>;
+  startHost: (options: { roomId: string; playerName: string; avatarId: AvatarId }) => Promise<ElectronLanHostInfo>;
   stopHost: () => Promise<ElectronLanRuntime>;
   discoverHosts: (options?: { timeoutMs?: number }) => Promise<ElectronDiscoveredHost[]>;
   openExternal: (url: string) => Promise<void>;
@@ -89,6 +98,7 @@ async function renderLaunchMenu(container: HTMLElement): Promise<void> {
   const params = new URLSearchParams(window.location.search);
   const defaultMode = "single";
   const defaultName = localStorageValue("egll.playerName") || params.get("name") || (runtime ? "Host" : "Player");
+  const defaultAvatar = normalizeAvatarId(params.get("avatar") ?? loadSelectedAvatar());
   const defaultRoom = params.get("room") || "edinburgh-gardens";
   const defaultServer = params.get("server") || runtime?.relay?.lanUrls[0] || defaultLanServer();
 
@@ -96,6 +106,7 @@ async function renderLaunchMenu(container: HTMLElement): Promise<void> {
     runtime,
     mode: defaultMode,
     playerName: defaultName,
+    avatarId: defaultAvatar,
     roomId: defaultRoom,
     serverUrl: defaultServer
   });
@@ -107,9 +118,10 @@ async function renderLaunchMenu(container: HTMLElement): Promise<void> {
   const serverField = container.querySelector<HTMLInputElement>('[name="serverUrl"]');
   const roomField = container.querySelector<HTMLInputElement>('[name="roomId"]');
   const nameField = container.querySelector<HTMLInputElement>('[name="playerName"]');
+  const avatarField = container.querySelector<HTMLInputElement>('[name="avatarId"]');
   const submitButton = container.querySelector<HTMLButtonElement>("[data-launch-submit]");
   const discoveryList = container.querySelector<HTMLElement>("[data-discovery-list]");
-  if (!form || !modeInput || !status || !hostDetails || !serverField || !roomField || !nameField || !submitButton || !discoveryList) {
+  if (!form || !modeInput || !status || !hostDetails || !serverField || !roomField || !nameField || !avatarField || !submitButton || !discoveryList) {
     throw new Error("Launch menu failed to render required controls");
   }
 
@@ -128,11 +140,39 @@ async function renderLaunchMenu(container: HTMLElement): Promise<void> {
   };
   setMode(defaultMode);
 
+  const setAvatar = (avatarId: unknown) => {
+    const selected = avatarDefinition(avatarId);
+    avatarField.value = selected.id;
+    saveSelectedAvatar(selected.id);
+    container.querySelectorAll<HTMLButtonElement>("[data-avatar]").forEach((button) => {
+      const active = button.dataset.avatar === selected.id;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-checked", active ? "true" : "false");
+      button.tabIndex = active ? 0 : -1;
+    });
+    const portrait = container.querySelector<HTMLImageElement>("[data-avatar-portrait]");
+    const name = container.querySelector<HTMLElement>("[data-avatar-name]");
+    const role = container.querySelector<HTMLElement>("[data-avatar-role]");
+    const description = container.querySelector<HTMLElement>("[data-avatar-description]");
+    if (portrait) {
+      portrait.src = selected.portraitPath;
+      portrait.alt = `${selected.name}, ${selected.silhouette}`;
+    }
+    if (name) name.textContent = selected.name;
+    if (role) role.textContent = selected.role;
+    if (description) description.textContent = selected.description;
+  };
+  setAvatar(defaultAvatar);
+
   container.addEventListener("click", (event) => {
     const target = event.target instanceof Element
-      ? event.target.closest<HTMLElement>("[data-mode],[data-copy],[data-enter-host],[data-refresh-hosts],[data-join-discovered]")
+      ? event.target.closest<HTMLElement>("[data-mode],[data-avatar],[data-copy],[data-enter-host],[data-refresh-hosts],[data-join-discovered]")
       : null;
     if (!target) {
+      return;
+    }
+    if (target.dataset.avatar) {
+      setAvatar(target.dataset.avatar);
       return;
     }
     if (target.dataset.mode) {
@@ -158,8 +198,21 @@ async function renderLaunchMenu(container: HTMLElement): Promise<void> {
     if (target.dataset.joinDiscovered) {
       const serverUrl = target.dataset.serverUrl || "";
       const roomId = target.dataset.roomId || roomField.value;
-      launchJoin(serverUrl, roomId, nameField.value, status);
+      launchJoin(serverUrl, roomId, nameField.value, avatarField.value, status);
     }
+  });
+
+  container.addEventListener("keydown", (event) => {
+    const target = event.target instanceof Element ? event.target.closest<HTMLButtonElement>("[data-avatar]") : null;
+    if (!target || !["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
+    const options = [...container.querySelectorAll<HTMLButtonElement>("[data-avatar]")];
+    const currentIndex = options.indexOf(target);
+    const direction = event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 1;
+    const next = options[(currentIndex + direction + options.length) % options.length];
+    if (!next) return;
+    event.preventDefault();
+    setAvatar(next.dataset.avatar);
+    next.focus();
   });
 
   form.addEventListener("submit", async (event) => {
@@ -169,10 +222,11 @@ async function renderLaunchMenu(container: HTMLElement): Promise<void> {
     const mode = String(formData.get("mode") || "single");
     const playerName = cleanInput(String(formData.get("playerName") || "Player"), 32);
     const roomId = cleanInput(String(formData.get("roomId") || "edinburgh-gardens"), 48);
+    const avatarId = saveSelectedAvatar(formData.get("avatarId"));
     localStorageSet("egll.playerName", playerName);
 
     if (mode === "single") {
-      launchGame(new URLSearchParams({ play: "1" }));
+      launchGame(new URLSearchParams({ play: "1", avatar: avatarId }));
       return;
     }
 
@@ -180,7 +234,7 @@ async function renderLaunchMenu(container: HTMLElement): Promise<void> {
       if (runtime && window.edinburghLan) {
         setStatus(status, "Starting LAN host...");
         try {
-          const host = await window.edinburghLan.startHost({ roomId, playerName });
+          const host = await window.edinburghLan.startHost({ roomId, playerName, avatarId });
           renderHostDetails(hostDetails, host);
           setStatus(status, "Hosting. Desktop clients can find this game automatically.");
         } catch (error) {
@@ -192,7 +246,8 @@ async function renderLaunchMenu(container: HTMLElement): Promise<void> {
       const hostParams = new URLSearchParams({
         lan: "host",
         room: roomId,
-        name: playerName
+        name: playerName,
+        avatar: avatarId
       });
       const browserServer = normalizeServerUrl(String(formData.get("serverUrl") || defaultLanServer()));
       hostParams.set("server", browserServer);
@@ -201,7 +256,7 @@ async function renderLaunchMenu(container: HTMLElement): Promise<void> {
     }
 
     try {
-      launchJoin(String(formData.get("serverUrl") || serverField.value || defaultLanServer()), roomId, playerName, status);
+      launchJoin(String(formData.get("serverUrl") || serverField.value || defaultLanServer()), roomId, playerName, avatarId, status);
     } catch (error) {
       setStatus(status, error instanceof Error ? error.message : "Enter the host IP shown on the host machine.", true);
     }
@@ -212,6 +267,7 @@ function launchMenuMarkup(options: {
   runtime: ElectronLanRuntime | null | undefined;
   mode: string;
   playerName: string;
+  avatarId: AvatarId;
   roomId: string;
   serverUrl: string;
 }): string {
@@ -222,6 +278,16 @@ function launchMenuMarkup(options: {
     : window.location.protocol === "https:"
       ? "Public HTTPS builds are best for single player. Use desktop or a host HTTP URL for LAN."
       : "For LAN, host from the desktop app or run the relay beside this browser build.";
+  const selectedAvatar = AVATAR_DEFINITIONS[options.avatarId];
+  const avatarOptions = AVATAR_IDS.map((avatarId) => {
+    const avatar = AVATAR_DEFINITIONS[avatarId];
+    const active = avatar.id === selectedAvatar.id;
+    return `
+      <button class="avatar-option${active ? " active" : ""}" type="button" role="radio" aria-checked="${active ? "true" : "false"}" tabindex="${active ? "0" : "-1"}" data-avatar="${avatar.id}">
+        <img src="${escapeAttr(avatar.portraitPath)}" alt="" aria-hidden="true">
+        <span><strong>${escapeHtml(avatar.name)}</strong><small>${escapeHtml(avatar.role)}</small></span>
+      </button>`;
+  }).join("");
 
   return `
     <main class="launch-screen">
@@ -231,6 +297,19 @@ function launchMenuMarkup(options: {
         <p class="launch-deck">A survival FPS across a rain-soaked, research-built Edinburgh Gardens. Stay quiet, scavenge the park, and outlast the horde alone or over LAN.</p>
         <form class="launch-form" data-launch-form data-mode="${escapeAttr(options.mode)}">
           <input type="hidden" name="mode" value="${escapeAttr(options.mode)}" data-launch-mode>
+          <input type="hidden" name="avatarId" value="${selectedAvatar.id}">
+          <section class="avatar-selector" aria-labelledby="survivor-heading">
+            <div class="avatar-focus">
+              <img src="${escapeAttr(selectedAvatar.portraitPath)}" alt="${escapeAttr(`${selectedAvatar.name}, ${selectedAvatar.silhouette}`)}" data-avatar-portrait>
+              <div>
+                <span id="survivor-heading">Choose your survivor</span>
+                <strong data-avatar-name>${escapeHtml(selectedAvatar.name)}</strong>
+                <b data-avatar-role>${escapeHtml(selectedAvatar.role)}</b>
+                <p data-avatar-description>${escapeHtml(selectedAvatar.description)}</p>
+              </div>
+            </div>
+            <div class="avatar-options" role="radiogroup" aria-label="Survivors">${avatarOptions}</div>
+          </section>
           <div class="play-mode-list" aria-label="Play mode">
             <button class="solo-launch" type="button" data-mode="single" data-launch-single>
               <span>Play solo</span><small>Start immediately</small>
@@ -332,7 +411,7 @@ async function refreshDiscoveredHosts(list: HTMLElement, status: HTMLElement): P
   }
 }
 
-function launchJoin(serverInput: string, roomId: string, playerName: string, status: HTMLElement): void {
+function launchJoin(serverInput: string, roomId: string, playerName: string, avatarValue: unknown, status: HTMLElement): void {
   try {
     const serverUrl = normalizeServerUrl(serverInput);
     if (isBlockedMixedWebSocket(serverUrl)) {
@@ -344,7 +423,8 @@ function launchJoin(serverInput: string, roomId: string, playerName: string, sta
         lan: "join",
         server: serverUrl,
         room: cleanInput(roomId || "edinburgh-gardens", 48),
-        name: cleanInput(playerName || "Player", 32)
+        name: cleanInput(playerName || "Player", 32),
+        avatar: normalizeAvatarId(avatarValue)
       })
     );
   } catch (error) {

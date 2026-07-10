@@ -5,6 +5,7 @@ import type { AmenityPoint } from "./types";
 import type { InventoryItemId, LargeCarryItemId } from "./items";
 import type { UpgradeId, WeaponId } from "./weapons";
 import type { ZombieType } from "./waves";
+import type { AvatarId } from "./characters";
 
 export type GameStateName = "ready" | "playing" | "gameover";
 export type HitZone = "head" | "body" | "legs";
@@ -154,7 +155,7 @@ export interface GameTestApi {
   testTeleport: (position: { x: number; z: number; yaw?: number; pitch?: number }) => Snapshot;
   testShoot: () => void;
   testUpgrade: (stationId?: string) => boolean;
-  testSpawn: () => void;
+  testSpawn: (type?: ZombieType) => void;
   testPickupWeapon: (weaponId?: WeaponId) => boolean;
   testScope: (weaponId?: WeaponId) => boolean;
   testInteract: (fixtureId?: string) => boolean;
@@ -178,11 +179,13 @@ export interface GameTestApi {
     zombiesMeasured: number;
   };
   testZombieStates: () => Array<{ id: number; type: ZombieType; aiState: ZombieAiState; hasTarget: boolean; targetDistance: number | null; x: number; z: number }>;
+  testZombieAssetStates: () => Array<{ id: number; type: ZombieType; assetLoaded: boolean; animation: string }>;
   testZombieFacing: () => Array<{ id: number; faceAlignment: number; targetDistance: number }>;
   testSetCrouching: (crouching: boolean) => boolean;
   testStartIntermission: () => boolean;
   testChooseIntermissionUpgrade: (upgradeId?: UpgradeId) => boolean;
-  testAddTeammate: (name?: string) => boolean;
+  testAddTeammate: (name?: string, avatarId?: AvatarId) => boolean;
+  testAvatarStates: () => Array<{ id: string; avatarId: AvatarId; assetLoaded: boolean; animation: string; weaponAttachedToSocket: boolean }>;
   testToggleBike: () => boolean;
   dispose: () => void;
 }

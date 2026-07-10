@@ -2,6 +2,7 @@ import type { GameStateName, WavePhase, ZombieAiState } from "../state";
 import type { WeaponDrop } from "../state";
 import type { Loadout, UpgradeId, WeaponId } from "../weapons";
 import type { ZombieType } from "../waves";
+import type { AvatarId } from "../characters";
 
 export type MultiplayerRole = "single" | "host" | "client";
 
@@ -11,6 +12,7 @@ export interface MultiplayerConfig {
   serverUrl: string;
   roomId: string;
   playerName: string;
+  avatarId: AvatarId;
 }
 
 export interface NetworkInputState {
@@ -47,6 +49,8 @@ export interface NetworkAction {
 export interface NetworkPlayerSnapshot {
   id: string;
   name: string;
+  avatarId: AvatarId;
+  lastProcessedInputSequence: number;
   x: number;
   y: number;
   z: number;
@@ -62,6 +66,8 @@ export interface NetworkPlayerSnapshot {
   bikePumpTimer: number;
   crouching: boolean;
   aim: boolean;
+  moveSpeed: number;
+  sprinting: boolean;
   height: number;
   jumpHeight: number;
   activeFixtureId: string | null;
@@ -138,6 +144,7 @@ export interface ClientHelloMessage {
   role: Exclude<MultiplayerRole, "single">;
   roomId: string;
   name: string;
+  avatarId: AvatarId;
 }
 
 export interface ClientInputMessage {
@@ -178,6 +185,7 @@ export interface RelayPeerJoinedMessage {
   kind: "peerJoined";
   playerId: string;
   name: string;
+  avatarId: AvatarId;
 }
 
 export interface RelayPeerLeftMessage {

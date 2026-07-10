@@ -11,6 +11,8 @@ import type { NetworkRemotePlayer } from "../runtimeTypes";
 import type { Vec2 } from "../types";
 import { createInitialLoadout, type WeaponId } from "../weapons";
 import { disposeThreeResources } from "../rendering/disposeThreeResources";
+import { DEFAULT_AVATAR_ID, avatarDefinition, normalizeAvatarId, type AvatarId } from "../characters";
+import { instantiateCharacterAsset, type CharacterAssetInstance } from "../rendering/CharacterAsset";
 
 export interface RemotePlayerMeshFactory {
   createWeaponMesh(weaponId: WeaponId, firstPerson?: boolean): THREE.Object3D;
@@ -21,6 +23,7 @@ export interface RemotePlayerRosterOptions {
   meshFactory: RemotePlayerMeshFactory;
   groundY: (point: Vec2) => number;
   now?: () => number;
+  loadCharacterAsset?: (avatarId: AvatarId) => Promise<CharacterAssetInstance>;
 }
 
 const REMOTE_PLAYER_OFFSET_X = 3.2;
@@ -32,12 +35,14 @@ export class RemotePlayerRoster {
   private readonly meshFactory: RemotePlayerMeshFactory;
   private readonly groundY: (point: Vec2) => number;
   private readonly now: () => number;
+  private readonly loadCharacterAsset: ((avatarId: AvatarId) => Promise<CharacterAssetInstance>) | null;
 
   constructor(options: RemotePlayerRosterOptions) {
     this.scene = options.scene;
     this.meshFactory = options.meshFactory;
     this.groundY = options.groundY;
     this.now = options.now ?? (() => performance.now() / 1000);
+    this.loadCharacterAsset = options.loadCharacterAsset ?? (typeof window === "undefined" ? null : instantiateCharacterAsset);
   }
 
   get size(): number {
@@ -56,10 +61,12 @@ export class RemotePlayerRoster {
     return this.playersById.keys();
   }
 
-  add(id: string, name: string): NetworkRemotePlayer {
+  add(id: string, name: string, avatarValue: unknown = DEFAULT_AVATAR_ID): NetworkRemotePlayer {
+    const avatarId = normalizeAvatarId(avatarValue);
     const existing = this.playersById.get(id);
     if (existing) {
       existing.name = name;
+      this.setAvatar(existing, avatarId);
       return existing;
     }
 
@@ -69,7 +76,13 @@ export class RemotePlayerRoster {
     const player: NetworkRemotePlayer = {
       id,
       name,
-      mesh: this.createMesh(loadout.weaponId),
+      avatarId,
+      mesh: this.createMesh(loadout.weaponId, avatarId),
+      avatarVisual: null,
+      animationMixer: null,
+      animationActions: new Map(),
+      activeAnimation: "",
+      animationOverride: null,
       weaponIdRendered: loadout.weaponId,
       position,
       velocity: new THREE.Vector3(),
@@ -107,7 +120,38 @@ export class RemotePlayerRoster {
     this.scene.add(player.mesh);
     this.updateMesh(player);
     this.playersById.set(id, player);
+    void this.loadAvatar(player, avatarId);
     return player;
+  }
+
+  setAvatar(player: NetworkRemotePlayer, avatarValue: unknown): void {
+    const avatarId = normalizeAvatarId(avatarValue);
+    if (player.avatarId === avatarId) return;
+    const weapon = player.mesh.getObjectByName("remote-weapon");
+    weapon?.parent?.remove(weapon);
+    if (player.avatarVisual) {
+      player.mesh.remove(player.avatarVisual);
+      disposeThreeResources(player.avatarVisual);
+    }
+    const previousPlaceholder = player.mesh.getObjectByName("avatar-placeholder");
+    if (previousPlaceholder) {
+      player.mesh.remove(previousPlaceholder);
+      disposeThreeResources(previousPlaceholder);
+    }
+    player.avatarId = avatarId;
+    player.avatarVisual = null;
+    player.animationMixer?.stopAllAction();
+    player.animationMixer = null;
+    player.animationActions.clear();
+    player.activeAnimation = "";
+    player.animationOverride = null;
+    player.mesh.add(this.createPlaceholder(avatarId));
+    if (weapon) {
+      player.mesh.add(weapon);
+      this.positionPlaceholderWeapon(weapon);
+    }
+    this.updateMesh(player);
+    void this.loadAvatar(player, avatarId);
   }
 
   remove(id: string): void {
@@ -115,6 +159,7 @@ export class RemotePlayerRoster {
     if (!player) {
       return;
     }
+    player.animationMixer?.stopAllAction();
     this.scene.remove(player.mesh);
     disposeThreeResources(player.mesh);
     this.playersById.delete(id);
@@ -171,18 +216,66 @@ export class RemotePlayerRoster {
       this.rebuildWeapon(player);
     }
     player.mesh.position.set(player.position.x, player.position.y + player.height + player.jumpHeight, player.position.z);
-    player.mesh.rotation.y = player.yaw + Math.PI;
+    player.mesh.rotation.y = player.yaw;
     const crouchScale = 1 - player.crouchAmount * 0.16;
-    player.mesh.scale.set(1, Math.max(0.82, crouchScale), 1);
-    player.mesh.visible = player.health > 0;
+    player.mesh.scale.set(1, player.avatarVisual ? 1 : Math.max(0.82, crouchScale), 1);
+    player.mesh.visible = true;
   }
 
-  private createMesh(weaponId: WeaponId): THREE.Group {
+  updateAnimations(dt: number): void {
+    for (const player of this.playersById.values()) {
+      const mixer = player.animationMixer;
+      if (!mixer) continue;
+      if (player.animationOverride) {
+        player.animationOverride.remaining -= dt;
+        if (player.animationOverride.remaining > 0) {
+          mixer.update(dt);
+          continue;
+        }
+        player.animationOverride = null;
+      }
+      const horizontalSpeed = Math.hypot(player.velocity.x, player.velocity.z);
+      const desired = player.health <= 0
+        ? "Downed"
+        : player.jumpHeight > 0.04
+          ? "Jump"
+          : player.crouchAmount > 0.45
+            ? horizontalSpeed > 0.3 ? "CrouchWalk" : "Crouch"
+            : player.input.aim
+              ? "Aim"
+              : horizontalSpeed > 0.3
+                ? player.isSprinting ? "Run" : "Walk"
+                : "Idle";
+      this.transitionAnimation(player, desired);
+      mixer.update(dt);
+    }
+  }
+
+  triggerAnimation(player: NetworkRemotePlayer, name: "Melee" | "Reload" | "Jump"): void {
+    const action = player.animationActions.get(name);
+    if (!action) return;
+    this.transitionAnimation(player, name, true);
+    player.animationOverride = { name, remaining: Math.max(0.12, action.getClip().duration) };
+  }
+
+  private createMesh(weaponId: WeaponId, avatarId: AvatarId): THREE.Group {
     const group = new THREE.Group();
     group.userData.dynamic = true;
-    const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x6f8f93, roughness: 0.78, metalness: 0.02 });
+    group.add(this.createPlaceholder(avatarId));
+    const weapon = this.meshFactory.createWeaponMesh(weaponId, false);
+    weapon.name = "remote-weapon";
+    this.positionPlaceholderWeapon(weapon);
+    group.add(weapon);
+    return group;
+  }
+
+  private createPlaceholder(avatarId: AvatarId): THREE.Group {
+    const placeholder = new THREE.Group();
+    placeholder.name = "avatar-placeholder";
+    const appearance = avatarDefinition(avatarId).appearance;
+    const bodyMaterial = new THREE.MeshStandardMaterial({ color: appearance.sleeve, roughness: 0.78, metalness: 0.02 });
     const darkMaterial = new THREE.MeshStandardMaterial({ color: 0x1e282b, roughness: 0.84, metalness: 0.04 });
-    const skinMaterial = new THREE.MeshStandardMaterial({ color: 0xcaa47c, roughness: 0.74 });
+    const skinMaterial = new THREE.MeshStandardMaterial({ color: appearance.skin, roughness: 0.74 });
     const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.46, 1.08, 4, 9), bodyMaterial);
     body.position.y = 1.34;
     const head = new THREE.Mesh(new THREE.SphereGeometry(0.28, 12, 10), skinMaterial);
@@ -197,28 +290,90 @@ export class RemotePlayerRoster {
     const rightArm = leftArm.clone();
     rightArm.position.x = 0.5;
     rightArm.rotation.z = -0.22;
-    const weapon = this.meshFactory.createWeaponMesh(weaponId, false);
-    weapon.name = "remote-weapon";
-    weapon.position.set(0.34, 1.25, -0.62);
-    weapon.rotation.set(0.2, Math.PI, -0.08);
-    weapon.scale.setScalar(0.74);
-    group.add(body, head, leftLeg, rightLeg, leftArm, rightArm, weapon);
-    return group;
+    placeholder.add(body, head, leftLeg, rightLeg, leftArm, rightArm);
+    return placeholder;
   }
 
   private rebuildWeapon(player: NetworkRemotePlayer): void {
     const previous = player.mesh.getObjectByName("remote-weapon");
     if (previous) {
-      player.mesh.remove(previous);
+      previous.parent?.remove(previous);
       disposeThreeResources(previous);
     }
     const weapon = this.meshFactory.createWeaponMesh(player.loadout.weaponId, false);
     weapon.name = "remote-weapon";
+    this.attachWeapon(player, weapon);
+    player.weaponIdRendered = player.loadout.weaponId;
+  }
+
+  private positionPlaceholderWeapon(weapon: THREE.Object3D): void {
     weapon.position.set(0.34, 1.25, -0.62);
     weapon.rotation.set(0.2, Math.PI, -0.08);
     weapon.scale.setScalar(0.74);
-    player.mesh.add(weapon);
-    player.weaponIdRendered = player.loadout.weaponId;
+  }
+
+  private attachWeapon(player: NetworkRemotePlayer, weapon: THREE.Object3D): void {
+    const socket = player.avatarVisual?.getObjectByName("WeaponSocket");
+    if (!socket) {
+      player.mesh.add(weapon);
+      this.positionPlaceholderWeapon(weapon);
+      return;
+    }
+    socket.add(weapon);
+    weapon.position.set(0, 0, 0);
+    weapon.rotation.set(0, 0, 0);
+    weapon.scale.setScalar(0.58);
+  }
+
+  private async loadAvatar(player: NetworkRemotePlayer, avatarId: AvatarId): Promise<void> {
+    if (!this.loadCharacterAsset) return;
+    try {
+      const asset = await this.loadCharacterAsset(avatarId);
+      if (this.playersById.get(player.id) !== player || player.avatarId !== avatarId) {
+        disposeThreeResources(asset.root);
+        return;
+      }
+      const weapon = player.mesh.getObjectByName("remote-weapon");
+      weapon?.parent?.remove(weapon);
+      const placeholder = player.mesh.getObjectByName("avatar-placeholder");
+      if (placeholder) {
+        player.mesh.remove(placeholder);
+        disposeThreeResources(placeholder);
+      }
+      if (player.avatarVisual) {
+        player.mesh.remove(player.avatarVisual);
+        disposeThreeResources(player.avatarVisual);
+      }
+      asset.root.name = "avatar-visual";
+      player.avatarVisual = asset.root;
+      player.mesh.add(asset.root);
+      player.animationMixer = new THREE.AnimationMixer(asset.root);
+      player.animationActions = new Map(asset.animations.map((clip) => [clip.name, player.animationMixer!.clipAction(clip)]));
+      player.activeAnimation = "";
+      this.transitionAnimation(player, "Idle");
+      if (weapon) this.attachWeapon(player, weapon);
+      this.updateMesh(player);
+    } catch {
+      // Keep the deterministic placeholder when a character asset cannot load.
+    }
+  }
+
+  private transitionAnimation(player: NetworkRemotePlayer, name: string, restart = false): void {
+    if ((!restart && player.activeAnimation === name) || !player.animationMixer) return;
+    const next = player.animationActions.get(name) ?? player.animationActions.get("Idle");
+    if (!next) return;
+    const previous = player.animationActions.get(player.activeAnimation);
+    previous?.fadeOut(0.16);
+    next.reset();
+    if (["Melee", "Reload", "Jump", "Downed"].includes(name)) {
+      next.setLoop(THREE.LoopOnce, 1);
+      next.clampWhenFinished = true;
+    } else {
+      next.setLoop(THREE.LoopRepeat, Infinity);
+      next.clampWhenFinished = false;
+    }
+    next.fadeIn(0.16).play();
+    player.activeAnimation = name;
   }
 }
 

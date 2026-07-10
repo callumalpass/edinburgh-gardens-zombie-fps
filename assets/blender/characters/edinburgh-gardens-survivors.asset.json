@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "assetId": "edinburgh-gardens-survivor-roster",
+  "label": "Edinburgh Gardens survivor roster",
+  "units": "metres",
+  "origin": "between the feet at ground level",
+  "front": "+Y in Blender; -Z in Three.js after glTF conversion",
+  "blenderVersion": "4.5.11 LTS",
+  "generator": "scripts/blender/build_player_characters.py",
+  "blend": "assets/blender/characters/edinburgh-gardens-survivors.blend",
+  "designBasis": "Original fictional survivors shaped for the existing low-poly Melbourne anime palette; no external likenesses or scanned character assets.",
+  "animationContract": {
+    "rootMotion": false,
+    "clips": [
+      "Idle",
+      "Walk",
+      "Run",
+      "Crouch",
+      "CrouchWalk",
+      "Aim",
+      "Melee",
+      "Reload",
+      "Jump",
+      "Downed"
+    ],
+    "weaponSocket": "WeaponSocket parented to Hand.R"
+  },
+  "avatars": [
+    {
+      "id": "milo",
+      "name": "Milo Reed",
+      "role": "Trail scout",
+      "glb": "public/models/characters/milo-reed.glb",
+      "triangleCount": 3072,
+      "meshObjectCount": 1,
+      "armatureCount": 1,
+      "distinctiveFeature": "light-brown curly hair and weathered Australian bush hat"
+    },
+    {
+      "id": "asha",
+      "name": "Asha Bell",
+      "role": "Community medic",
+      "glb": "public/models/characters/asha-bell.glb",
+      "triangleCount": 2504,
+      "meshObjectCount": 1,
+      "armatureCount": 1,
+      "distinctiveFeature": null
+    },
+    {
+      "id": "jules",
+      "name": "Jules Nguyen",
+      "role": "Park keeper",
+      "glb": "public/models/characters/jules-nguyen.glb",
+      "triangleCount": 2416,
+      "meshObjectCount": 1,
+      "armatureCount": 1,
+      "distinctiveFeature": null
+    },
+    {
+      "id": "maeve",
+      "name": "Maeve Costa",
+      "role": "Bike courier",
+      "glb": "public/models/characters/maeve-costa.glb",
+      "triangleCount": 2892,
+      "meshObjectCount": 1,
+      "armatureCount": 1,
+      "distinctiveFeature": null
+    }
+  ]
+}

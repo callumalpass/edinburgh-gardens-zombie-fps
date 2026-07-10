@@ -2,6 +2,7 @@ import type * as THREE from "three";
 import type { Loadout, WeaponId } from "./weapons";
 import type { PlayerCondition } from "./playerCondition";
 import type { NetworkInputState } from "./multiplayer/types";
+import type { AvatarId } from "./characters";
 import type { AmenityPoint, InteractableFixture, ParkLifeDetail, UpgradeStation, Vec2 } from "./types";
 import type { WorldItemId } from "./items";
 
@@ -83,7 +84,13 @@ export interface PlacedLadder {
 export interface NetworkRemotePlayer {
   id: string;
   name: string;
+  avatarId: AvatarId;
   mesh: THREE.Group;
+  avatarVisual: THREE.Group | null;
+  animationMixer: THREE.AnimationMixer | null;
+  animationActions: Map<string, THREE.AnimationAction>;
+  activeAnimation: string;
+  animationOverride: { name: string; remaining: number } | null;
   weaponIdRendered: WeaponId;
   position: THREE.Vector3;
   velocity: THREE.Vector3;

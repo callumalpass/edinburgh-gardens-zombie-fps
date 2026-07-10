@@ -4,6 +4,7 @@ import type { WeaponId } from "../weapons";
 import type { ZombieType } from "../waves";
 import type { WorldItemId } from "../items";
 import { ANIME_OUTLINE_COLOR, MELBOURNE_ANIME_PALETTE, tuneAnimeMaterial as tuneAnimeMaterialStyle } from "./animeStyle";
+import { DEFAULT_AVATAR_ID, avatarDefinition, type AvatarAppearance, type AvatarId } from "../characters";
 
 export type PickupKind = "scrap" | "health" | "ammo";
 export type BikeIssue = "flat-tyres" | "broken-chain" | "locked";
@@ -55,8 +56,9 @@ interface ZombieDetailMaterials extends ZombieMarkerMaterials {
 export class MeshFactory {
   constructor(private readonly materials: GameMaterials) {}
 
-  createWeaponMesh(weaponId: WeaponId, firstPerson = false): THREE.Group {
+  createWeaponMesh(weaponId: WeaponId, firstPerson = false, avatarId: AvatarId = DEFAULT_AVATAR_ID): THREE.Group {
     const group = new THREE.Group();
+    const avatarAppearance = avatarDefinition(avatarId).appearance;
     if (weaponId === "knife" || weaponId === "machete") {
       const isMachete = weaponId === "machete";
       const bladeMaterial = this.paintedStandardMaterial({
@@ -138,7 +140,7 @@ export class MeshFactory {
       }
 
       if (firstPerson) {
-        this.addFirstPersonArm(group, 1, { x: 0.12, y: -0.34, z: 0.28 }, { x: -0.62, y: 0.08, z: 0.22 }, { x: 0.05, y: -0.2, z: 0.1 });
+        this.addFirstPersonArm(group, 1, { x: 0.12, y: -0.34, z: 0.28 }, { x: -0.62, y: 0.08, z: 0.22 }, { x: 0.05, y: -0.2, z: 0.1 }, avatarAppearance);
       }
 
       this.applyAnimeMeshStyle(group, firstPerson ? 1.025 : 1.04);
@@ -221,7 +223,8 @@ export class MeshFactory {
           1,
           { x: 0.17, y: -0.31, z: 0.14 },
           { x: -0.2, y: 0.08, z: 0.34 },
-          { x: 0.1, y: -0.23, z: -0.02 }
+          { x: 0.1, y: -0.23, z: -0.02 },
+          avatarAppearance
         );
       }
 
@@ -358,7 +361,8 @@ export class MeshFactory {
           side,
           { x: side * 0.18, y: -0.3, z: 0.18 },
           { x: side < 0 ? -0.12 : 0.04, y: side * 0.06, z: side * 0.35 },
-          { x: side * 0.1, y: -0.21, z: -0.18 }
+          { x: side * 0.1, y: -0.21, z: -0.18 },
+          avatarAppearance
         );
       }
     }
@@ -372,12 +376,13 @@ export class MeshFactory {
     side: number,
     sleevePosition: { x: number; y: number; z: number },
     sleeveRotation: { x: number; y: number; z: number },
-    handPosition: { x: number; y: number; z: number }
+    handPosition: { x: number; y: number; z: number },
+    appearance: AvatarAppearance
   ): void {
-    const handMaterial = this.paintedStandardMaterial({ color: 0xc28f66, roughness: 0.9 });
-    const gloveMaterial = this.paintedStandardMaterial({ color: 0x202b2d, roughness: 0.94 });
-    const sleeveMaterial = this.paintedStandardMaterial({ color: 0x273f46, roughness: 0.94 });
-    const cuffMaterial = this.paintedStandardMaterial({ color: MELBOURNE_ANIME_PALETTE.tramOchre, roughness: 0.84, metalness: 0.04 });
+    const handMaterial = this.paintedStandardMaterial({ color: appearance.skin, roughness: 0.9 });
+    const gloveMaterial = this.paintedStandardMaterial({ color: appearance.glove, roughness: 0.94 });
+    const sleeveMaterial = this.paintedStandardMaterial({ color: appearance.sleeve, roughness: 0.94 });
+    const cuffMaterial = this.paintedStandardMaterial({ color: appearance.cuff, roughness: 0.84, metalness: 0.04 });
 
     const sleeve = new THREE.Mesh(new THREE.CapsuleGeometry(0.085, 0.5, 4, 8), sleeveMaterial);
     sleeve.position.set(sleevePosition.x, sleevePosition.y, sleevePosition.z);

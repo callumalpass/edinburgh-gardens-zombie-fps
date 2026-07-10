@@ -66,6 +66,14 @@ import { freezeStaticScene } from "./rendering/staticScene";
 import { collectWeatherAnchors } from "./rendering/weatherAnchors";
 import { disposeThreeResources } from "./rendering/disposeThreeResources";
 import { AdaptiveRenderQuality, RENDER_QUALITY_SETTINGS, type RenderQualityLevel } from "./rendering/renderQuality";
+import {
+  attachZombieAnimation,
+  disposeZombieAssetAnimation,
+  instantiateZombieAsset,
+  triggerZombieAssetAnimation,
+  updateZombieAssetAnimation,
+  zombieAssetState
+} from "./rendering/ZombieAsset";
 import type { GameStateName, GameTestApi, HitZone, Pickup, ShellCasing, SmokePuff, Snapshot, Tracer, WavePhase, WeaponDrop, Zombie } from "./state";
 import { installGameTestDriver, uninstallGameTestDriver } from "./testing/GameTestDriver";
 import { InputController } from "./input/InputController";
@@ -268,6 +276,8 @@ export class GameApp {
   private movementNoiseTimer = 0;
   private elevatedNoiseTimer = 0;
   private testCrouchOverride: boolean | null = null;
+  private testCameraOverride = false;
+  private testZombieSpawnIndex = 0;
   private lastDamageAt = 0;
   private damageDirection = 0;
   private damageDirectionTimer = 0;
@@ -540,7 +550,7 @@ export class GameApp {
       testTeleport: (position) => this.testTeleport(position),
       testShoot: () => this.shoot(performance.now() / 1000, true),
       testUpgrade: (stationId?: string) => this.buyUpgrade(stationId),
-      testSpawn: () => this.forceSpawnZombie(),
+      testSpawn: (type) => this.forceSpawnZombie(type),
       testPickupWeapon: (weaponId?: WeaponId) => this.testPickupWeapon(weaponId),
       testScope: (weaponId?: WeaponId) => this.testScope(weaponId),
       testInteract: (fixtureId?: string) => this.testInteract(fixtureId),
@@ -558,15 +568,28 @@ export class GameApp {
       testMiniMapVisibility: () => this.testMiniMapVisibility(),
       testGrounding: () => this.testGrounding(),
       testZombieStates: () => this.testZombieStates(),
+      testZombieAssetStates: () => this.zombies.map((zombie) => ({
+        id: zombie.id,
+        type: zombie.type,
+        assetLoaded: zombieAssetState(zombie.mesh).loaded,
+        animation: zombieAssetState(zombie.mesh).animation
+      })),
       testZombieFacing: () => this.testZombieFacing(),
       testSetCrouching: (crouching: boolean) => this.testSetCrouching(crouching),
       testStartIntermission: () => this.testStartIntermission(),
       testChooseIntermissionUpgrade: (upgradeId?: UpgradeId) => this.chooseIntermissionUpgrade(upgradeId ?? this.currentIntermissionChoices()[0]?.id ?? "damage"),
-      testAddTeammate: (name?: string) => {
-        this.remotePlayers.add(`test-peer-${this.remotePlayers.size + 1}`, name ?? "Test survivor");
+      testAddTeammate: (name, avatarId) => {
+        this.remotePlayers.add(`test-peer-${this.remotePlayers.size + 1}`, name ?? "Test survivor", avatarId);
         this.updateHud();
         return true;
       },
+      testAvatarStates: () => [...this.remotePlayers.values()].map((player) => ({
+        id: player.id,
+        avatarId: player.avatarId,
+        assetLoaded: player.avatarVisual?.userData.kind === "blender-player-avatar",
+        animation: player.activeAnimation,
+        weaponAttachedToSocket: player.mesh.getObjectByName("remote-weapon")?.parent?.name === "WeaponSocket"
+      })),
       testToggleBike: () => this.testToggleBike(),
       dispose: () => this.dispose()
     };
@@ -681,8 +704,8 @@ export class GameApp {
     const connected = this.network.connect(
       {
         status: (message) => this.flashStatus(message),
-        peerJoined: (playerId, name) => this.remotePlayers.add(playerId, name),
         peerLeft: (playerId) => this.remotePlayers.remove(playerId),
+        peerJoined: (playerId, name, avatarId) => this.remotePlayers.add(playerId, name, avatarId),
         input: (playerId, input) => {
           const player = this.remotePlayers.get(playerId) ?? this.remotePlayers.add(playerId, `Player ${playerId}`);
           player.input = input;
@@ -888,6 +911,12 @@ export class GameApp {
     }
 
     const simulationDt = this.paused && !this.network.enabled ? 0 : dt;
+    this.remotePlayers?.updateAnimations(simulationDt);
+    if (this.isNetworkClient) {
+      for (const zombie of this.zombies) {
+        this.animateZombie(zombie, now, zombie.position.distanceTo(this.player.position), simulationDt);
+      }
+    }
     const atmosphere = this.atmosphere.update(simulationDt, this.camera.position, now);
     const { timeOfDay, weather } = atmosphere;
     this.currentWeather = weather;
@@ -1097,6 +1126,8 @@ export class GameApp {
     return {
       id: this.network.localId,
       name: this.network.config.playerName,
+      avatarId: this.network.config.avatarId,
+      lastProcessedInputSequence: 0,
       x: this.player.position.x,
       y: this.player.position.y,
       z: this.player.position.z,
@@ -1112,6 +1143,8 @@ export class GameApp {
       bikePumpTimer: this.condition.bikePumpTimer,
       crouching: this.player.crouching,
       aim: this.aimHeld,
+      moveSpeed: Math.hypot(this.player.velocity.x, this.player.velocity.z),
+      sprinting: this.isSprinting,
       height: this.player.height,
       jumpHeight: this.player.jumpHeight,
       activeFixtureId: this.player.activeFixtureId,
@@ -1129,6 +1162,8 @@ export class GameApp {
     return {
       id: player.id,
       name: player.name,
+      avatarId: player.avatarId,
+      lastProcessedInputSequence: player.input.sequence,
       x: player.position.x,
       y: player.position.y,
       z: player.position.z,
@@ -1144,6 +1179,8 @@ export class GameApp {
       bikePumpTimer: player.condition.bikePumpTimer,
       crouching: player.crouching,
       aim: player.input.aim,
+      moveSpeed: Math.hypot(player.velocity.x, player.velocity.z),
+      sprinting: player.isSprinting,
       height: player.height,
       jumpHeight: player.jumpHeight,
       activeFixtureId: player.activeFixtureId,
@@ -1368,6 +1405,7 @@ export class GameApp {
     }
     player.condition.stamina = stamina.stamina;
     player.lastShotAt = now;
+    this.remotePlayers.triggerAnimation(player, "Melee");
     this.emitNoise("melee", { x: player.position.x, z: player.position.z }, stats.noiseMultiplier * (player.crouching ? 0.7 : 1), {
       weaponId: player.loadout.weaponId
     });
@@ -1388,6 +1426,7 @@ export class GameApp {
   private reloadNetworkPlayer(player: NetworkRemotePlayer, now: number): void {
     player.loadout = startReload(player.loadout, now);
     if (player.loadout.reloadingUntil > 0) {
+      this.remotePlayers.triggerAnimation(player, "Reload");
       this.emitNoise("reload", { x: player.position.x, z: player.position.z }, player.crouching ? 0.55 : 1, {
         weaponId: player.loadout.weaponId
       });
@@ -1404,6 +1443,7 @@ export class GameApp {
     }
     player.condition.stamina = stamina.stamina;
     this.locomotion.startJump(player);
+    this.remotePlayers.triggerAnimation(player, "Jump");
     this.emitNoise("footstep", { x: player.position.x, z: player.position.z }, 0.46, { volume: 0.38 });
     return true;
   }
@@ -1615,10 +1655,11 @@ export class GameApp {
     const seen = new Set<string>();
     for (const snapshot of snapshots) {
       seen.add(snapshot.id);
-      const player = this.remotePlayers.get(snapshot.id) ?? this.remotePlayers.add(snapshot.id, snapshot.name);
+      const player = this.remotePlayers.get(snapshot.id) ?? this.remotePlayers.add(snapshot.id, snapshot.name, snapshot.avatarId);
       player.name = snapshot.name;
       player.position.set(snapshot.x, snapshot.y, snapshot.z);
       player.yaw = snapshot.yaw;
+      this.remotePlayers.setAvatar(player, snapshot.avatarId);
       player.pitch = snapshot.pitch;
       player.health = snapshot.health;
       player.scrap = snapshot.scrap;
@@ -1640,6 +1681,7 @@ export class GameApp {
       player.reviveProtectionTimer = snapshot.reviveProtectionTimer ?? 0;
       player.input.aim = snapshot.aim;
       this.remotePlayers.updateMesh(player);
+      player.isSprinting = snapshot.sprinting ?? false;
     }
     for (const id of [...this.remotePlayers.keys()]) {
       if (!seen.has(id)) {
@@ -1682,6 +1724,7 @@ export class GameApp {
           screamCooldown: 0
         };
         this.zombies.push(zombie);
+        void this.installBlenderZombie(zombie);
       }
       zombie.position.set(snapshot.x, snapshot.y, snapshot.z);
       zombie.health = snapshot.health;
@@ -1693,7 +1736,7 @@ export class GameApp {
     }
     for (const zombie of [...this.zombies]) {
       if (!seen.has(zombie.id)) {
-        this.scene.remove(zombie.mesh);
+        this.removeZombieVisual(zombie);
         this.zombies = this.zombies.filter((candidate) => candidate !== zombie);
       }
     }
@@ -2567,7 +2610,7 @@ export class GameApp {
   }
 
   private updateCamera(): void {
-    if (this.smokeMode && document.pointerLockElement !== this.canvas) {
+    if (this.smokeMode && !this.testCameraOverride && document.pointerLockElement !== this.canvas) {
       const t = this.frame * 0.005;
       this.player.yaw = -2.2 + Math.sin(t) * 0.18;
       this.player.pitch = -0.1 + Math.sin(t * 0.7) * 0.04;
@@ -2582,8 +2625,20 @@ export class GameApp {
     this.camera.rotation.x = this.player.pitch - this.recoil * 0.012;
   }
 
-  private forceSpawnZombie(): void {
-    this.addZombie(createZombieSpawn(getWaveConfig(this.wave), this.level.spawnPoints, this.rng));
+  private forceSpawnZombie(type?: ZombieType): void {
+    if (!type) {
+      this.addZombie(createZombieSpawn(getWaveConfig(this.wave), this.level.spawnPoints, this.rng));
+      return;
+    }
+    const profile = zombieProfile(type);
+    const index = this.testZombieSpawnIndex++ % 5;
+    this.addZombie({
+      type,
+      position: { x: this.player.position.x + (index - 2) * 3.6, z: this.player.position.z - 12 },
+      health: profile.health,
+      speed: profile.speed,
+      reward: profile.reward
+    });
   }
 
   private addZombie(spawn: ZombieSpawn): void {
@@ -2595,7 +2650,7 @@ export class GameApp {
     const maxHealth = spawn.health;
     const profile = zombieProfile(spawn.type);
     const spawnPoint = { x: spawn.position.x, z: spawn.position.z };
-    this.zombies.push({
+    const zombie: Zombie = {
       id: this.entities.nextZombieId(),
       type: spawn.type,
       mesh,
@@ -2617,7 +2672,9 @@ export class GameApp {
       stepCooldown: this.rng.range(0.1, 0.7),
       staggerTimer: 0,
       screamCooldown: this.rng.range(2.5, 6)
-    });
+    };
+    this.zombies.push(zombie);
+    void this.installBlenderZombie(zombie);
   }
 
   private updateZombies(dt: number, now: number): void {
@@ -2742,10 +2799,11 @@ export class GameApp {
         zombie.mesh.rotation.y = Math.atan2(toTarget.x, toTarget.z) + Math.PI;
       }
       this.syncZombieMeshPosition(zombie, now);
-      this.animateZombie(zombie, now, localDistance);
+      this.animateZombie(zombie, now, localDistance, dt);
       this.updateZombieAudio(zombie, dt, localDistance, distanceToTarget);
       const attackTarget = this.attackableCombatantForZombie(zombie, zombiePoint, combatants);
       if (attackTarget && zombie.attackCooldown <= 0) {
+        triggerZombieAssetAnimation(zombie.mesh, "Attack");
         const hitApplied = this.applyZombieHit(zombie, profile, now, attackTarget);
         zombie.attackCooldown = profile.attackCooldown;
         this.audio.playWorld("zombieAttack", zombiePoint, { zombieType: zombie.type });
@@ -2758,6 +2816,7 @@ export class GameApp {
   }
 
   private triggerScreamerCall(zombie: Zombie, zombiePoint: Vec2): void {
+    triggerZombieAssetAnimation(zombie.mesh, "Scream");
     const target = zombie.lastKnownPlayer ?? { x: this.player.position.x, z: this.player.position.z };
     this.emitNoise("scream", zombiePoint, 1.18, { volume: 1.12 });
     const rallied = this.rallyZombiesFromScream(zombie, zombiePoint, target);
@@ -3443,7 +3502,7 @@ export class GameApp {
 
   private killZombie(zombie: Zombie, killer?: NetworkRemotePlayer): void {
     this.audio.playWorld("zombieDeath", { x: zombie.position.x, z: zombie.position.z }, { zombieType: zombie.type });
-    this.scene.remove(zombie.mesh);
+    this.removeZombieVisual(zombie);
     this.zombies = this.zombies.filter((candidate) => candidate !== zombie);
     if (killer) {
       killer.scrap += zombie.reward;
@@ -5048,9 +5107,11 @@ export class GameApp {
     this.player.activeFixtureId = null;
     if (Number.isFinite(position.yaw)) {
       this.player.yaw = position.yaw!;
+      this.testCameraOverride = true;
     }
     if (Number.isFinite(position.pitch)) {
       this.player.pitch = THREE.MathUtils.clamp(position.pitch!, -1.18, 1.1);
+      this.testCameraOverride = true;
     }
     this.updateNearestStation();
     this.updateNearestAmenity();
@@ -5062,7 +5123,7 @@ export class GameApp {
 
   private testStartIntermission(): boolean {
     for (const zombie of this.zombies) {
-      this.scene.remove(zombie.mesh);
+      this.removeZombieVisual(zombie);
     }
     this.zombies = [];
     this.waveDirector.completeActiveWaveForTest();
@@ -5470,7 +5531,7 @@ export class GameApp {
     this.weaponModel.clear();
     this.meleeSwing = 0;
     const stats = getWeaponStats(this.loadout);
-    const weapon = this.meshFactory.createWeaponMesh(this.loadout.weaponId, true);
+    const weapon = this.meshFactory.createWeaponMesh(this.loadout.weaponId, true, this.network.config.avatarId);
     if (stats.kind === "melee") {
       weapon.position.set(0.44, -0.47, -0.42);
       weapon.rotation.set(-0.46, -0.34, 0.42);
@@ -5656,7 +5717,46 @@ export class GameApp {
     }
   }
 
-  private animateZombie(zombie: Zombie, now: number, distanceToPlayer: number): void {
+  private async installBlenderZombie(zombie: Zombie): Promise<void> {
+    try {
+      const asset = await instantiateZombieAsset(zombie.type);
+      if (!this.zombies.includes(zombie) || zombie.mesh.parent !== this.scene) {
+        disposeThreeResources(asset.root);
+        return;
+      }
+      for (const child of [...zombie.mesh.children]) {
+        zombie.mesh.remove(child);
+        disposeThreeResources(child);
+      }
+      zombie.mesh.scale.set(1, 1, 1);
+      delete zombie.mesh.userData.arms;
+      delete zombie.mesh.userData.head;
+      zombie.mesh.add(asset.root);
+      zombie.mesh.userData.kind = "blender-zombie-wrapper";
+      zombie.mesh.userData.zombieType = zombie.type;
+      attachZombieAnimation(zombie.mesh, asset);
+      this.renderer.shadowMap.needsUpdate = !this.smokeMode;
+    } catch {
+      // The existing procedural zombie remains a deterministic load fallback.
+    }
+  }
+
+  private removeZombieVisual(zombie: Zombie): void {
+    this.scene.remove(zombie.mesh);
+    disposeZombieAssetAnimation(zombie.mesh);
+    disposeThreeResources(zombie.mesh);
+  }
+
+  private animateZombie(zombie: Zombie, now: number, distanceToPlayer: number, dt: number): void {
+    if (updateZombieAssetAnimation(zombie.mesh, {
+      dt,
+      type: zombie.type,
+      aiState: zombie.aiState,
+      staggered: zombie.staggerTimer > 0,
+      distanceToPlayer
+    })) {
+      return;
+    }
     const arms = zombie.mesh.userData.arms as THREE.Mesh[] | undefined;
     const head = zombie.mesh.userData.head as THREE.Mesh | undefined;
     const basePace = zombie.type === "sprinter" ? 10 : zombie.type === "bloater" ? 4.2 : zombie.type === "crawler" ? 5.4 : zombie.type === "screamer" ? 7.6 : 6.8;

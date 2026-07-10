@@ -13,6 +13,7 @@ import type {
   RelayToClientMessage,
   RelayWelcomeMessage
 } from "./types";
+import { loadSelectedAvatar, normalizeAvatarId } from "../characters";
 
 type MultiplayerHandlers = {
   welcome?: (message: RelayWelcomeMessage) => void;
@@ -51,7 +52,8 @@ export class LanMultiplayerClient {
         kind: "hello",
         role,
         roomId: this.config.roomId,
-        name: this.config.playerName
+        name: this.config.playerName,
+        avatarId: this.config.avatarId
       });
       this.handlers.status?.(`LAN ${role} connected to ${this.config.serverUrl}`);
       this.heartbeatId = window.setInterval(() => {
@@ -134,13 +136,15 @@ export function multiplayerConfigFromLocation(location: Location = window.locati
   const defaultServer = `${protocol}://${location.hostname || "127.0.0.1"}:5488`;
   const rawName = params.get("name")?.trim();
   const playerName = rawName || (role === "host" ? "Host" : `Player ${Math.floor(Math.random() * 900 + 100)}`);
+  const avatarId = normalizeAvatarId(params.get("avatar") ?? loadSelectedAvatar());
 
   return {
     enabled,
     role,
     serverUrl: params.get("server") || defaultServer,
     roomId: params.get("room") || "edinburgh-gardens",
-    playerName
+    playerName,
+    avatarId
   };
 }
 

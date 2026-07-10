@@ -110,6 +110,7 @@ function registerPeer(rooms, nextPeerId, socket, hello, remoteAddress, logger) {
     role,
     roomId,
     name: String(hello.name || id).slice(0, 32),
+    avatarId: String(hello.avatarId || "milo").slice(0, 32),
     socket,
     remoteAddress
   };
@@ -129,7 +130,7 @@ function registerPeer(rooms, nextPeerId, socket, hello, remoteAddress, logger) {
   if (role === "client") {
     const hostPeer = room.hostId ? room.peers.get(room.hostId) : null;
     if (hostPeer) {
-      send(hostPeer.socket, { kind: "peerJoined", playerId: id, name: peer.name });
+      send(hostPeer.socket, { kind: "peerJoined", playerId: id, name: peer.name, avatarId: peer.avatarId });
       send(socket, { kind: "status", message: `Joined LAN room "${roomId}".` });
     } else {
       send(socket, { kind: "status", message: `Waiting for a host in LAN room "${roomId}".` });
@@ -138,7 +139,7 @@ function registerPeer(rooms, nextPeerId, socket, hello, remoteAddress, logger) {
     send(socket, { kind: "status", message: `Hosting LAN room "${roomId}".` });
     for (const candidate of room.peers.values()) {
       if (candidate.role === "client") {
-        send(socket, { kind: "peerJoined", playerId: candidate.id, name: candidate.name });
+        send(socket, { kind: "peerJoined", playerId: candidate.id, name: candidate.name, avatarId: candidate.avatarId });
         send(candidate.socket, { kind: "status", message: `Host joined LAN room "${roomId}".` });
       }
     }

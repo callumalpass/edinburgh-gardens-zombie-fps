@@ -3,6 +3,8 @@ import type { AmenityKind } from "../types";
 import type { WorldItemId } from "../items";
 import type { WeaponId } from "../weapons";
 import type { UpgradeId } from "../weapons";
+import { AVATAR_IDS, type AvatarId } from "../characters";
+import type { ZombieType } from "../waves";
 
 export interface GameToolCommandParameter {
   name: string;
@@ -58,6 +60,7 @@ const AMENITY_KINDS = [
 ] as const satisfies readonly AmenityKind[];
 const ITEM_IDS = ["tyre-kit", "bolt-cutters", "noise-bottle", "noise-radio", "ladder", "skateboard"] as const satisfies readonly WorldItemId[];
 const UPGRADE_IDS = ["damage", "fireRate", "magazine", "reload", "spread"] as const satisfies readonly UpgradeId[];
+const ZOMBIE_TYPES = ["shambler", "sprinter", "bloater", "crawler", "screamer"] as const satisfies readonly ZombieType[];
 
 const COMMAND_DEFINITIONS: readonly GameToolCommandDefinition[] = [
   { name: "snapshot", description: "Read the current game state snapshot." },
@@ -71,7 +74,14 @@ const COMMAND_DEFINITIONS: readonly GameToolCommandDefinition[] = [
       { name: "pitch", description: "Optional pitch in radians." }
     ]
   },
-  { name: "spawn", description: "Force-spawn one or more zombies.", parameters: [{ name: "count", description: "Spawn count. Defaults to 1." }] },
+  {
+    name: "spawn",
+    description: "Force-spawn one or more zombies.",
+    parameters: [
+      { name: "count", description: "Spawn count. Defaults to 1." },
+      { name: "type", description: "Optional fixed zombie archetype.", values: ZOMBIE_TYPES }
+    ]
+  },
   { name: "shoot", description: "Fire the equipped weapon once." },
   {
     name: "weapon",
@@ -124,8 +134,17 @@ const COMMAND_DEFINITIONS: readonly GameToolCommandDefinition[] = [
     description: "Claim a free field modification during intermission.",
     parameters: [{ name: "upgradeId", description: "Optional upgrade id.", values: UPGRADE_IDS }]
   },
-  { name: "teammate", description: "Add a synthetic co-op teammate to the HUD.", parameters: [{ name: "name", description: "Optional survivor name." }] },
+  {
+    name: "teammate",
+    description: "Add a synthetic co-op teammate with an optional avatar.",
+    parameters: [
+      { name: "name", description: "Optional survivor name." },
+      { name: "avatarId", description: "Optional avatar id.", values: AVATAR_IDS }
+    ]
+  },
+  { name: "avatars", description: "Inspect loaded teammate avatar assets, animation state and weapon sockets." },
   { name: "zombies", description: "List zombie AI state summaries.", aliases: ["zombie-states"] },
+  { name: "zombie-assets", description: "Inspect loaded Blender zombie assets and animation state." },
   { name: "facing", description: "List zombie facing-alignment summaries.", aliases: ["zombie-facing"] },
   { name: "grounding", description: "Measure player and zombie ground alignment." },
   { name: "minimap", description: "Run the minimap visibility probe." },
@@ -188,8 +207,9 @@ async function runGameToolCommand(api: GameTestApi, commandName: string, args?: 
       });
     case "spawn": {
       const count = Math.max(1, Math.min(250, Math.floor(optionalNumberArg(args, "count", 0) ?? 1)));
+      const type = optionalStringArg(args, "type", 1) as ZombieType | undefined;
       for (let index = 0; index < count; index += 1) {
-        api.testSpawn();
+        api.testSpawn(type);
       }
       return withSnapshot(api, { spawned: count });
     }
@@ -233,9 +253,13 @@ async function runGameToolCommand(api: GameTestApi, commandName: string, args?: 
     case "intermission-upgrade":
       return withSnapshot(api, { ok: api.testChooseIntermissionUpgrade(optionalStringArg(args, "upgradeId", 0) as UpgradeId | undefined) });
     case "teammate":
-      return withSnapshot(api, { ok: api.testAddTeammate(optionalStringArg(args, "name", 0)) });
+      return withSnapshot(api, { ok: api.testAddTeammate(optionalStringArg(args, "name", 0), optionalStringArg(args, "avatarId", 1) as AvatarId | undefined) });
+    case "avatars":
+      return api.testAvatarStates();
     case "zombies":
       return api.testZombieStates();
+    case "zombie-assets":
+      return api.testZombieAssetStates();
     case "facing":
       return api.testZombieFacing();
     case "grounding":

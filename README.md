@@ -91,6 +91,8 @@ The CLI defaults to `http://127.0.0.1:5480/?smoke=1`, starts Vite automatically 
 
 ## Current Mechanics
 
+- Four persistent selectable Blender survivors with distinct portraits, first-person colours, LAN-synchronised identity, rigged third-person animation and socketed weapons.
+- Five rigged Blender zombie archetypes with distinct combat silhouettes, AI-driven locomotion and one-shot attack reactions, procedural loading fallbacks, and distance-throttled animation.
 - Larger playable scale using the full OSM park boundary at a 1.28x expanded map scale.
 - Vicmap-derived elevation samples shape a terrain grid, so the lawns, paths and fixtures follow broad real-world rise/fall instead of a flat plane.
 - Faster park traversal tuned for the larger playable gardens: brisk walk plus sprint without returning to the old arcade-scale speed.

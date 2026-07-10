@@ -1,8 +1,9 @@
 import * as THREE from "three";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { START_HEALTH, START_POSITION, START_SCRAP } from "../src/game/gameConfig";
 import { RemotePlayerRoster, type RemotePlayerMeshFactory } from "../src/game/multiplayer/RemotePlayerRoster";
 import { addWeapon, switchWeapon, type WeaponId } from "../src/game/weapons";
+import type { AvatarId } from "../src/game/characters";
 
 class FakeMeshFactory implements RemotePlayerMeshFactory {
   readonly weapons: WeaponId[] = [];
@@ -16,14 +17,17 @@ class FakeMeshFactory implements RemotePlayerMeshFactory {
   }
 }
 
-function createRoster() {
+function createRoster(
+  loadCharacterAsset?: (avatarId: AvatarId) => Promise<{ root: THREE.Group; animations: THREE.AnimationClip[] }>,
+) {
   const scene = new THREE.Scene();
   const meshFactory = new FakeMeshFactory();
   const roster = new RemotePlayerRoster({
     scene,
     meshFactory,
     groundY: (point) => point.x * 0.1 + point.z * 0.01,
-    now: () => 123
+    now: () => 123,
+    loadCharacterAsset
   });
   return { scene, meshFactory, roster };
 }
@@ -105,4 +109,59 @@ describe("RemotePlayerRoster", () => {
     expect(scene.children).not.toContain(second.mesh);
     expect(roster.size).toBe(0);
   });
+
+  it("installs Blender avatars, sockets weapons and transitions animation state", async () => {
+    const loadCharacterAsset = vi.fn(async () => {
+      const root = new THREE.Group();
+      root.userData.kind = "blender-player-avatar";
+      const socket = new THREE.Group();
+      socket.name = "WeaponSocket";
+      root.add(socket);
+      return {
+        root,
+        animations: ["Idle", "Walk", "Run", "Crouch", "CrouchWalk", "Aim", "Melee", "Reload", "Jump", "Downed"]
+          .map((name) => new THREE.AnimationClip(name, 0.5, []))
+      };
+    });
+    const { roster } = createRoster(loadCharacterAsset);
+    const player = roster.add("peer-1", "Milo", "milo");
+    await vi.waitFor(() => expect(player.avatarVisual).not.toBeNull());
+
+    expect(loadCharacterAsset).toHaveBeenCalledWith("milo");
+    expect(player.mesh.getObjectByName("remote-weapon")?.parent?.name).toBe("WeaponSocket");
+    expect(player.activeAnimation).toBe("Idle");
+
+    player.velocity.set(1, 0, 0);
+    roster.updateAnimations(0.1);
+    expect(player.activeAnimation).toBe("Walk");
+    player.isSprinting = true;
+    roster.updateAnimations(0.1);
+    expect(player.activeAnimation).toBe("Run");
+    player.crouchAmount = 1;
+    roster.updateAnimations(0.1);
+    expect(player.activeAnimation).toBe("CrouchWalk");
+    roster.triggerAnimation(player, "Melee");
+    expect(player.activeAnimation).toBe("Melee");
+    expect(player.animationOverride?.name).toBe("Melee");
+  });
+
+  it("reloads only the visual when a teammate changes avatar", async () => {
+    const loadCharacterAsset = vi.fn(async (avatarId) => {
+      const root = new THREE.Group();
+      root.userData.avatarId = avatarId;
+      root.add(Object.assign(new THREE.Group(), { name: "WeaponSocket" }));
+      return { root, animations: [new THREE.AnimationClip("Idle", 1, [])] };
+    });
+    const { roster } = createRoster(loadCharacterAsset);
+    const player = roster.add("peer-1", "One", "milo");
+    const mesh = player.mesh;
+    await vi.waitFor(() => expect(player.avatarVisual).not.toBeNull());
+
+    roster.setAvatar(player, "maeve");
+    await vi.waitFor(() => expect(player.avatarVisual?.userData.avatarId).toBe("maeve"));
+    expect(player.mesh).toBe(mesh);
+    expect(player.avatarId).toBe("maeve");
+    expect(loadCharacterAsset).toHaveBeenLastCalledWith("maeve");
+  });
+
 });

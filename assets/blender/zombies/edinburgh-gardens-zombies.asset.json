@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "assetId": "edinburgh-gardens-zombie-roster",
+  "label": "Edinburgh Gardens zombie archetypes",
+  "blenderVersion": "4.5.11 LTS",
+  "blend": "assets/blender/zombies/edinburgh-gardens-zombies.blend",
+  "generator": "scripts/blender/build_zombie_characters.py",
+  "designBasis": "Original low-poly infected archetypes translating existing game silhouettes and behaviours; no external likenesses or scanned assets.",
+  "animationContract": {
+    "bipedClips": [
+      "Idle",
+      "Move",
+      "Chase",
+      "Attack",
+      "Stagger",
+      "Scream"
+    ],
+    "crawlerClips": [
+      "Idle",
+      "Move",
+      "Chase",
+      "Attack",
+      "Stagger"
+    ]
+  },
+  "runtimeContract": {
+    "rootMotion": false,
+    "gameplayHitZonesRemainAuthoritative": true,
+    "contactShadowsRemainInstanced": true,
+    "animationDistanceThrottling": true
+  },
+  "zombies": [
+    {
+      "type": "shambler",
+      "glb": "public/models/zombies/shambler.glb",
+      "triangleCount": 3068,
+      "meshObjectCount": 1,
+      "armatureCount": 1,
+      "rigFamily": "biped"
+    },
+    {
+      "type": "sprinter",
+      "glb": "public/models/zombies/sprinter.glb",
+      "triangleCount": 2792,
+      "meshObjectCount": 1,
+      "armatureCount": 1,
+      "rigFamily": "biped"
+    },
+    {
+      "type": "bloater",
+      "glb": "public/models/zombies/bloater.glb",
+      "triangleCount": 2948,
+      "meshObjectCount": 1,
+      "armatureCount": 1,
+      "rigFamily": "biped"
+    },
+    {
+      "type": "screamer",
+      "glb": "public/models/zombies/screamer.glb",
+      "triangleCount": 2720,
+      "meshObjectCount": 1,
+      "armatureCount": 1,
+      "rigFamily": "biped"
+    },
+    {
+      "type": "crawler",
+      "glb": "public/models/zombies/crawler.glb",
+      "triangleCount": 2056,
+      "meshObjectCount": 1,
+      "armatureCount": 1,
+      "rigFamily": "crawler"
+    }
+  ]
+}
