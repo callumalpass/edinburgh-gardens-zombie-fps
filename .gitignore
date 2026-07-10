@@ -5,9 +5,15 @@ test-results/
 playwright-report/
 coverage/
 .vite/
+/tmp/
+/tmp-*.txt
 docs/research/raw/
 docs/research/renders/
 .codex-improve-logs/
+
+**/__pycache__/
+*.py[cod]
+*.blend1
 
 *.log
 .DS_Store
