@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "assetId": "edinburgh-gardens-fitzroy-victoria-bowling-club",
+  "label": "Fitzroy Victoria Bowling & Sports Club",
+  "units": "game-world metres",
+  "origin": "OSM way 543505639 fitted-footprint centroid at foundation level",
+  "front": "-Y in Blender; +Z in Three.js after glTF conversion",
+  "blenderVersion": "4.5.10 LTS",
+  "sourceFiles": {
+    "blend": "assets/blender/bowling-club/edinburgh-gardens-bowling-club.blend",
+    "glb": "public/models/edinburgh-gardens/edinburgh-gardens-bowling-club.glb",
+    "generator": "scripts/blender/build_bowling_club.py"
+  },
+  "primaryEvidence": [
+    "https://the3068group.org/wp-content/uploads/2025/11/2021-conservation-management-plan-_merged.pdf",
+    "https://www.openstreetmap.org/way/543505639",
+    "https://www.yarracity.vic.gov.au/things-to-do/arts/gallery/public-art/fitzroy-bowls-150-years-memorial-wall",
+    "https://www.yarracity.vic.gov.au/sites/default/files/2025-04/yarranews_aprmay25_fa_web_nicholls_ward.pdf",
+    "https://www.flickr.com/photos/colourourcity/55297636202/",
+    "https://www.flickr.com/photos/colourourcity/55298958435/",
+    "https://www.flickr.com/photos/colourourcity/55298958440/"
+  ],
+  "translatedCondition": "2026 physical baseline after the appearance-retaining 2025 zincalume roof and gutter upgrade, including the Melanie Caple St Georges Road mural photographed on 28 May 2026",
+  "dimensionsMetres": {
+    "mappedLength": 80.24,
+    "mappedDepth": 30.96,
+    "lowerRoofHeight": 3.19,
+    "upperRoofHeight": 4.87
+  },
+  "navigationContract": {
+    "greenFacingInteraction": "bowling-clubroom-access remains outside the glazed frontage",
+    "approach": "Hannah memorial gate remains the collision-tested public approach",
+    "interior": "not represented; public sources do not establish a current surveyed interior plan"
+  },
+  "uncertainty": [
+    "OSM controls the irregular horizontal shell; no public architectural survey fixes wall, window or upper-storey member dimensions.",
+    "CMP Figures 70-73 and current aerial imagery control massing and visible elevations but do not resolve every rear service opening.",
+    "Three geotagged 28 May 2026 photographs control the current mural's subject layout and palette; the low-relief mural is a painterly translation, not a texture copy or measured artwork survey.",
+    "The 2025 council notice says roof work would not affect appearance; small roof plant and exact reinstated solar-panel offsets are not publicly surveyed."
+  ],
+  "statistics": {
+    "objectCount": 357,
+    "meshObjectCount": 356,
+    "materialCount": 23,
+    "triangleCount": 22156
+  }
+}

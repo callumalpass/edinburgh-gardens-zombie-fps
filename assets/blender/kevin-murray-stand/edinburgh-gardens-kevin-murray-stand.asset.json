@@ -1,0 +1,44 @@
+{
+  "assetId": "edinburgh-gardens-kevin-murray-stand",
+  "label": "Kevin Murray Stand",
+  "conditionDate": "2026-07-10",
+  "blenderVersion": "4.5.10 LTS",
+  "sourceFiles": {
+    "blend": "assets/blender/kevin-murray-stand/edinburgh-gardens-kevin-murray-stand.blend",
+    "glb": "public/models/edinburgh-gardens/edinburgh-gardens-kevin-murray-stand.glb",
+    "generator": "scripts/blender/build_kevin_murray_stand.py"
+  },
+  "primaryEvidence": [
+    "https://the3068group.org/wp-content/uploads/2025/11/2021-conservation-management-plan-_merged.pdf",
+    "https://www.openstreetmap.org/way/403753786",
+    "https://vhd-dr.heritage.vic.gov.au/places/447/download-report",
+    "https://www.yarracity.vic.gov.au/planning-and-building/our-projects-and-initiatives/brunswick-street-oval",
+    "https://yoursayyarra.com.au/brunswickstoval",
+    "https://www.fitzroyfc.com.au/latest-news/kevin-s-come-home"
+  ],
+  "translatedCondition": "Retained 1888 exterior and established pre-works stair/gallery fabric at 10 July 2026; planned 2026-27 stair/gate replacements are not represented as completed",
+  "dimensionsMetres": {
+    "mappedLength": 47.80175537030087,
+    "mappedDepth": 13.008765243305158,
+    "ridgeHeight": 7.55
+  },
+  "navigationContract": {
+    "ovalApproach": "east oval-facing stair aligns with grandstand-seats access and landing positions",
+    "gallery": "open upper seating gallery remains visibly legible and traversable through the existing fixture toggle",
+    "serviceFrontage": "ground-storey changeroom and umpire interactions remain outside the oval elevation",
+    "interior": "no free-roam enclosed interior is represented because no current public measured plan establishes one"
+  },
+  "uncertainty": [
+    "OSM fixes the horizontal footprint, but no public measured architectural survey fixes every bay, column or stair dimension.",
+    "The CMP photographs control all four visible elevations and material hierarchy; obscured service-door and rear-panel offsets are proportional translations.",
+    "Council dates grandstand works only to 2026-27, so replacement-stair and secure-gate completion cannot be assigned to 10 July 2026.",
+    "The Community Hall is an adjoining separate volume and is not absorbed into this heritage-grandstand asset.",
+    "The Kevin Murray sign is erected for Fitzroy home games, so it is not baked into the ordinary-day physical baseline."
+  ],
+  "statistics": {
+    "objectCount": 588,
+    "meshObjectCount": 587,
+    "materialCount": 11,
+    "triangleCount": 21791
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "assetId": "edinburgh-gardens-emely-baker-centre",
+  "label": "Emely Baker Centre",
+  "conditionDate": "2026-07-10",
+  "blenderVersion": "4.5.10 LTS",
+  "sourceFiles": {
+    "blend": "assets/blender/emely-baker-centre/edinburgh-gardens-emely-baker-centre.blend",
+    "glb": "public/models/edinburgh-gardens/edinburgh-gardens-emely-baker-centre.glb",
+    "generator": "scripts/blender/build_emely_baker_centre.py"
+  },
+  "primaryEvidence": [
+    "https://the3068group.org/wp-content/uploads/2025/11/2021-conservation-management-plan-_merged.pdf",
+    "https://www.openstreetmap.org/way/543505702",
+    "https://www.yarracity.vic.gov.au/things-to-do/find-a-venue/emely-baker-centre",
+    "https://www.yarracity.vic.gov.au/sites/default/files/2024-11/Emely%20Baker%20Venue%20Manual.pdf"
+  ],
+  "translatedCondition": "Active access-friendly community venue at 10 July 2026, with current gated play yard, dark shade sail and documented external doors",
+  "dimensionsGameUnits": {
+    "mappedLength": 29.048176235886487,
+    "mappedDepth": 20.03833514626707,
+    "rearRoofHeight": 3.6
+  },
+  "sourceFootprintMetres": {
+    "mappedLength": 22.693887684286317,
+    "mappedDepth": 15.654949333021149
+  },
+  "navigationContract": {
+    "yardGate": "1.72 m clear opening in the photographed western return, with the vertical-bar leaf visibly held open",
+    "accessibleApron": "continuous hard-paved route from the gate to the current play-yard doors",
+    "communityRoom": "interaction remains at the external glazed community-room frontage rather than inventing free-roam interior access",
+    "shadeShelter": "dark triangular sail is visibly supported over the gated outdoor play area"
+  },
+  "uncertainty": [
+    "OSM fixes the T-shaped horizontal shell but no public measured elevation survey fixes every mullion, seam or eave dimension.",
+    "The venue-manual floor plan is low resolution; rear-room window offsets are proportional translations of documented exterior openings.",
+    "The CMP identifies a sandpit and hard paving, but current public photographs do not fix the sandpit boundary, so no precise sandpit is invented.",
+    "The visible gate, doors and shade sail are current documented elements; their fine hardware and anchor dimensions are estimated from photographs.",
+    "No free-roam interior is authored because the public plan and photographs do not constitute a measured, current architectural survey."
+  ],
+  "statistics": {
+    "objectCount": 180,
+    "meshObjectCount": 179,
+    "materialCount": 23,
+    "triangleCount": 14625
+  }
+}

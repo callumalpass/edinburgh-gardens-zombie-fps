@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "assetId": "edinburgh-gardens-memorial-rotunda",
+  "label": "Edinburgh Gardens Memorial Rotunda",
+  "units": "metres",
+  "origin": "centre of concrete apron at ground level",
+  "front": "+Y in Blender; -Z in Three.js after glTF conversion",
+  "blenderVersion": "4.5.10 LTS",
+  "sourceFiles": {
+    "blend": "assets/blender/rotunda/edinburgh-gardens-rotunda.blend",
+    "glb": "public/models/edinburgh-gardens/edinburgh-gardens-rotunda.glb",
+    "generator": "scripts/blender/build_rotunda.py"
+  },
+  "primaryEvidence": [
+    "https://the3068group.org/wp-content/uploads/2025/11/2021-conservation-management-plan-_merged.pdf",
+    "https://www.yarracity.vic.gov.au/things-to-do/find-a-venue/edinburgh-gardens-rotunda",
+    "OpenStreetMap way 543505640 from the repository raw research cache"
+  ],
+  "translatedCondition": "2026 physical baseline; only the separate game countdown clock indicates 2030",
+  "dimensionsMetres": {
+    "apronDiameter": 13.5,
+    "drumDiameter": 9.1,
+    "deckHeight": 1.92,
+    "overallHeight": 9.76
+  },
+  "navigationContract": {
+    "stairCount": 7,
+    "stairAccessDistanceFromCentre": 7.55,
+    "landingDistanceFromCentre": 4.3,
+    "walkableDeckRadius": 4.56,
+    "wheelchairAccessible": false
+  },
+  "uncertainty": [
+    "OSM controls centre, footprint and orientation; no public architectural survey supplies exact component dimensions.",
+    "CMP 2021 confirms modern entablature floodlights but does not resolve exact count or angular positions; the asset uses two subdued opposing schematic fixtures.",
+    "Colours are a painterly interpretation of current-condition photographs and are not paint-chip measurements."
+  ],
+  "statistics": {
+    "objectCount": 137,
+    "meshObjectCount": 124,
+    "materialCount": 13,
+    "triangleCount": 16428
+  }
+}

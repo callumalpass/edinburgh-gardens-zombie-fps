@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "assetId": "edinburgh-gardens-timber-entrance-pavilion",
+  "label": "Reconstructed timber entrance pavilion",
+  "units": "game-world metres",
+  "origin": "OSM footprint centre at threshold level",
+  "front": "-Y in Blender; +Z in Three.js after glTF conversion",
+  "blenderVersion": "4.5.10 LTS",
+  "sourceFiles": {
+    "blend": "assets/blender/entrance-pavilion/edinburgh-gardens-entrance-pavilion.blend",
+    "glb": "public/models/edinburgh-gardens/edinburgh-gardens-entrance-pavilion.glb",
+    "generator": "scripts/blender/build_entrance_pavilion.py"
+  },
+  "primaryEvidence": [
+    "https://the3068group.org/wp-content/uploads/2025/11/2021-conservation-management-plan-_merged.pdf",
+    "https://www.openstreetmap.org/way/543505638"
+  ],
+  "translatedCondition": "2026 physical baseline; reconstructed 1996 timber pavilion in its current 1980s location",
+  "dimensionsMetres": {
+    "mappedLength": 23.22,
+    "mappedDepth": 4.27,
+    "ridgeHeight": 3.9
+  },
+  "navigationContract": {
+    "openPassageCentersX": [
+      -3.71,
+      3.71
+    ],
+    "clearPassageWidth": 6.55,
+    "clearPassageHeight": 2.12,
+    "gateLeaves": "modelled stowed clear of the passages"
+  },
+  "uncertainty": [
+    "OSM controls footprint dimensions and orientation; no public architectural survey fixes member sizes.",
+    "Figure 61 and the CMP description control appearance, but small hardware and the precise reconstructed cresting pattern are not photographically resolved.",
+    "Painterly colours are not paint-chip measurements."
+  ],
+  "statistics": {
+    "objectCount": 306,
+    "meshObjectCount": 264,
+    "materialCount": 9,
+    "triangleCount": 8122
+  }
+}

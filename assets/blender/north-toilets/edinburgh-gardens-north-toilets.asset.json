@@ -1,0 +1,47 @@
+{
+  "assetId": "edinburgh-gardens-north-toilets",
+  "label": "Edinburgh Gardens north public toilets",
+  "conditionDate": "2026-07-10",
+  "blenderVersion": "4.5.10 LTS",
+  "sourceFiles": {
+    "blend": "assets/blender/north-toilets/edinburgh-gardens-north-toilets.blend",
+    "glb": "public/models/edinburgh-gardens/edinburgh-gardens-north-toilets.glb",
+    "generator": "scripts/blender/build_north_toilets.py"
+  },
+  "primaryEvidence": [
+    "https://www.openstreetmap.org/way/307404819",
+    "https://yoursayyarra.com.au/newtoilets",
+    "https://www.yarracity.vic.gov.au/sites/default/files/2024-04/annual_report_2021_to_2022_accessible_version.pdf",
+    "https://the3068group.org/wp-content/uploads/2025/11/2021-conservation-management-plan-_merged.pdf",
+    "https://base.maps.vic.gov.au/service"
+  ],
+  "translatedCondition": "Completed and open 2026 north toilet module in its photographed charcoal as-built finish, not the red proposal finish",
+  "dimensionsGameUnits": {
+    "mappedLength": 14.062516258664825,
+    "mappedDepth": 9.571372656045673,
+    "frontRoofHeight": 3.91
+  },
+  "sourceFootprintMetres": {
+    "mappedLength": 10.986340827081895,
+    "mappedDepth": 7.477634887535682
+  },
+  "navigationContract": {
+    "southWestDoorBank": "seven plan-derived external stall/DDA doors remain visually distinct and approachable outside the solid OSM collision shell",
+    "northEastDoorBank": "six plan-derived external stall/ambulant/urinal doors remain visually distinct and approachable",
+    "accessibleRamp": "continuous 1.55-unit-wide concrete ramp and paired rails remain outside collision",
+    "basinApron": "two photographed exterior stainless basins remain unobstructed on the south-east public apron"
+  },
+  "uncertainty": [
+    "OSM fixes the current horizontal shell, but no public as-built elevation survey fixes every post, screen joint or roof height.",
+    "The dimensioned council plan controls room/door count and functional arrangement; its red proposal render does not control current colour because the council as-built photograph shows charcoal cladding.",
+    "The plan is translated proportionally into the slightly different current OSM roof/footprint proportions rather than presented as surveyed game geometry.",
+    "Perforation pitch, corrugation pitch, door hardware and roof-strip rhythm are proportional readings of the as-built photograph.",
+    "No free-roam interior is authored because the public plan and single as-built exterior photograph are insufficient for a complete current interior survey."
+  ],
+  "statistics": {
+    "objectCount": 533,
+    "meshObjectCount": 532,
+    "materialCount": 13,
+    "triangleCount": 16984
+  }
+}

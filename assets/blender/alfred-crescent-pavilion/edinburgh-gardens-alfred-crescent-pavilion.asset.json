@@ -1,0 +1,49 @@
+{
+  "assetId": "edinburgh-gardens-alfred-crescent-pavilion",
+  "label": "Alfred Crescent Sports Pavilion",
+  "conditionDate": "2026-07-10",
+  "blenderVersion": "4.5.10 LTS",
+  "sourceFiles": {
+    "blend": "assets/blender/alfred-crescent-pavilion/edinburgh-gardens-alfred-crescent-pavilion.blend",
+    "glb": "public/models/edinburgh-gardens/edinburgh-gardens-alfred-crescent-pavilion.glb",
+    "generator": "scripts/blender/build_alfred_crescent_pavilion.py"
+  },
+  "primaryEvidence": [
+    "https://www.openstreetmap.org/way/242003562",
+    "https://the3068group.org/wp-content/uploads/2025/11/2021-conservation-management-plan-_merged.pdf",
+    "https://www.yarracity.vic.gov.au/sites/default/files/2024-06/buildings_asset_management_plan_revision_2017.pdf",
+    "https://yoursayyarra.com.au/newtoilets",
+    "https://www.yarracity.vic.gov.au/sites/default/files/2024-04/annual_report_2021_to_2022_accessible_version.pdf",
+    "https://archipro.com.au/project/edinburgh-gardens-cricket-pavilion-clarkehopkinsclarke"
+  ],
+  "translatedCondition": "Current 2026 pavilion envelope with the completed 2021 public-toilet expansion, while retaining the original 2010 architectural language",
+  "dimensionsGameUnits": {
+    "mappedLength": 45.05949968498282,
+    "mappedDepth": 21.230271351272727,
+    "southRoofHeight": 5.3
+  },
+  "sourceFootprintMetres": {
+    "mappedLength": 35.20273412889283,
+    "mappedDepth": 16.586149493181818
+  },
+  "navigationContract": {
+    "westPublicApproach": "continuous accessible concrete apron beneath the documented deep canopy",
+    "mainEntrance": "paired glazed west doors remain visible and unobstructed at player height",
+    "kiosk": "oval-facing roller shutter remains externally approachable as a gameplay search point",
+    "toiletForecourt": "open screened hand-basin forecourt and seven plan-derived exterior stall doors remain legible",
+    "southAccessibleToilets": "two existing south-end accessible doors from the council plan remain externally approachable"
+  },
+  "uncertainty": [
+    "OSM version 5 fixes the current horizontal shell, but no public as-built elevation survey fixes every return or overall roof height.",
+    "The architect photographs predate the public-toilet expansion; later council plan/render and 2026 OSM geometry supersede them at the north-west end.",
+    "The council toilet image is a proposal render and the plan is schematic; the annual report proves completion but does not prove every proposed finish was installed unchanged.",
+    "Clerestory mullion, corrugation, masonry-joint and canopy-post rhythms are proportional translations of photographs rather than measured construction drawings.",
+    "No free-roam interior is authored because the photographs and schematic toilet plan are insufficient for a complete current interior survey."
+  ],
+  "statistics": {
+    "objectCount": 231,
+    "meshObjectCount": 230,
+    "materialCount": 26,
+    "triangleCount": 11536
+  }
+}
