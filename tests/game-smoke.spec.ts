@@ -85,7 +85,9 @@ test("game loop advances and gameplay helpers mutate state", async ({ page }) =>
   expect(first.renderedTrees).toBeGreaterThanOrEqual(350);
   expect(first.renderedGrassClumps).toBeGreaterThanOrEqual(1200);
   expect(first.renderedWetPathSheens).toBeGreaterThanOrEqual(40);
-  expect(first.renderedLampSpills).toBeGreaterThanOrEqual(12);
+  // The 2026 physical audit removed the unsurveyed historic/reproduction
+  // lamps; zero is an intentional evidence constraint, not a render failure.
+  expect(first.renderedLampSpills).toBe(0);
   expect(first.renderedMistBanks).toBeGreaterThanOrEqual(30);
   expect(first.renderedRainDrops).toBeGreaterThanOrEqual(300);
   expect(first.renderedWeatherAnchors).toBeGreaterThanOrEqual(40);
@@ -200,13 +202,13 @@ test("game loop advances and gameplay helpers mutate state", async ({ page }) =>
   expect(afterInteract.elevation).toBeLessThan(2.5);
   expect(afterInteract.sheltered).toBe(true);
   expect(afterInteract.shelterProtection).toBeGreaterThan(0.5);
-  await page.evaluate(() => window.__EGAME__!.testInteract("south-toilets-roof"));
+  await page.evaluate(() => window.__EGAME__!.testInteract("alfred-pavilion-roof"));
   await page.waitForFunction(() => window.__EGAME__!.snapshot().elevation > 0.5);
   const afterRoof = await page.evaluate(() => window.__EGAME__!.snapshot());
   expect(afterRoof.elevation).toBeGreaterThan(0.5);
   expect(afterRoof.sheltered).toBe(false);
   expect(afterRoof.placedLadders).toBe(1);
-  expect(await page.evaluate(() => window.__EGAME__!.testInteract("south-toilets-roof"))).toBe(true);
+  expect(await page.evaluate(() => window.__EGAME__!.testInteract("alfred-pavilion-roof"))).toBe(true);
   expect(await page.evaluate(() => window.__EGAME__!.testPickupPlacedLadder())).toBe(true);
   const afterLadderPickup = await page.evaluate(() => window.__EGAME__!.snapshot());
   expect(afterLadderPickup.placedLadders).toBe(0);

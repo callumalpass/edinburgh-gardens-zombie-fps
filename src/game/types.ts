@@ -322,7 +322,7 @@ export type InteractableRaisedFootprint =
 export interface InteractableFixture {
   id: string;
   label: string;
-  kind: "rotunda" | "grandstand" | "playground" | "skate" | "basketball" | "toilets" | "tennis" | "cricket-nets";
+  kind: "rotunda" | "grandstand" | "playground" | "skate" | "basketball" | "toilets" | "tennis" | "cricket-nets" | "gate";
   position: Vec2;
   accessPosition?: Vec2;
   landingPosition?: Vec2;

@@ -1,5 +1,13 @@
 import { boundingRadius, distance, polygonCentroid } from "../geo";
-import type { GroundSurfacePolygon, LevelData, LevelPath, PathSurfacePatch, Vec2 } from "../types";
+import type {
+  GroundSurfacePolygon,
+  LevelData,
+  LevelPath,
+  PathSurfacePatch,
+  SkateBowlFeature,
+  StructureShelter,
+  Vec2
+} from "../types";
 import { WEAPON_DEFINITIONS, type WeaponId } from "../weapons";
 import type { ZombieType } from "../waves";
 import type { WorldItemId } from "../items";
@@ -8,6 +16,7 @@ import type { PickupKind } from "./MeshFactory";
 export type ObjectPreviewTargetKind =
   | "landmark"
   | "mapped-building"
+  | "structure-shelter"
   | "mapped-fence"
   | "hardscape-line"
   | "path"
@@ -15,6 +24,7 @@ export type ObjectPreviewTargetKind =
   | "ground-surface-polygon"
   | "street-edge"
   | "sports-fixture"
+  | "skate-bowl"
   | "amenity"
   | "park-life-detail"
   | "rideable-bike"
@@ -35,6 +45,11 @@ export interface ObjectPreviewTarget {
   position: Vec2;
   radius: number;
   height: number;
+  viewAngle?: number;
+  viewAngleOffsets?: readonly number[];
+  elevatedViews?: readonly boolean[];
+  detailViewPosition?: Vec2;
+  detailViewRadius?: number;
   weaponId?: WeaponId;
   itemId?: WorldItemId;
   pickupKind?: PickupKind;
@@ -59,20 +74,42 @@ export function createObjectPreviewTargets(level: LevelData): ObjectPreviewTarge
       kind: "landmark",
       label: landmark.label,
       position,
-      radius: landmark.polygon ? boundingRadius(landmark.polygon, position) : landmark.radius ?? landmarkRadius(landmark.kind),
-      height: landmarkHeight(landmark.kind)
+      radius:
+        landmark.kind === "memorial"
+          ? Math.max(6.4, landmark.radius ?? 0)
+          : landmark.polygon
+            ? boundingRadius(landmark.polygon, position)
+            : landmark.radius ?? landmarkRadius(landmark.kind),
+      height: landmarkHeight(landmark.kind),
+      viewAngle: landmarkViewAngle(landmark, level)
     });
   }
 
   for (const building of level.mappedBuildings) {
     const position = polygonCentroid(building.polygon);
+    const isRotunda = building.detailProfile === "rotunda-pavilion";
+    const isBowlingClub = building.detailProfile === "bowling-club";
     add({
       sourceId: building.id,
       kind: "mapped-building",
       label: building.label,
       position,
-      radius: boundingRadius(building.polygon, position) + 1.4,
-      height: Math.max(2.2, building.height + 1.2)
+      radius: isRotunda ? 8.2 : boundingRadius(building.polygon, position) + 1.4,
+      height: isRotunda ? 9.8 : isBowlingClub ? 6.1 : Math.max(2.2, building.height + 1.2),
+      viewAngle: buildingFrontViewAngle(building),
+      viewAngleOffsets: isRotunda ? [0, Math.PI / 4, Math.PI, -Math.PI / 4] : undefined,
+      elevatedViews: isRotunda ? [false, true, false, true] : isBowlingClub ? [false, false, false, false] : undefined
+    });
+  }
+
+  for (const shelter of level.structureShelters) {
+    add({
+      sourceId: shelter.id,
+      kind: "structure-shelter",
+      label: shelter.label,
+      position: shelter.footprint.center,
+      radius: structureShelterRadius(shelter),
+      height: structureShelterHeight(shelter, level)
     });
   }
 
@@ -98,7 +135,12 @@ export function createObjectPreviewTargets(level: LevelData): ObjectPreviewTarge
       label: line.label,
       position,
       radius: polylineRadius(line.points, position) + 1.8,
-      height: Math.max(1.5, line.height + 0.8)
+      height: Math.max(1.5, line.height + 0.8),
+      viewAngle: polylineNormalViewAngle(line.points),
+      viewAngleOffsets: [0, Math.PI / 6, Math.PI, -Math.PI / 6],
+      elevatedViews: [true, false, true, false],
+      detailViewPosition: longestSegmentMidpoint(line.points),
+      detailViewRadius: 6
     });
   }
 
@@ -111,7 +153,12 @@ export function createObjectPreviewTargets(level: LevelData): ObjectPreviewTarge
       label: path.label,
       position,
       radius: polylineRadius(path.points, position) + path.width,
-      height: 1.2
+      height: 1.2,
+      viewAngle: polylineNormalViewAngle(path.points),
+      viewAngleOffsets: [0, Math.PI / 6, Math.PI, -Math.PI / 6],
+      elevatedViews: [true, false, true, false],
+      detailViewPosition: longestSegmentMidpoint(path.points),
+      detailViewRadius: Math.max(6, Math.min(10, path.width * 2.8))
     });
   }
 
@@ -160,20 +207,58 @@ export function createObjectPreviewTargets(level: LevelData): ObjectPreviewTarge
       kind: "sports-fixture",
       label: fixture.label,
       position: fixture.position,
-      radius: fixture.kind === "football-goal" ? fixture.width * 0.55 + 1 : 2.2,
-      height: fixture.height + 0.9
+      radius: fixture.kind === "football-goal" ? fixture.width * 0.75 + 1 : 2.2,
+      height: fixture.height + 0.9,
+      viewAngle: Math.PI / 2 - fixture.angle,
+      viewAngleOffsets: [0, Math.PI / 4, Math.PI, -Math.PI / 4]
+    });
+  }
+
+  for (const [sourceIndex, bowl] of level.skateBowls.entries()) {
+    add({
+      sourceId: bowl.id,
+      sourceIndex,
+      kind: "skate-bowl",
+      label: bowl.label,
+      position: bowl.center,
+      radius: skateBowlRadius(bowl),
+      height: Math.max(2.2, bowl.depth + 1.2)
     });
   }
 
   for (const [sourceIndex, amenity] of level.amenities.entries()) {
+    const linkedBuilding = amenity.linkedStructureId
+      ? level.mappedBuildings.find((candidate) => candidate.id === amenity.linkedStructureId)
+      : undefined;
+    const linkedLandmark = amenity.linkedStructureId
+      ? level.landmarks.find((candidate) => candidate.id === amenity.linkedStructureId)
+      : undefined;
+    const linkedCenter = linkedBuilding
+      ? polygonCentroid(linkedBuilding.polygon)
+      : linkedLandmark?.position ?? (linkedLandmark?.polygon ? polygonCentroid(linkedLandmark.polygon) : undefined);
+    const linkedContextRadius = linkedBuilding
+      ? Math.max(5.8, Math.min(8.2, boundingRadius(linkedBuilding.polygon, polygonCentroid(linkedBuilding.polygon)) * 0.48))
+      : linkedLandmark
+        ? 6.4
+        : undefined;
     add({
       sourceId: amenity.id,
       sourceIndex,
       kind: "amenity",
       label: amenity.label,
       position: amenity.position,
-      radius: amenityRadius(amenity.kind),
-      height: amenity.kind === "table_tennis" ? 1.7 : 2.2
+      radius: linkedContextRadius ?? amenityRadius(amenity.kind),
+      height: linkedBuilding
+        ? Math.max(3.4, linkedBuilding.height + 1.2)
+        : linkedLandmark
+          ? landmarkHeight(linkedLandmark.kind)
+          : amenity.kind === "table_tennis"
+            ? 1.7
+            : 2.2,
+      viewAngle: linkedCenter
+        ? Math.atan2(amenity.position.z - linkedCenter.z, amenity.position.x - linkedCenter.x)
+        : undefined,
+      viewAngleOffsets: linkedCenter ? [0, Math.PI / 6, Math.PI, -Math.PI / 6] : undefined
     });
   }
 
@@ -218,8 +303,13 @@ export function createObjectPreviewTargets(level: LevelData): ObjectPreviewTarge
       kind: "tree",
       label: tree.label,
       position: tree.position,
-      radius: Math.max(2.8, tree.canopyRadius * 0.85),
-      height: Math.max(6, tree.height ?? tree.canopyRadius * 1.8)
+      // The renderer deliberately varies crown lobes and trunk scale. Frame the
+      // largest possible silhouette rather than the nominal inventory radius so
+      // the visual audit never crops a mature canopy and hides defects at its edge.
+      radius: Math.max(3.6, tree.canopyRadius * 1.55),
+      height: tree.height
+        ? Math.max(15.5, tree.height * 1.65)
+        : Math.max(22, tree.canopyRadius * 2.8)
     });
   }
 
@@ -311,6 +401,33 @@ function polylineRadius(points: readonly Vec2[], center: Vec2): number {
   return points.reduce((max, point) => Math.max(max, distance(point, center)), 0);
 }
 
+function polylineNormalViewAngle(points: readonly Vec2[]): number | undefined {
+  let longest = 0;
+  let angle: number | undefined;
+  for (let index = 0; index < points.length - 1; index += 1) {
+    const length = distance(points[index], points[index + 1]);
+    if (length <= longest) continue;
+    longest = length;
+    angle = Math.atan2(points[index + 1].z - points[index].z, points[index + 1].x - points[index].x) + Math.PI / 2;
+  }
+  return angle;
+}
+
+function longestSegmentMidpoint(points: readonly Vec2[]): Vec2 | undefined {
+  let longest = 0;
+  let midpoint: Vec2 | undefined;
+  for (let index = 0; index < points.length - 1; index += 1) {
+    const length = distance(points[index], points[index + 1]);
+    if (length <= longest) continue;
+    longest = length;
+    midpoint = {
+      x: (points[index].x + points[index + 1].x) * 0.5,
+      z: (points[index].z + points[index + 1].z) * 0.5
+    };
+  }
+  return midpoint;
+}
+
 function landmarkRadius(kind: LevelData["landmarks"][number]["kind"]): number {
   if (kind === "bbq") return 4.2;
   if (kind === "rotunda") return 7;
@@ -322,8 +439,38 @@ function landmarkHeight(kind: LevelData["landmarks"][number]["kind"]): number {
   if (kind === "rotunda") return 9.2;
   if (kind === "grandstand") return 7.4;
   if (kind === "playground" || kind === "skate" || kind === "basketball") return 4.2;
-  if (kind === "memorial") return 5.4;
+  if (kind === "memorial") return 7.2;
   return 3.2;
+}
+
+function landmarkViewAngle(landmark: LevelData["landmarks"][number], level: LevelData): number | undefined {
+  if (landmark.kind !== "grandstand" || !landmark.polygon) return undefined;
+  const oval = level.landmarks.find((candidate) => candidate.kind === "oval" && candidate.polygon);
+  if (!oval?.polygon) return undefined;
+  const center = polygonCentroid(landmark.polygon);
+  const ovalCenter = polygonCentroid(oval.polygon);
+  return Math.atan2(ovalCenter.z - center.z, ovalCenter.x - center.x);
+}
+
+function buildingFrontViewAngle(building: LevelData["mappedBuildings"][number]): number | undefined {
+  if (!building.facade?.frontagePoint || building.polygon.length < 2) return undefined;
+  const center = polygonCentroid(building.polygon);
+  let longestAngle = 0;
+  let longestLength = -1;
+  for (let index = 0; index < building.polygon.length; index += 1) {
+    const a = building.polygon[index];
+    const b = building.polygon[(index + 1) % building.polygon.length];
+    const length = distance(a, b);
+    if (length > longestLength) {
+      longestLength = length;
+      longestAngle = Math.atan2(b.z - a.z, b.x - a.x);
+    }
+  }
+  const dx = building.facade.frontagePoint.x - center.x;
+  const dz = building.facade.frontagePoint.z - center.z;
+  const localZ = -dx * Math.sin(longestAngle) + dz * Math.cos(longestAngle);
+  if (localZ < 0) longestAngle += Math.PI;
+  return longestAngle + Math.PI / 2;
 }
 
 function amenityRadius(kind: LevelData["amenities"][number]["kind"]): number {
@@ -359,7 +506,7 @@ function parkLifeRadius(kind: LevelData["parkLifeDetails"][number]["kind"]): num
   if (kind === "removed-tree-stump") return 2.2;
   if (kind === "park-rule-sign") return 1.9;
   if (kind === "heritage-gas-lamp") return 2.8;
-  if (kind === "heritage-bollards") return 3.1;
+  if (kind === "heritage-bollard") return 1.4;
   if (kind === "heritage-seat") return 2.7;
   if (kind === "interpretive-sign") return 2.3;
   if (kind === "chandler-fountain") return 2.6;
@@ -373,6 +520,24 @@ function pathSurfacePatchRadius(patch: PathSurfacePatch): number {
 
 function groundSurfacePolygonRadius(surface: GroundSurfacePolygon): number {
   return Math.max(1.8, boundingRadius(surface.polygon, polygonCentroid(surface.polygon)) + 0.8);
+}
+
+function structureShelterRadius(shelter: StructureShelter): number {
+  if (shelter.footprint.shape === "circle") {
+    return shelter.footprint.radius + 1.8;
+  }
+  return Math.hypot(shelter.footprint.halfX, shelter.footprint.halfZ) + 1.8;
+}
+
+function structureShelterHeight(shelter: StructureShelter, level: LevelData): number {
+  const building = level.mappedBuildings.find((candidate) => candidate.id === shelter.linkedStructureId);
+  if (building) return Math.max(3.2, building.height + 1.4);
+  if (shelter.linkedStructureId === "grandstand") return 8.2;
+  return shelter.kind === "shade-sail" ? 4.8 : 9.2;
+}
+
+function skateBowlRadius(bowl: SkateBowlFeature): number {
+  return Math.hypot(bowl.radiusX, bowl.radiusZ) + 1.8;
 }
 
 export function pathPreviewMaterialKey(path: LevelPath): "asphalt" | "concrete" | "gravel" | "path" {

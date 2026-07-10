@@ -42,6 +42,37 @@ import type {
 import { MELBOURNE_ANIME_PALETTE, createAnimeToonRamp, tuneAnimeMaterial } from "./animeStyle";
 import { MeshFactory } from "./MeshFactory";
 import { pathPreviewMaterialKey, type ObjectPreviewTarget } from "./objectPreview";
+import { instantiateRotundaAsset } from "./RotundaAsset";
+import {
+  ENTRANCE_PAVILION_ASSET_DEPTH,
+  ENTRANCE_PAVILION_ASSET_LENGTH,
+  instantiateEntrancePavilionAsset
+} from "./EntrancePavilionAsset";
+import {
+  BOWLING_CLUB_ASSET_DEPTH,
+  BOWLING_CLUB_ASSET_LENGTH,
+  instantiateBowlingClubAsset
+} from "./BowlingClubAsset";
+import {
+  GRANDSTAND_ASSET_DEPTH,
+  GRANDSTAND_ASSET_LENGTH,
+  instantiateGrandstandAsset
+} from "./GrandstandAsset";
+import {
+  EMELY_BAKER_ASSET_DEPTH,
+  EMELY_BAKER_ASSET_LENGTH,
+  instantiateEmelyBakerAsset
+} from "./EmelyBakerAsset";
+import {
+  ALFRED_CRESCENT_PAVILION_ASSET_DEPTH,
+  ALFRED_CRESCENT_PAVILION_ASSET_LENGTH,
+  instantiateAlfredCrescentPavilionAsset
+} from "./AlfredCrescentPavilionAsset";
+import {
+  NORTH_TOILETS_ASSET_DEPTH,
+  NORTH_TOILETS_ASSET_LENGTH,
+  instantiateNorthToiletsAsset
+} from "./NorthToiletsAsset";
 import {
   createTerrainOverlayDiscGeometry,
   createTerrainOverlayEllipseGeometry,
@@ -145,6 +176,7 @@ export class WorldBuilder {
   private renderedWetPathSheenCount = 0;
   private renderedLampSpillCount = 0;
   private suppressLabels = false;
+  private readonly pendingAssetLoads: Promise<void>[] = [];
   private readonly detailMaterialCache = new Map<string, THREE.Material>();
   private readonly treeMaterialCache = new Map<string, TreeMaterialSet>();
   private readonly treeTrunkGeometry = new THREE.CylinderGeometry(0.72, 1, 1, 8);
@@ -261,6 +293,9 @@ export class WorldBuilder {
     } else if (target.kind === "mapped-building") {
       const building = this.level.mappedBuildings.find((candidate) => candidate.id === target.sourceId);
       if (building) this.addMappedBuildingPreview(building);
+    } else if (target.kind === "structure-shelter") {
+      const shelter = this.level.structureShelters.find((candidate) => candidate.id === target.sourceId);
+      if (shelter) this.addStructureShelterPreview(shelter);
     } else if (target.kind === "mapped-fence") {
       const fence = this.level.mappedFences.find((candidate) => candidate.id === target.sourceId);
       if (fence) this.addMappedFencePreview(fence);
@@ -282,9 +317,15 @@ export class WorldBuilder {
     } else if (target.kind === "sports-fixture") {
       const fixture = this.level.sportsFixtures.find((candidate) => candidate.id === target.sourceId);
       if (fixture) this.addSportsFixturePreview(fixture);
+    } else if (target.kind === "skate-bowl") {
+      const bowl = this.level.skateBowls.find((candidate) => candidate.id === target.sourceId);
+      if (bowl) this.addSkateBowlFeature(bowl);
     } else if (target.kind === "amenity") {
       const amenity = this.level.amenities.find((candidate) => candidate.id === target.sourceId);
-      if (amenity) this.addAmenityPreview(amenity);
+      if (amenity) {
+        this.addLinkedAmenityStructurePreview(amenity);
+        this.addAmenityPreview(amenity);
+      }
     } else if (target.kind === "park-life-detail") {
       const detail = this.level.parkLifeDetails.find((candidate) => candidate.id === target.sourceId);
       if (detail) this.addParkLifeDetailPreview(detail);
@@ -307,6 +348,10 @@ export class WorldBuilder {
     }
   }
 
+  async whenAssetsReady(): Promise<void> {
+    await Promise.all(this.pendingAssetLoads);
+  }
+
   private addPreviewLighting(): void {
     this.scene.add(new THREE.HemisphereLight(0xbfd7e0, 0x2a2428, 1.45));
 
@@ -321,7 +366,10 @@ export class WorldBuilder {
   }
 
   private addPreviewGround(target: ObjectPreviewTarget): void {
-    const radius = Math.max(4, target.radius * 1.35);
+    const detailReach = target.detailViewPosition
+      ? distance(target.position, target.detailViewPosition) + (target.detailViewRadius ?? 0)
+      : 0;
+    const radius = Math.max(4, target.radius * 1.35, detailReach * 1.2);
     const platform = this.createTerrainOverlayDisc(target.position, radius, 0.02, this.materials.grass);
     platform.receiveShadow = true;
     this.scene.add(platform);
@@ -368,21 +416,13 @@ export class WorldBuilder {
     if (landmark.kind === "garden" && landmark.polygon) this.addGardenZone(landmark);
     if (landmark.kind === "oval" && landmark.polygon) this.addOval(landmark);
     if (landmark.kind === "grandstand" && landmark.polygon) this.addGrandstand(landmark);
-    if (landmark.kind === "tennis" && landmark.polygon) {
-      this.addFenceAround(landmark.polygon, 2.2, 0x93a59a);
-    }
     if (landmark.kind === "court" && landmark.polygon) {
       this.addTennisCourt(landmark);
     }
     if (landmark.kind === "bowls" && landmark.polygon) {
       this.addFlatPolygon(landmark.polygon, this.materials.court, 0.08, landmark.id.startsWith("bowling-green") ? 0.86 : 0.6);
-      if (landmark.id === "bowling") {
-        this.addFenceAround(landmark.polygon, 1.15, 0x677362);
-        this.addBowlsClubDetails(landmark.polygon);
-      }
       if (landmark.id.startsWith("bowling-green")) {
         this.addBowlingRinkLines(landmark.polygon);
-        this.addLowHedgeAround(landmark.polygon, 0.52, 0.42);
       }
     }
     if (landmark.kind === "playground" && landmark.polygon) this.addPlayground(landmark);
@@ -400,6 +440,17 @@ export class WorldBuilder {
       return;
     }
     this.addMappedBuilding(building);
+  }
+
+  private addStructureShelterPreview(shelter: StructureShelter): void {
+    const building = this.level.mappedBuildings.find((candidate) => candidate.id === shelter.linkedStructureId);
+    if (building) {
+      this.addMappedBuildingPreview(building);
+    } else {
+      const landmark = this.level.landmarks.find((candidate) => candidate.id === shelter.linkedStructureId);
+      if (landmark) this.addLandmarkPreview(landmark);
+    }
+    this.addStructureShelter(shelter);
   }
 
   private addMappedFencePreview(fence: MappedFence): void {
@@ -472,7 +523,7 @@ export class WorldBuilder {
   }
 
   private addAmenityPreview(amenity: AmenityPoint): void {
-    const angle = this.angleFromId(amenity.id);
+    const angle = this.isStructureAmenity(amenity) ? this.structureAccessAngle(amenity) : this.angleFromId(amenity.id);
     if (amenity.kind === "bench") {
       this.addBench(amenity.position, amenity.angle ?? angle);
       this.addAmenityHalo(amenity.position, 0x9ebf86, 0.62);
@@ -492,21 +543,29 @@ export class WorldBuilder {
       this.addBikeRack(amenity.position, angle);
       this.addAmenityHalo(amenity.position, 0xc2c8ba, 0.58);
     } else if (amenity.kind === "bbq") {
-      this.addSupplyCrate(amenity.position, angle);
       this.addAmenityHalo(amenity.position, 0xd0a343, 0.64);
     } else if (amenity.kind === "toilets") {
-      this.addToiletSign(amenity.position, angle);
       this.addAmenityHalo(amenity.position, 0x61a8d3, 0.52);
     } else if (amenity.kind === "post_box") {
       this.addPostBox(amenity.position, angle);
       this.addAmenityHalo(amenity.position, 0xb43a32, 0.48);
     } else if (amenity.kind === "memorial_plaque") {
-      this.addMemorialPlaqueCue(amenity.position, angle);
       this.addAmenityHalo(amenity.position, 0xd0a343, 0.52);
     } else if (this.isStructureAmenity(amenity)) {
       this.addStructureAccessCue(amenity, angle);
       this.addAmenityHalo(amenity.position, 0xe3a84a, 0.58);
     }
+  }
+
+  private addLinkedAmenityStructurePreview(amenity: AmenityPoint): void {
+    if (!amenity.linkedStructureId) return;
+    const building = this.level.mappedBuildings.find((candidate) => candidate.id === amenity.linkedStructureId);
+    if (building) {
+      this.addMappedBuildingPreview(building);
+      return;
+    }
+    const landmark = this.level.landmarks.find((candidate) => candidate.id === amenity.linkedStructureId);
+    if (landmark) this.addLandmarkPreview(landmark);
   }
 
   private addParkLifeDetailPreview(detail: ParkLifeDetail): void {
@@ -838,7 +897,10 @@ export class WorldBuilder {
       ...this.level.amenities.filter((amenity) => amenity.kind === "bbq" || amenity.kind === "bench").slice(0, 18).map((amenity) => amenity.position)
     ];
     highUsePoints.forEach((point, index) => {
-      const patch = new THREE.Mesh(new THREE.CircleGeometry(index % 3 === 0 ? 4.2 : 2.7, 18), this.materials.wornGrass);
+      const patch = new THREE.Mesh(
+        this.painterlyGeometry(new THREE.CircleGeometry(index % 3 === 0 ? 4.2 : 2.7, 18), this.materials.wornGrass),
+        this.materials.wornGrass
+      );
       const center = { x: point.x + this.rng.range(-1.1, 1.1), z: point.z + this.rng.range(-1.1, 1.1) };
       patch.position.set(center.x, this.groundY(center) + 0.082, center.z);
       patch.rotation.x = -Math.PI / 2;
@@ -862,7 +924,10 @@ export class WorldBuilder {
       if (!pointInPolygon(band.center, this.level.boundary)) {
         return;
       }
-      const stripe = new THREE.Mesh(new THREE.CircleGeometry(band.radius, 36), this.materials.wornGrass);
+      const stripe = new THREE.Mesh(
+        this.painterlyGeometry(new THREE.CircleGeometry(band.radius, 36), this.materials.wornGrass),
+        this.materials.wornGrass
+      );
       stripe.position.set(band.center.x, this.groundY(band.center) + 0.066, band.center.z);
       stripe.rotation.set(-Math.PI / 2, 0, band.rotation);
       stripe.scale.set(band.scaleX, band.scaleZ, 1);
@@ -1387,7 +1452,7 @@ export class WorldBuilder {
     }
 
     if (placements.length === 0) return;
-    const geometry = new THREE.BoxGeometry(0.52, line.height, 0.36);
+    const geometry = this.painterlyGeometry(new THREE.BoxGeometry(0.52, line.height, 0.36), this.materials.basalt);
     const mesh = new THREE.InstancedMesh(geometry, this.materials.basalt, placements.length);
     const matrix = new THREE.Matrix4();
     const quaternion = new THREE.Quaternion();
@@ -1715,7 +1780,10 @@ export class WorldBuilder {
 
   private addActivityPrecinctDetails(polygon: Vec2[]): void {
     const center = polygonCentroid(polygon);
-    const pad = new THREE.Mesh(new THREE.CircleGeometry(3.4, 24), this.materials.concrete);
+    const pad = new THREE.Mesh(
+      this.painterlyGeometry(new THREE.CircleGeometry(3.4, 24), this.materials.concrete),
+      this.materials.concrete
+    );
     const padPoint = { x: center.x - 6.2, z: center.z + 4.4 };
     const padGroundY = this.radialSupportY(padPoint, 3.4);
     pad.position.set(padPoint.x, padGroundY + 0.07, padPoint.z);
@@ -1737,21 +1805,13 @@ export class WorldBuilder {
       if (landmark.kind === "garden" && landmark.polygon) this.addGardenZone(landmark);
       if (landmark.kind === "oval" && landmark.polygon) this.addOval(landmark);
       if (landmark.kind === "grandstand" && landmark.polygon) this.addGrandstand(landmark);
-      if (landmark.kind === "tennis" && landmark.polygon) {
-        this.addFenceAround(landmark.polygon, 2.2, 0x93a59a);
-      }
       if (landmark.kind === "court" && landmark.polygon) {
         this.addTennisCourt(landmark);
       }
       if (landmark.kind === "bowls" && landmark.polygon) {
         this.addFlatPolygon(landmark.polygon, this.materials.court, 0.08, landmark.id.startsWith("bowling-green") ? 0.86 : 0.6);
-        if (landmark.id === "bowling") {
-          this.addFenceAround(landmark.polygon, 1.15, 0x677362);
-          this.addBowlsClubDetails(landmark.polygon);
-        }
         if (landmark.id.startsWith("bowling-green")) {
           this.addBowlingRinkLines(landmark.polygon);
-          this.addLowHedgeAround(landmark.polygon, 0.52, 0.42);
         }
       }
       if (landmark.kind === "playground" && landmark.polygon) this.addPlayground(landmark);
@@ -1835,36 +1895,82 @@ export class WorldBuilder {
     // built by the detail profile below, so a generic prism would close the
     // real passage bays.
     if (building.detailProfile === "gatehouse") {
+      const existingChildren = new Set(this.scene.children);
       this.addMappedBuildingDetails(building, polygonCentroid(building.polygon));
+      this.replaceEntrancePavilionFallbackWithAsset(
+        building,
+        this.scene.children.filter((child) => !existingChildren.has(child))
+      );
       return;
     }
 
+    const bowlingClubFallbackStart = building.detailProfile === "bowling-club" ? new Set(this.scene.children) : null;
+    const emelyBakerFallbackStart = building.detailProfile === "community-centre" ? new Set(this.scene.children) : null;
+    const alfredPavilionFallbackStart = building.id === "osm-building-242003562" ? new Set(this.scene.children) : null;
+
     const material =
-      building.material === "brick" ? this.materials.brick : building.material === "timber" ? this.materials.timber : this.materials.concrete;
-    const mesh = this.addPrismPolygon(building.polygon, building.height, material);
+      building.detailProfile === "tennis-pavilion"
+        ? this.standardDetailMaterial("tennis-pavilion-ochre-weatherboards", 0xc7a45d, 0.82, 0.01)
+        : building.detailProfile === "bowling-club"
+          ? this.standardDetailMaterial("bowls-lower-storey-cream", 0xc7c2a5, 0.84, 0.01)
+          : building.detailProfile === "community-centre"
+            ? this.standardDetailMaterial("emely-baker-tan-brick", 0x8a6b4e, 0.88, 0.01)
+            : building.material === "brick"
+              ? this.materials.brick
+              : building.material === "timber"
+                ? this.materials.timber
+                : this.materials.concrete;
+    const visualHeight = building.detailProfile === "bowling-club" ? 3.05 : building.height;
+    const mesh = this.addPrismPolygon(building.polygon, visualHeight, material);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
 
     const center = polygonCentroid(building.polygon);
-    const roof = this.addPrismPolygon(building.polygon, 0.18, this.materials.metal, building.height + 0.08);
-    roof.castShadow = true;
+    if (
+      building.detailProfile !== "tennis-pavilion" &&
+      building.detailProfile !== "bowling-club" &&
+      building.detailProfile !== "community-centre"
+    ) {
+      const roof = this.addPrismPolygon(building.polygon, 0.18, this.materials.metal, building.height + 0.08);
+      roof.castShadow = true;
+    }
 
     if (building.id === "osm-building-543505702" || building.id === "osm-building-242003562") {
       this.addLabel(building.label, center, building.height + 1.8);
     }
     this.addMappedBuildingDetails(building, center);
+    if (bowlingClubFallbackStart) {
+      this.replaceBowlingClubFallbackWithAsset(
+        building,
+        this.scene.children.filter((child) => !bowlingClubFallbackStart.has(child))
+      );
+    }
+    if (emelyBakerFallbackStart) {
+      this.replaceEmelyBakerFallbackWithAsset(
+        building,
+        this.scene.children.filter((child) => !emelyBakerFallbackStart.has(child))
+      );
+    }
+    if (alfredPavilionFallbackStart) {
+      this.replaceAlfredCrescentPavilionFallbackWithAsset(
+        building,
+        this.scene.children.filter((child) => !alfredPavilionFallbackStart.has(child))
+      );
+    }
   }
 
   private addMappedStorageTank(building: MappedBuilding): void {
     const footprint = this.fitBoxFromPolygon(building.polygon, 0, 0);
     const center = footprint.center;
-    const rotation = -footprint.angle;
     const radius = Math.max(0.58, Math.min(footprint.halfX, footprint.halfZ) * 0.94);
     const groundY = this.radialSupportY(center, radius + 0.35);
     const tankMaterial = this.standardDetailMaterial("storage-tank-body", 0x7e8780, 0.56, 0.3);
     const lidMaterial = this.standardDetailMaterial("storage-tank-lid", 0xa9b1a9, 0.48, 0.42);
 
-    const pad = new THREE.Mesh(new THREE.CylinderGeometry(radius + 0.36, radius + 0.44, 0.08, 24), this.materials.concrete);
+    const pad = new THREE.Mesh(
+      this.painterlyGeometry(new THREE.CylinderGeometry(radius + 0.36, radius + 0.44, 0.08, 24), this.materials.concrete),
+      this.materials.concrete
+    );
     pad.position.set(center.x, groundY + 0.04, center.z);
     pad.receiveShadow = true;
     this.scene.add(pad);
@@ -1879,16 +1985,6 @@ export class WorldBuilder {
     lid.position.set(center.x, groundY + 0.13 + building.height, center.z);
     lid.castShadow = true;
     this.scene.add(lid);
-    this.addLocalCylinder(center, rotation, radius * 0.18, -radius * 0.16, radius * 0.22, radius * 0.22, 0.08, this.materials.metal, building.height + 0.18);
-
-    for (const side of [-1, 1]) {
-      this.addLocalBox(center, rotation, side * 0.14, radius + 0.08, 0.045, building.height * 0.72, 0.05, this.materials.metal, 0.12 + building.height * 0.36, false);
-    }
-    for (let rung = 0; rung < 4; rung += 1) {
-      this.addLocalBox(center, rotation, 0, radius + 0.11, 0.36, 0.035, 0.055, this.materials.metal, 0.38 + rung * 0.32, false);
-    }
-    this.addLocalCylinder(center, rotation, -radius * 0.72, radius * 0.68, 0.055, 0.055, 0.72, this.materials.metal, 0.05);
-    this.addLocalBox(center, rotation, -radius * 0.72, radius * 1.02, 0.42, 0.18, 0.24, this.materials.metal, 0.22);
   }
 
   private addMappedBuildingDetails(building: MappedBuilding, center: Vec2): void {
@@ -1909,18 +2005,38 @@ export class WorldBuilder {
         this.addLocalCylinder(center, rotation, x * footprint.halfX, frontZ + 0.48, 0.055, 0.07, 2.58, redTimber);
       }
       this.addBuildingGutter(center, rotation, 0, frontZ + 0.03, footprint.halfX * 1.86, building.height);
-      for (const x of [-0.68, -0.34, 0.18, 0.58]) {
+      for (const x of [-0.68, -0.4, 0.18]) {
         this.addBuildingWindow(center, rotation, x * footprint.halfX, frontZ + 0.06, footprint.halfX * 0.22, 1.18, 1.46);
       }
       this.addBuildingDoor(center, rotation, -footprint.halfX * 0.08, frontZ + 0.07, footprint.halfX * 0.2, 1.82, 1.03, 0.08);
+      this.addBuildingDoor(center, rotation, footprint.halfX * 0.5, frontZ + 0.1, footprint.halfX * 0.18, 1.78, 1.01, 0.08);
       for (let board = 0; board < 7; board += 1) {
-        this.addLocalBox(center, rotation, 0, frontZ + 0.085, footprint.halfX * 1.84, 0.035, 0.035, redTimber, 0.34 + board * 0.34, false);
+        this.addLocalBox(center, rotation, 0, frontZ + 0.085, footprint.halfX * 1.84, 0.025, 0.025, ochreWeatherboard, 0.34 + board * 0.34, false);
       }
       for (const x of [-0.74, -0.28, 0.24, 0.72]) {
         this.addBuildingWindow(center, rotation, x * footprint.halfX, rearZ - 0.03, footprint.halfX * 0.22, 1.12, 1.42);
       }
-      this.addLocalBox(center, rotation, 0, 0, footprint.halfX * 1.86, 0.12, footprint.halfZ * 1.92, paleRoof, building.height + 0.22);
-      this.addLocalBox(center, rotation, -footprint.halfX * 0.1, frontZ * 0.18, footprint.halfX * 0.64, 0.52, footprint.halfZ * 0.94, paleRoof, building.height + 0.48);
+      this.addHippedRoof(center, rotation, -footprint.halfX * 0.2, 0, footprint.halfX * 1.45, footprint.halfZ * 1.95, building.height - 0.04, 1.22, paleRoof);
+      this.addHippedRoof(center, rotation, footprint.halfX * 0.48, -footprint.halfZ * 0.03, footprint.halfX * 0.7, footprint.halfZ * 2.08, building.height + 0.02, 1.36, paleRoof);
+      this.addGabledRoof(center, rotation, footprint.halfX * 0.48, frontZ * 0.62, footprint.halfX * 0.48, footprint.halfZ * 0.64, building.height - 0.03, 1.02, paleRoof);
+      this.addFacadePediment(
+        center,
+        rotation,
+        footprint.halfX * 0.48,
+        frontZ + 0.105,
+        footprint.halfX * 0.48,
+        0.62,
+        2.86,
+        ochreWeatherboard
+      );
+      const clockFace = new THREE.Mesh(
+        new THREE.CircleGeometry(0.25, 18),
+        this.standardDetailMaterial("tennis-pavilion-clock-face", 0xe4debd, 0.72, 0.02)
+      );
+      const clockPoint = this.localPoint(center, rotation, -footprint.halfX * 0.08, frontZ + 0.105);
+      clockFace.position.set(clockPoint.x, this.groundY(clockPoint) + building.height - 0.42, clockPoint.z);
+      clockFace.rotation.set(0, rotation, 0);
+      this.scene.add(clockFace);
       for (const x of [-0.62, 0.52]) {
         this.addBuildingDownpipe(center, rotation, x * footprint.halfX, frontZ + 0.06, building.height);
       }
@@ -1930,40 +2046,84 @@ export class WorldBuilder {
 
     if (building.detailProfile === "bowling-club") {
       const muralBlue = this.basicDetailMaterial("bowls-mural-blue", 0x234f88);
-      const muralMaroon = this.basicDetailMaterial("bowls-mural-maroon", 0x7b263b);
-      const muralGold = this.basicDetailMaterial("bowls-mural-gold", 0xd0a13a);
-      this.addBuildingApron(center, rotation, -footprint.halfX * 0.18, frontZ + 0.82, footprint.halfX * 1.42, 1.7, 0.12);
-      this.addBuildingAwning(center, rotation, -footprint.halfX * 0.18, frontZ + 0.58, footprint.halfX * 1.5, 1.35, building.height + 0.08, this.materials.timber, 0.22);
-      this.addBuildingGutter(center, rotation, -footprint.halfX * 0.18, frontZ + 0.03, footprint.halfX * 1.72, building.height);
-      this.addBuildingGutter(center, rotation, 0, rearZ - 0.03, footprint.halfX * 1.62, building.height);
+      const muralMaroon = this.basicDetailMaterial("bowls-mural-maroon", 0x67242c);
+      const muralGold = this.basicDetailMaterial("bowls-mural-gold", 0xe6a343);
       const zincalumeRoof = this.standardDetailMaterial("bowls-zincalume-roof-sheets", 0xb9c4bd, 0.4, 0.34);
-      this.addLocalBox(center, rotation, -footprint.halfX * 0.1, 0, footprint.halfX * 1.72, 0.055, footprint.halfZ * 1.86, zincalumeRoof, building.height + 0.23);
+      const greenFrame = this.standardDetailMaterial("bowls-green-glazing-frame", 0x41665b, 0.58, 0.22);
+      this.addBuildingApron(center, rotation, -footprint.halfX * 0.18, frontZ + 0.82, footprint.halfX * 1.42, 1.7, 0.12);
+      const lowerRoofY = 3.12;
+      this.addBuildingAwning(center, rotation, -footprint.halfX * 0.05, frontZ + 0.58, footprint.halfX * 1.68, 1.35, lowerRoofY, zincalumeRoof, 0.22);
+      this.addBuildingGutter(center, rotation, -footprint.halfX * 0.05, frontZ + 0.03, footprint.halfX * 1.82, lowerRoofY);
+      this.addBuildingGutter(center, rotation, 0, rearZ - 0.03, footprint.halfX * 1.62, lowerRoofY);
+      this.addLocalBox(center, rotation, -footprint.halfX * 0.05, 0, footprint.halfX * 1.82, 0.055, footprint.halfZ * 1.86, zincalumeRoof, lowerRoofY + 0.13);
       for (const x of [-0.72, -0.42, -0.12, 0.18, 0.48, 0.78]) {
-        this.addLocalBox(center, rotation, x * footprint.halfX, 0, 0.035, 0.065, footprint.halfZ * 1.92, this.materials.metal, building.height + 0.29, false);
+        this.addLocalBox(center, rotation, x * footprint.halfX, 0, 0.035, 0.065, footprint.halfZ * 1.92, this.materials.metal, lowerRoofY + 0.18, false);
+      }
+      const upperBlock = this.standardDetailMaterial("bowls-upper-storey-cream", 0xd6d0ae, 0.86, 0.01);
+      this.addLocalBox(center, rotation, -footprint.halfX * 0.58, -footprint.halfZ * 0.14, footprint.halfX * 0.55, 1.55, footprint.halfZ * 1.3, upperBlock, 3.78);
+      this.addLocalBox(center, rotation, -footprint.halfX * 0.58, -footprint.halfZ * 0.14, footprint.halfX * 0.6, 0.08, footprint.halfZ * 1.38, zincalumeRoof, 4.58);
+      for (const x of [-0.72, -0.56, -0.4]) {
+        this.addBuildingWindow(center, rotation, x * footprint.halfX, frontZ - 0.02, footprint.halfX * 0.12, 0.58, 3.72, 0.08);
       }
       for (const x of [-0.92, 0.78]) {
-        this.addBuildingDownpipe(center, rotation, x * footprint.halfX, frontZ + 0.07, building.height);
-        this.addBuildingDownpipe(center, rotation, x * footprint.halfX, rearZ - 0.07, building.height);
+        this.addBuildingDownpipe(center, rotation, x * footprint.halfX, frontZ + 0.07, lowerRoofY);
+        this.addBuildingDownpipe(center, rotation, x * footprint.halfX, rearZ - 0.07, lowerRoofY);
       }
-      for (const x of [-0.58, -0.22, 0.14, 0.5]) {
-        this.addBuildingWindow(center, rotation, x * footprint.halfX, frontZ - 0.02, 1.35, 0.86, 1.36, 0.09);
+      for (const x of [-0.72, -0.48, -0.24, 0, 0.24, 0.48, 0.72]) {
+        this.addBuildingWindow(center, rotation, x * footprint.halfX, frontZ - 0.02, footprint.halfX * 0.18, 1.28, 1.48, 0.09);
       }
-      this.addBuildingSign(center, rotation, -footprint.halfX * 0.12, frontZ + 0.04, footprint.halfX * 0.56, 0.36, 2.38, 0x223f64);
+      for (const x of [-0.84, -0.6, -0.36, -0.12, 0.12, 0.36, 0.6, 0.84]) {
+        this.addLocalBox(center, rotation, x * footprint.halfX, frontZ + 0.08, 0.055, 1.5, 0.055, greenFrame, 1.48, false);
+      }
+      for (const y of [0.78, 2.12]) {
+        this.addLocalBox(center, rotation, 0, frontZ + 0.08, footprint.halfX * 1.78, 0.055, 0.055, greenFrame, y, false);
+      }
       for (const x of [-0.66, 0.66]) {
         this.addLocalBox(center, rotation, x * footprint.halfX, frontZ + 0.25, 0.12, 1.35, 0.12, this.materials.timber, 0.8);
       }
-      for (const placement of [
-        { z: -0.42, material: muralBlue },
-        { z: 0.03, material: muralMaroon },
-        { z: 0.48, material: muralBlue }
-      ]) {
-        this.addLocalBox(center, rotation, -footprint.halfX - 0.035, placement.z * footprint.halfZ, 0.07, 1.18, footprint.halfZ * 0.38, placement.material, 1.55, false);
-      }
-      this.addLocalBox(center, rotation, -footprint.halfX - 0.06, footprint.halfZ * 0.08, 0.08, 0.34, 0.32, muralGold, 2.18, false);
+      this.addLocalBox(center, rotation, -footprint.halfX - 0.035, footprint.halfZ * 0.06, 0.07, 2.42, footprint.halfZ * 1.18, muralMaroon, 1.45, false);
+      this.addLocalBox(center, rotation, -footprint.halfX - 0.06, -footprint.halfZ * 0.49, 0.08, 0.34, footprint.halfZ * 0.18, muralBlue, 2.46, false);
+      this.addLocalBox(center, rotation, -footprint.halfX - 0.06, -footprint.halfZ * 0.12, 0.08, 0.08, footprint.halfZ * 0.34, muralGold, 2.46, false);
       this.addBowlsMuralMotifs(center, rotation, footprint);
-      this.addBuildingTextSign(center, rotation, -footprint.halfX * 0.12, frontZ + 0.055, footprint.halfX * 0.64, 0.34, 2.46, "BOWLS", "#223f64", "#f3d47d");
-      for (const x of [-0.42, 0.36]) {
-        this.addBuildingRoofVent(center, rotation, x * footprint.halfX, -footprint.halfZ * 0.22, building.height, 0.58, 0.34);
+      this.addLocalBox(
+        center,
+        rotation,
+        0,
+        frontZ + 1.28,
+        footprint.halfX * 1.72,
+        0.42,
+        0.08,
+        this.basicDetailMaterial("bowls-blue-fascia", 0x223f64),
+        2.58,
+        false
+      );
+      this.addBuildingTextSign(
+        center,
+        rotation,
+        -footprint.halfX * 0.43,
+        frontZ + 1.33,
+        footprint.halfX * 0.82,
+        0.34,
+        2.61,
+        "FITZROY VICTORIA",
+        "#223f64",
+        "#f3d47d"
+      );
+      this.addBuildingTextSign(
+        center,
+        rotation,
+        footprint.halfX * 0.43,
+        frontZ + 1.33,
+        footprint.halfX * 0.82,
+        0.34,
+        2.61,
+        "BOWLING & SPORTS",
+        "#223f64",
+        "#f3d47d"
+      );
+      const solarPanel = this.standardDetailMaterial("bowls-solar-panel", 0x264b67, 0.36, 0.42);
+      for (const x of [-0.62, -0.42, -0.22, -0.02, 0.18, 0.38, 0.58]) {
+        this.addLocalBox(center, rotation, x * footprint.halfX, frontZ + 0.32, footprint.halfX * 0.16, 0.055, 0.72, solarPanel, lowerRoofY + 0.22, false);
       }
       this.addLocalBox(center, rotation, footprint.halfX * 0.72, frontZ + 1.12, 0.8, 0.48, 0.32, this.materials.timber, 0.32);
       this.addLabel("Fitzroy Victoria Bowling Club", center, building.height + 1.45);
@@ -1989,8 +2149,22 @@ export class WorldBuilder {
       }
       for (const z of [frontZ - 0.08, rearZ + 0.08]) {
         this.addLocalBox(center, rotation, 0, z, footprint.halfX * 2.02, 0.16, 0.1, redFrame, 2.42);
+        for (let index = -10; index <= 10; index += 1) {
+          const x = (index / 10) * footprint.halfX * 0.92;
+          this.addLocalBox(center, rotation, x, z + Math.sign(z) * 0.015, 0.045, 0.12, 0.07, redFrame, 2.31, false);
+        }
       }
-      this.addBuildingAwning(center, rotation, 0, 0, footprint.halfX * 2.18, footprint.halfZ * 2.36, building.height + 0.15, corrugatedRoof, 0.16);
+      this.addHippedRoof(
+        center,
+        rotation,
+        0,
+        0,
+        footprint.halfX * 2.18,
+        footprint.halfZ * 2.36,
+        building.height + 0.02,
+        0.48,
+        corrugatedRoof
+      );
       this.addBuildingGutter(center, rotation, 0, frontZ + 0.08, footprint.halfX * 2.08, building.height + 0.04);
       this.addBuildingGutter(center, rotation, 0, rearZ - 0.08, footprint.halfX * 2.08, building.height + 0.04);
       this.addLabel("Timber entrance pavilion", center, building.height + 1.15);
@@ -1999,7 +2173,10 @@ export class WorldBuilder {
 
     if (building.detailProfile === "rotunda-pavilion") {
       const pavilionRadius = Math.min(footprint.halfX, footprint.halfZ) * 0.84;
-      const dome = new THREE.Mesh(new THREE.ConeGeometry(footprint.halfX * 1.45, 0.9, 18), this.materials.timber);
+      const dome = new THREE.Mesh(
+        this.painterlyGeometry(new THREE.ConeGeometry(footprint.halfX * 1.45, 0.9, 18), this.materials.timber),
+        this.materials.timber
+      );
       dome.position.set(center.x, this.radialSupportY(center, footprint.halfX) + building.height + 0.48, center.z);
       dome.castShadow = true;
       this.scene.add(dome);
@@ -2018,131 +2195,104 @@ export class WorldBuilder {
     }
 
     if (building.detailProfile === "community-centre") {
-      this.addBuildingApron(center, rotation, 0, frontZ + 0.48, footprint.halfX * 1.35, 1.05, 0.1);
-      for (const x of [-0.62, -0.22, 0.22, 0.62]) {
-        this.addBuildingWindow(center, rotation, x * footprint.halfX, frontZ + 0.02, footprint.halfX * 0.32, 0.72, 1.82);
+      const emelyBrick = this.standardDetailMaterial("emely-baker-tan-brick", 0x8a6b4e, 0.88, 0.01);
+      const emelyRoof = this.standardDetailMaterial("emely-baker-metal-tray-deck", 0x788783, 0.62, 0.2);
+      const wallCoping = this.standardDetailMaterial("emely-baker-tile-coping", 0xb6aa8d, 0.8, 0.02);
+      const clerestory = this.facadeWindowMaterial();
+      const aluminium = this.standardDetailMaterial("emely-baker-blue-grey-aluminium", 0x526d70, 0.46, 0.42);
+      const darkSail = this.standardDetailMaterial("emely-baker-charcoal-shade-sail", 0x202827, 0.86, 0.01, true, 0.92);
+      this.addSkillionPolygonRoof(building.polygon, building.height + 0.04, 0.28, footprint.angle, emelyRoof);
+      this.addBuildingApron(center, rotation, 0, frontZ + 0.52, footprint.halfX * 1.5, 1.18, 0.08);
+      this.addLocalBox(center, rotation, 0, frontZ + 0.055, footprint.halfX * 1.33, 2.34, 0.08, clerestory, 1.43, false);
+      for (const x of [-0.62, -0.46, -0.3, -0.14, 0.02, 0.18, 0.34, 0.5, 0.66]) {
+        this.addLocalBox(center, rotation, x * footprint.halfX, frontZ + 0.105, 0.055, 2.42, 0.07, aluminium, 1.44, false);
       }
-      this.addBuildingSign(center, rotation, -footprint.halfX * 0.24, frontZ + 0.04, footprint.halfX * 0.52, 0.34, 2.42, 0x315d67);
-      this.addBuildingTextSign(center, rotation, footprint.halfX * 0.36, frontZ + 0.055, footprint.halfX * 0.58, 0.34, 2.5, "EMELY", "#315d67", "#f2e6a8");
-      this.addBuildingTextSign(center, rotation, -footprint.halfX * 0.76, frontZ + 0.055, footprint.halfX * 0.26, 0.28, 2.04, "30", "#315d67", "#f2e6a8", 0.06);
-      this.addLocalBox(center, rotation, footprint.halfX + 0.04, -footprint.halfZ * 0.1, 0.08, 0.78, 0.54, this.materials.metal, 1.78, false);
-      this.addLocalBox(center, rotation, footprint.halfX + 0.055, -footprint.halfZ * 0.1, 0.085, 0.08, 0.38, this.materials.darkOpening, 2.1, false);
-      this.addLocalBox(center, rotation, -footprint.halfX * 0.62, frontZ + 1.04, footprint.halfX * 0.48, 0.07, 1.1, this.materials.concrete, 0.16, false);
-      for (const side of [-1, 1]) {
-        this.addLocalBox(center, rotation, -footprint.halfX * 0.62 + side * footprint.halfX * 0.28, frontZ + 1.04, 0.055, 0.7, 1.05, this.materials.metal, 0.52);
+      for (const y of [0.48, 2.30, 2.71]) {
+        this.addLocalBox(center, rotation, 0, frontZ + 0.112, footprint.halfX * 1.34, 0.055, 0.07, aluminium, y, false);
       }
-      const courtyardZ = rearZ - 1.65;
-      this.addLocalBox(center, rotation, 0, courtyardZ, footprint.halfX * 1.46, 0.06, 2.4, this.materials.concrete, 0.1, false);
-      for (const x of [-0.78, 0.78]) {
-        for (const z of [-0.56, 0.56]) {
-          this.addLocalCylinder(center, rotation, x * footprint.halfX, courtyardZ + z * 2.05, 0.045, 0.055, 1.25, this.materials.metal);
+      for (const [x, width] of [[0.18, 0.92], [4.92, 1.04], [6.05, 1.04]] as const) {
+        this.addLocalBox(center, rotation, x, frontZ + 0.155, width, 2.02, 0.085, clerestory, 1.17, false);
+        for (const side of [-1, 1]) {
+          this.addLocalBox(center, rotation, x + side * width * 0.48, frontZ + 0.19, 0.055, 2.06, 0.1, aluminium, 1.17, false);
         }
       }
-      this.addLocalBox(center, rotation, 0, courtyardZ - 1.15, footprint.halfX * 1.62, 0.08, 0.08, this.materials.metal, 0.72);
-      this.addLocalBox(center, rotation, 0, courtyardZ + 1.15, footprint.halfX * 1.62, 0.08, 0.08, this.materials.metal, 0.72);
+
+      const yardRearZ = frontZ + 0.04;
+      const yardFrontZ = frontZ + 5.48;
+      const yardMidZ = (yardRearZ + yardFrontZ) * 0.5;
+      const yardDepth = yardFrontZ - yardRearZ;
+      const sideWallX = footprint.halfX * 0.8595;
+      const gateCenterZ = frontZ + 3.70;
+      const gateHalfWidth = 0.86;
+      const westRearEndZ = gateCenterZ - gateHalfWidth;
+      const westFrontStartZ = gateCenterZ + gateHalfWidth;
+      this.addLocalBox(center, rotation, 0, yardFrontZ, footprint.halfX * 1.718, 1.72, 0.22, emelyBrick, 0.9);
+      this.addLocalBox(center, rotation, 0, yardFrontZ, footprint.halfX * 1.724, 0.1, 0.32, wallCoping, 1.82);
+      this.addLocalBox(center, rotation, sideWallX, yardMidZ, 0.22, 1.72, yardDepth, emelyBrick, 0.9);
+      this.addLocalBox(center, rotation, sideWallX, yardMidZ, 0.32, 0.1, yardDepth + 0.08, wallCoping, 1.82);
+      this.addLocalBox(center, rotation, -sideWallX, (yardRearZ + westRearEndZ) * 0.5, 0.22, 1.72, westRearEndZ - yardRearZ, emelyBrick, 0.9);
+      this.addLocalBox(center, rotation, -sideWallX, (yardRearZ + westRearEndZ) * 0.5, 0.32, 0.1, westRearEndZ - yardRearZ + 0.06, wallCoping, 1.82);
+      this.addLocalBox(center, rotation, -sideWallX, (westFrontStartZ + yardFrontZ) * 0.5, 0.22, 1.72, yardFrontZ - westFrontStartZ, emelyBrick, 0.9);
+      this.addLocalBox(center, rotation, -sideWallX, (westFrontStartZ + yardFrontZ) * 0.5, 0.32, 0.1, yardFrontZ - westFrontStartZ + 0.06, wallCoping, 1.82);
+      const gateMaterial = this.standardDetailMaterial("emely-baker-courtyard-gate", 0x495750, 0.56, 0.32);
+      for (let index = 0; index < 6; index += 1) {
+        this.addLocalBox(center, rotation, -sideWallX + 0.10 + index * 0.27, gateCenterZ + 0.70, 0.045, 1.48, 0.045, gateMaterial, 0.76, false);
+      }
+      for (const y of [0.34, 0.82, 1.48]) {
+        this.addLocalBox(center, rotation, -sideWallX + 0.78, gateCenterZ + 0.70, 1.52, 0.06, 0.06, gateMaterial, y, false);
+      }
       this.addLocalShadeSail(
         center,
         rotation,
         [
-          { x: -footprint.halfX * 0.82, z: courtyardZ - 1.05, y: 2.55 },
-          { x: footprint.halfX * 0.76, z: courtyardZ - 0.92, y: 2.95 },
-          { x: footprint.halfX * 0.88, z: courtyardZ + 1.08, y: 2.62 },
-          { x: -footprint.halfX * 0.72, z: courtyardZ + 0.92, y: 2.88 }
+          { x: -9.2, z: frontZ + 0.60, y: 2.74 },
+          { x: 1.15, z: frontZ + 0.60, y: 2.68 },
+          { x: -4.0, z: frontZ + 5.03, y: 2.58 }
         ],
-        this.standardDetailMaterial("emely-shade-sail", 0xc8d3cf, 0.78, 0.02, true, 0.82)
+        darkSail
       );
-      this.addBuildingRoofVent(center, rotation, footprint.halfX * 0.48, -footprint.halfZ * 0.22, building.height, 0.46, 0.32);
-      this.addEmelyBakerGateDetails(center, rotation, courtyardZ, footprint);
-      this.addEmelyOutdoorFurniture(center, rotation, courtyardZ, footprint);
+      for (const x of [0.42, 0.66]) {
+        this.addBuildingRoofVent(center, rotation, x * footprint.halfX, -footprint.halfZ * 0.18, building.height, 0.42, 0.3);
+      }
       this.addLabel("Emely Baker Centre", center, building.height + 1.35);
       return;
     }
 
     if (building.detailProfile === "amenities") {
-      const amenitiesDoorMaterial = this.standardDetailMaterial("amenities-painted-door", 0x3f5556, 0.72, 0.03);
-      this.addBuildingApron(center, rotation, 0, frontZ + 0.34, footprint.halfX * 1.3, 0.84, 0.09);
-      for (const x of [-0.42, 0, 0.42]) {
-        this.addLocalBox(center, rotation, x * footprint.halfX, frontZ + 0.02, footprint.halfX * 0.28, 1.38, 0.08, amenitiesDoorMaterial, 1.02, false);
-        this.addLocalBox(center, rotation, x * footprint.halfX + footprint.halfX * 0.1, frontZ + 0.075, 0.055, 0.12, 0.05, this.materials.darkOpening, 1.1, false);
-        this.addLocalBox(center, rotation, x * footprint.halfX, frontZ + 0.075, footprint.halfX * 0.22, 0.14, 0.055, this.materials.metal, 1.86, false);
+      // Source-backed fallback for Alfred Crescent Sports Pavilion. The GLB
+      // replacement carries the exact current L-plan and full 2010/2021
+      // articulation; this lighter procedural version keeps its defining
+      // canopy, clerestory, green panels and paired entry if loading fails.
+      const pavilionGreen = this.standardDetailMaterial("alfred-pavilion-green-panels", 0x178b43, 0.74, 0.02);
+      const pavilionLime = this.standardDetailMaterial("alfred-pavilion-lime-panels", 0x89c94a, 0.72, 0.02);
+      const pavilionRoof = this.standardDetailMaterial("alfred-pavilion-black-corrugated-roof", 0x333d3f, 0.55, 0.34);
+      const pavilionFrame = this.standardDetailMaterial("alfred-pavilion-charcoal-frame", 0x30393b, 0.5, 0.38);
+      const pavilionGlass = this.facadeWindowMaterial();
+      this.addBuildingApron(center, rotation, 0, frontZ + 1.2, footprint.halfX * 1.45, 2.45, 0.08);
+      this.addBuildingAwning(center, rotation, footprint.halfX * 0.1, frontZ + 0.85, footprint.halfX * 1.42, 1.9, 3.0, pavilionRoof, 0.18);
+      this.addLocalBox(center, rotation, footprint.halfX * 0.08, frontZ + 0.06, footprint.halfX * 1.55, 0.5, 0.09, pavilionGreen, 2.55, false);
+      this.addLocalBox(center, rotation, -footprint.halfX * 0.18, frontZ + 0.065, footprint.halfX * 0.22, 0.46, 0.095, pavilionLime, 2.55, false);
+      this.addLocalBox(center, rotation, footprint.halfX * 0.05, frontZ + 0.045, footprint.halfX * 1.5, 1.02, 0.08, pavilionGlass, 3.62, false);
+      for (const x of [-0.64, -0.48, -0.32, -0.16, 0, 0.16, 0.32, 0.48, 0.64]) {
+        this.addLocalBox(center, rotation, x * footprint.halfX, frontZ + 0.09, 0.065, 1.06, 0.1, pavilionFrame, 3.62, false);
       }
-      this.addBuildingSign(center, rotation, 0, frontZ + 0.03, footprint.halfX * 0.48, 0.45, 2.48, 0xe8e0b6);
-      this.addBuildingTextSign(center, rotation, 0, frontZ + 0.045, footprint.halfX * 0.54, 0.38, 2.54, "TOILETS", "#246ca8", "#f2e6a8");
-      if (building.id === "osm-building-242003562") {
-        this.addBuildingSign(center, rotation, -footprint.halfX * 0.82, frontZ + 0.04, footprint.halfX * 0.24, 0.38, 2.16, 0x246ca8);
-        this.addBuildingWallLight(center, rotation, footprint.halfX * 0.82, frontZ + 0.06, 2.34);
-        this.addBuildingGutter(center, rotation, 0, frontZ + 0.02, footprint.halfX * 1.82, building.height);
-        this.addBuildingGutter(center, rotation, 0, rearZ - 0.02, footprint.halfX * 1.55, building.height);
-        for (const x of [-0.44, 0.18, 0.68]) {
-          this.addBuildingRoofVent(center, rotation, x * footprint.halfX, -footprint.halfZ * 0.32, building.height, 0.5, 0.34);
-        }
-        const ladderBracket = this.localPointOnPolygonEdge(center, rotation, building.polygon, footprint.halfX * 0.86, rearZ - 0.03);
-        for (const side of [-1, 1]) {
-          this.addLocalBox(center, rotation, ladderBracket.x + side * 0.18, ladderBracket.z, 0.045, 0.42, 0.055, this.materials.metal, 2.22, false);
-        }
-        for (const x of [-0.58, 0.58]) {
-          this.addLocalCylinder(center, rotation, x * footprint.halfX, frontZ + 0.78, 0.09, 0.1, 0.82, this.materials.metal);
-        }
-        for (const x of [-0.64, -0.2, 0.24, 0.68]) {
-          this.addLocalBox(center, rotation, x * footprint.halfX, rearZ - 0.03, footprint.halfX * 0.18, 0.18, 0.07, this.materials.darkOpening, 2.22, false);
-        }
-        this.addLocalBox(center, rotation, -footprint.halfX - 0.04, -footprint.halfZ * 0.24, 0.08, 1.05, 0.6, this.standardDetailMaterial("amenities-external-service-panel", 0x5b6665, 0.76, 0.08), 0.72);
+      for (const x of [-0.23, 0.24]) {
+        this.addLocalBox(center, rotation, x * footprint.halfX, frontZ + 0.08, footprint.halfX * 0.18, 2.18, 0.1, pavilionGlass, 1.25, false);
+        this.addLocalBox(center, rotation, x * footprint.halfX, frontZ + 0.14, 0.06, 2.2, 0.12, pavilionFrame, 1.25, false);
       }
+      for (const x of [-0.7, -0.42, -0.14, 0.14, 0.42, 0.7]) {
+        this.addLocalBox(center, rotation, x * footprint.halfX, frontZ + 0.82, 0.1, 2.8, 0.1, pavilionFrame, 1.42, false);
+      }
+      this.addBuildingGutter(center, rotation, 0, frontZ + 0.05, footprint.halfX * 1.7, 4.24);
       return;
     }
 
     if (building.detailProfile === "bowling-shed") {
-      this.addBuildingAwning(center, rotation, 0, 0, footprint.halfX * 2.18, footprint.halfZ * 2.28, building.height + 0.1, this.materials.metal, 0.22);
-      this.addBuildingDoor(center, rotation, 0, frontZ + 0.02, footprint.halfX * 0.95, 1.15, 0.74);
-      if (building.id === "osm-building-1475006767") {
-        this.addBuildingGutter(center, rotation, 0, frontZ + 0.02, footprint.halfX * 1.72, building.height);
-        this.addLocalBox(center, rotation, 0, frontZ + 0.075, footprint.halfX * 0.82, 0.08, 0.06, this.materials.metal, 1.18, false);
-        this.addLocalBox(center, rotation, -footprint.halfX * 0.62, frontZ + 0.52, 0.42, 0.62, 0.38, this.materials.metal, 0.36);
-        this.addLocalCylinder(center, rotation, footprint.halfX * 0.58, frontZ + 0.46, 0.2, 0.2, 0.08, this.materials.metal, 0.34);
-      }
-      if (building.id === "osm-building-1475006768") {
-        this.addBuildingGutter(center, rotation, 0, frontZ + 0.02, footprint.halfX * 1.58, building.height);
-        this.addBuildingRoofVent(center, rotation, footprint.halfX * 0.32, -footprint.halfZ * 0.18, building.height, 0.36, 0.28);
-        this.addLocalCylinder(center, rotation, -footprint.halfX * 0.56, frontZ + 0.42, 0.16, 0.16, 0.08, this.materials.metal, 0.34);
-        for (const x of [0.42, 0.66]) {
-          this.addLocalBox(center, rotation, x * footprint.halfX, frontZ + 0.58, 0.26, 0.54, 0.3, this.materials.metal, 0.34);
-        }
-      }
-      if (building.id === "osm-building-1475006769") {
-        this.addBuildingGutter(center, rotation, 0, frontZ + 0.02, footprint.halfX * 1.76, building.height);
-        this.addBuildingGutter(center, rotation, 0, rearZ - 0.02, footprint.halfX * 1.38, building.height);
-        this.addLocalBox(center, rotation, -footprint.halfX * 0.18, frontZ + 0.075, footprint.halfX * 0.74, 0.1, 0.06, this.materials.metal, 1.18, false);
-        this.addBuildingRoofVent(center, rotation, footprint.halfX * 0.42, -footprint.halfZ * 0.16, building.height, 0.34, 0.26);
-        this.addLocalBox(center, rotation, footprint.halfX * 0.56, frontZ + 0.52, 0.5, 0.42, 0.34, this.materials.timber, 0.31);
-      }
-      if (building.id === "osm-building-1475006770") {
-        this.addBuildingGutter(center, rotation, 0, frontZ + 0.02, footprint.halfX * 1.82, building.height);
-        this.addLocalCylinder(center, rotation, footprint.halfX * 0.58, frontZ + 0.4, 0.15, 0.15, 0.08, this.materials.metal, 0.34);
-        this.addLocalBox(center, rotation, -footprint.halfX * 0.52, frontZ + 0.52, 0.38, 0.44, 0.3, this.materials.timber, 0.3);
-        this.addLocalBox(center, rotation, 0, rearZ - 0.26, footprint.halfX * 1.32, 0.3, 0.28, this.materials.timber, 0.34);
-      }
-      if (building.id === "osm-building-1475006771") {
-        this.addBuildingGutter(center, rotation, 0, frontZ + 0.02, footprint.halfX * 1.62, building.height);
-        this.addLocalBox(center, rotation, footprint.halfX * 0.54, frontZ + 0.44, 0.34, 0.36, 0.28, this.materials.timber, 0.28);
-        this.addLocalBox(center, rotation, -footprint.halfX * 0.18, rearZ - 0.2, footprint.halfX * 1.02, 0.18, 0.22, this.materials.metal, 0.42);
-      }
-      if (building.id === "osm-building-1475006772") {
-        this.addBuildingGutter(center, rotation, 0, frontZ + 0.02, footprint.halfX * 1.68, building.height);
-        this.addLocalBox(center, rotation, 0, frontZ + 0.075, footprint.halfX * 0.72, 0.1, 0.06, this.materials.metal, 1.08, false);
-        this.addBuildingRoofVent(center, rotation, -footprint.halfX * 0.36, -footprint.halfZ * 0.1, building.height, 0.3, 0.24);
-        this.addLocalCylinder(center, rotation, footprint.halfX * 0.58, frontZ + 0.42, 0.12, 0.12, 0.08, this.materials.metal, 0.31);
-      }
-      if (building.id === "osm-building-1475006773") {
-        this.addBuildingGutter(center, rotation, 0, frontZ + 0.02, footprint.halfX * 1.86, building.height);
-        this.addBuildingGutter(center, rotation, 0, rearZ - 0.02, footprint.halfX * 1.62, building.height);
-        for (const x of [-0.42, 0.42]) {
-          this.addLocalBox(center, rotation, x * footprint.halfX, frontZ + 0.06, footprint.halfX * 0.34, 1.02, 0.07, this.materials.darkOpening, 0.82, false);
-        }
-        this.addLocalBox(center, rotation, 0, rearZ - 0.28, footprint.halfX * 1.54, 0.32, 0.3, this.materials.timber, 0.34);
-        for (const x of [-0.62, 0, 0.62]) {
-          this.addLocalBox(center, rotation, x * footprint.halfX, rearZ - 0.5, 0.08, 0.54, 0.08, this.materials.metal, 0.56);
-        }
-      }
+      // The aerial and OSM establish these seven footprints and their roof
+      // envelopes, but no public source resolves individual door, vent, bin or
+      // equipment positions. The exact prism and roof above are therefore the
+      // most accurate defensible 2026 representation.
+      return;
     }
   }
 
@@ -2168,24 +2318,54 @@ export class WorldBuilder {
         this.addFenceSegment(a, b, interval.start, interval.end, height, postMaterial, railMaterial);
       }
     }
-    for (const gate of fence.gates ?? []) {
-      this.addFenceGateThreshold(gate.position, height);
+    this.addMappedFenceGateDetails(fence);
+  }
+
+  private addMappedFenceGateDetails(fence: MappedFence): void {
+    const hannahGate = fence.gates?.find((gate) => gate.id === "bowling-hannah-memorial-gate");
+    if (!hannahGate) return;
+
+    // CMP Figure 72 shows a genuinely architectural entrance here: red-brick
+    // memorial piers on dark-brick bases with an open green metal gate. A bare
+    // gap in the chain mesh loses both the landmark and the readable route.
+    const segmentAngle = this.nearestPolylineSegmentAngle(fence.points, hannahGate.position);
+    const rotation = -segmentAngle;
+    const openingHalfWidth = 1.18;
+    const brick = this.standardDetailMaterial("hannah-memorial-gate-red-brick", 0xa94f35, 0.86, 0.01);
+    const darkBrick = this.standardDetailMaterial("hannah-memorial-gate-dark-brick-base", 0x3c2621, 0.9, 0.01);
+    const capstone = this.standardDetailMaterial("hannah-memorial-gate-capstone", 0xc5b99a, 0.82, 0.01);
+    const bronze = this.standardDetailMaterial("hannah-memorial-gate-plaques", 0x70452f, 0.54, 0.16);
+    const greenMetal = this.standardDetailMaterial("hannah-memorial-gate-green-metal", 0x426659, 0.58, 0.3);
+
+    for (const side of [-1, 1]) {
+      const localX = side * openingHalfWidth;
+      this.addLocalBox(hannahGate.position, rotation, localX, 0, 0.72, 0.56, 0.72, darkBrick, 0.3);
+      this.addLocalBox(hannahGate.position, rotation, localX, 0, 0.62, 1.42, 0.62, brick, 1.02);
+      this.addLocalBox(hannahGate.position, rotation, localX, 0, 0.72, 0.12, 0.72, capstone, 1.79);
+      this.addLocalBox(hannahGate.position, rotation, localX - side * 0.015, 0.335, 0.34, 0.46, 0.035, bronze, 1.22, false);
+      this.addOpenGateLeaf(hannahGate.position, rotation, side * (openingHalfWidth - 0.34), 0, 0.92, 1.3, side, greenMetal);
     }
   }
 
-  private addFenceGateThreshold(position: Vec2, height: number): void {
-    const gateMaterial = new THREE.MeshBasicMaterial({ color: 0xd7cfad, transparent: true, opacity: 0.56 });
-    const threshold = this.createTerrainOverlayRect(position, 0.35, 1.7, 0.18, PATH_MARKING_SURFACE_Y, gateMaterial);
-    threshold.receiveShadow = false;
-    this.scene.add(threshold);
-    const postMaterial = this.materials.metal;
-    for (const side of [-1, 1]) {
-      const point = { x: position.x + side * 0.95, z: position.z };
-      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.08, Math.min(1.25, height), 8), postMaterial);
-      post.position.set(point.x, this.groundY(point) + Math.min(1.25, height) * 0.5, point.z);
-      post.castShadow = true;
-      this.scene.add(post);
+  private nearestPolylineSegmentAngle(points: readonly Vec2[], position: Vec2): number {
+    let bestDistance = Number.POSITIVE_INFINITY;
+    let bestAngle = 0;
+    for (let index = 0; index < points.length - 1; index += 1) {
+      const a = points[index];
+      const b = points[index + 1];
+      const dx = b.x - a.x;
+      const dz = b.z - a.z;
+      const lengthSquared = dx * dx + dz * dz;
+      if (lengthSquared < 0.000001) continue;
+      const t = THREE.MathUtils.clamp(((position.x - a.x) * dx + (position.z - a.z) * dz) / lengthSquared, 0, 1);
+      const nearest = { x: a.x + dx * t, z: a.z + dz * t };
+      const candidateDistance = distance(nearest, position);
+      if (candidateDistance < bestDistance) {
+        bestDistance = candidateDistance;
+        bestAngle = Math.atan2(dz, dx);
+      }
     }
+    return bestAngle;
   }
 
   private addPrismPolygon(polygon: Vec2[], height: number, material: THREE.Material, yOffset = 0): THREE.Mesh {
@@ -2217,6 +2397,9 @@ export class WorldBuilder {
     geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
     geometry.setIndex(indices);
     geometry.computeVertexNormals();
+    if (this.usesPainterlyVertexWash(material)) {
+      this.applyPainterlyVertexColors(geometry);
+    }
     const prismMaterial = material.clone();
     prismMaterial.side = THREE.DoubleSide;
     const mesh = new THREE.Mesh(geometry, prismMaterial);
@@ -2230,23 +2413,38 @@ export class WorldBuilder {
     const triangles = THREE.ShapeUtils.triangulateShape(shapePoints, []);
     const vertices: number[] = [];
     const uvs: number[] = [];
-    const indices: number[] = [];
-    for (const point of cleanPolygon) {
+    const emitVertex = (point: Vec2) => {
       vertices.push(point.x, this.groundY(point) + y, point.z);
       uvs.push(point.x * 0.04, point.z * 0.04);
-    }
-    for (const triangle of triangles) {
-      indices.push(triangle[0], triangle[1], triangle[2]);
+    };
+    const emitDrapedTriangle = (a: Vec2, b: Vec2, c: Vec2, depth = 0): void => {
+      const longestEdge = Math.max(distance(a, b), distance(b, c), distance(c, a));
+      if (longestEdge <= TERRAIN_GRID_STEP || depth >= 5) {
+        emitVertex(a);
+        emitVertex(b);
+        emitVertex(c);
+        return;
+      }
+      const ab = { x: (a.x + b.x) * 0.5, z: (a.z + b.z) * 0.5 };
+      const bc = { x: (b.x + c.x) * 0.5, z: (b.z + c.z) * 0.5 };
+      const ca = { x: (c.x + a.x) * 0.5, z: (c.z + a.z) * 0.5 };
+      emitDrapedTriangle(a, ab, ca, depth + 1);
+      emitDrapedTriangle(ab, b, bc, depth + 1);
+      emitDrapedTriangle(ca, bc, c, depth + 1);
+      emitDrapedTriangle(ab, bc, ca, depth + 1);
+    };
+    for (const [a, b, c] of triangles) {
+      emitDrapedTriangle(cleanPolygon[a], cleanPolygon[b], cleanPolygon[c]);
     }
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
     geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
-    geometry.setIndex(indices);
     geometry.computeVertexNormals();
     if (this.usesPainterlyVertexWash(material)) {
       this.applyPainterlyVertexColors(geometry);
     }
-    const meshMaterial = opacity < 1 ? material.clone() : material;
+    const meshMaterial = material.clone();
+    meshMaterial.side = THREE.DoubleSide;
     const mesh = new THREE.Mesh(geometry, meshMaterial);
     if (opacity < 1) {
       meshMaterial.transparent = true;
@@ -2257,7 +2455,13 @@ export class WorldBuilder {
     return mesh;
   }
 
-  private addBlockPolygon(polygon: Vec2[], height: number, material: THREE.Material, frontSign = -1, options: { openFront?: boolean } = {}): void {
+  private addBlockPolygon(
+    polygon: Vec2[],
+    height: number,
+    material: THREE.Material,
+    frontSign = -1,
+    options: { openFront?: boolean; hippedRoof?: boolean; roofMaterial?: THREE.Material; seatRows?: number } = {}
+  ): void {
     const footprint = this.fitBoxFromPolygon(polygon, 0.8, 0.45);
     const center = footprint.center;
     const rotation = -footprint.angle;
@@ -2281,6 +2485,9 @@ export class WorldBuilder {
       }
     } else {
       const geometry = new THREE.BoxGeometry(footprint.halfX * 2, height, footprint.halfZ * 2);
+      if (this.usesPainterlyVertexWash(material)) {
+        this.applyPainterlyVertexColors(geometry);
+      }
       const mesh = new THREE.Mesh(geometry, material);
       mesh.position.set(center.x, baseY + height / 2, center.z);
       mesh.rotation.y = rotation;
@@ -2288,14 +2495,34 @@ export class WorldBuilder {
       mesh.receiveShadow = true;
       this.scene.add(mesh);
     }
-    const roof = new THREE.Mesh(new THREE.BoxGeometry(footprint.halfX * 2 + 1.8, 0.28, footprint.halfZ * 2 + 1.6), this.materials.timber);
-    roof.position.set(center.x, baseY + height + 0.2, center.z);
-    roof.rotation.y = rotation;
-    roof.castShadow = true;
-    this.scene.add(roof);
+    if (options.hippedRoof) {
+      this.addHippedRoof(
+        center,
+        rotation,
+        0,
+        0,
+        footprint.halfX * 2 + 1.8,
+        footprint.halfZ * 2 + 1.6,
+        height + 0.04,
+        0.72,
+        options.roofMaterial ?? this.materials.metal
+      );
+    } else {
+      const roofMaterial = options.roofMaterial ?? this.materials.timber;
+      const roof = new THREE.Mesh(
+        this.painterlyGeometry(new THREE.BoxGeometry(footprint.halfX * 2 + 1.8, 0.28, footprint.halfZ * 2 + 1.6), roofMaterial),
+        roofMaterial
+      );
+      roof.position.set(center.x, baseY + height + 0.2, center.z);
+      roof.rotation.y = rotation;
+      roof.castShadow = true;
+      this.scene.add(roof);
+    }
 
-    for (let row = 0; row < 4; row += 1) {
-      const seat = new THREE.Mesh(new THREE.BoxGeometry(footprint.halfX * 1.65, 0.18, 0.34), this.materials.timber);
+    for (let row = 0; row < (options.seatRows ?? 4); row += 1) {
+      const seatGeometry = new THREE.BoxGeometry(footprint.halfX * 1.65, 0.18, 0.34);
+      this.applyPainterlyVertexColors(seatGeometry);
+      const seat = new THREE.Mesh(seatGeometry, this.materials.timber);
       const rowCenter = this.localPoint(center, rotation, 0, frontSign * (footprint.halfZ - 0.6 - row * 0.35));
       seat.position.set(rowCenter.x, baseY + 1.2 + row * 0.45, rowCenter.z);
       seat.rotation.y = rotation;
@@ -2399,6 +2626,13 @@ export class WorldBuilder {
     geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
   }
 
+  private painterlyGeometry<T extends THREE.BufferGeometry>(geometry: T, material: THREE.Material): T {
+    if (this.usesPainterlyVertexWash(material)) {
+      this.applyPainterlyVertexColors(geometry);
+    }
+    return geometry;
+  }
+
   private painterlyVertexColorAt(point: Vec2): THREE.Color {
     const broad = this.stableNoise(point.x * 0.075, point.z * 0.075, 901);
     const crossWash = this.stableNoise((point.x + point.z) * 0.038, (point.z - point.x) * 0.038, 902);
@@ -2456,6 +2690,9 @@ export class WorldBuilder {
       7, 4, 0, 7, 0, 3
     ]);
     geometry.computeVertexNormals();
+    if (this.usesPainterlyVertexWash(material)) {
+      this.applyPainterlyVertexColors(geometry);
+    }
     return new THREE.Mesh(geometry, material);
   }
 
@@ -2500,11 +2737,15 @@ export class WorldBuilder {
   }
 
   private localPoint(center: Vec2, rotation: number, localX: number, localZ: number): Vec2 {
-    return localWorldPoint(center, rotation, localX, localZ);
+    // Three.js rotates local X toward negative world Z for a positive Y
+    // rotation, while the 2D map helpers use positive X-to-Z rotation. Mirror
+    // the sign so detail offsets, facade normals and the rendered mesh share
+    // one frame instead of being reflected across the building centre.
+    return localWorldPoint(center, -rotation, localX, localZ);
   }
 
   private worldToLocal(center: Vec2, rotation: number, point: Vec2): Vec2 {
-    return worldPointToLocal(center, rotation, point);
+    return worldPointToLocal(center, -rotation, point);
   }
 
   private localPointOnPolygonEdge(center: Vec2, rotation: number, polygon: Vec2[], localX: number, localZ: number): Vec2 {
@@ -2629,7 +2870,11 @@ export class WorldBuilder {
     castShadow = true
   ): THREE.Mesh {
     const position = this.localPoint(center, rotation, localX, localZ);
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), material);
+    const geometry = new THREE.BoxGeometry(width, height, depth);
+    if (this.usesPainterlyVertexWash(material)) {
+      this.applyPainterlyVertexColors(geometry);
+    }
+    const mesh = new THREE.Mesh(geometry, material);
     mesh.position.set(position.x, this.boxSupportY(position, rotation, width * 0.5, depth * 0.5) + y, position.z);
     mesh.rotation.y = rotation;
     mesh.castShadow = castShadow;
@@ -2650,7 +2895,11 @@ export class WorldBuilder {
     yOffset = 0
   ): THREE.Mesh {
     const position = this.localPoint(center, rotation, localX, localZ);
-    const mesh = new THREE.Mesh(new THREE.CylinderGeometry(radiusTop, radiusBottom, height, 10), material);
+    const geometry = new THREE.CylinderGeometry(radiusTop, radiusBottom, height, 10);
+    if (this.usesPainterlyVertexWash(material)) {
+      this.applyPainterlyVertexColors(geometry);
+    }
+    const mesh = new THREE.Mesh(geometry, material);
     mesh.position.set(position.x, this.groundY(position) + yOffset + height / 2, position.z);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
@@ -2658,11 +2907,41 @@ export class WorldBuilder {
     return mesh;
   }
 
+  private addOpenGateLeaf(
+    center: Vec2,
+    rotation: number,
+    localX: number,
+    localZ: number,
+    width: number,
+    height: number,
+    hingeSide: number,
+    material: THREE.Material
+  ): void {
+    const group = new THREE.Group();
+    for (let index = 0; index < 4; index += 1) {
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(0.045, height, 0.05), material);
+      bar.position.set(-hingeSide * width * (index / 3), height * 0.5, 0);
+      bar.castShadow = true;
+      group.add(bar);
+    }
+    for (const y of [height * 0.28, height * 0.78]) {
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(width, 0.05, 0.055), material);
+      rail.position.set(-hingeSide * width * 0.5, y, 0);
+      rail.castShadow = true;
+      group.add(rail);
+    }
+    const hinge = this.localPoint(center, rotation, localX, localZ);
+    group.position.set(hinge.x, this.groundY(hinge), hinge.z);
+    group.rotation.y = rotation + hingeSide * 1.05;
+    this.scene.add(group);
+  }
+
   private basicDetailMaterial(key: string, color: number): THREE.MeshBasicMaterial {
     const cacheKey = `basic:${key}:${color.toString(16)}`;
     let material = this.detailMaterialCache.get(cacheKey);
     if (!material) {
       material = new THREE.MeshBasicMaterial({ color });
+      material.name = key;
       this.detailMaterialCache.set(cacheKey, material);
     }
     return material as THREE.MeshBasicMaterial;
@@ -2679,6 +2958,7 @@ export class WorldBuilder {
         depthWrite: false,
         side: THREE.DoubleSide
       });
+      material.name = key;
       this.detailMaterialCache.set(cacheKey, material);
     }
     return material as THREE.MeshBasicMaterial;
@@ -2764,6 +3044,15 @@ export class WorldBuilder {
     const cacheKey = `canvas-sign:${key}:${text}:${background}:${foreground}`;
     let material = this.detailMaterialCache.get(cacheKey);
     if (!material) {
+      // Geometry audits run the real scene builder in Node without a DOM or
+      // WebGL context. Keep the same sign mesh and dimensions there so the
+      // building envelope can be validated; only the painterly text texture
+      // is omitted. Browser renders continue through the canvas path below.
+      if (typeof document === "undefined") {
+        material = new THREE.MeshBasicMaterial({ color: new THREE.Color(background) });
+        this.detailMaterialCache.set(cacheKey, material);
+        return material as THREE.MeshBasicMaterial;
+      }
       const canvas = document.createElement("canvas");
       canvas.width = 320;
       canvas.height = 160;
@@ -2861,6 +3150,11 @@ export class WorldBuilder {
     const cacheKey = `digital-clock:${key}:${text}:${caption}`;
     let material = this.detailMaterialCache.get(cacheKey);
     if (!material) {
+      if (typeof document === "undefined") {
+        material = new THREE.MeshBasicMaterial({ color: 0xff3e2e, side: THREE.DoubleSide });
+        this.detailMaterialCache.set(cacheKey, material);
+        return material as THREE.MeshBasicMaterial;
+      }
       const canvas = document.createElement("canvas");
       canvas.width = 512;
       canvas.height = 192;
@@ -2925,6 +3219,7 @@ export class WorldBuilder {
     let material = this.detailMaterialCache.get(cacheKey);
     if (!material) {
       material = new THREE.MeshStandardMaterial({ color, roughness, metalness, transparent, opacity });
+      material.name = key;
       tuneAnimeMaterial(material);
       this.detailMaterialCache.set(cacheKey, material);
     }
@@ -2955,6 +3250,254 @@ export class WorldBuilder {
     height = 0.18
   ): THREE.Mesh {
     return this.addLocalBox(center, rotation, localX, localZ, width, height, depth, material, y);
+  }
+
+  private addHippedRoof(
+    center: Vec2,
+    rotation: number,
+    localX: number,
+    localZ: number,
+    width: number,
+    depth: number,
+    baseY: number,
+    roofHeight: number,
+    material: THREE.Material
+  ): THREE.Mesh {
+    const halfWidth = width * 0.5;
+    const halfDepth = depth * 0.5;
+    const vertices: number[] = [
+      -halfWidth, 0, -halfDepth,
+      halfWidth, 0, -halfDepth,
+      halfWidth, 0, halfDepth,
+      -halfWidth, 0, halfDepth
+    ];
+    const indices: number[] = [];
+
+    if (width >= depth) {
+      const ridgeHalf = Math.max(0.04, (width - depth) * 0.5);
+      vertices.push(-ridgeHalf, roofHeight, 0, ridgeHalf, roofHeight, 0);
+      indices.push(0, 1, 5, 0, 5, 4, 1, 2, 5, 2, 3, 4, 2, 4, 5, 3, 0, 4);
+    } else {
+      const ridgeHalf = Math.max(0.04, (depth - width) * 0.5);
+      vertices.push(0, roofHeight, -ridgeHalf, 0, roofHeight, ridgeHalf);
+      indices.push(0, 1, 4, 1, 2, 5, 1, 5, 4, 2, 3, 5, 3, 0, 4, 3, 4, 5);
+    }
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+    geometry.setIndex(indices);
+    geometry.computeVertexNormals();
+
+    const roofMaterial = material.clone();
+    roofMaterial.side = THREE.DoubleSide;
+    const mesh = new THREE.Mesh(geometry, roofMaterial);
+    const position = this.localPoint(center, rotation, localX, localZ);
+    mesh.position.set(position.x, this.boxSupportY(position, rotation, halfWidth, halfDepth) + baseY, position.z);
+    mesh.rotation.y = rotation;
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    this.scene.add(mesh);
+    return mesh;
+  }
+
+  private addSkillionRoof(
+    center: Vec2,
+    rotation: number,
+    localX: number,
+    localZ: number,
+    width: number,
+    depth: number,
+    baseY: number,
+    rise: number,
+    material: THREE.Material
+  ): THREE.Mesh {
+    const halfWidth = width * 0.5;
+    const halfDepth = depth * 0.5;
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute(
+      "position",
+      new THREE.Float32BufferAttribute(
+        [
+          -halfWidth, 0, -halfDepth,
+          halfWidth, rise, -halfDepth,
+          halfWidth, rise, halfDepth,
+          -halfWidth, 0, halfDepth
+        ],
+        3
+      )
+    );
+    geometry.setIndex([0, 1, 2, 0, 2, 3]);
+    geometry.computeVertexNormals();
+    const roofMaterial = material.clone();
+    roofMaterial.side = THREE.DoubleSide;
+    const mesh = new THREE.Mesh(geometry, roofMaterial);
+    const position = this.localPoint(center, rotation, localX, localZ);
+    mesh.position.set(position.x, this.boxSupportY(position, rotation, halfWidth, halfDepth) + baseY, position.z);
+    mesh.rotation.y = rotation;
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    this.scene.add(mesh);
+    return mesh;
+  }
+
+  private addSkillionPolygonRoof(
+    polygon: Vec2[],
+    baseY: number,
+    rise: number,
+    angle: number,
+    material: THREE.Material
+  ): THREE.Mesh {
+    const cleanPolygon = this.cleanPolygon(polygon);
+    const center = polygonCentroid(cleanPolygon);
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const localXValues = cleanPolygon.map((point) => (point.x - center.x) * cos + (point.z - center.z) * sin);
+    const minLocalX = Math.min(...localXValues);
+    const maxLocalX = Math.max(...localXValues);
+    const span = Math.max(0.001, maxLocalX - minLocalX);
+    const supportY = this.averageGroundYAt(cleanPolygon);
+    const thickness = 0.14;
+    const vertices: number[] = [];
+    for (let layer = 0; layer < 2; layer += 1) {
+      for (let index = 0; index < cleanPolygon.length; index += 1) {
+        const point = cleanPolygon[index];
+        const slopeY = rise * ((localXValues[index] - minLocalX) / span);
+        vertices.push(point.x, supportY + baseY + slopeY + layer * thickness, point.z);
+      }
+    }
+    const triangles = THREE.ShapeUtils.triangulateShape(
+      cleanPolygon.map((point) => new THREE.Vector2(point.x, point.z)),
+      []
+    );
+    const vertexCount = cleanPolygon.length;
+    const indices: number[] = [];
+    for (const triangle of triangles) {
+      indices.push(triangle[2], triangle[1], triangle[0]);
+      indices.push(triangle[0] + vertexCount, triangle[1] + vertexCount, triangle[2] + vertexCount);
+    }
+    for (let index = 0; index < vertexCount; index += 1) {
+      const next = (index + 1) % vertexCount;
+      indices.push(index, next, next + vertexCount, index, next + vertexCount, index + vertexCount);
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+    geometry.setIndex(indices);
+    geometry.computeVertexNormals();
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    this.scene.add(mesh);
+    return mesh;
+  }
+
+  private addGabledRoof(
+    center: Vec2,
+    rotation: number,
+    localX: number,
+    localZ: number,
+    width: number,
+    depth: number,
+    baseY: number,
+    roofHeight: number,
+    material: THREE.Material
+  ): THREE.Mesh {
+    const halfWidth = width * 0.5;
+    const halfDepth = depth * 0.5;
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute(
+      "position",
+      new THREE.Float32BufferAttribute(
+        [
+          -halfWidth, 0, -halfDepth,
+          halfWidth, 0, -halfDepth,
+          -halfWidth, 0, halfDepth,
+          halfWidth, 0, halfDepth,
+          -halfWidth, roofHeight, 0,
+          halfWidth, roofHeight, 0
+        ],
+        3
+      )
+    );
+    geometry.setIndex([0, 1, 5, 0, 5, 4, 2, 4, 5, 2, 5, 3, 0, 4, 2, 1, 3, 5]);
+    geometry.computeVertexNormals();
+
+    const roofMaterial = material.clone();
+    roofMaterial.side = THREE.DoubleSide;
+    const mesh = new THREE.Mesh(geometry, roofMaterial);
+    const position = this.localPoint(center, rotation, localX, localZ);
+    mesh.position.set(position.x, this.boxSupportY(position, rotation, halfWidth, halfDepth) + baseY, position.z);
+    mesh.rotation.y = rotation;
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    this.scene.add(mesh);
+    return mesh;
+  }
+
+  private addFacadePediment(
+    center: Vec2,
+    rotation: number,
+    localX: number,
+    localZ: number,
+    width: number,
+    height: number,
+    baseY: number,
+    material: THREE.Material
+  ): THREE.Mesh {
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute(
+      "position",
+      new THREE.Float32BufferAttribute([-width * 0.5, 0, 0, width * 0.5, 0, 0, 0, height, 0], 3)
+    );
+    geometry.setIndex([0, 1, 2]);
+    geometry.computeVertexNormals();
+    const pedimentMaterial = material.clone();
+    pedimentMaterial.side = THREE.DoubleSide;
+    const mesh = new THREE.Mesh(geometry, pedimentMaterial);
+    const position = this.localPoint(center, rotation, localX, localZ);
+    mesh.position.set(position.x, this.groundY(position) + baseY, position.z);
+    mesh.rotation.y = rotation;
+    mesh.castShadow = true;
+    this.scene.add(mesh);
+    return mesh;
+  }
+
+  private addFacadeClock(
+    center: Vec2,
+    rotation: number,
+    localX: number,
+    localZ: number,
+    radius: number,
+    y: number
+  ): THREE.Mesh {
+    const clockMaterial = this.standardDetailMaterial("heritage-facade-clock", 0xe4debd, 0.74, 0.02);
+    const material = clockMaterial.clone();
+    material.side = THREE.DoubleSide;
+    const mesh = new THREE.Mesh(new THREE.CircleGeometry(radius, 20), material);
+    const position = this.localPoint(center, rotation, localX, localZ);
+    mesh.position.set(position.x, this.groundY(position) + y, position.z);
+    mesh.rotation.y = rotation;
+    this.scene.add(mesh);
+    return mesh;
+  }
+
+  private addFacadeLouver(
+    center: Vec2,
+    rotation: number,
+    localX: number,
+    localZ: number,
+    radius: number,
+    y: number
+  ): THREE.Mesh {
+    const louverMaterial = this.standardDetailMaterial("grandstand-round-louver", 0xd8c99b, 0.8, 0.01);
+    const material = louverMaterial.clone();
+    material.side = THREE.DoubleSide;
+    const mesh = new THREE.Mesh(new THREE.CircleGeometry(radius, 20), material);
+    const position = this.localPoint(center, rotation, localX, localZ);
+    mesh.position.set(position.x, this.groundY(position) + y, position.z);
+    mesh.rotation.y = rotation;
+    mesh.userData.kind = "grandstand-round-louver";
+    this.scene.add(mesh);
+    return mesh;
   }
 
   private addBuildingDoor(
@@ -3106,18 +3649,26 @@ export class WorldBuilder {
 
   private addBowlsMuralMotifs(center: Vec2, rotation: number, footprint: { halfX: number; halfZ: number }): void {
     const flora = this.basicDetailMaterial("bowls-mural-flora", 0x4c8f55);
-    const maroon = this.basicDetailMaterial("bowls-mural-detail-maroon", 0x7b263b);
-    const gold = this.basicDetailMaterial("bowls-mural-lion", 0xd0a13a);
+    const dark = this.basicDetailMaterial("bowls-mural-lion-mane", 0x302b2a);
+    const gold = this.basicDetailMaterial("bowls-mural-lion", 0xc97d3f);
+    const amber = this.basicDetailMaterial("bowls-mural-amber-disc", 0xf3b54a);
+    const pink = this.basicDetailMaterial("bowls-mural-dahlia", 0xe492a2);
+    const blue = this.basicDetailMaterial("bowls-mural-budgie-blue", 0x1d6691);
     const wallX = -footprint.halfX - 0.078;
 
-    for (const z of [-0.55, -0.22, 0.18, 0.52]) {
-      this.addLocalBox(center, rotation, wallX, z * footprint.halfZ, 0.09, 0.08, footprint.halfZ * 0.42, flora, 1.86, false);
-      this.addLocalBox(center, rotation, wallX - 0.01, z * footprint.halfZ + footprint.halfZ * 0.11, 0.092, 0.16, 0.18, maroon, 1.98, false);
+    for (const side of [-1, 1]) {
+      const z = side * footprint.halfZ * 0.38;
+      this.addLocalBox(center, rotation, wallX, z, 0.09, 1.68, footprint.halfZ * 0.34, amber, 1.48, false);
+      this.addLocalBox(center, rotation, wallX - 0.012, z - side * footprint.halfZ * 0.08, 0.092, 0.72, footprint.halfZ * 0.22, gold, 1.08, false);
+      this.addLocalBox(center, rotation, wallX - 0.02, z + side * footprint.halfZ * 0.12, 0.095, 0.62, 0.44, dark, 1.63, false);
+      this.addLocalBox(center, rotation, wallX - 0.028, z + side * footprint.halfZ * 0.12, 0.098, 0.34, 0.25, gold, 1.63, false);
     }
-
-    this.addLocalBox(center, rotation, wallX - 0.015, footprint.halfZ * 0.08, 0.095, 0.42, 0.48, gold, 2.23, false);
-    for (const z of [-0.28, 0, 0.28]) {
-      this.addLocalBox(center, rotation, wallX - 0.018, footprint.halfZ * 0.08 + z, 0.1, 0.16, 0.08, gold, 2.55 - Math.abs(z) * 0.32, false);
+    for (const z of [-0.18, 0, 0.18]) {
+      this.addLocalBox(center, rotation, wallX - 0.018, z * footprint.halfZ, 0.1, 0.5, footprint.halfZ * 0.18, pink, 1.65 + (z === 0 ? 0.16 : 0), false);
+    }
+    for (const [index, z] of [-0.1, 0.12].entries()) {
+      this.addLocalBox(center, rotation, wallX - 0.025, z * footprint.halfZ, 0.1, 0.28, footprint.halfZ * 0.16, flora, 0.92 - index * 0.12, false);
+      this.addLocalBox(center, rotation, wallX - 0.032, z * footprint.halfZ, 0.102, 0.12, footprint.halfZ * 0.1, blue, 0.94 - index * 0.12, false);
     }
   }
 
@@ -3184,6 +3735,7 @@ export class WorldBuilder {
 
   private addGrandstand(landmark: Landmark): void {
     if (!landmark.polygon) return;
+    const fallbackStart = this.scene.children.length;
     const footprint = this.fitBoxFromPolygon(landmark.polygon, 0.8, 0.45);
     const rotation = -footprint.angle;
     const center = footprint.center;
@@ -3191,72 +3743,78 @@ export class WorldBuilder {
     const ovalCenter = oval ? polygonCentroid(oval) : center;
     const dx = ovalCenter.x - center.x;
     const dz = ovalCenter.z - center.z;
-    const ovalLocalZ = -dx * Math.sin(rotation) + dz * Math.cos(rotation);
+    const ovalLocalZ = -dx * Math.sin(footprint.angle) + dz * Math.cos(footprint.angle);
     const frontSign = ovalLocalZ < 0 ? -1 : 1;
     const frontZ = frontSign * (footprint.halfZ + 0.05);
     const frontOut = (distanceFromFront: number) => frontZ + frontSign * distanceFromFront;
     const frontIn = (distanceFromFront: number) => frontZ - frontSign * distanceFromFront;
 
-    this.addBlockPolygon(landmark.polygon, 5.8, this.materials.brick, frontSign, { openFront: true });
-
     const frontScreenMaterial = this.standardDetailMaterial("grandstand-front-transparent-screen", 0x0b1718, 0.5, 0.06, true, 0.24);
     const grandstandCream = this.standardDetailMaterial("grandstand-painted-cream", 0xd8c99b, 0.8, 0.01);
     const grandstandRedTimber = this.standardDetailMaterial("grandstand-red-timber", 0x6e3028, 0.74, 0.02);
     const grandstandWhiteSeats = this.standardDetailMaterial("grandstand-white-seats", 0xd9d6c5, 0.82, 0.01);
-    frontScreenMaterial.depthWrite = false;
-    this.addLocalBox(center, rotation, 0, frontZ, footprint.halfX * 1.36, 1.18, 0.045, frontScreenMaterial, 1.72, false);
-    for (const x of [-0.58, 0, 0.58]) {
-      this.addLocalBox(center, rotation, x * footprint.halfX * 1.05, frontOut(0.055), footprint.halfX * 0.28, 1.28, 0.07, this.materials.darkOpening, 0.84, false);
-      this.addLocalBox(center, rotation, x * footprint.halfX * 1.05 + footprint.halfX * 0.09, frontOut(0.095), 0.08, 0.12, 0.055, this.materials.metal, 0.96, false);
-    }
-    this.addBuildingTextSign(center, rotation, -footprint.halfX * 0.54, frontOut(0.08), footprint.halfX * 0.36, 0.3, 2.72, "CHANGE", "#5b4632", "#f2e6a8", 0.06);
-    this.addBuildingTextSign(center, rotation, footprint.halfX * 0.54, frontOut(0.08), footprint.halfX * 0.32, 0.3, 2.72, "UMPIRE", "#5b4632", "#f2e6a8", 0.06);
+    const grandstandRoof = this.standardDetailMaterial("grandstand-corrugated-roof", 0xbec1b4, 0.64, 0.18);
+    this.addBlockPolygon(landmark.polygon, 5.8, this.materials.brick, frontSign, {
+      openFront: true,
+      hippedRoof: true,
+      roofMaterial: grandstandRoof,
+      seatRows: 0
+    });
+
+    // CMP Figure 36 reads as an enclosed red-brick/cream ground storey with
+    // the open, tiered viewing gallery above it. Keeping those two layers
+    // separate prevents the white benches from reading as external bleachers.
+    this.addLocalBox(center, rotation, 0, frontIn(0.03), footprint.halfX * 1.82, 2.62, 0.34, this.materials.brick, 1.31);
     for (const x of [-0.78, -0.39, 0, 0.39, 0.78]) {
-      this.addLocalBox(center, rotation, x * footprint.halfX, frontOut(0.055), footprint.halfX * 0.26, 1.02, 0.055, grandstandCream, 1.0, false);
-      this.addLocalBox(center, rotation, x * footprint.halfX, frontOut(0.09), 0.08, 2.72, 0.07, grandstandRedTimber, 2.34, false);
+      this.addLocalBox(center, rotation, x * footprint.halfX, frontOut(0.17), footprint.halfX * 0.27, 1.5, 0.055, grandstandCream, 1.28, false);
+      this.addLocalBox(center, rotation, x * footprint.halfX, frontOut(0.2), 0.1, 2.64, 0.065, grandstandRedTimber, 1.42, false);
     }
-    for (const y of [1.16, 2.34]) {
-      this.addLocalBox(center, rotation, 0, frontOut(0.02), footprint.halfX * 1.42, 0.08, 0.08, this.materials.metal, y, false);
+    for (const x of [-0.58, 0, 0.58]) {
+      this.addLocalBox(center, rotation, x * footprint.halfX * 1.05, frontOut(0.225), footprint.halfX * 0.22, 1.72, 0.07, this.materials.darkOpening, 1.0, false);
     }
-    for (const x of [-0.42, -0.14, 0.14, 0.42]) {
-      this.addLocalCylinder(center, rotation, x * footprint.halfX * 2, frontOut(0.08), 0.09, 0.12, 2.8, this.materials.metal);
+    this.addLocalBox(center, rotation, 0, frontOut(0.16), footprint.halfX * 1.86, 0.24, 0.075, grandstandCream, 2.64, false);
+
+    frontScreenMaterial.depthWrite = false;
+    this.addLocalBox(center, rotation, 0, frontIn(0.05), footprint.halfX * 1.76, 2.22, 0.045, frontScreenMaterial, 4.02, false);
+    for (const x of [-0.88, -0.66, -0.44, -0.22, 0, 0.22, 0.44, 0.66, 0.88]) {
+      this.addLocalCylinder(center, rotation, x * footprint.halfX, frontOut(0.1), 0.075, 0.1, 2.72, grandstandRedTimber, 2.67);
     }
-    this.addBuildingRoofVent(center, rotation, footprint.halfX * 0.22, frontIn(0.35), 5.8, 0.58, 0.36);
+    for (const y of [2.86, 5.18]) {
+      this.addLocalBox(center, rotation, 0, frontOut(0.12), footprint.halfX * 1.84, 0.1, 0.08, grandstandCream, y, false);
+    }
     for (const x of [-0.86, 0.86]) {
       this.addBuildingDownpipe(center, rotation, x * footprint.halfX, frontOut(0.02), 5.8);
     }
-    for (let i = -4; i <= 4; i += 1) {
-      this.addLocalBox(center, rotation, (i / 4) * footprint.halfX * 0.9, 0, 0.08, 0.09, footprint.halfZ * 2 + 2.3, this.materials.metal, 6.12);
-    }
-    for (let row = 0; row < 5; row += 1) {
-      this.addLocalBox(center, rotation, 0, frontIn(0.84 + row * 0.48), footprint.halfX * 1.32, 0.12, 0.24, grandstandWhiteSeats, 2.08 + row * 0.34);
-    }
-    for (let step = 0; step < 5; step += 1) {
-      this.addLocalBox(
-        center,
-        rotation,
-        0,
-        frontZ + frontSign * (0.74 - step * 0.48),
-        footprint.halfX * 0.52,
-        0.16,
-        0.34,
-        this.materials.concrete,
-        0.16 + step * 0.17
-      );
+    this.addFacadePediment(center, rotation, 0, frontOut(0.17), 3.8, 0.9, 5.76, grandstandCream);
+    this.addFacadeLouver(center, rotation, 0, frontOut(0.22), 0.25, 6.12);
+    for (let row = 0; row < 8; row += 1) {
+      this.addLocalBox(center, rotation, 0, frontIn(0.82 + row * 0.4), footprint.halfX * 1.52, 0.09, 0.24, grandstandWhiteSeats, 3.08 + row * 0.23);
     }
     for (const side of [-1, 1]) {
-      this.addLocalBox(center, rotation, side * footprint.halfX * 0.31, frontIn(0.62), 0.07, 0.08, 2.35, this.materials.metal, 0.82);
-    }
-    for (const side of [-1, 1]) {
-      const stairX = side * (footprint.halfX + 0.55);
-      for (let step = 0; step < 5; step += 1) {
-        this.addLocalBox(center, rotation, stairX, frontIn(0.42 + step * 0.42), 1.08, 0.16, 0.32, grandstandRedTimber, 0.18 + step * 0.18);
+      const stairX = side * footprint.halfX * 0.38;
+      for (let step = 0; step < 10; step += 1) {
+        const stair = this.addLocalBox(
+          center,
+          rotation,
+          stairX,
+          frontOut(2.5 - step * 0.38),
+          1.12,
+          0.16,
+          0.34,
+          grandstandRedTimber,
+          0.16 + step * 0.26
+        );
+        stair.userData.kind = "grandstand-external-stair";
+        stair.userData.side = side;
       }
       for (const railSide of [-1, 1]) {
-        this.addLocalBox(center, rotation, stairX + railSide * 0.62, frontIn(1.28), 0.07, 0.08, 2.2, grandstandRedTimber, 0.86);
+        const rail = this.addLocalBox(center, rotation, stairX + railSide * 0.62, frontOut(0.72), 0.07, 0.1, 3.45, grandstandRedTimber, 1.42);
+        rail.userData.kind = "grandstand-external-stair-rail";
+        rail.userData.side = side;
       }
     }
     this.addLabel("Kevin Murray Stand", center, 6.7);
+    this.replaceGrandstandFallbackWithAsset(landmark, this.scene.children.slice(fallbackStart));
   }
 
   private addFenceAround(
@@ -3653,7 +4211,9 @@ export class WorldBuilder {
       // The public 2026 sources establish the closed northern work zone, but not
       // day-specific plant/material locations. Keep the stripped surface free of
       // speculative nets, line tape, machinery and stockpiles.
-      this.addFlatPolygon(landmark.polygon, this.materials.dirt, 0.09);
+      const strippedSubgrade = this.standardDetailMaterial("fitzroy-2026-tennis-works-subgrade", 0x8c6c49, 0.96, 0.01);
+      this.addFlatPolygon(landmark.polygon, strippedSubgrade, 0.09);
+      this.addFeatureOutline(landmark.polygon, 0x594f40, 0.34);
       return;
     }
     const clay = this.standardDetailMaterial("fitzroy-existing-red-clay", 0xa6543b, 0.94, 0.01);
@@ -3775,13 +4335,19 @@ export class WorldBuilder {
 
     for (const x of [-width * 0.42, width * 0.42]) {
       for (const z of [-depth * 0.38, depth * 0.38]) {
-        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.18, platformY + 1.7, 8), this.materials.timber);
+        const pole = new THREE.Mesh(
+          this.painterlyGeometry(new THREE.CylinderGeometry(0.14, 0.18, platformY + 1.7, 8), this.materials.timber),
+          this.materials.timber
+        );
         pole.position.set(x, (platformY + 1.7) * 0.5, z);
         pole.castShadow = true;
         group.add(pole);
       }
     }
-    const deck = new THREE.Mesh(new THREE.BoxGeometry(width, 0.22, depth), this.materials.timber);
+    const deck = new THREE.Mesh(
+      this.painterlyGeometry(new THREE.BoxGeometry(width, 0.22, depth), this.materials.timber),
+      this.materials.timber
+    );
     deck.position.y = platformY;
     deck.castShadow = true;
     group.add(deck);
@@ -3858,7 +4424,10 @@ export class WorldBuilder {
   private addPlaygroundShelter(center: Vec2, rotation: number, localX: number, localZ: number): void {
     const position = this.localPoint(center, rotation, localX, localZ);
     const groundY = this.radialSupportY(position, 2.4);
-    const roof = new THREE.Mesh(new THREE.CylinderGeometry(2.0, 2.45, 0.28, 4), this.materials.timber);
+    const roof = new THREE.Mesh(
+      this.painterlyGeometry(new THREE.CylinderGeometry(2.0, 2.45, 0.28, 4), this.materials.timber),
+      this.materials.timber
+    );
     roof.position.set(position.x, groundY + 2.55, position.z);
     roof.rotation.y = rotation + Math.PI / 4;
     roof.castShadow = true;
@@ -3895,7 +4464,10 @@ export class WorldBuilder {
 
   private addSpinner(center: Vec2, rotation: number, localX: number, localZ: number): void {
     const position = this.localPoint(center, rotation, localX, localZ);
-    const disc = new THREE.Mesh(new THREE.CylinderGeometry(1.05, 1.12, 0.16, 20), this.materials.rubber);
+    const disc = new THREE.Mesh(
+      this.painterlyGeometry(new THREE.CylinderGeometry(1.05, 1.12, 0.16, 20), this.materials.rubber),
+      this.materials.rubber
+    );
     disc.position.set(position.x, this.groundY(position) + 0.18, position.z);
     disc.castShadow = true;
     this.scene.add(disc);
@@ -3904,7 +4476,10 @@ export class WorldBuilder {
 
   private addTunnel(center: Vec2, rotation: number, localX: number, localZ: number): void {
     const position = this.localPoint(center, rotation, localX, localZ);
-    const tunnel = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 2.1, 14, 1, true), this.materials.rubber);
+    const tunnel = new THREE.Mesh(
+      this.painterlyGeometry(new THREE.CylinderGeometry(0.7, 0.7, 2.1, 14, 1, true), this.materials.rubber),
+      this.materials.rubber
+    );
     tunnel.position.set(position.x, this.groundY(position) + 0.72, position.z);
     tunnel.rotation.z = Math.PI / 2;
     tunnel.rotation.y = rotation + Math.PI / 2;
@@ -3943,7 +4518,10 @@ export class WorldBuilder {
         chain.castShadow = true;
         group.add(chain);
       }
-      const seat = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.08, 0.34), this.materials.rubber);
+      const seat = new THREE.Mesh(
+        this.painterlyGeometry(new THREE.BoxGeometry(0.85, 0.08, 0.34), this.materials.rubber),
+        this.materials.rubber
+      );
       seat.position.set(x, 1.42, 0);
       seat.castShadow = true;
       group.add(seat);
@@ -3956,7 +4534,10 @@ export class WorldBuilder {
   private addBalanceLogs(position: Vec2, rotation: number): void {
     const group = new THREE.Group();
     for (let i = 0; i < 4; i += 1) {
-      const log = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.18, 2.3, 8), this.materials.timber);
+      const log = new THREE.Mesh(
+        this.painterlyGeometry(new THREE.CylinderGeometry(0.16, 0.18, 2.3, 8), this.materials.timber),
+        this.materials.timber
+      );
       log.position.set((i - 1.5) * 1.1, 0.28 + (i % 2) * 0.08, (i % 2) * 0.52);
       log.rotation.z = Math.PI / 2;
       log.castShadow = true;
@@ -4203,58 +4784,136 @@ export class WorldBuilder {
   }
 
   private addToilets(landmark: Landmark): void {
+    const fallbackStart = landmark.id === "north-toilets" ? new Set(this.scene.children) : null;
     const center = landmark.polygon ? polygonCentroid(landmark.polygon) : landmark.position;
     if (!center) return;
     const footprint = landmark.polygon ? this.fitBoxFromPolygon(landmark.polygon, 0.12, 0.12) : { center, halfX: 3, halfZ: 2.5, angle: 0 };
     const rotation = landmark.polygon ? -footprint.angle : 0;
     const width = Math.max(5.4, footprint.halfX * 2);
     const depth = Math.max(4.6, footprint.halfZ * 2);
-    const wallMaterial = this.standardDetailMaterial("north-toilet-corrugated-wall", 0x506c72, 0.72, 0.08);
+    const wallMaterial = this.standardDetailMaterial("north-toilet-corrugated-wall", 0x30383a, 0.72, 0.1);
     const roofMaterial = this.standardDetailMaterial("north-toilet-sheet-metal-roof", 0x7e8c8a, 0.64, 0.18);
     const clearRoofMaterial = this.standardDetailMaterial("north-toilet-clear-roof-sheet", 0xc4d8d4, 0.42, 0.02, true, 0.46);
-    const muralYellow = this.basicDetailMaterial("north-toilet-mural-yellow", 0xd5a532);
-    const muralPurple = this.basicDetailMaterial("north-toilet-mural-purple", 0x5a4178);
-    const muralBlue = this.basicDetailMaterial("north-toilet-mural-blue", 0x315e73);
+    const doorMaterial = this.standardDetailMaterial("north-toilet-current-grey-doors", 0x596365, 0.6, 0.18);
+    const signMaterial = this.basicDetailMaterial("north-toilet-blue-wayfinding-sign", 0x1454a4);
+    const basinMaterial = this.standardDetailMaterial("north-toilet-stainless-hand-basin", 0x899493, 0.4, 0.56);
 
+    const cellDepth = depth * 0.74;
+    const cellZ = depth * 0.06;
+    const roofWidth = width + 1.1;
+    const metalRoofWidth = roofWidth * 0.64;
+    const clearRoofWidth = roofWidth - metalRoofWidth;
+    const roofRise = 0.62;
     this.addLocalBox(center, rotation, 0, 0, width + 1.1, 0.08, depth + 1.2, this.materials.concrete, 0.07, false);
-    this.addLocalBox(center, rotation, 0, 0, width, 2.5, depth, wallMaterial, 1.29);
-    this.addLocalBox(center, rotation, -width * 0.22, 0, width * 0.58, 0.16, depth + 1.5, roofMaterial, 3.0);
-    this.addLocalBox(center, rotation, width * 0.29, 0, width * 0.32, 0.12, depth + 1.5, clearRoofMaterial, 3.02, false);
+    this.addLocalBox(center, rotation, 0, cellZ, width, 2.5, cellDepth, wallMaterial, 1.29);
+    this.addSkillionRoof(
+      center,
+      rotation,
+      -roofWidth * 0.18,
+      0,
+      metalRoofWidth,
+      depth + 1.5,
+      2.82,
+      roofRise * 0.64,
+      roofMaterial
+    );
+    this.addSkillionRoof(
+      center,
+      rotation,
+      roofWidth * 0.32,
+      0,
+      clearRoofWidth,
+      depth + 1.5,
+      2.82 + roofRise * 0.64,
+      roofRise * 0.36,
+      clearRoofMaterial
+    );
     for (const x of [-width * 0.45, width * 0.12, width * 0.45]) {
       for (const z of [-depth * 0.58, depth * 0.58]) {
         this.addLocalCylinder(center, rotation, x, z, 0.055, 0.07, 3.0, this.materials.metal);
       }
     }
-    const frontZ = -depth * 0.5 - 0.045;
-    for (const [index, x] of [-width * 0.32, 0, width * 0.32].entries()) {
-      this.addLocalBox(center, rotation, x, frontZ, width * 0.26, 1.9, 0.08, index === 0 ? muralYellow : index === 1 ? muralPurple : muralBlue, 1.08, false);
-      this.addLocalBox(center, rotation, x, frontZ - 0.045, width * 0.12, 1.48, 0.08, this.materials.darkOpening, 1.02, false);
+    const stallSideX = width * 0.5 + 0.045;
+    for (const [index, z] of [-depth * 0.38, -depth * 0.23, -depth * 0.08, depth * 0.08, depth * 0.23, depth * 0.38].entries()) {
+      this.addLocalBox(center, rotation, stallSideX, z, 0.08, 2.1, depth * 0.12, doorMaterial, 1.14, false);
+      this.addLocalBox(center, rotation, stallSideX + 0.045, z, 0.08, 0.3, depth * 0.035, signMaterial, 1.48, false);
     }
-    this.addLocalBox(center, rotation, -width * 0.43, frontZ - 0.035, 0.38, 0.34, 0.1, this.basicDetailMaterial("toilet-accessible-sign", 0x246ca8), 2.18, false);
-    this.addBuildingGutter(center, rotation, 0, depth * 0.5 + 0.68, width * 0.92, 2.98);
+    const publicZ = -depth * 0.5 - 0.055;
+    for (const x of [-0.68, 0.68]) {
+      this.addLocalBox(center, rotation, x, publicZ, 0.88, 0.46, 0.48, basinMaterial, 0.73, true);
+    }
+    if (fallbackStart && landmark.polygon) {
+      this.replaceNorthToiletsFallbackWithAsset(
+        landmark,
+        this.scene.children.filter((child) => !fallbackStart.has(child))
+      );
+    }
   }
 
   private addBbq(position: Vec2): void {
     const groundY = this.radialSupportY(position, 3.2);
-    const pad = new THREE.Mesh(new THREE.CircleGeometry(3.2, 24), this.materials.concrete);
-    pad.position.set(position.x, groundY + 0.075, position.z);
+    const group = new THREE.Group();
+    const pad = new THREE.Mesh(this.painterlyGeometry(new THREE.CircleGeometry(3.2, 24), this.materials.concrete), this.materials.concrete);
+    pad.position.y = 0.075;
     pad.rotation.x = -Math.PI / 2;
     pad.receiveShadow = true;
-    this.scene.add(pad);
-    const base = new THREE.Mesh(new THREE.BoxGeometry(2.1, 1.0, 1.4), this.materials.metal);
-    base.position.set(position.x, groundY + 0.55, position.z);
-    base.castShadow = true;
-    this.scene.add(base);
-    const shelter = new THREE.Mesh(new THREE.CylinderGeometry(2.4, 2.8, 0.32, 4), this.materials.timber);
-    shelter.position.set(position.x, groundY + 3.2, position.z);
-    shelter.rotation.y = Math.PI / 4;
-    shelter.castShadow = true;
-    this.scene.add(shelter);
+    group.add(pad);
+
+    // CMP 2004 Figure 67 records the park BBQ as a low, faceted bluestone
+    // masonry unit with a dark cooktop, not a generic steel cabinet.
+    const body = new THREE.Mesh(
+      this.painterlyGeometry(new THREE.CylinderGeometry(0.88, 0.98, 0.92, 12), this.materials.basalt),
+      this.materials.basalt
+    );
+    body.position.y = 0.53;
+    body.castShadow = true;
+    body.receiveShadow = true;
+    group.add(body);
+
+    const mortar = this.standardDetailMaterial("edinburgh-bbq-mortar", 0x78817a, 0.86, 0.02);
+    for (const y of [0.28, 0.52, 0.76]) {
+      const course = new THREE.Mesh(new THREE.TorusGeometry(0.93, 0.018, 6, 24), mortar);
+      course.position.y = y;
+      course.rotation.x = Math.PI / 2;
+      group.add(course);
+    }
+
+    const timberRim = new THREE.Mesh(
+      this.painterlyGeometry(new THREE.TorusGeometry(0.91, 0.075, 8, 24), this.materials.timber),
+      this.materials.timber
+    );
+    timberRim.position.y = 1.01;
+    timberRim.rotation.x = Math.PI / 2;
+    timberRim.castShadow = true;
+    group.add(timberRim);
+
+    const cooktopMaterial = this.standardDetailMaterial("edinburgh-bbq-stainless-cooktop", 0x778681, 0.34, 0.52);
+    const cooktop = new THREE.Mesh(new THREE.CylinderGeometry(0.74, 0.78, 0.09, 16), cooktopMaterial);
+    cooktop.position.y = 1.04;
+    cooktop.castShadow = true;
+    group.add(cooktop);
+    const hotplate = new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.035, 0.58), this.basicDetailMaterial("edinburgh-bbq-hotplate", 0x252a27));
+    hotplate.position.set(0, 1.105, -0.04);
+    group.add(hotplate);
+
+    const controlPanel = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.24, 0.055), cooktopMaterial);
+    controlPanel.position.set(0, 0.68, -0.94);
+    group.add(controlPanel);
+    for (const x of [-0.13, 0.13]) {
+      const control = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.035, 10), this.basicDetailMaterial("edinburgh-bbq-control", 0x202622));
+      control.position.set(x, 0.68, -0.98);
+      control.rotation.x = Math.PI / 2;
+      group.add(control);
+    }
+
+    group.position.set(position.x, groundY, position.z);
+    group.rotation.y = this.angleFromPoint(position);
+    this.scene.add(group);
   }
 
   private addAmenities(): void {
     for (const amenity of this.level.amenities) {
-      const angle = this.angleFromId(amenity.id);
+      const angle = this.isStructureAmenity(amenity) ? this.structureAccessAngle(amenity) : this.angleFromId(amenity.id);
       if (amenity.kind === "bench") {
         this.addBench(amenity.position, amenity.angle ?? angle);
         this.addAmenityHalo(amenity.position, 0x9ebf86, 0.62);
@@ -4274,16 +4933,13 @@ export class WorldBuilder {
         this.addBikeRack(amenity.position, angle);
         this.addAmenityHalo(amenity.position, 0xc2c8ba, 0.58);
       } else if (amenity.kind === "bbq") {
-        this.addSupplyCrate(amenity.position, angle);
         this.addAmenityHalo(amenity.position, 0xd0a343, 0.64);
     } else if (amenity.kind === "toilets") {
-      this.addToiletSign(amenity.position, angle);
       this.addAmenityHalo(amenity.position, 0x61a8d3, 0.52);
     } else if (amenity.kind === "post_box") {
       this.addPostBox(amenity.position, angle);
       this.addAmenityHalo(amenity.position, 0xb43a32, 0.48);
     } else if (amenity.kind === "memorial_plaque") {
-      this.addMemorialPlaqueCue(amenity.position, angle);
       this.addAmenityHalo(amenity.position, 0xd0a343, 0.52);
       } else if (this.isStructureAmenity(amenity)) {
         this.addStructureAccessCue(amenity, angle);
@@ -4370,7 +5026,10 @@ export class WorldBuilder {
     const darkMaterial = this.basicDetailMaterial("park-rule-dark-symbol", 0x1d2522);
     const accentMaterial = this.basicDetailMaterial("park-rule-red-symbol", 0xb84c3c);
 
-    const pad = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.42, 0.06, 14), this.materials.concrete);
+    const pad = new THREE.Mesh(
+      this.painterlyGeometry(new THREE.CylinderGeometry(0.36, 0.42, 0.06, 14), this.materials.concrete),
+      this.materials.concrete
+    );
     pad.position.y = 0.03;
     pad.receiveShadow = true;
     group.add(pad);
@@ -4598,19 +5257,22 @@ export class WorldBuilder {
     const timber = this.materials.timber;
     const iron = this.standardDetailMaterial("heritage-seat-iron-frame", 0x25302c, 0.56, 0.32);
     this.addLocalBrushShadow(group, MELBOURNE_ANIME_PALETTE.bluestoneShadow, 1.78, 0.76, 0.13, 0.018, 0.04);
-    const pad = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.045, 1.25), this.materials.concrete);
+    const pad = new THREE.Mesh(
+      this.painterlyGeometry(new THREE.BoxGeometry(3.2, 0.045, 1.25), this.materials.concrete),
+      this.materials.concrete
+    );
     pad.position.y = 0.025;
     pad.receiveShadow = true;
     group.add(pad);
     for (const z of [-0.32, -0.1, 0.12]) {
-      const slat = new THREE.Mesh(new THREE.BoxGeometry(2.82, 0.09, 0.12), timber);
+      const slat = new THREE.Mesh(this.painterlyGeometry(new THREE.BoxGeometry(2.82, 0.09, 0.12), timber), timber);
       slat.position.set(0, 0.62, z);
       slat.castShadow = true;
       group.add(slat);
       this.addLocalPaintStroke(group, MELBOURNE_ANIME_PALETTE.weatheredWhite, 0.18, 0.685, z - 0.065, 1.6, 0.016, 0.14, 0, 0.03);
     }
     for (const y of [0.9, 1.1, 1.3]) {
-      const back = new THREE.Mesh(new THREE.BoxGeometry(2.82, 0.09, 0.12), timber);
+      const back = new THREE.Mesh(this.painterlyGeometry(new THREE.BoxGeometry(2.82, 0.09, 0.12), timber), timber);
       back.position.set(0, y, 0.43);
       back.rotation.x = -0.22;
       back.castShadow = true;
@@ -4934,7 +5596,10 @@ export class WorldBuilder {
     bag.castShadow = true;
     group.add(bag);
     for (const x of [-0.32, 0.32]) {
-      const strap = new THREE.Mesh(new THREE.TorusGeometry(0.26, 0.022, 6, 14), this.materials.timber);
+      const strap = new THREE.Mesh(
+        this.painterlyGeometry(new THREE.TorusGeometry(0.26, 0.022, 6, 14), this.materials.timber),
+        this.materials.timber
+      );
       strap.position.set(x, 0.48, 0);
       strap.rotation.x = Math.PI / 2;
       strap.scale.z = 0.55;
@@ -5155,19 +5820,28 @@ export class WorldBuilder {
   private addBench(position: Vec2, angle: number): void {
     const group = new THREE.Group();
     this.addLocalBrushShadow(group, MELBOURNE_ANIME_PALETTE.bluestoneShadow, 1.85, 0.72, 0.12, 0.018, -0.08);
-    const pad = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.06, 1.55), this.materials.concrete);
+    const pad = new THREE.Mesh(
+      this.painterlyGeometry(new THREE.BoxGeometry(3.2, 0.06, 1.55), this.materials.concrete),
+      this.materials.concrete
+    );
     pad.position.y = 0.035;
     pad.receiveShadow = true;
     group.add(pad);
     for (const z of [-0.22, 0, 0.22]) {
-      const slat = new THREE.Mesh(new THREE.BoxGeometry(2.72, 0.11, 0.12), this.materials.timber);
+      const slat = new THREE.Mesh(
+        this.painterlyGeometry(new THREE.BoxGeometry(2.72, 0.11, 0.12), this.materials.timber),
+        this.materials.timber
+      );
       slat.position.set(0, 0.72, z);
       slat.castShadow = true;
       group.add(slat);
       this.addLocalPaintStroke(group, MELBOURNE_ANIME_PALETTE.weatheredWhite, -0.24, 0.79, z - 0.065, 1.72, 0.018, 0.16, 0, 0.02);
     }
     for (const y of [0.96, 1.18]) {
-      const back = new THREE.Mesh(new THREE.BoxGeometry(2.72, 0.12, 0.14), this.materials.timber);
+      const back = new THREE.Mesh(
+        this.painterlyGeometry(new THREE.BoxGeometry(2.72, 0.12, 0.14), this.materials.timber),
+        this.materials.timber
+      );
       back.position.set(0, y, 0.43);
       back.rotation.x = -0.18;
       back.castShadow = true;
@@ -5183,25 +5857,34 @@ export class WorldBuilder {
       }
     }
     group.position.set(position.x, this.boxSupportY(position, angle, 1.6, 0.78), position.z);
-    group.rotation.y = angle;
+    group.rotation.y = -angle;
     this.scene.add(group);
   }
 
   private addPicnicTable(position: Vec2, angle: number): void {
     const group = new THREE.Group();
     this.addLocalBrushShadow(group, MELBOURNE_ANIME_PALETTE.bluestoneShadow, 1.95, 1.28, 0.12, 0.018, 0.12);
-    const pad = new THREE.Mesh(new THREE.BoxGeometry(3.35, 0.055, 2.45), this.materials.concrete);
+    const pad = new THREE.Mesh(
+      this.painterlyGeometry(new THREE.BoxGeometry(3.35, 0.055, 2.45), this.materials.concrete),
+      this.materials.concrete
+    );
     pad.position.y = 0.032;
     pad.receiveShadow = true;
     group.add(pad);
-    const top = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.14, 0.72), this.materials.timber);
+    const top = new THREE.Mesh(
+      this.painterlyGeometry(new THREE.BoxGeometry(2.4, 0.14, 0.72), this.materials.timber),
+      this.materials.timber
+    );
     top.position.y = 0.82;
     top.castShadow = true;
     group.add(top);
     this.addLocalPaintStroke(group, MELBOURNE_ANIME_PALETTE.weatheredWhite, -0.1, 0.91, -0.34, 1.75, 0.022, 0.18, 0, 0.02);
     this.addLocalPaintStroke(group, MELBOURNE_ANIME_PALETTE.eucalyptus, 0.12, 0.92, 0.34, 1.42, 0.02, 0.16, 0, -0.04);
     for (const z of [-0.85, 0.85]) {
-      const bench = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.12, 0.32), this.materials.timber);
+      const bench = new THREE.Mesh(
+        this.painterlyGeometry(new THREE.BoxGeometry(2.1, 0.12, 0.32), this.materials.timber),
+        this.materials.timber
+      );
       bench.position.set(0, 0.52, z);
       bench.castShadow = true;
       group.add(bench);
@@ -5215,14 +5898,17 @@ export class WorldBuilder {
       group.add(leg);
     }
     group.position.set(position.x, this.boxSupportY(position, angle, 1.68, 1.23), position.z);
-    group.rotation.y = angle;
+    group.rotation.y = -angle;
     this.scene.add(group);
   }
 
   private addTableTennis(position: Vec2, angle: number): void {
     const group = new THREE.Group();
     this.addLocalBrushShadow(group, MELBOURNE_ANIME_PALETTE.bluestoneShadow, 2.25, 1.42, 0.13, 0.018, -0.16);
-    const pad = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.055, 2.8), this.materials.concrete);
+    const pad = new THREE.Mesh(
+      this.painterlyGeometry(new THREE.BoxGeometry(4.2, 0.055, 2.8), this.materials.concrete),
+      this.materials.concrete
+    );
     pad.position.y = 0.032;
     pad.receiveShadow = true;
     group.add(pad);
@@ -5260,7 +5946,7 @@ export class WorldBuilder {
     this.addLocalPaintStroke(group, MELBOURNE_ANIME_PALETTE.weatheredWhite, -0.35, 0.868, -0.42, 0.72, 0.018, 0.28, 0, -0.05);
     this.addLocalPaintStroke(group, MELBOURNE_ANIME_PALETTE.tramOchre, 0.58, 0.87, 0.46, 0.58, 0.016, 0.2, 0, 0.08);
     group.position.set(position.x, this.boxSupportY(position, angle, 2.1, 1.4), position.z);
-    group.rotation.y = angle;
+    group.rotation.y = -angle;
     this.scene.add(group);
   }
 
@@ -5305,12 +5991,15 @@ export class WorldBuilder {
     const plate = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.2, 0.028), label);
     plate.position.set(0, 0.75, -0.258);
     group.add(plate);
-    const foot = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.08, 0.54), this.materials.basalt);
+    const foot = new THREE.Mesh(
+      this.painterlyGeometry(new THREE.BoxGeometry(0.72, 0.08, 0.54), this.materials.basalt),
+      this.materials.basalt
+    );
     foot.position.y = 0.04;
     foot.receiveShadow = true;
     group.add(foot);
     group.position.set(position.x, this.boxSupportY(position, angle, 0.42, 0.32), position.z);
-    group.rotation.y = angle;
+    group.rotation.y = -angle;
     this.scene.add(group);
   }
 
@@ -5355,7 +6044,7 @@ export class WorldBuilder {
       }
     }
     group.position.set(position.x, this.boxSupportY(position, angle, 1.15, 0.45), position.z);
-    group.rotation.y = angle;
+    group.rotation.y = -angle;
     this.scene.add(group);
   }
 
@@ -5379,7 +6068,7 @@ export class WorldBuilder {
     label.position.set(0, 0.46, -0.5);
     group.add(label);
     group.position.set(position.x, this.boxSupportY(position, angle, 0.65, 0.48), position.z);
-    group.rotation.y = angle;
+    group.rotation.y = -angle;
     this.scene.add(group);
   }
 
@@ -5398,114 +6087,64 @@ export class WorldBuilder {
     );
   }
 
+  private structureAccessAngle(amenity: AmenityPoint): number {
+    const building = amenity.linkedStructureId
+      ? this.level.mappedBuildings.find((candidate) => candidate.id === amenity.linkedStructureId)
+      : undefined;
+    if (building) {
+      return -this.fitBoxFromPolygon(building.polygon, 0, 0, building.facade?.frontagePoint).angle;
+    }
+    const landmark = amenity.linkedStructureId
+      ? this.level.landmarks.find((candidate) => candidate.id === amenity.linkedStructureId && candidate.polygon)
+      : undefined;
+    if (landmark?.polygon) {
+      return -this.fitBoxFromPolygon(landmark.polygon, 0, 0).angle;
+    }
+    return this.angleFromId(amenity.id);
+  }
+
+  private structureAccessRenderPosition(amenity: AmenityPoint): Vec2 {
+    const building = amenity.linkedStructureId
+      ? this.level.mappedBuildings.find((candidate) => candidate.id === amenity.linkedStructureId)
+      : undefined;
+    if (building) return nearestPointOnPolygon(amenity.position, building.polygon);
+    const landmark = amenity.linkedStructureId
+      ? this.level.landmarks.find((candidate) => candidate.id === amenity.linkedStructureId && candidate.polygon)
+      : undefined;
+    return landmark?.polygon ? nearestPointOnPolygon(amenity.position, landmark.polygon) : amenity.position;
+  }
+
   private addStructureAccessCue(amenity: AmenityPoint, angle: number): void {
+    // Interior facilities share the documented external room entrance. Do not
+    // put appliances or a second invented doorway on the lawn, and do not add
+    // a fake door to the entrance pavilion's real open passage.
+    if (amenity.kind === "kitchenette" || amenity.kind === "gatehouse") return;
+
+    const position = this.structureAccessRenderPosition(amenity);
     const panelColor = this.structureAccessPanelColor(amenity.kind);
     const panelMaterial = this.standardDetailMaterial(`structure-access-${amenity.kind}`, panelColor, 0.72, 0.08);
     const latchMaterial = this.standardDetailMaterial("structure-access-latch", 0xd0a343, 0.48, 0.28);
-    const signText = this.structureAccessSignText(amenity.kind);
-    const signMaterial = this.canvasSignMaterial(`structure-access-${amenity.kind}`, signText, "#2b332c", "#f0d996");
-
-    this.addLocalBox(amenity.position, angle, 0, 0, 1.8, 0.065, 1.1, this.materials.concrete, 0.095, false);
-    this.addLocalBox(amenity.position, angle, 0, -0.28, 1.08, 0.9, 0.16, panelMaterial, 0.58);
-    this.addLocalBox(amenity.position, angle, 0.41, -0.39, 0.12, 0.16, 0.08, latchMaterial, 0.72, false);
-    this.addLocalBox(amenity.position, angle, 0, -0.48, 0.78, 0.3, 0.055, signMaterial, 1.24, false);
-
-    if (amenity.kind === "changeroom") {
-      const firstAid = this.basicDetailMaterial("structure-first-aid", 0xd8e6dc);
-      const cross = this.basicDetailMaterial("structure-first-aid-cross", 0x396c55);
-      this.addLocalBox(amenity.position, angle, -0.5, -0.52, 0.34, 0.34, 0.06, firstAid, 0.92, false);
-      this.addLocalBox(amenity.position, angle, -0.5, -0.56, 0.24, 0.055, 0.065, cross, 0.92, false);
-      this.addLocalBox(amenity.position, angle, -0.5, -0.565, 0.055, 0.24, 0.065, cross, 0.92, false);
-      this.addLocalBox(amenity.position, angle, 0.18, 0.28, 1.15, 0.16, 0.32, this.materials.timber, 0.2);
-      return;
-    }
-
-    if (amenity.kind === "umpire_room") {
-      const clipboard = this.basicDetailMaterial("umpire-room-clipboard", 0xd8cfad);
-      this.addLocalBox(amenity.position, angle, -0.46, -0.52, 0.34, 0.46, 0.06, clipboard, 0.92, false);
-      this.addLocalBox(amenity.position, angle, -0.46, -0.565, 0.24, 0.045, 0.065, this.materials.darkOpening, 1.0, false);
-      this.addLocalCylinder(amenity.position, angle, 0.42, 0.28, 0.16, 0.16, 0.08, this.materials.metal, 0.28);
-      this.addLocalBox(amenity.position, angle, 0.42, 0.46, 0.5, 0.12, 0.24, this.materials.timber, 0.28);
-      return;
-    }
-
-    if (amenity.kind === "first_aid_room") {
-      const firstAid = this.basicDetailMaterial("structure-first-aid-room-white", 0xf0ead7);
-      const cross = this.basicDetailMaterial("structure-first-aid-room-cross", 0xb84a3e);
-      const stretcher = this.standardDetailMaterial("structure-first-aid-stretcher", 0xd8c995, 0.72, 0.02);
-      this.addLocalBox(amenity.position, angle, -0.5, -0.52, 0.42, 0.42, 0.06, firstAid, 0.94, false);
-      this.addLocalBox(amenity.position, angle, -0.5, -0.56, 0.28, 0.06, 0.065, cross, 0.94, false);
-      this.addLocalBox(amenity.position, angle, -0.5, -0.565, 0.06, 0.28, 0.067, cross, 0.94, false);
-      this.addLocalBox(amenity.position, angle, 0.44, 0.28, 0.78, 0.12, 0.28, stretcher, 0.34);
-      for (const x of [0.12, 0.76]) {
-        this.addLocalCylinder(amenity.position, angle, x, 0.45, 0.065, 0.065, 0.08, this.materials.metal, 0.24);
-      }
-      return;
-    }
-
-    if (amenity.kind === "gatehouse") {
-      this.addLocalBox(amenity.position, angle, -0.1, -0.56, 0.62, 0.2, 0.06, this.materials.darkOpening, 0.84, false);
-      for (const x of [-0.72, 0.72]) {
-        this.addLocalCylinder(amenity.position, angle, x, 0.34, 0.08, 0.1, 0.72, this.materials.metal);
-      }
-      return;
-    }
-
-    if (amenity.kind === "maintenance_room") {
-      this.addLocalBox(amenity.position, angle, -0.46, 0.28, 0.55, 0.52, 0.42, this.materials.metal, 0.34);
-      this.addLocalCylinder(amenity.position, angle, 0.5, 0.3, 0.18, 0.18, 0.08, this.materials.metal, 0.28);
-      this.addLocalBox(amenity.position, angle, 0.5, 0.45, 0.12, 0.24, 0.08, latchMaterial, 0.32, false);
-      return;
-    }
-
-    if (amenity.kind === "community_room") {
-      const firstAid = this.basicDetailMaterial("community-first-aid", 0xe7e3d0);
-      const cross = this.basicDetailMaterial("community-first-aid-cross", 0x2d7a6d);
-      this.addLocalBox(amenity.position, angle, -0.48, -0.52, 0.32, 0.32, 0.06, firstAid, 0.92, false);
-      this.addLocalBox(amenity.position, angle, -0.48, -0.56, 0.22, 0.052, 0.065, cross, 0.92, false);
-      this.addLocalBox(amenity.position, angle, -0.48, -0.565, 0.052, 0.22, 0.065, cross, 0.92, false);
-      this.addLocalBox(amenity.position, angle, 0.48, 0.26, 0.48, 0.52, 0.28, this.materials.timber, 0.34);
-      return;
-    }
-
-    if (amenity.kind === "kitchenette") {
-      const appliance = this.standardDetailMaterial("kitchenette-appliance", 0xe2e0d2, 0.54, 0.12);
-      const doorSeal = this.basicDetailMaterial("kitchenette-door-seal", 0x2d3430);
-      this.addLocalBox(amenity.position, angle, -0.48, 0.24, 0.42, 0.72, 0.34, appliance, 0.42);
-      this.addLocalBox(amenity.position, angle, -0.48, 0.02, 0.36, 0.055, 0.05, doorSeal, 0.58, false);
-      this.addLocalBox(amenity.position, angle, 0.46, 0.25, 0.52, 0.18, 0.34, this.materials.metal, 0.56);
-      this.addLocalCylinder(amenity.position, angle, 0.46, 0.05, 0.06, 0.06, 0.28, this.materials.metal, 0.61);
-      return;
-    }
 
     if (amenity.kind === "kiosk_hatch") {
       const shutter = this.standardDetailMaterial("kiosk-roller-shutter", 0xa6a697, 0.68, 0.18);
       const counter = this.standardDetailMaterial("kiosk-counter", 0x8b6a3d, 0.72, 0.08);
-      this.addLocalBox(amenity.position, angle, 0, -0.55, 1.22, 0.64, 0.06, shutter, 0.86, false);
+      this.addLocalBox(position, angle, 0, 0, 1.22, 0.64, 0.06, shutter, 1.06, false);
       for (const y of [0.68, 0.82, 0.96, 1.1]) {
-        this.addLocalBox(amenity.position, angle, 0, -0.595, 1.16, 0.026, 0.064, this.materials.darkOpening, y, false);
+        this.addLocalBox(position, angle, 0, -0.035, 1.16, 0.026, 0.064, this.materials.darkOpening, y + 0.2, false);
       }
-      this.addLocalBox(amenity.position, angle, 0, -0.18, 1.35, 0.14, 0.42, counter, 0.44);
-      this.addLocalBox(amenity.position, angle, -0.48, 0.3, 0.38, 0.32, 0.3, this.materials.timber, 0.28);
-      this.addLocalBox(amenity.position, angle, 0.46, 0.28, 0.34, 0.24, 0.28, this.materials.metal, 0.26);
+      this.addLocalBox(position, angle, 0, -0.2, 1.35, 0.14, 0.42, counter, 0.68);
       return;
     }
 
     if (amenity.kind === "utility_box") {
       const panel = this.standardDetailMaterial("utility-switchboard-panel", 0x6e7770, 0.58, 0.18);
-      const meter = this.basicDetailMaterial("utility-switchboard-meter", 0xc9d7d0);
-      const warning = this.basicDetailMaterial("utility-switchboard-warning", 0xd0a343);
-      this.addLocalBox(amenity.position, angle, -0.48, -0.54, 0.38, 0.46, 0.06, panel, 0.88, false);
-      this.addLocalBox(amenity.position, angle, -0.48, -0.58, 0.24, 0.18, 0.064, meter, 0.98, false);
-      this.addLocalBox(amenity.position, angle, -0.48, -0.595, 0.28, 0.05, 0.068, warning, 0.76, false);
-      this.addLocalBox(amenity.position, angle, -0.2, 0.26, 0.055, 0.92, 0.06, this.materials.metal, 0.54, false);
-      this.addLocalBox(amenity.position, angle, 0.12, 0.26, 0.055, 0.72, 0.06, this.materials.metal, 0.48, false);
-      this.addLocalBox(amenity.position, angle, 0.4, 0.28, 0.42, 0.34, 0.3, this.materials.metal, 0.3);
+      this.addLocalBox(position, angle, 0, 0, 0.5, 0.78, 0.12, panel, 1.58, false);
+      this.addLocalBox(position, angle, 0.16, -0.07, 0.07, 0.12, 0.05, latchMaterial, 1.58, false);
       return;
     }
 
-    this.addLocalBox(amenity.position, angle, -0.48, 0.24, 0.48, 0.58, 0.34, this.materials.metal, 0.38);
-    this.addLocalBox(amenity.position, angle, 0.48, 0.24, 0.44, 0.44, 0.32, this.materials.timber, 0.32);
+    this.addLocalBox(position, angle, 0, 0, 1.08, 1.94, 0.1, panelMaterial, 1.0, false);
+    this.addLocalBox(position, angle, 0.4, -0.07, 0.1, 0.14, 0.055, latchMaterial, 1.02, false);
   }
 
   private structureAccessPanelColor(kind: AmenityPoint["kind"]): number {
@@ -5519,19 +6158,6 @@ export class WorldBuilder {
     if (kind === "kiosk_hatch") return 0x6f5635;
     if (kind === "utility_box") return 0x4f5e56;
     return 0x314f44;
-  }
-
-  private structureAccessSignText(kind: AmenityPoint["kind"]): string {
-    if (kind === "changeroom") return "CHANGE";
-    if (kind === "umpire_room") return "UMPIRE";
-    if (kind === "first_aid_room") return "FIRST";
-    if (kind === "gatehouse") return "GATE";
-    if (kind === "maintenance_room") return "STORE";
-    if (kind === "community_room") return "ROOM";
-    if (kind === "kitchenette") return "KITCHEN";
-    if (kind === "kiosk_hatch") return "KIOSK";
-    if (kind === "utility_box") return "POWER";
-    return "CLUB";
   }
 
   private addMemorialPlaqueCue(position: Vec2, angle: number): void {
@@ -5582,7 +6208,7 @@ export class WorldBuilder {
   private addRotunda(position: Vec2): void {
     const group = new THREE.Group();
     const renderStone = new THREE.MeshStandardMaterial({ color: 0xd5c6a2, roughness: 0.58 });
-    const copper = new THREE.MeshStandardMaterial({ color: 0x6f8069, metalness: 0.18, roughness: 0.66 });
+    const copper = new THREE.MeshStandardMaterial({ color: 0x98705a, metalness: 0.18, roughness: 0.66 });
     const plaque = new THREE.MeshStandardMaterial({ color: 0x4a3921, metalness: 0.5, roughness: 0.42 });
     const base = new THREE.Mesh(new THREE.CylinderGeometry(5.35, 5.75, 0.72, 36), renderStone);
     base.position.y = 0.36;
@@ -5604,7 +6230,10 @@ export class WorldBuilder {
     const baseDoor = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.42, 0.08), this.materials.darkOpening);
     baseDoor.position.set(0, 0.86, -4.47);
     group.add(baseDoor);
-    const platform = new THREE.Mesh(new THREE.CylinderGeometry(4.8, 5.05, 0.28, 36), this.materials.path);
+    const platform = new THREE.Mesh(
+      this.painterlyGeometry(new THREE.CylinderGeometry(4.8, 5.05, 0.28, 36), this.materials.path),
+      this.materials.path
+    );
     platform.position.y = 1.86;
     platform.castShadow = true;
     platform.receiveShadow = true;
@@ -5648,20 +6277,21 @@ export class WorldBuilder {
       stair.position.set(0, 0.16 + step * 0.18, -5.25 - step * 0.48);
       stair.castShadow = true;
       stair.receiveShadow = true;
+      stair.userData.kind = "rotunda-stair";
       group.add(stair);
     }
     for (const side of [-1, 1]) {
-      const balustrade = this.createBranch(new THREE.Vector3(side * 1.62, 0.82, -7.1), new THREE.Vector3(side * 1.34, 1.82, -4.78), 0.24, renderStone);
+      const balustrade = new THREE.Mesh(new THREE.BoxGeometry(0.52, 1.08, 2.85), renderStone);
+      balustrade.position.set(side * 1.5, 1.34, -5.92);
+      balustrade.rotation.x = -0.4;
+      balustrade.castShadow = true;
       group.add(balustrade);
+      const cap = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.16, 3.0), renderStone);
+      cap.position.set(side * 1.5, 1.93, -5.9);
+      cap.rotation.x = -0.4;
+      cap.castShadow = true;
+      group.add(cap);
     }
-    const landingStrip = new THREE.Mesh(new THREE.BoxGeometry(2.9, 0.08, 0.22), plaque);
-    landingStrip.position.set(0, 1.94, -4.35);
-    landingStrip.castShadow = true;
-    group.add(landingStrip);
-    const cappedServicePlate = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.035, 12), plaque);
-    cappedServicePlate.position.set(1.86, 1.98, -4.42);
-    cappedServicePlate.castShadow = true;
-    group.add(cappedServicePlate);
     for (const side of [-1, 1]) {
       const pier = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.92, 0.5), renderStone);
       pier.position.set(side * 1.62, 0.78, -5.88);
@@ -5676,6 +6306,7 @@ export class WorldBuilder {
       const bar = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.8, 0.055), stairGate);
       bar.position.set(x, 0.62, -7.58);
       bar.castShadow = true;
+      bar.userData.kind = "rotunda-stair-gate";
       group.add(bar);
     }
     for (const y of [0.36, 0.76]) {
@@ -5686,7 +6317,187 @@ export class WorldBuilder {
     group.position.set(position.x, this.radialSupportY(position, 5.7), position.z);
     group.rotation.y = -0.34;
     this.scene.add(group);
+    this.replaceRotundaFallbackWithAsset(group, position);
     this.addLabel("Rotunda", position, 7);
+  }
+
+  private replaceRotundaFallbackWithAsset(fallback: THREE.Group, position: Vec2): void {
+    if (typeof window === "undefined") return;
+    const load = instantiateRotundaAsset()
+      .then((asset) => {
+        asset.position.set(position.x, this.radialSupportY(position, 6.75), position.z);
+        asset.rotation.y = -0.34;
+        asset.userData.sourceId = "osm-building-543505640";
+        asset.userData.navigationFixtureId = "rotunda-deck";
+        fallback.visible = false;
+        this.scene.add(asset);
+      })
+      .catch((error: unknown) => {
+        console.warn("Rotunda GLB asset failed to load; retaining procedural fallback", error);
+      });
+    this.pendingAssetLoads.push(load);
+  }
+
+  private replaceEntrancePavilionFallbackWithAsset(building: MappedBuilding, fallbackObjects: THREE.Object3D[]): void {
+    if (typeof window === "undefined") return;
+    const footprint = this.fitBoxFromPolygon(building.polygon, 0, 0, building.facade?.frontagePoint);
+    const rotation = -footprint.angle;
+    const load = instantiateEntrancePavilionAsset()
+      .then((asset) => {
+        asset.position.set(
+          footprint.center.x,
+          this.boxSupportY(footprint.center, rotation, footprint.halfX, footprint.halfZ),
+          footprint.center.z
+        );
+        asset.rotation.y = rotation;
+        asset.scale.set((footprint.halfX * 2) / ENTRANCE_PAVILION_ASSET_LENGTH, 1, (footprint.halfZ * 2) / ENTRANCE_PAVILION_ASSET_DEPTH);
+        asset.userData.sourceId = building.id;
+        asset.userData.navigationAmenityId = "timber-entrance-pavilion-passage";
+        for (const fallback of fallbackObjects) fallback.visible = false;
+        this.scene.add(asset);
+      })
+      .catch((error: unknown) => {
+        console.warn("Entrance pavilion GLB asset failed to load; retaining procedural fallback", error);
+      });
+    this.pendingAssetLoads.push(load);
+  }
+
+  private replaceBowlingClubFallbackWithAsset(building: MappedBuilding, fallbackObjects: THREE.Object3D[]): void {
+    if (typeof window === "undefined") return;
+    const footprint = this.fitBoxFromPolygon(building.polygon, 0, 0, building.facade?.frontagePoint);
+    const rotation = -footprint.angle;
+    const load = instantiateBowlingClubAsset()
+      .then((asset) => {
+        // The exact-plan shell extends 0.35 m below its authored threshold so
+        // average terrain placement embeds the foundation without turning the
+        // broad, rigid clubhouse into a visibly floating slab on minor grade.
+        asset.position.set(footprint.center.x, this.averageGroundY(building.polygon) - 0.08, footprint.center.z);
+        asset.rotation.y = rotation;
+        asset.scale.set((footprint.halfX * 2) / BOWLING_CLUB_ASSET_LENGTH, 1, (footprint.halfZ * 2) / BOWLING_CLUB_ASSET_DEPTH);
+        asset.userData.sourceId = building.id;
+        asset.userData.navigationAmenityId = "bowling-clubroom-access";
+        asset.userData.approachGateId = "bowling-hannah-memorial-gate";
+        for (const fallback of fallbackObjects) fallback.visible = false;
+        this.scene.add(asset);
+      })
+      .catch((error: unknown) => {
+        console.warn("Bowling club GLB asset failed to load; retaining procedural fallback", error);
+      });
+    this.pendingAssetLoads.push(load);
+  }
+
+  private replaceEmelyBakerFallbackWithAsset(building: MappedBuilding, fallbackObjects: THREE.Object3D[]): void {
+    if (typeof window === "undefined") return;
+    const footprint = this.fitBoxFromPolygon(building.polygon, 0, 0, building.facade?.frontagePoint);
+    const rotation = -footprint.angle;
+    const load = instantiateEmelyBakerAsset()
+      .then((asset) => {
+        asset.position.set(footprint.center.x, this.averageGroundY(building.polygon) - 0.04, footprint.center.z);
+        asset.rotation.y = rotation;
+        asset.scale.set(
+          (footprint.halfX * 2) / EMELY_BAKER_ASSET_LENGTH,
+          1,
+          (footprint.halfZ * 2) / EMELY_BAKER_ASSET_DEPTH
+        );
+        asset.userData.sourceId = building.id;
+        asset.userData.communityRoomAmenityId = "emely-baker-community-room";
+        asset.userData.kitchenetteAmenityId = "emely-baker-kitchenette";
+        asset.userData.serviceCabinetAmenityId = "emely-baker-exterior-service-cabinet";
+        asset.userData.accessGateId = "emely-courtyard-west-side-gate";
+        for (const fallback of fallbackObjects) fallback.visible = false;
+        this.scene.add(asset);
+      })
+      .catch((error: unknown) => {
+        console.warn("Emely Baker Centre GLB asset failed to load; retaining procedural fallback", error);
+      });
+    this.pendingAssetLoads.push(load);
+  }
+
+  private replaceAlfredCrescentPavilionFallbackWithAsset(building: MappedBuilding, fallbackObjects: THREE.Object3D[]): void {
+    if (typeof window === "undefined") return;
+    const footprint = this.fitBoxFromPolygon(building.polygon, 0, 0, building.facade?.frontagePoint);
+    const rotation = -footprint.angle;
+    const load = instantiateAlfredCrescentPavilionAsset()
+      .then((asset) => {
+        asset.position.set(footprint.center.x, this.averageGroundY(building.polygon) - 0.07, footprint.center.z);
+        asset.rotation.y = rotation;
+        asset.scale.set(
+          (footprint.halfX * 2) / ALFRED_CRESCENT_PAVILION_ASSET_LENGTH,
+          1,
+          (footprint.halfZ * 2) / ALFRED_CRESCENT_PAVILION_ASSET_DEPTH
+        );
+        asset.userData.sourceId = building.id;
+        asset.userData.mainEntranceAmenityId = "alfred-pavilion-main-entrance";
+        asset.userData.kioskAmenityId = "alfred-pavilion-kiosk";
+        asset.userData.publicToiletAmenityIds = [
+          "alfred-pavilion-expanded-public-toilets",
+          "alfred-pavilion-south-accessible-toilets"
+        ];
+        for (const fallback of fallbackObjects) fallback.visible = false;
+        this.scene.add(asset);
+      })
+      .catch((error: unknown) => {
+        console.warn("Alfred Crescent Sports Pavilion GLB asset failed to load; retaining procedural fallback", error);
+      });
+    this.pendingAssetLoads.push(load);
+  }
+
+  private replaceNorthToiletsFallbackWithAsset(landmark: Landmark, fallbackObjects: THREE.Object3D[]): void {
+    if (typeof window === "undefined" || !landmark.polygon) return;
+    const polygon = landmark.polygon;
+    const footprint = this.fitBoxFromPolygon(polygon, 0, 0);
+    const rotation = -footprint.angle;
+    const load = instantiateNorthToiletsAsset()
+      .then((asset) => {
+        asset.position.set(
+          footprint.center.x,
+          this.averageGroundY(polygon) - 0.035,
+          footprint.center.z
+        );
+        asset.rotation.y = rotation;
+        asset.scale.set(
+          (footprint.halfX * 2) / NORTH_TOILETS_ASSET_LENGTH,
+          1,
+          (footprint.halfZ * 2) / NORTH_TOILETS_ASSET_DEPTH
+        );
+        asset.userData.sourceId = landmark.id;
+        asset.userData.stallBankAmenityIds = [
+          "north-toilets-south-west-stall-bank",
+          "north-toilets-north-east-stall-bank"
+        ];
+        for (const fallback of fallbackObjects) fallback.visible = false;
+        this.scene.add(asset);
+      })
+      .catch((error: unknown) => {
+        console.warn("Edinburgh Gardens north public-toilet GLB asset failed to load; retaining procedural fallback", error);
+      });
+    this.pendingAssetLoads.push(load);
+  }
+
+  private replaceGrandstandFallbackWithAsset(landmark: Landmark, fallbackObjects: THREE.Object3D[]): void {
+    if (typeof window === "undefined" || !landmark.polygon) return;
+    const footprint = this.fitBoxFromPolygon(landmark.polygon, 0, 0);
+    const rotation = -footprint.angle;
+    const load = instantiateGrandstandAsset()
+      .then((asset) => {
+        asset.position.set(
+          footprint.center.x,
+          this.boxSupportY(footprint.center, rotation, footprint.halfX, footprint.halfZ) - 0.04,
+          footprint.center.z
+        );
+        asset.rotation.y = rotation;
+        asset.scale.set((footprint.halfX * 2) / GRANDSTAND_ASSET_LENGTH, 1, (footprint.halfZ * 2) / GRANDSTAND_ASSET_DEPTH);
+        asset.userData.sourceId = landmark.id;
+        asset.userData.navigationFixtureId = "grandstand-seats";
+        asset.userData.changeroomAmenityId = "grandstand-changeroom-access";
+        asset.userData.umpireAmenityId = "grandstand-umpire-room-access";
+        for (const fallback of fallbackObjects) fallback.visible = false;
+        this.scene.add(asset);
+      })
+      .catch((error: unknown) => {
+        console.warn("Kevin Murray Stand GLB asset failed to load; retaining procedural fallback", error);
+      });
+    this.pendingAssetLoads.push(load);
   }
 
   private addMemorial(landmark: Landmark): void {
@@ -5775,7 +6586,10 @@ export class WorldBuilder {
     const stone = new THREE.MeshStandardMaterial({ color: 0xd0c2a2, roughness: 0.68 });
     const bronze = new THREE.MeshStandardMaterial({ color: 0x8a5d2d, metalness: 0.35, roughness: 0.5 });
     const group = new THREE.Group();
-    const base = new THREE.Mesh(new THREE.BoxGeometry(6.4, 0.18, 3.1), this.materials.concrete);
+    const base = new THREE.Mesh(
+      this.painterlyGeometry(new THREE.BoxGeometry(6.4, 0.18, 3.1), this.materials.concrete),
+      this.materials.concrete
+    );
     base.position.y = 0.1;
     base.receiveShadow = true;
     group.add(base);
@@ -5813,15 +6627,53 @@ export class WorldBuilder {
       group.add(rafter);
     }
     const inscription = new THREE.Mesh(
-      new THREE.BoxGeometry(2.45, 0.34, 0.055),
+      new THREE.BoxGeometry(0.055, 0.34, 2.15),
       this.canvasSignMaterial("sportsmans-in-memoriam", "IN MEMORIAM", "#d0c2a2", "#5a4630")
     );
-    inscription.position.set(0, 3.52, -1.285);
+    inscription.position.set(2.88, 3.52, 0);
+    inscription.userData.kind = "sportsmans-east-inscription";
     group.add(inscription);
-    const wreathCabinet = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.9, 0.08), bronze);
-    wreathCabinet.position.set(-2.35, 1.82, -1.33);
-    wreathCabinet.castShadow = true;
-    group.add(wreathCabinet);
+
+    const pedimentGeometry = new THREE.BufferGeometry();
+    pedimentGeometry.setAttribute(
+      "position",
+      new THREE.Float32BufferAttribute([0, 0, -1.08, 0, 0, 1.08, 0, 0.68, 0], 3)
+    );
+    pedimentGeometry.setIndex([0, 1, 2]);
+    pedimentGeometry.computeVertexNormals();
+    const pedimentMaterial = stone.clone();
+    pedimentMaterial.side = THREE.DoubleSide;
+    const pediment = new THREE.Mesh(pedimentGeometry, pedimentMaterial);
+    pediment.position.set(2.83, 3.83, 0);
+    pediment.castShadow = true;
+    pediment.userData.kind = "sportsmans-east-pediment";
+    group.add(pediment);
+    const pedimentCap = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.18, 2.46), stone);
+    pedimentCap.position.set(2.83, 4.52, 0);
+    pedimentCap.castShadow = true;
+    group.add(pedimentCap);
+    for (const z of [-0.74, 0, 0.74]) {
+      const swag = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.035, 6, 16, Math.PI), bronze);
+      swag.position.set(2.795, 4.08, z);
+      swag.rotation.y = Math.PI / 2;
+      swag.rotation.z = Math.PI;
+      swag.userData.kind = "sportsmans-east-swag";
+      group.add(swag);
+    }
+    for (const z of [-1.05, 1.05]) {
+      const urnBase = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.2, 0.34), stone);
+      urnBase.position.set(2.65, 3.84, z);
+      group.add(urnBase);
+      const urn = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 8), stone);
+      urn.scale.y = 1.35;
+      urn.position.set(2.65, 4.16, z);
+      urn.castShadow = true;
+      urn.userData.kind = "sportsmans-east-urn-finial";
+      group.add(urn);
+      const urnTip = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.2, 10), stone);
+      urnTip.position.set(2.65, 4.5, z);
+      group.add(urnTip);
+    }
     group.position.set(position.x, groundY, position.z);
     group.rotation.y = rotation;
     this.scene.add(group);
@@ -5837,12 +6689,48 @@ export class WorldBuilder {
     base.position.y = groundY + 0.12;
     const plinth = this.addLocalBox(position, rotation, 0, 0, 1.12, 2.62, 0.7, granite, 1.5);
     plinth.position.y = groundY + 1.5;
-    this.addLocalBox(position, rotation, 0, -0.37, 0.72, 0.82, 0.055, bronze, groundY + 1.94, false).position.y = groundY + 1.94;
+    const portraitPanel = this.addLocalBox(position, rotation, 0, -0.37, 0.72, 0.56, 0.055, bronze, groundY + 1.78, false);
+    portraitPanel.position.y = groundY + 1.78;
+    portraitPanel.userData.kind = "cook-memorial-portrait-panel";
+    const portraitArchMaterial = bronze.clone();
+    portraitArchMaterial.side = THREE.DoubleSide;
+    const portraitArch = new THREE.Mesh(new THREE.CircleGeometry(0.36, 18, 0, Math.PI), portraitArchMaterial);
+    const archPoint = this.localPoint(position, rotation, 0, -0.405);
+    portraitArch.position.set(archPoint.x, groundY + 2.06, archPoint.z);
+    portraitArch.rotation.y = rotation;
+    portraitArch.userData.kind = "cook-memorial-portrait-arch";
+    this.scene.add(portraitArch);
+    const portraitHead = new THREE.Mesh(new THREE.SphereGeometry(0.105, 12, 8), this.basicDetailMaterial("cook-portrait-relief", 0x4e3928));
+    portraitHead.scale.z = 0.28;
+    const portraitHeadPoint = this.localPoint(position, rotation, 0, -0.43);
+    portraitHead.position.set(portraitHeadPoint.x, groundY + 2.02, portraitHeadPoint.z);
+    portraitHead.rotation.y = rotation;
+    portraitHead.userData.kind = "cook-memorial-relief";
+    this.scene.add(portraitHead);
+    const portraitBust = this.addLocalBox(
+      position,
+      rotation,
+      0,
+      -0.408,
+      0.34,
+      0.23,
+      0.035,
+      this.basicDetailMaterial("cook-portrait-relief", 0x4e3928),
+      groundY + 1.82,
+      false
+    );
+    portraitBust.position.y = groundY + 1.82;
+    portraitBust.userData.kind = "cook-memorial-relief";
     this.addLocalBox(position, rotation, 0, -0.375, 0.62, 0.22, 0.06, bronze, groundY + 1.2, false).position.y = groundY + 1.2;
     this.addLocalBox(position, rotation, 0, -0.375, 0.38, 0.15, 0.06, bronze, groundY + 0.72, false).position.y = groundY + 0.72;
-    const cap = this.addLocalBox(position, rotation, 0, 0, 1.2, 0.2, 0.76, granite, groundY + 2.9);
-    cap.position.y = groundY + 2.9;
-    this.addLabel("Cook memorial site", position, 3.2);
+    const cap = new THREE.Mesh(new THREE.ConeGeometry(0.82, 0.28, 4), granite);
+    cap.position.set(position.x, groundY + 2.95, position.z);
+    cap.rotation.y = rotation + Math.PI / 4;
+    cap.scale.z = 0.64;
+    cap.castShadow = true;
+    cap.userData.kind = "cook-memorial-pyramidal-cap";
+    this.scene.add(cap);
+    this.addLabel("Cook Memorial", position, 3.2);
   }
 
   private addBoundaryFence(): void {
@@ -6323,7 +7211,7 @@ export class WorldBuilder {
     const trees = this.level.trees.filter((tree) => pointInPolygon(tree.position, this.level.boundary));
     if (trees.length === 0) return;
 
-    const circleGeometry = new THREE.CircleGeometry(1, 22);
+    const circleGeometry = this.painterlyGeometry(new THREE.CircleGeometry(1, 22), this.materials.leafLitter);
     const litterMesh = new THREE.InstancedMesh(circleGeometry, this.materials.leafLitter, trees.length);
     const wearMesh = new THREE.InstancedMesh(circleGeometry, this.materials.wornGrass, trees.length);
     const matrix = new THREE.Matrix4();

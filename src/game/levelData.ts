@@ -107,6 +107,50 @@ const footprintFromPolygon = (polygon: readonly Vec2[]): { center: Vec2; halfX: 
   return { center, halfX, halfZ, angle };
 };
 
+const fittedFootprintFromPolygon = (
+  polygon: readonly Vec2[],
+  frontagePoint?: Vec2
+): { center: Vec2; halfX: number; halfZ: number; angle: number } => {
+  const center = polygonCentroid(polygon);
+  let longestA = polygon[0];
+  let longestB = polygon[1] ?? polygon[0];
+  let longest = 0;
+  for (let index = 0; index < polygon.length; index += 1) {
+    const a = polygon[index];
+    const b = polygon[(index + 1) % polygon.length];
+    const length = distance(a, b);
+    if (length > longest) {
+      longest = length;
+      longestA = a;
+      longestB = b;
+    }
+  }
+  let angle = Math.atan2(longestB.z - longestA.z, longestB.x - longestA.x);
+  const extents = (candidateAngle: number) => {
+    const cos = Math.cos(candidateAngle);
+    const sin = Math.sin(candidateAngle);
+    let halfX = 0;
+    let halfZ = 0;
+    for (const point of polygon) {
+      const dx = point.x - center.x;
+      const dz = point.z - center.z;
+      halfX = Math.max(halfX, Math.abs(dx * cos + dz * sin));
+      halfZ = Math.max(halfZ, Math.abs(-dx * sin + dz * cos));
+    }
+    return { halfX, halfZ };
+  };
+  const { halfX, halfZ } = extents(angle);
+  if (frontagePoint && localPointFromWorld(center, angle, frontagePoint).z < 0) angle += Math.PI;
+  return { center, halfX, halfZ, angle };
+};
+
+const localRectPolygon = (center: Vec2, angle: number, localX: number, localZ: number, width: number, depth: number): Vec2[] => [
+  offsetPoint(center, angle, localX - width * 0.5, localZ - depth * 0.5),
+  offsetPoint(center, angle, localX + width * 0.5, localZ - depth * 0.5),
+  offsetPoint(center, angle, localX + width * 0.5, localZ + depth * 0.5),
+  offsetPoint(center, angle, localX - width * 0.5, localZ + depth * 0.5)
+];
+
 const raisedCircle = (center: Vec2, radius: number): Extract<InteractableRaisedFootprint, { shape: "circle" }> => ({
   shape: "circle",
   center,
@@ -178,18 +222,21 @@ export const RESEARCH_NOTES = [
   "Path surface transition patches now derive feathered edges and compacted junctions from mapped paths, with a small set of researched desire paths through high-use lawns.",
   "A 2026-07-06 realism artifact audit aligned Three.js object-preview building orientation with the restored Three.js runtime, added source-backed facade, current-works, suppressed-tree-stump, wet-weather and night-light details, and tightened zombie/weapon silhouettes while preserving low-poly anime minimalism.",
   "A later 2026-07-06 facade and tennis-works pass added explicit source-backed frontage points for the major mapped buildings and renovation-surface cues on all six existing tennis courts, based on Yarra's 2026-2027 Brunswick Street Oval works page.",
-  "A 2026-07-06 playground and fence pass refreshed current OSM playground footprints, modeled both playgrounds as fenced with inferred safety-gate gaps, added low jumpable oval fence blockers at mapped oval connectors, and added a short player jump.",
+  "A 2026-07-06 playground and fence pass refreshed current OSM playground footprints, retained the documented south safety fence/gates, left the relocated northern playground unfenced after current-source review, added low jumpable oval fence blockers at mapped connectors, and added a short player jump.",
   "A 2026-07-06 Fitzy Bowl pass removed the old invisible full-skatepark blocker, added source-backed depressed skate bowls, and made bowl exits constrained to roll-out gaps so dropping in is easy and climbing out is deliberately awkward.",
-  "A 2026-07-06 public-use pass added source-backed rule signs for dog-leash edges, alcohol hours, access-friendly venue cues and the rotunda stair/no-power constraint so the park reads like the current public Edinburgh Gardens rather than a generic arena.",
-  "A 2026-07-06 structure-depth pass added additional source-backed building affordances: grandstand umpire access, Emely Baker kitchenette/service cues, bowling-green shed supplies, north toilet service access and an interactable rotunda memorial plaque.",
-  "A 2026-07-06 structure utility pass adds source-backed grandstand kiosk/public-toilet access plus powered-building switchboards that can activate exterior floodlights; the rotunda remains explicitly unpowered.",
+  "Public-use rules still inform gameplay, but rule pages are no longer translated into fixed physical signs without a mapped or photographed sign coordinate.",
+  "The structure-depth correction retains grandstand umpire access, the Emely Baker room/kitchenette and the Rotunda plaque interaction, while removing unsupported bowling shed supplies, loose roof-maintenance kits, exterior appliances and duplicate access props.",
+  "Future grandstand kiosk/public-toilet and sports-pavilion switchboard interactions are excluded from the 2026 baseline; the Rotunda remains explicitly unpowered.",
   "A 2026-07-06 structure shelter pass adds source-backed roof, verandah, shade-sail and grandstand-cover shelter zones that reduce weather handling/search exposure while staying tied to visible building footprints.",
-  "A 2026-07-06 structure facility refresh adds source-backed sports-pavilion first-aid/kitchen access and Fitzroy Bowls zincalume roof/gutter cues, with the new gameplay points kept exterior because public room and service drawings are unavailable.",
-  "A 2026-07-06 heritage-furniture and winter-weather pass adds CMP-backed Chandler Fountain, cast-iron gas-lamp, bollard, reproduction-seat and interpretive-sign cues, and retunes weather toward Bureau of Meteorology Melbourne July cloud/rain/wind normals.",
+  "The 2026 facility correction retains documented Fitzroy Bowls zincalume/solar roof fabric without inventing loose exterior maintenance props; future sports-pavilion first-aid/kitchen access is excluded.",
+  "A 2026-07-10 correction retains the CMP-backed Chandler Fountain and the single documented Avenue B Fitzroy Council Bollard, and removes rotunda lamps recorded as gone by c. 2014 plus unsupported interpretive signs, extra seats and bollards; winter weather remains tuned to Bureau of Meteorology Melbourne July normals.",
   "A 2026-07-06 winter daylight/tree/zombie pass retunes the accelerated cycle to Melbourne July 2026 sunrise/sunset, uses winter solar azimuth/altitude for the key light, makes elm/oak profiles sparser and branchier, and lets night/rain/wet lawns modestly alter zombie visibility, hearing and footing.",
   "A 2026-07-06 tree character pass replaces arbitrary mapped-tree profile fallbacks with heritage/significant-tree proximity rules; the 35 Brunswick Street Oval replacement trees remain excluded from the 2026 snapshot because council schedules planting after the active works packages.",
-  "A 2026-07-09 current OSM object audit confirms tree/bin/fountain/bench/toilet/BBQ node parity, adds the Freeman Street post box, moves table tennis to OSM way 715659039 and labels per-table picnic placements as approximate where public GIS is unavailable.",
-  "A 2026-07-10 physical-baseline correction restores the park itself to 2026: six existing tennis courts under active works, construction fencing/materials and the council-confirmed tree removals, with the in-world clock/date as the only 2030 element.",
+  "A 2026-07-09 current OSM object audit confirms tree/bin/fountain/bench/toilet/BBQ node parity, adds the Freeman Street post box and moves table tennis to OSM way 715659039; approximate picnic tables were later removed because no per-table GIS points were found.",
+  "A 2026-07-10 physical-baseline correction restores the park itself to 2026: three northern tennis courts are active works surfaces, three southern clay courts remain operational and all 39 council-plan removals are represented as stumps, with the in-world clock/date as the only 2030 element.",
+  "The same audit corrects Three.js map/local rotation signs, prevents tennis/bowling fence runs from closing through clubhouses, and keeps documented gate-to-clubroom and Emely courtyard routes free of hidden blockers.",
+  "CMP Figure 72 controls the Hannah memorial entrance: paired red-brick piers, dark bases, plaques and open green gate leaves are rendered at the mapped bowling entrance, with matching solid pier collision and a clear pedestrian opening.",
+  "Geotagged 28 May 2026 photographs replace the bowling club's earlier 150-year mural cue on the St Georges Road wall with the current Melanie Caple composition: a maroon ground, standing and reclining lions, amber discs, central flower/still life, paired budgies, foliage and gold rays.",
   "See docs/edinburgh-gardens-research.md for source URLs, query notes, data licensing notes and implementation decisions."
 ];
 
@@ -334,6 +381,11 @@ const TENNIS_GEO = [
   g(-37.7877761, 144.9819984)
 ];
 
+// The sports-centre polygon uses the pavilion walls as part of its south-west
+// boundary. Only the exposed court perimeter is chain mesh; drawing the
+// closed OSM envelope would put a second fence through the clubhouse.
+const TENNIS_FENCE_GEO = TENNIS_GEO.slice(14).concat(TENNIS_GEO.slice(1, 2));
+
 const TENNIS_COURTS_GEO = [
   [
     g(-37.7881147, 144.9819961),
@@ -388,6 +440,11 @@ const BOWLS_GEO = [
   g(-37.7880313, 144.9809581),
   g(-37.7880240, 144.9810455)
 ];
+
+// The clubhouse and entrance outbuilding close the southern bowling boundary.
+// Vicmap aerial imagery and CMP Figure 71 show chain mesh only around the
+// exposed west/north/east green perimeter.
+const BOWLING_FENCE_GEO = BOWLS_GEO.slice(0, 11);
 
 const BOWLS_GREENS_GEO = [
   [
@@ -539,7 +596,7 @@ const PLAYGROUND_FENCE_SOURCE =
 const SOUTH_PLAYGROUND_LAYOUT_SOURCE =
   "OSM way 24489879 current playground footprint; Melbourne Playgrounds and Busy City Guide describe the large fenced south playground, all-abilities paths, wooden fort, rope net, sandpits, swings, toddler area, chalk walls and central shelter";
 const NORTH_PLAYGROUND_LAYOUT_SOURCE =
-  "OSM way 543616019 current relocated playground footprint; Yarra 2018 northern precinct plan, Proludic 2018 toddler unit reference, Melbourne Playgrounds and Mama Knows North describe younger-age equipment, natural-play/log elements and nearby BBQ/activity precinct; no current public fence source found for the relocated footprint";
+  "OSM way 543616019 current relocated playground footprint; Yarra 2018 northern precinct plan, Proludic 2018 toddler unit reference, Melbourne Playgrounds and Mama Knows North describe younger-age equipment, natural-play/log elements and nearby BBQ/activity precinct; exact current equipment positions are unavailable, and no current public fence source was found for the relocated footprint";
 const OVAL_FENCE_SOURCE =
   "OSM way 14946934 W.T. Peterson Oval footprint; OSM connector ways 403753751 and 403753754 align with fence-gate gaps; low jumpable fence height and exact gate widths are inferred from existing in-game oval fence treatment because no public barrier=fence way was available";
 const FITZY_BOWL_SOURCE =
@@ -547,13 +604,26 @@ const FITZY_BOWL_SOURCE =
 const STRUCTURE_ACCESS_SOURCE =
   "Yarra Edinburgh Gardens facility listing; OSM building footprints; Lovell Chen Edinburgh Gardens CMP 2021 built-feature inventory and facade photographs; existing changeroom and umpire-room access only—future sports-pavilion rooms are excluded from the 2026 baseline";
 const STRUCTURE_SHELTER_SOURCE =
-  "Yarra Edinburgh Gardens facility listing confirms pavilion, public toilets and access-friendly park facilities; Yarra Brunswick Street Oval redevelopment confirms kiosk terrace, grandstand external stairs/gates and tennis social-space/amenity works; Yarra Emely Baker Centre confirms gated outdoor area and shade sail; Yarra Rotunda page confirms bookable shelter use but no current power";
-const BOWLING_ROOF_UPGRADE_SOURCE =
-  "Yarra News April-May 2025 Fitzroy Bowls roof upgrade: ageing roof sheeting replaced with zincalume sheets, roof structure strengthened and gutters upgraded without changing the building's look or nearby heritage-listed sites";
+  "Yarra Edinburgh Gardens facility listing confirms pavilion, public toilets and access-friendly park facilities; Yarra Brunswick Street Oval redevelopment confirms kiosk terrace, grandstand external stairs/gates and tennis social-space/amenity works; Yarra Emely Baker Centre venue page and venue manual confirm the gated outdoor area, dark shade sail, external play-yard doors and accessible use; Yarra Rotunda page confirms bookable shelter use but no current power";
 const TREE_CHARACTER_ZONE_SOURCE =
   "3068 Group Edinburgh Gardens heritage-study summary and CMP source inventory: mature exotic-tree canopy, mostly avenue planting along the path system, remains a defining garden structure; Yarra significant-tree data gives precise species/height/diameter for source-backed specimen anchors";
 const HERITAGE_FURNITURE_SOURCE =
   "Lovell Chen Edinburgh Gardens CMP 2021 sections 3.2.8 and 3.11.4: Chandler Drinking Fountain, one surviving Fitzroy Council Bollard at the Avenue B/St Georges Road entrance, consistent timber-and-steel park benches, contemporary bin enclosures and interpretive signs near early structures";
+const UNSUPPORTED_FIXED_PARK_DETAIL_IDS = new Set([
+  "north-lawn-dog-sign",
+  "alfred-lawn-dog-sign",
+  "north-playground-dog-leash-rule",
+  "south-playground-dog-leash-rule",
+  "oval-dog-leash-rule",
+  "rotunda-stairs-no-power-rule",
+  "south-picnic-alcohol-hours-rule",
+  "emely-baker-access-friendly-rule",
+  "freeman-gate-notice-board",
+  "alfred-crescent-notice-board",
+  "grandstand-interpretive-sign",
+  "rotunda-interpretive-sign",
+  "queen-victoria-interpretive-sign"
+]);
 const TABLE_TENNIS_SOURCE =
   "OpenStreetMap way 715659039 sport=table_tennis from the 2026-07-09 map API extract; Yarra northern precinct consultation confirms table-tennis activity in the northern precinct";
 const RAIL_TRAIL_SOURCE =
@@ -563,15 +633,15 @@ const ALFRED_CRESCENT_PATH_SOURCE =
 const OVAL_SOURCE =
   "OpenStreetMap way 14946934 W.T. Peterson Oval footprint; OSM pitch way 546997148 sits inside the oval sporting surface";
 const GRANDSTAND_SOURCE =
-  "OpenStreetMap way 403753786 building=grandstand, named Kevin Murray Stand; OSM amenity=parking way 1392352940 maps the adjacent stand parking apron";
+  "OpenStreetMap way 403753786 building=grandstand, named Kevin Murray Stand; Lovell Chen Edinburgh Gardens CMP 2021 Figure 36; OSM amenity=parking way 1392352940 maps the adjacent stand parking apron; exact 10 July 2026 temporary construction fabric is unavailable";
 const GRANDSTAND_PARKING_SOURCE =
   "OpenStreetMap way 1392352940 amenity=parking from the 2026-07-09 map API extract; painted bay layout and kerb detail are not public in OSM";
 const TENNIS_SOURCE =
-  "OpenStreetMap sports_centre way 24489878, tennis court ways 715802691-715802696 and mapped club building way 403753784; Fitzroy Tennis Club update 5 June 2026 records northern-court construction from May to September while three clay courts remain in use";
+  "OpenStreetMap sports_centre way 24489878, tennis court ways 715802691-715802696 and mapped club building way 403753784; Fitzroy Tennis Club update 30 June 2026 records northern-court construction from May to September while three clay courts remain in use";
 const TENNIS_COURT_WORKS_SOURCE =
-  "OpenStreetMap tennis court ways 715802694-715802696; Fitzroy Tennis Club update 5 June 2026 records Northern Courts construction from May to September 2026; Yarra's 29 May 2026 first-sod notice confirms court construction had started";
+  "OpenStreetMap tennis court ways 715802694-715802696; Fitzroy Tennis Club update 30 June 2026 records Northern Courts construction from May to September 2026; Yarra's 29 May 2026 first-sod notice confirms court construction had started";
 const TENNIS_ACTIVE_COURT_SOURCE =
-  "OpenStreetMap tennis court ways 715802691-715802693; Fitzroy Tennis Club update 5 June 2026 says the club was operating on three clay courts while the Northern Courts were under construction";
+  "OpenStreetMap tennis court ways 715802691-715802693; Fitzroy Tennis Club update 30 June 2026 says the club was operating on three clay courts while the Northern Courts were under construction";
 const BOWLING_SOURCE =
   "OpenStreetMap sports_centre way 24489838, bowls pitch ways 715802677 and 715802678 and bowling club building way 543505639";
 const SKATE_SOURCE =
@@ -579,7 +649,7 @@ const SKATE_SOURCE =
 const BASKETBALL_SOURCE =
   "OpenStreetMap way 500981577 leisure=pitch sport=basketball with two hoops; Yarra northern precinct consultation confirms basketball half-court activity";
 const NORTH_TOILETS_SOURCE =
-  "OpenStreetMap way 307404819 amenity=toilets/building=yes; Yarra Edinburgh Gardens public toilet facility listing; Lovell Chen Edinburgh Gardens CMP 2021 section 3.10.4 and Figure 146 document the 2014 corrugated-sheet facility, decorative painted walls and sheet-metal/clear-plastic skillion roof on steel posts";
+  "OpenStreetMap way 307404819 amenity=toilets/building=yes fixes the current footprint; City of Yarra new-toilets project page supplies the dimensioned north-block upgrade plan and current as-built photograph; Yarra 2021-22 Annual Report confirms the upgraded facility was completed and open; the as-built photograph controls the charcoal corrugated walls, external grey door banks, accessible ramp, twin stainless basins, perforated upper screens, exposed dark steel frame and alternating opaque/translucent skillion roof, superseding the proposal render's red finish; Lovell Chen Edinburgh Gardens CMP 2021 section 3.10.4 and Figure 146 document the earlier facility";
 const OSM_CENTRAL_GARDEN_BED_SOURCE =
   "OpenStreetMap way 715802699 leisure=garden from the 2026-07-09 map API extract";
 const SOUTH_EAST_PITCH_SOURCE =
@@ -2396,13 +2466,13 @@ const OSM_BUILDING_FOOTPRINTS_GEO: Array<{
 }> = [
   {
     id: "osm-building-242003562",
-    label: "South service and amenities building",
+    label: "Alfred Crescent Sports Pavilion",
     height: 3.4,
     material: "utility",
     detailProfile: "amenities",
-    frontagePoint: g(-37.7884306, 144.9835333),
-    facadeSource: "OSM toilet amenity node 7576808731; Yarra Edinburgh Gardens public facilities listing",
-    source: "OSM way 242003562 full JSON; Yarra Edinburgh Gardens facilities listing",
+    frontagePoint: g(-37.7883200, 144.9834200),
+    facadeSource: "Lovell Chen Edinburgh Gardens CMP 2021 section 3.10.3 and Figure 145; ClarkeHopkinsClarke project photographs document the west paired-glass entrance, black wraparound corrugated roof, clerestory, pale masonry, green panels, shutters and timber soffits; City of Yarra's completed toilet-upgrade records supersede the photographs at the north-west extension",
+    source: "OSM way 242003562 version 5 (2026-02-06) exact current footprint; Lovell Chen Edinburgh Gardens CMP 2021 section 3.10.3/Figure 145; City of Yarra Buildings Asset Management Plan asset B000163; City of Yarra Alfred Crescent public-toilet plan and 2021-22 completion report; ClarkeHopkinsClarke project photographs",
     collision: true,
     points: [
       g(-37.7884009, 144.9834542),
@@ -2431,9 +2501,9 @@ const OSM_BUILDING_FOOTPRINTS_GEO: Array<{
     material: "timber",
     detailProfile: "tennis-pavilion",
     frontagePoint: g(-37.7880800, 144.9822400),
-    facadeSource: "Lovell Chen Edinburgh Gardens CMP 2021 Figures 76-77: ochre weatherboards, red-brown timber trim, verandahs and multiple corrugated hipped/gabled roof volumes; Yarra Brunswick Street Oval 2026 works updates place the adjoining courts inside active construction",
-    source: "OSM way 403753784 full JSON; Lovell Chen Edinburgh Gardens CMP 2021 sections 3.5.4 and Figures 76-77; Yarra Brunswick Street Oval 2026 works updates",
-    collision: false,
+    facadeSource: "Lovell Chen Edinburgh Gardens CMP 2021 section 3.2.10 and Figures 76-77: ochre-painted battened fibro-cement cladding above a weatherboard plinth, red-brown trim, gambrel/skillion roofs and north/east verandahs; Fitzroy Tennis Club's 30 June 2026 update says the old clubhouse was inaccessible and being relocated",
+    source: "OSM way 403753784 full JSON; Lovell Chen Edinburgh Gardens CMP 2021 section 3.2.10 and Figures 76-77; Fitzroy Tennis Club update 30 June 2026 records May-March clubhouse construction, no clubhouse facilities on site and relocation of the old building; exact 10 July 2026 clubhouse position and temporary construction fabric are unavailable",
+    collision: true,
     points: [
       g(-37.7882091, 144.9819287),
       g(-37.7883259, 144.9819091),
@@ -2457,8 +2527,8 @@ const OSM_BUILDING_FOOTPRINTS_GEO: Array<{
     label: "Tennis-side storage tank",
     height: 1.7,
     material: "utility",
-    source: "OSM way 715802679 man_made=storage_tank; current full-object placement audit",
-    collision: false,
+    source: "OSM way 715802679 man_made=storage_tank; current full-object placement audit; no public source resolves attached pipe, ladder or fitting positions",
+    collision: true,
     points: [
       g(-37.7880689, 144.9816485),
       g(-37.7880747, 144.9816588),
@@ -2480,7 +2550,7 @@ const OSM_BUILDING_FOOTPRINTS_GEO: Array<{
     material: "timber",
     detailProfile: "gatehouse",
     frontagePoint: g(-37.7897200, 144.9801800),
-    facadeSource: "Lovell Chen Edinburgh Gardens CMP 2021 Figure 61: reconstructed timber entrance pavilion with cream infill panels, red-brown framing, open central passage bays and a shallow corrugated gable roof",
+    facadeSource: "Lovell Chen Edinburgh Gardens CMP 2021 Figure 61: reconstructed timber entrance pavilion with cream V-jointed infill, red-brown framing, paired open central passage bays, diagonal boarding, carved eaves valances and a corrugated gabled roof with central gablets",
     source: "OSM way 543505638 full JSON; Lovell Chen Edinburgh Gardens CMP 2021 section 3.2.6 and Figure 61",
     collision: true,
     points: [
@@ -2497,10 +2567,10 @@ const OSM_BUILDING_FOOTPRINTS_GEO: Array<{
     height: 4.2,
     material: "utility",
     detailProfile: "bowling-club",
-    frontagePoint: g(-37.7879900, 144.9802500),
-    facadeSource: "Lovell Chen Edinburgh Gardens CMP 2021 Figures 71-72: pale two-storey club rooms, long glazed green-facing frontage, blue-and-gold fascia signage, zincalume/solar roof and red-brick Hannah memorial gates",
-    source: "OSM way 543505639 full JSON; Lovell Chen Edinburgh Gardens CMP 2021 section 3.4.4 and Figures 71-72; Yarra 2025 Fitzroy Bowls roof upgrade",
-    collision: false,
+    frontagePoint: g(-37.7878200, 144.9806800),
+    facadeSource: "Lovell Chen Edinburgh Gardens CMP 2021 section 3.2.9 and Figures 70-73: utilitarian bagged-render single/double-storey club rooms, long glazed green-facing frontage, blue-and-gold fascia signage, zincalume/solar roof and red/brown-brick Hannah memorial gates; Colour Our City photos 55297636202, 55298958435 and 55298958440 document the current Melanie Caple St Georges Road mural on 28 May 2026",
+    source: "OSM way 543505639 full JSON; Lovell Chen Edinburgh Gardens CMP 2021 section 3.2.9 and Figures 70-73; Yarra 2025 Fitzroy Bowls roof upgrade; Yarra Fitzroy Bowls 150 Years Memorial Wall context; Colour Our City Flickr photos 55297636202, 55298958435 and 55298958440 for the current 28 May 2026 mural",
+    collision: true,
     points: [
       g(-37.7879856, 144.9809226),
       g(-37.7879754, 144.9809242),
@@ -2520,11 +2590,11 @@ const OSM_BUILDING_FOOTPRINTS_GEO: Array<{
   },
   {
     id: "osm-building-543505640",
-    label: "Round pavilion building",
+    label: "Fitzroy Memorial Rotunda",
     height: 3.1,
     material: "timber",
     detailProfile: "rotunda-pavilion",
-    source: "OSM way 543505640 full JSON",
+    source: "OSM way 543505640 full JSON; Lovell Chen Edinburgh Gardens CMP 2021 section 3.10.1 and Figures 142-143; Yarra Edinburgh Gardens Rotunda venue photographs; public sources do not resolve the entablature floodlight count and angular positions",
     collision: true,
     points: [
       g(-37.7867751, 144.9815512),
@@ -2545,12 +2615,12 @@ const OSM_BUILDING_FOOTPRINTS_GEO: Array<{
   {
     id: "osm-building-543505702",
     label: "Emely Baker Centre",
-    height: 4.2,
+    height: 3.2,
     material: "brick",
     detailProfile: "community-centre",
-    frontagePoint: g(-37.7856400, 144.9824800),
-    facadeSource: "Yarra Emely Baker Centre page: Alfred Crescent venue, access-friendly status, gated outdoor area and shade sail",
-    source: "OSM way 543505702 full JSON",
+    frontagePoint: g(-37.7856520, 144.9824100),
+    facadeSource: "Lovell Chen Edinburgh Gardens CMP 2021 Figure 144: low single-storey tan-brick centre with a shallow metal tray-deck skillion roof, tile-coped high walled outdoor court and aluminium-framed glazing; Yarra Emely Baker Centre venue manual pages 9-11 document the current glazed play-yard facade, name sign, dark shade sail, vertical-bar side gate and floor plan",
+    source: "OSM way 543505702 full JSON; Lovell Chen Edinburgh Gardens CMP 2021 section 3.10.2 and Figure 144; Yarra Emely Baker Centre venue page and November 2024 venue manual; public sources do not resolve a measured sandpit boundary or every rear-room opening dimension",
     collision: true,
     points: [
       g(-37.7857727, 144.982404),
@@ -2570,8 +2640,8 @@ const OSM_BUILDING_FOOTPRINTS_GEO: Array<{
     height: 2.9,
     material: "utility",
     detailProfile: "bowling-shed",
-    source: "OSM way 1475006767 full JSON",
-    collision: false,
+    source: "OSM way 1475006767 full JSON; public facade photography and individual door, vent and equipment positions are unavailable",
+    collision: true,
     points: [
       g(-37.7880133, 144.9809609),
       g(-37.7879795, 144.9809661),
@@ -2587,8 +2657,8 @@ const OSM_BUILDING_FOOTPRINTS_GEO: Array<{
     height: 2.6,
     material: "utility",
     detailProfile: "bowling-shed",
-    source: "OSM way 1475006768 full JSON",
-    collision: false,
+    source: "OSM way 1475006768 full JSON; public facade photography and individual door, vent and equipment positions are unavailable",
+    collision: true,
     points: [
       g(-37.7881042, 144.9806922),
       g(-37.7880689, 144.9806874),
@@ -2603,8 +2673,8 @@ const OSM_BUILDING_FOOTPRINTS_GEO: Array<{
     height: 2.8,
     material: "utility",
     detailProfile: "bowling-shed",
-    source: "OSM way 1475006769 full JSON",
-    collision: false,
+    source: "OSM way 1475006769 full JSON; public facade photography and individual door, vent and equipment positions are unavailable",
+    collision: true,
     points: [
       g(-37.787959, 144.9811502),
       g(-37.7880467, 144.9812417),
@@ -2619,8 +2689,8 @@ const OSM_BUILDING_FOOTPRINTS_GEO: Array<{
     height: 2.4,
     material: "timber",
     detailProfile: "bowling-shed",
-    source: "OSM way 1475006770 full JSON",
-    collision: false,
+    source: "OSM way 1475006770 full JSON; public facade photography and individual door, vent and equipment positions are unavailable",
+    collision: true,
     points: [
       g(-37.7875114, 144.9811606),
       g(-37.7875199, 144.9812476),
@@ -2635,8 +2705,8 @@ const OSM_BUILDING_FOOTPRINTS_GEO: Array<{
     height: 2.3,
     material: "timber",
     detailProfile: "bowling-shed",
-    source: "OSM way 1475006771 full JSON",
-    collision: false,
+    source: "OSM way 1475006771 full JSON; public facade photography and individual door, vent and equipment positions are unavailable",
+    collision: true,
     points: [
       g(-37.787481, 144.9805718),
       g(-37.7874869, 144.9806325),
@@ -2651,8 +2721,8 @@ const OSM_BUILDING_FOOTPRINTS_GEO: Array<{
     height: 2.3,
     material: "timber",
     detailProfile: "bowling-shed",
-    source: "OSM way 1475006772 full JSON",
-    collision: false,
+    source: "OSM way 1475006772 full JSON; public facade photography and individual door, vent and equipment positions are unavailable",
+    collision: true,
     points: [
       g(-37.7877459, 144.9804572),
       g(-37.7877508, 144.9805076),
@@ -2667,8 +2737,8 @@ const OSM_BUILDING_FOOTPRINTS_GEO: Array<{
     height: 2.3,
     material: "timber",
     detailProfile: "bowling-shed",
-    source: "OSM way 1475006773 full JSON",
-    collision: false,
+    source: "OSM way 1475006773 full JSON; public facade photography and individual door, vent and equipment positions are unavailable",
+    collision: true,
     points: [
       g(-37.7878326, 144.9811639),
       g(-37.7877033, 144.9812283),
@@ -2690,6 +2760,40 @@ const OSM_FENCES_GEO: Array<{
   source: string;
   gates?: Array<{ id: string; label: string; point: GeoPoint; radius: number; source?: string }>;
 }> = [
+  {
+    id: "tennis-precinct-perimeter-fence",
+    label: "Fitzroy Tennis Club chain-mesh perimeter fence",
+    height: 2.8,
+    width: 0.3,
+    source: "OSM sports_centre way 24489878 perimeter; Vicmap Basemap aerial shows the exposed court fence terminating against the clubhouse rather than crossing it; Lovell Chen CMP 2021 Figures 76-77 show the fenced six-court precinct; Fitzroy Tennis Club update 5 June 2026 identifies the operational access gate at the south-eastern corner of Court 3",
+    gates: [
+      {
+        id: "tennis-court-3-south-east-gate",
+        label: "Court 3 south-east member access gate",
+        point: g(-37.7883709, 144.9823970),
+        radius: 2.1,
+        source: "Fitzroy Tennis Club update 5 June 2026: access through a new gate in the south-eastern corner of Court 3"
+      }
+    ],
+    points: TENNIS_FENCE_GEO
+  },
+  {
+    id: "bowling-precinct-perimeter-fence",
+    label: "Fitzroy Victoria Bowling Club perimeter fence",
+    height: 1.65,
+    width: 0.3,
+    source: "OSM sports_centre way 24489838 perimeter; Vicmap Basemap aerial and Lovell Chen CMP 2021 Figure 71 show the green chain-mesh enclosure terminating at the clubhouse/outbuilding boundary; CMP Figure 72 shows the Hannah memorial entrance gate",
+    gates: [
+      {
+        id: "bowling-hannah-memorial-gate",
+        label: "Hannah memorial entrance gate",
+        point: g(-37.7879508, 144.9811627),
+        radius: 2.4,
+        source: "Lovell Chen CMP 2021 Figure 72; entrance fitted to the mapped south-east clubhouse approach"
+      }
+    ],
+    points: BOWLING_FENCE_GEO
+  },
   {
     id: "south-playground-fence",
     label: "South playground steel safety fence",
@@ -3030,7 +3134,42 @@ function fenceObstacles(fence: MappedFence): BoxObstacle[] {
       });
     });
   }
+
+  const hannahGate = gates.find((gate) => gate.id === "bowling-hannah-memorial-gate");
+  if (hannahGate) {
+    const angle = nearestFenceSegmentAngle(fence.points, hannahGate.position);
+    for (const side of [-1, 1]) {
+      obstacles.push({
+        id: `${hannahGate.id}-pier-${side < 0 ? "west" : "east"}`,
+        label: "Hannah memorial gate brick pier",
+        sourceObjectId: fence.id,
+        sourceObjectKind: "mapped-fence",
+        shape: "box",
+        center: offsetPoint(hannahGate.position, angle, side * 1.18, 0),
+        halfX: 0.36,
+        halfZ: 0.36,
+        angle,
+        blocksSight: false
+      });
+    }
+  }
   return obstacles;
+}
+
+function nearestFenceSegmentAngle(points: readonly Vec2[], position: Vec2): number {
+  let bestDistance = Number.POSITIVE_INFINITY;
+  let bestAngle = 0;
+  for (let index = 0; index < points.length - 1; index += 1) {
+    const a = points[index];
+    const b = points[index + 1];
+    const nearest = nearestPointOnSegment(position, a, b);
+    const candidateDistance = distance(position, nearest);
+    if (candidateDistance < bestDistance) {
+      bestDistance = candidateDistance;
+      bestAngle = Math.atan2(b.z - a.z, b.x - a.x);
+    }
+  }
+  return bestAngle;
 }
 
 function fenceVisibleIntervals(a: Vec2, b: Vec2, gaps: Array<{ position: Vec2; radius: number }>): Array<{ start: number; end: number }> {
@@ -3515,21 +3654,37 @@ export function createLevelData(): LevelData {
   const grandstand = polygonFromGeo(GRANDSTAND_GEO);
   const tennis = polygonFromGeo(TENNIS_GEO);
   const bowling = polygonFromGeo(BOWLS_GEO);
-  const tennisCenter = polygonCentroid(tennis);
-  const tennisFootprint = footprintFromPolygon(tennis);
   const southAmenitiesBuildingSource = OSM_BUILDING_FOOTPRINTS_GEO.find((building) => building.id === "osm-building-242003562");
   if (!southAmenitiesBuildingSource) {
-    throw new Error("Missing south amenities building footprint");
+    throw new Error("Missing Alfred Crescent Sports Pavilion footprint");
   }
   const rotundaBuildingSource = OSM_BUILDING_FOOTPRINTS_GEO.find((building) => building.id === "osm-building-543505640");
   if (!rotundaBuildingSource) {
     throw new Error("Missing rotunda building footprint");
   }
+  const entrancePavilionSource = OSM_BUILDING_FOOTPRINTS_GEO.find((building) => building.id === "osm-building-543505638");
+  if (!entrancePavilionSource?.frontagePoint) {
+    throw new Error("Missing timber entrance pavilion footprint or frontage");
+  }
   const southAmenitiesBuilding = polygonFromGeo(southAmenitiesBuildingSource.points);
-  const southAmenitiesFootprint = footprintFromPolygon(southAmenitiesBuilding);
+  const southAmenitiesFootprint = fittedFootprintFromPolygon(
+    southAmenitiesBuilding,
+    southAmenitiesBuildingSource.frontagePoint ? geoToWorld(southAmenitiesBuildingSource.frontagePoint) : undefined
+  );
   const southAmenitiesRotation = -southAmenitiesFootprint.angle;
   const rotundaBuilding = polygonFromGeo(rotundaBuildingSource.points);
   const rotundaCenter = polygonCentroid(rotundaBuilding);
+  const entrancePavilionPolygon = polygonFromGeo(entrancePavilionSource.points);
+  const entrancePavilionFootprint = fittedFootprintFromPolygon(
+    entrancePavilionPolygon,
+    geoToWorld(entrancePavilionSource.frontagePoint)
+  );
+  const entrancePavilionPassageAccess = offsetPoint(
+    entrancePavilionFootprint.center,
+    entrancePavilionFootprint.angle,
+    -entrancePavilionFootprint.halfX * 0.32,
+    entrancePavilionFootprint.halfZ + 1.15
+  );
   const rotundaRadius = Math.max(5.8, boundingRadius(rotundaBuilding, rotundaCenter) + 2.25);
   const southPlayground = polygonFromGeo(SOUTH_PLAYGROUND_GEO);
   const northPlayground = polygonFromGeo(NORTH_PLAYGROUND_GEO);
@@ -3613,8 +3768,30 @@ export function createLevelData(): LevelData {
   const southToilets = southAmenitiesFootprint.center;
   const southToiletsRoofFootprint = raisedBox(southToilets, southAmenitiesFootprint.halfX + 0.18, southAmenitiesFootprint.halfZ + 0.18, southAmenitiesFootprint.angle);
   const southToiletsRoofRadius = Math.hypot(southAmenitiesFootprint.halfX, southAmenitiesFootprint.halfZ) + 0.45;
-  const rotundaStairAccess = offsetPoint(rotundaCenter, -0.34, 0, -7.25);
-  const rotundaStairLanding = offsetPoint(rotundaCenter, -0.34, 0, -3.45);
+  const rotundaMapAngle = 0.34;
+  const rotundaStairAccess = offsetPoint(rotundaCenter, rotundaMapAngle, 0, -7.25);
+  const rotundaStairLanding = offsetPoint(rotundaCenter, rotundaMapAngle, 0, -3.45);
+  const rotundaStairHeading = Math.atan2(
+    rotundaStairLanding.z - rotundaStairAccess.z,
+    rotundaStairLanding.x - rotundaStairAccess.x
+  );
+  // Match the eight Blender-asset Tuscan shafts. The main drum blocker is
+  // bypassed while the deck interaction is active, but the columns remain
+  // tangible so the open platform is navigable without becoming ghostlike.
+  const rotundaColumnObstacles: CircularObstacle[] = Array.from({ length: 8 }, (_, index) => {
+    const columnAngle = Math.PI / 2 + Math.PI / 8 + index * Math.PI / 4;
+    const localX = Math.cos(columnAngle) * 4.03;
+    const localZ = -Math.sin(columnAngle) * 4.03;
+    return {
+      id: `rotunda-column-${String(index + 1).padStart(2, "0")}`,
+      label: `Fitzroy Memorial Rotunda column ${index + 1}`,
+      sourceObjectId: "osm-building-543505640",
+      sourceObjectKind: "mapped-building",
+      center: offsetPoint(rotundaCenter, rotundaMapAngle, localX, localZ),
+      radius: 0.31,
+      blocksSight: false
+    };
+  });
   const southToiletsLadderAccess = polygonEdgePointFromLocal(
     southAmenitiesBuilding,
     southAmenitiesFootprint.center,
@@ -3622,11 +3799,6 @@ export function createLevelData(): LevelData {
     southAmenitiesFootprint.halfX * 0.86,
     -southAmenitiesFootprint.halfZ - 0.11
   );
-  const tennisLadderAccess = exteriorPointFromPolygon(geoToWorld(g(-37.787955, 144.982030)), tennis, tennisCenter, 0.28);
-  const tennisLadderLanding = {
-    x: tennisLadderAccess.x + (tennisCenter.x - tennisLadderAccess.x) * 0.16,
-    z: tennisLadderAccess.z + (tennisCenter.z - tennisLadderAccess.z) * 0.16
-  };
   const southBbq = geoToWorld(g(-37.7890776, 144.9835871));
   const northBbq = geoToWorld(g(-37.7859107, 144.9831484));
   const northTableTennis = tableTennisCenter;
@@ -3635,20 +3807,23 @@ export function createLevelData(): LevelData {
   const basketballHoopOffset = Math.max(basketballFootprint.halfX, basketballFootprint.halfZ) * 0.74;
   const ovalCenter = polygonCentroid(oval);
   const grandstandFootprint = footprintFromPolygon(grandstand);
-  const grandstandRotation = -grandstandFootprint.angle;
+  // Level/collision geometry uses the standard map-plane angle. Three.js
+  // meshes negate this angle at render time because of its Y-axis rotation
+  // convention; using that render sign here mirrors lateral access points.
+  const grandstandRotation = grandstandFootprint.angle;
   const grandstandFrontSign = localZFromPoint(grandstandCenter, grandstandRotation, ovalCenter) < 0 ? -1 : 1;
   const grandstandVisualHalfZ = grandstandFootprint.halfZ + 0.45;
   const grandstandStairAccess = offsetPoint(
     grandstandCenter,
     grandstandRotation,
-    0,
-    grandstandFrontSign * (grandstandVisualHalfZ + 1.05)
+    grandstandFootprint.halfX * 0.38,
+    grandstandFrontSign * (grandstandVisualHalfZ + 2.3)
   );
   const grandstandStairLanding = offsetPoint(
     grandstandCenter,
     grandstandRotation,
-    0,
-    grandstandFrontSign * (grandstandVisualHalfZ - 2.4)
+    grandstandFootprint.halfX * 0.38,
+    grandstandFrontSign * (grandstandVisualHalfZ - 0.86)
   );
   const grandstandStairHeading = Math.atan2(grandstandStairLanding.z - grandstandStairAccess.z, grandstandStairLanding.x - grandstandStairAccess.x);
   const grandstandStairAccessLocal = localPointFromWorld(grandstandCenter, grandstandFootprint.angle, grandstandStairAccess);
@@ -3734,22 +3909,11 @@ export function createLevelData(): LevelData {
     g(-37.7873918, 144.9853250),
     g(-37.7877533, 144.9841097)
   ]);
-  const ovalPath = pathFromGeo(
-    "oval-loop",
-    "W. T. Peterson Oval loop",
-    "footway",
-    OVAL_GEO,
-    3.6,
-    {
-      surface: "asphalt",
-      source: "W.T. Peterson Oval OSM geometry; asphalt path surface inferred from CMP park-path context"
-    }
-  );
   const osmPaths = OSM_EXTRA_PATHS_GEO.map((path) => pathFromGeo(path.id, path.label, path.kind, path.points, path.width, {
     surface: path.surface,
     source: path.source
   }));
-  const amenityOrientationPaths = [railTrail, crescentPath, ovalPath, rotundaLoop, ...osmPaths];
+  const amenityOrientationPaths = [railTrail, crescentPath, rotundaLoop, ...osmPaths];
   const emelyBakerNapierPaths = osmPaths.filter((path) =>
     [
       "osm-22673070-north-west-footpath",
@@ -3763,25 +3927,26 @@ export function createLevelData(): LevelData {
     if (!building) return geoToWorld(fallback);
     const polygon = polygonFromGeo(building.points);
     const center = polygonCentroid(polygon);
-    const footprint = footprintFromPolygon(polygon);
-    const frontage = building.frontagePoint ? geoToWorld(building.frontagePoint) : center;
+    const frontage = building.frontagePoint ? geoToWorld(building.frontagePoint) : geoToWorld(fallback);
+    const footprint = fittedFootprintFromPolygon(polygon, frontage);
     const shiftedFrontage = lateralOffset === 0 ? frontage : offsetPoint(frontage, footprint.angle, lateralOffset, 0);
     return exteriorPointFromPolygon(shiftedFrontage, polygon, center, clearance);
   };
-  const clearMappedBuildingFootprint = (point: Vec2, buildingId: string, clearance = 1.2): Vec2 => {
+  const buildingSideAccessPosition = (buildingId: string, fallback: GeoPoint, alongZ: number, clearance = 1.2): Vec2 => {
     const building = OSM_BUILDING_FOOTPRINTS_GEO.find((candidate) => candidate.id === buildingId);
-    if (!building) return point;
+    if (!building) return geoToWorld(fallback);
     const polygon = polygonFromGeo(building.points);
-    if (!pointInPolygon(point, polygon)) {
-      return point;
-    }
-    return exteriorPointFromPolygon(point, polygon, polygonCentroid(polygon), clearance);
+    const footprint = fittedFootprintFromPolygon(
+      polygon,
+      building.frontagePoint ? geoToWorld(building.frontagePoint) : undefined
+    );
+    return offsetPoint(footprint.center, footprint.angle, footprint.halfX + clearance, alongZ);
   };
   const mappedAmenities: AmenityPoint[] = OSM_AMENITY_GEO.map((amenity) => {
     const position = geoToWorld(amenity.point);
     const visiblePosition =
       amenity.kind === "toilets" && pointInPolygon(position, southAmenitiesBuilding)
-        ? exteriorPointFromPolygon(position, southAmenitiesBuilding, southToilets)
+        ? exteriorPointFromPolygon(position, southAmenitiesBuilding, southToilets, 1.55)
         : amenity.kind === "toilets" && pointInPolygon(position, northToilets)
           ? exteriorPointFromPolygon(position, northToilets, northToiletsCenter)
           : position;
@@ -3839,58 +4004,15 @@ export function createLevelData(): LevelData {
       id: "bowling-clubroom-access",
       label: "Bowling clubroom",
       kind: "clubroom",
-      position: exteriorPointFromPolygon(
-        clearMappedBuildingFootprint(
-          exteriorPointFromPolygon(geoToWorld(g(-37.7879800, 144.9811650)), bowling, polygonCentroid(bowling), 4.5),
-          "osm-building-1475006769",
-          1.2
-        ),
-        bowling,
-        polygonCentroid(bowling),
-        4.5
-      ),
+      position: buildingAccessPosition("osm-building-543505639", g(-37.7878200, 144.9806800), 2.0, 2.45),
       linkedStructureId: "osm-building-543505639",
-      source: "OSM way 543505639; CMP 2004 bowling club entity, clubhouse, memorial-gate and bowling-precinct description; Fitzroy Victoria Bowling & Sports Club active greens/social use"
-    },
-    {
-      id: "bowling-roof-gutter-maintenance",
-      label: "Bowling roof gutter maintenance kit",
-      kind: "maintenance_room",
-      position: exteriorPointFromPolygon(
-        clearMappedBuildingFootprint(
-          exteriorPointFromPolygon(geoToWorld(g(-37.7880200, 144.9805450)), bowling, polygonCentroid(bowling), 4.5),
-          "osm-building-543505639",
-          1.35
-        ),
-        bowling,
-        polygonCentroid(bowling),
-        4.5
-      ),
-      linkedStructureId: "osm-building-543505639",
-      source: `${BOWLING_ROOF_UPGRADE_SOURCE}; represented as an exterior maintenance kit because the public source confirms roof/gutter works but not an interior access point`
-    },
-    {
-      id: "bowling-green-service-locker",
-      label: "Bowling green service locker",
-      kind: "maintenance_room",
-      position: exteriorPointFromPolygon(
-        clearMappedBuildingFootprint(
-          exteriorPointFromPolygon(geoToWorld(g(-37.7875400, 144.9812450)), bowling, polygonCentroid(bowling), 4.5),
-          "osm-building-1475006770",
-          1.2
-        ),
-        bowling,
-        polygonCentroid(bowling),
-        4.5
-      ),
-      linkedStructureId: "osm-building-1475006770",
-      source: "OSM way 1475006770 bowling green shed; CMP 2004 bowling-club ancillary-building context; Fitzroy Victoria Bowling & Sports Club active green/social use"
+      source: "OSM way 543505639; Lovell Chen Edinburgh Gardens CMP 2021 Figure 71 documents the glazed green-facing club frontage; the interaction point is fitted 2m along and 2.45m outside that mapped frontage so the full player proxy faces a clear glazed bay under the verandah, and is reached through the Hannah memorial gate"
     },
     {
       id: "timber-entrance-pavilion-passage",
       label: "Timber entrance pavilion passage",
       kind: "gatehouse",
-      position: buildingAccessPosition("osm-building-543505638", g(-37.7897200, 144.9801800), 0, 1.15),
+      position: entrancePavilionPassageAccess,
       linkedStructureId: "osm-building-543505638",
       source: "OSM way 543505638; Lovell Chen Edinburgh Gardens CMP 2021 section 3.2.6 and Figure 61 document the reconstructed timber pavilion's open central passage bays"
     },
@@ -3898,33 +4020,93 @@ export function createLevelData(): LevelData {
       id: "emely-baker-community-room",
       label: "Emely Baker community room",
       kind: "community_room",
-      position: buildingAccessPosition("osm-building-543505702", g(-37.7856400, 144.9824800), 2.8, 1.25),
+      position: buildingAccessPosition("osm-building-543505702", g(-37.7856400, 144.9824800), 4.2, 1.85),
       linkedStructureId: "osm-building-543505702",
-      source: "OSM way 543505702; Yarra Emely Baker Centre page for access-friendly community-room venue, gated outdoor area and shade sail"
+      source: "OSM way 543505702; Yarra Emely Baker Centre venue page and venue manual pages 3 and 9-11 for the access-friendly community room, current play-yard doors, gated outdoor area and shade sail"
     },
     {
       id: "emely-baker-kitchenette",
       label: "Emely Baker kitchenette",
       kind: "kitchenette",
-      position: buildingAccessPosition("osm-building-543505702", g(-37.7856400, 144.9824800), -2.8, 1.25),
+      position: buildingAccessPosition("osm-building-543505702", g(-37.7856400, 144.9824800), -1.65, 1.85),
       linkedStructureId: "osm-building-543505702",
-      source: "OSM way 543505702; Yarra Emely Baker Centre page lists kitchenette, small refrigerator, microwave, trestle tables and chairs"
+      source: "OSM way 543505702; Yarra Emely Baker Centre venue page and venue manual pages 7 and 10 list and photograph the kitchenette, small refrigerator and microwave; the interaction remains at the external community-room frontage"
     },
     {
       id: "emely-baker-exterior-service-cabinet",
       label: "Emely Baker exterior service cabinet",
       kind: "utility_box",
-      position: buildingAccessPosition("osm-building-543505702", g(-37.7856400, 144.9824800), 6.2, 1.35),
+      position: buildingSideAccessPosition("osm-building-543505702", g(-37.7857420, 144.9826310), -5.05, 1.25),
       linkedStructureId: "osm-building-543505702",
-      source: "OSM way 543505702; Lovell Chen Edinburgh Gardens CMP 2021 Figure 144 visibly documents the exterior wall-mounted service cabinet at the building end; placement is attached to that photographed end wall"
+      source: "OSM way 543505702; Lovell Chen Edinburgh Gardens CMP 2021 Figure 144 visibly documents the exterior wall-mounted service cabinet at the building end; the interaction is attached just outside that photographed end wall rather than the play-yard doors"
     },
     {
-      id: "south-amenities-service-room",
-      label: "South amenities service room",
-      kind: "maintenance_room",
-      position: buildingAccessPosition("osm-building-242003562", g(-37.7884306, 144.9835333), 6.2, 1.25),
+      id: "alfred-pavilion-main-entrance",
+      label: "Alfred Crescent Pavilion clubroom entrance",
+      kind: "clubroom",
+      position: buildingAccessPosition("osm-building-242003562", g(-37.7883200, 144.9834200), 1.3, 1.65),
       linkedStructureId: "osm-building-242003562",
-      source: "OSM way 242003562; Yarra Edinburgh Gardens public-toilet/accessibility listing; CMP 2004 notes toilet blocks as functional service buildings"
+      source: "OSM way 242003562 version 5; Lovell Chen Edinburgh Gardens CMP 2021 section 3.10.3 and Figure 145 identify the pavilion's clubroom/social-room use and west paired glass entrance; ClarkeHopkinsClarke west-elevation photography resolves the clear covered approach"
+    },
+    {
+      id: "alfred-pavilion-kiosk",
+      label: "Alfred Crescent Pavilion oval-side kiosk",
+      kind: "kiosk_hatch",
+      position: exteriorPointFromPolygon(
+        offsetPoint(
+          southAmenitiesFootprint.center,
+          southAmenitiesFootprint.angle,
+          5.7,
+          -southAmenitiesFootprint.halfZ - 1.65
+        ),
+        southAmenitiesBuilding,
+        southAmenitiesFootprint.center,
+        1.65
+      ),
+      linkedStructureId: "osm-building-242003562",
+      source: "OSM way 242003562 version 5; Lovell Chen Edinburgh Gardens CMP 2021 section 3.10.3/Figure 145 identifies the pavilion kiosk and roller shutters on the north/east elevations; ClarkeHopkinsClarke east-elevation photography resolves the shuttered oval-facing bays"
+    },
+    {
+      id: "alfred-pavilion-expanded-public-toilets",
+      label: "Alfred Crescent Pavilion expanded public toilets",
+      kind: "toilets",
+      position: buildingAccessPosition("osm-building-242003562", g(-37.7883200, 144.9834200), -12.4, 1.85),
+      linkedStructureId: "osm-building-242003562",
+      source: "City of Yarra Alfred Crescent public-toilet proposal plan and render document the north-west extension, five additional gender-neutral cubicles, expanded female/ambulant facilities, exterior hand basins and screened canopy; City of Yarra 2021-22 Annual Report confirms the expansion was completed and opened"
+    },
+    {
+      id: "alfred-pavilion-south-accessible-toilets",
+      label: "Alfred Crescent Pavilion south accessible toilets",
+      kind: "toilets",
+      position: buildingSideAccessPosition("osm-building-242003562", g(-37.7884550, 144.9836000), 0.1, 2.0),
+      linkedStructureId: "osm-building-242003562",
+      source: "City of Yarra Alfred Crescent public-toilet plan identifies two existing DDA toilets at the pavilion's curved southern end; the plan states the new northern facilities are additional to these two accessible toilets"
+    },
+    {
+      id: "north-toilets-south-west-stall-bank",
+      label: "North public toilets south-west stall bank",
+      kind: "toilets",
+      position: offsetPoint(
+        northToiletsCenter,
+        northToiletsFootprint.angle,
+        -northToiletsFootprint.halfX - 1.45,
+        0.35
+      ),
+      linkedStructureId: "north-toilets",
+      source: "OpenStreetMap way 307404819; City of Yarra north-toilet upgrade plan shows the external female, DDA and gender-neutral stall bank; the council as-built photograph fixes the current grey doors, blue signs and clear paved approach"
+    },
+    {
+      id: "north-toilets-north-east-stall-bank",
+      label: "North public toilets north-east stall bank",
+      kind: "toilets",
+      position: offsetPoint(
+        northToiletsCenter,
+        northToiletsFootprint.angle,
+        northToiletsFootprint.halfX + 1.45,
+        -0.35
+      ),
+      linkedStructureId: "north-toilets",
+      source: "OpenStreetMap way 307404819; City of Yarra north-toilet upgrade plan shows the external gender-neutral, ambulant and urinal-side bank; positioned beyond the mapped wall on the documented continuous paved apron"
     },
     {
       id: "rotunda-memorial-plaque",
@@ -4002,9 +4184,9 @@ export function createLevelData(): LevelData {
       id: "avenue-b-st-georges-fitzroy-council-bollard",
       label: "Avenue B Fitzroy Council Bollard",
       kind: "heritage-bollard",
-      position: geoToWorld(g(-37.7870572, 144.9807074)),
+      position: geoToWorld(g(-37.7870816, 144.9807819)),
       angle: -0.29,
-      source: `${HERITAGE_FURNITURE_SOURCE}; CMP section 3.11.4 records exactly one surviving orb-topped casting at the St Georges Road entrance to Avenue B, with a second removed between 2010 and 2016; position uses the OSM way 22760899 Avenue B entrance endpoint because no bollard survey point is public`
+      source: `${HERITAGE_FURNITURE_SOURCE}; CMP section 3.11.4 records exactly one surviving orb-topped casting at the St Georges Road entrance to Avenue B, with a second removed between 2010 and 2016; position uses the first interior OSM way 22760899 Avenue B entrance node because no bollard survey point is public`
     },
     {
       id: "grandstand-interpretive-sign",
@@ -4217,7 +4399,9 @@ export function createLevelData(): LevelData {
     source:
       `Urban Forestry Victoria Tree Protection and Management Plan tree ${tree.treePlanNumber} (${tree.commonName}), plan sheets TPP-A/TPP-B; Yarra states all 39 removals commenced 27 April 2026 and took approximately two weeks; PDF leader endpoint georeferenced at 0.766 game-unit RMS`
   }));
-  const parkLifeDetails = [...baseParkLifeDetails, ...removedTreeStumpDetails].filter((detail) => pointInPolygon(detail.position, boundary));
+  const parkLifeDetails = [...baseParkLifeDetails, ...removedTreeStumpDetails].filter(
+    (detail) => pointInPolygon(detail.position, boundary) && !UNSUPPORTED_FIXED_PARK_DETAIL_IDS.has(detail.id)
+  );
   const cricketNetDetail = parkLifeDetails.find((detail) => detail.id === "oval-cricket-nets");
   const cricketNetFrameAccess = cricketNetDetail
     ? offsetPoint(cricketNetDetail.position, cricketNetDetail.angle, -CRICKET_NET_CAGE_WIDTH * 0.5 - 0.82, -CRICKET_NET_CAGE_LENGTH * 0.12)
@@ -4284,20 +4468,20 @@ export function createLevelData(): LevelData {
       source: "Gameplay placement tied to OSM bicycle_parking node 2987216934"
     },
     {
-      id: "south-amenities-bolt-cutters",
+      id: "alfred-pavilion-service-bolt-cutters",
       itemId: "bolt-cutters" as const,
-      label: "Bolt cutters in the south amenities service recess",
-      position: buildingAccessPosition("osm-building-242003562", g(-37.7884306, 144.9835333), 5.2, 1.65),
+      label: "Bolt cutters in the Alfred Pavilion service recess",
+      position: buildingSideAccessPosition("osm-building-242003562", g(-37.7884306, 144.9835333), -4.8, 1.65),
       angle: 0.42,
-      source: "Gameplay placement tied to the mapped south amenities service building"
+      source: "Fictional gameplay loot placement at the pavilion's south service-wall side; not evidence of a permanent real-world object"
     },
     {
-      id: "south-service-portable-ladder",
+      id: "alfred-pavilion-portable-ladder",
       itemId: "ladder" as const,
-      label: "Portable ladder beside the south service wall",
+      label: "Portable ladder beside Alfred Crescent Pavilion",
       position: buildingAccessPosition("osm-building-242003562", g(-37.7884306, 144.9835333), -4.6, 2.05),
       angle: -0.62,
-      source: "Gameplay placement tied to existing ladder-gated roof access"
+      source: "Fictional portable gameplay item beside the mapped pavilion; no fixed ladder or real-world roof-access fixture is asserted"
     },
     {
       id: "fitzy-bowl-skateboard",
@@ -4340,6 +4524,63 @@ export function createLevelData(): LevelData {
     source: building.source,
     collision: building.collision
   })).filter((building) => pointInPolygon(polygonCentroid(building.polygon), boundary));
+  const emelyCourtyardWallObstacles: PolygonObstacle[] = (() => {
+    const building = mappedBuildings.find((candidate) => candidate.id === "osm-building-543505702");
+    if (!building) return [];
+    const footprint = fittedFootprintFromPolygon(building.polygon, building.facade?.frontagePoint);
+    const rotation = footprint.angle;
+    const yardRearZ = footprint.halfZ + 0.04;
+    const yardFrontZ = footprint.halfZ + 5.48;
+    const yardMidZ = (yardRearZ + yardFrontZ) * 0.5;
+    const yardDepth = yardFrontZ - yardRearZ;
+    const outerWallWidth = footprint.halfX * 1.718;
+    const sideWallX = footprint.halfX * 0.8595;
+    const gateCenterZ = footprint.halfZ + 3.70;
+    const gateHalfWidth = 0.86;
+    const westRearEndZ = gateCenterZ - gateHalfWidth;
+    const westFrontStartZ = gateCenterZ + gateHalfWidth;
+    const wallSource = { sourceObjectId: building.id, sourceObjectKind: "mapped-building" as const };
+    return [
+      polygonObstacleFromPolygon(
+        "emely-courtyard-outer-wall",
+        "Emely Baker walled play yard",
+        localRectPolygon(footprint.center, rotation, 0, yardFrontZ, outerWallWidth, 0.22),
+        wallSource
+      ),
+      polygonObstacleFromPolygon(
+        "emely-courtyard-side-wall-east",
+        "Emely Baker walled play yard",
+        localRectPolygon(footprint.center, rotation, sideWallX, yardMidZ, 0.22, yardDepth),
+        wallSource
+      ),
+      polygonObstacleFromPolygon(
+        "emely-courtyard-side-wall-west-rear",
+        "Emely Baker walled play yard",
+        localRectPolygon(
+          footprint.center,
+          rotation,
+          -sideWallX,
+          (yardRearZ + westRearEndZ) * 0.5,
+          0.22,
+          westRearEndZ - yardRearZ
+        ),
+        wallSource
+      ),
+      polygonObstacleFromPolygon(
+        "emely-courtyard-side-wall-west-front",
+        "Emely Baker walled play yard",
+        localRectPolygon(
+          footprint.center,
+          rotation,
+          -sideWallX,
+          (westFrontStartZ + yardFrontZ) * 0.5,
+          0.22,
+          yardFrontZ - westFrontStartZ
+        ),
+        wallSource
+      )
+    ];
+  })();
   const shelterForBuildingRoof = (
     id: string,
     label: string,
@@ -4386,6 +4627,62 @@ export function createLevelData(): LevelData {
       source: `${building.facade?.source ?? building.source}; ${STRUCTURE_SHELTER_SOURCE}; exact awning/shade extents are inferred from the documented building use and reachable frontage`
     };
   };
+  const bowlingClubVerandahShelters: StructureShelter[] = (() => {
+    const building = mappedBuildings.find((candidate) => candidate.id === "osm-building-543505639");
+    if (!building?.facade || building.polygon.length < 10) return [];
+    const facade = building.facade;
+    const edgeShelter = (suffix: string, label: string, start: Vec2, end: Vec2): StructureShelter => {
+      const dx = end.x - start.x;
+      const dz = end.z - start.z;
+      const length = Math.hypot(dx, dz) || 1;
+      const angle = Math.atan2(dz, dx);
+      const midpoint = { x: (start.x + end.x) * 0.5, z: (start.z + end.z) * 0.5 };
+      let normal = { x: -dz / length, z: dx / length };
+      const towardFrontage = {
+        x: facade.frontagePoint.x - midpoint.x,
+        z: facade.frontagePoint.z - midpoint.z
+      };
+      if (normal.x * towardFrontage.x + normal.z * towardFrontage.z < 0) {
+        normal = { x: -normal.x, z: -normal.z };
+      }
+      const depth = 1.9;
+      const center = {
+        x: midpoint.x + normal.x * depth * 0.42,
+        z: midpoint.z + normal.z * depth * 0.42
+      };
+      return {
+        id: `${building.id}-verandah-${suffix}-shelter`,
+        label,
+        kind: "verandah",
+        footprint: raisedBox(center, length * 0.5 + 0.45, depth, angle),
+        weatherProtection: 0.62,
+        linkedStructureId: building.id,
+        source: `${facade.source}; CMP Figure 71 and OSM way 543505639 control the two-segment green-facing verandah; the 1.9m weather-depth remains an explicit visual fit rather than a measured survey`
+      };
+    };
+    // OSM vertices 6-7 and 8-9 are the two photographed green-facing wall
+    // runs. Keeping separate boxes follows the real kinked frontage instead
+    // of covering a distant axis-aligned bounding-box edge.
+    return [
+      edgeShelter("main", "Bowling club main green-facing verandah", building.polygon[6], building.polygon[7]),
+      edgeShelter("east", "Bowling club east green-facing verandah", building.polygon[8], building.polygon[9])
+    ];
+  })();
+  const emelyShadeSailShelter: StructureShelter | null = (() => {
+    const building = mappedBuildings.find((candidate) => candidate.id === "osm-building-543505702");
+    if (!building) return null;
+    const footprint = fittedFootprintFromPolygon(building.polygon, building.facade?.frontagePoint);
+    const center = offsetPoint(footprint.center, footprint.angle, -4.0, footprint.halfZ + 2.82);
+    return {
+      id: "osm-building-543505702-shade-sail-shelter",
+      label: "Emely Baker shade-sail yard",
+      kind: "shade-sail",
+      footprint: raisedBox(center, 5.25, 2.30, footprint.angle),
+      weatherProtection: 0.56,
+      linkedStructureId: building.id,
+      source: `${building.facade?.source ?? building.source}; ${STRUCTURE_SHELTER_SOURCE}; the shelter box conservatively fits the current manual photograph's left-hand triangular sail rather than covering the entire yard`
+    };
+  })();
   const structureShelters: StructureShelter[] = [
     {
       id: "rotunda-roof-shelter",
@@ -4394,7 +4691,7 @@ export function createLevelData(): LevelData {
       footprint: raisedCircle(rotundaCenter, 5.65),
       weatherProtection: 0.76,
       linkedStructureId: "osm-building-543505640",
-      source: `${rotundaBuildingSource.source}; ${STRUCTURE_SHELTER_SOURCE}; the rotunda remains unpowered per the Yarra venue page, so this shelter does not imply a utility switchboard`
+      source: `OSM way 543505640 full JSON; Lovell Chen Edinburgh Gardens CMP 2021 Figures 142-143; Yarra Edinburgh Gardens Rotunda venue photographs; ${STRUCTURE_SHELTER_SOURCE}; the circular roof shelter follows the mapped Rotunda footprint and remains unpowered per the Yarra venue page`
     },
     {
       id: "grandstand-covered-seats-shelter",
@@ -4403,12 +4700,12 @@ export function createLevelData(): LevelData {
       footprint: raisedBox(grandstandCenter, grandstandFootprint.halfX + 1.35, grandstandFootprint.halfZ + 1.05, grandstandFootprint.angle),
       weatherProtection: 0.82,
       linkedStructureId: "grandstand",
-      source: `${STRUCTURE_SHELTER_SOURCE}; grandstand cover footprint is fitted from the Kevin Murray Stand polygon and current grandstand works context`
+      source: `${STRUCTURE_SHELTER_SOURCE}; grandstand cover footprint is fitted from the Kevin Murray Stand polygon and current grandstand works context; exact roof-overhang extents are unavailable`
     },
     shelterForBuildingFrontage("osm-building-403753784", "Tennis pavilion verandah", "verandah", 0.62, 1.8, 1.1, true),
-    shelterForBuildingFrontage("osm-building-543505639", "Bowling club verandah", "verandah", 0.62, 1.9, 1.0, true),
-    shelterForBuildingFrontage("osm-building-543505702", "Emely Baker shade-sail yard", "shade-sail", 0.56, 2.6, 0.9, false),
-    shelterForBuildingRoof("osm-building-242003562", "South amenities roof eaves", 0.7, 0.72, 0.72),
+    ...bowlingClubVerandahShelters,
+    emelyShadeSailShelter,
+    shelterForBuildingRoof("osm-building-242003562", "Alfred Crescent Pavilion roof and public-toilet canopy", 0.7, 0.72, 0.72),
     {
       id: "north-toilets-roof-shelter",
       label: "North toilet block roof eaves",
@@ -4416,7 +4713,7 @@ export function createLevelData(): LevelData {
       footprint: raisedBox(northToiletsCenter, northToiletsFootprint.halfX + 0.72, northToiletsFootprint.halfZ + 0.72, northToiletsFootprint.angle),
       weatherProtection: 0.7,
       linkedStructureId: "north-toilets",
-      source: `${STRUCTURE_SHELTER_SOURCE}; CMP toilet-block context supports a simple functional roof/eave shelter, with exact eave projection inferred from the mapped footprint`
+      source: `${STRUCTURE_SHELTER_SOURCE}; City of Yarra's as-built north-toilet photograph documents the broad exposed-steel skillion and alternating opaque/translucent eaves; the footprint is fitted from OSM way 307404819 and the photographed overhang`
     },
     shelterForBuildingRoof("osm-building-543505638", "Freeman Street gatehouse roof", 0.64, 0.7, 0.7)
   ]
@@ -4439,6 +4736,9 @@ export function createLevelData(): LevelData {
       source: gate.source
     }))
   })).filter((fence) => fence.points.some((point) => pointInPolygon(point, boundary)));
+  const bowlingFence = mappedFences.find((fence) => fence.id === "bowling-precinct-perimeter-fence");
+  const bowlingHannahGate = bowlingFence?.gates?.find((gate) => gate.id === "bowling-hannah-memorial-gate");
+  const bowlingHannahGateAngle = bowlingFence && bowlingHannahGate ? nearestFenceSegmentAngle(bowlingFence.points, bowlingHannahGate.position) : 0;
   const hardscapeLines: HardscapeLine[] = HARDSCAPE_LINES_GEO.map((line) => ({
     id: line.id,
     label: line.label,
@@ -4470,7 +4770,7 @@ export function createLevelData(): LevelData {
   }));
 
   const landmarks: Landmark[] = [
-    { id: "park", label: "Edinburgh Gardens", kind: "park", polygon: boundary },
+    { id: "park", label: "Edinburgh Gardens", kind: "park", polygon: boundary, source: "OpenStreetMap boundary way 13815924; Yarra Edinburgh Gardens reserve listing" },
     {
       id: "north-open-lawn",
       label: "North open lawn",
@@ -4672,7 +4972,7 @@ export function createLevelData(): LevelData {
     { id: "north-bbq", label: "North BBQ", kind: "bbq", position: northBbq, radius: 3.5, source: "OpenStreetMap amenity=bbq node 6280110896; Yarra Edinburgh Gardens facilities listing" },
     { id: "rotunda", label: "Fitzroy Memorial Rotunda", kind: "rotunda", position: rotundaCenter, radius: rotundaRadius, source: "OpenStreetMap way 543505640; Lovell Chen Edinburgh Gardens CMP 2021 section 3.10.1 and Figures 142-143" },
     { id: "queen-victoria-plinth", label: "Queen Victoria plinth / Plinth Program", kind: "memorial", position: queenVictoriaPlinth, radius: 5.8, source: "OpenStreetMap historic=memorial node 2987256133; Lovell Chen Edinburgh Gardens CMP 2021 section 3.10.5; Yarra Plinth Program" },
-    { id: "sportsmans-war-memorial", label: "Sportsman's War Memorial", kind: "memorial", position: sportsmansMemorial, radius: 4.5, source: "Australian War Memorial Places of Pride coordinate -37.7880136, 144.9805024; Yarra Sportsman's Memorial page; Lovell Chen Edinburgh Gardens CMP 2021 section 3.2.7" },
+    { id: "sportsmans-war-memorial", label: "Sportsman's War Memorial", kind: "memorial", position: sportsmansMemorial, radius: 4.5, source: "Australian War Memorial Places of Pride coordinate -37.7880136, 144.9805024; Yarra Sportsman's Memorial page; Lovell Chen Edinburgh Gardens CMP 2021 section 3.2.7 and Figures 64-65; no public survey resolves the surrounding rosemary-hedge geometry" },
     { id: "cook-memorial-site", label: "Captain James Cook memorial", kind: "memorial", position: cookMemorial, radius: 4, source: "OpenStreetMap historic=memorial node 2987201733; Lovell Chen Edinburgh Gardens CMP 2021 section 3.10.6 and Figure 148" }
   ];
   const structuralTreeExclusionKinds = new Set<Landmark["kind"]>(["basketball", "bowls", "court", "grandstand", "memorial", "oval", "playground", "rotunda", "skate", "tennis", "toilets"]);
@@ -4889,8 +5189,6 @@ export function createLevelData(): LevelData {
         { sourceObjectId: "grandstand", sourceObjectKind: "landmark" },
         [grandstandStairGap]
       ),
-      polygonObstacleFromPolygon("tennis", "Fitzroy Tennis Club", tennis, { sourceObjectId: "tennis", sourceObjectKind: "landmark" }),
-      polygonObstacleFromPolygon("bowling", "Fitzroy Victoria Bowling & Sports Club", bowling, { sourceObjectId: "bowling", sourceObjectKind: "landmark" }),
       boxObstacleFromPolygon("north-toilets", "North toilets", northToilets, 0.6, 0.6, { sourceObjectId: "north-toilets", sourceObjectKind: "landmark" }),
       {
         id: "north-playground",
@@ -4911,14 +5209,48 @@ export function createLevelData(): LevelData {
         blocksSight: false
       },
       ...mappedBuildings
-        .filter((building) => building.collision)
+        .filter((building) => building.collision && building.detailProfile !== "gatehouse")
         .map((building) =>
           polygonObstacleFromPolygon(building.id, building.label, building.polygon, {
             sourceObjectId: building.id,
             sourceObjectKind: "mapped-building"
           })
         ),
-      ...mappedFences.flatMap(fenceObstacles),
+      ...rotundaColumnObstacles,
+      ...mappedBuildings
+        .filter((building) => building.collision && building.detailProfile === "gatehouse")
+        .map((building) => {
+          const footprint = fittedFootprintFromPolygon(building.polygon, building.facade?.frontagePoint);
+          return {
+            id: building.id,
+            label: building.label,
+            sourceObjectId: building.id,
+            sourceObjectKind: "mapped-building" as const,
+            shape: "box" as const,
+            center: footprint.center,
+            halfX: footprint.halfX,
+            halfZ: footprint.halfZ,
+            angle: footprint.angle,
+            accessGaps: [
+              {
+                id: `${building.id}-open-west-passage`,
+                localCenterX: -footprint.halfX * 0.32,
+                localCenterZ: 0,
+                halfX: footprint.halfX * 0.285,
+                halfZ: footprint.halfZ + 1.35
+              },
+              {
+                id: `${building.id}-open-east-passage`,
+                localCenterX: footprint.halfX * 0.32,
+                localCenterZ: 0,
+                halfX: footprint.halfX * 0.285,
+                halfZ: footprint.halfZ + 1.35
+              }
+            ]
+          };
+        }),
+      ...emelyCourtyardWallObstacles,
+      ...mappedFences.flatMap(fenceObstacles).filter((obstacle) => pointInPolygon(obstacle.center, boundary)),
       ...sportsFixtures.flatMap(sportsFixtureObstacles),
       ...parkLifeDetails.filter((detail) => detail.kind === "cricket-nets").flatMap(cricketNetCageObstacles),
       ...treeColliders.map((tree) => ({
@@ -4956,6 +5288,33 @@ export function createLevelData(): LevelData {
       { id: "south-playground-workbench", label: "Playground workbench", position: geoToWorld(g(-37.78904, 144.98386)), upgradeId: "spread" }
     ],
     interactables: [
+      ...(bowlingHannahGate
+        ? [
+            {
+              id: "bowling-hannah-memorial-gate-passage",
+              label: "Hannah memorial entrance passage",
+              kind: "gate" as const,
+              position: bowlingHannahGate.position,
+              radius: 3.4,
+              height: 0,
+              raisedFootprint: raisedBox(bowlingHannahGate.position, 2.7, 3.4, bowlingHannahGateAngle),
+              prompt: "Walk through the Hannah memorial gate",
+              mode: "auto" as const,
+              // The source-accurate pedestrian gap is narrower than the game's
+              // 2.2m movement proxy. Only within this short gate corridor, let
+              // that proxy clear the photographed piers and their immediately
+              // adjoining mapped fence/outbuilding edges; their centres and
+              // visible geometry remain solid outside the corridor.
+              bypassObstacleIds: [
+                "bowling-hannah-memorial-gate-pier-west",
+                "bowling-hannah-memorial-gate-pier-east",
+                "bowling-precinct-perimeter-fence-segment-2-1",
+                "bowling-precinct-perimeter-fence-segment-4-1",
+                "osm-building-1475006769"
+              ]
+            }
+          ]
+        : []),
       {
         id: "rotunda-deck",
         label: "Rotunda raised platform",
@@ -4966,7 +5325,7 @@ export function createLevelData(): LevelData {
         exitPosition: rotundaStairAccess,
         accessRadius: 4.2,
         accessKind: "stairs",
-        accessHeading: -0.34,
+        accessHeading: rotundaStairHeading,
         radius: 5.8,
         height: 1.86,
         raisedFootprint: raisedCircle(rotundaCenter, 5.05),
@@ -5027,8 +5386,8 @@ export function createLevelData(): LevelData {
         bypassObstacleIds: ["south-playground"]
       },
       {
-        id: "south-toilets-roof",
-        label: "South toilet block roof",
+        id: "alfred-pavilion-roof",
+        label: "Alfred Crescent Sports Pavilion roof",
         kind: "toilets",
         position: southToilets,
         accessPosition: southToiletsLadderAccess,
@@ -5039,27 +5398,9 @@ export function createLevelData(): LevelData {
         radius: southToiletsRoofRadius,
         height: 3.58,
         raisedFootprint: southToiletsRoofFootprint,
-        prompt: "E: climb service ladder",
+        prompt: "E: place portable ladder and climb",
         mode: "toggle",
         bypassObstacleIds: ["osm-building-242003562"]
-      },
-      {
-        id: "tennis-court-ladder",
-        label: "Tennis court fence",
-        kind: "tennis",
-        position: tennisCenter,
-        accessPosition: tennisLadderAccess,
-        landingPosition: tennisLadderLanding,
-        exitPosition: tennisLadderAccess,
-        accessRadius: 4.6,
-        accessKind: "ladder",
-        accessHeading: tennisFootprint.angle,
-        radius: Math.max(tennisFootprint.halfX, tennisFootprint.halfZ),
-        height: 0.22,
-        raisedFootprint: raisedPolygon(tennis, tennisCenter),
-        prompt: "E: place ladder at tennis fence",
-        mode: "toggle",
-        bypassObstacleIds: ["tennis"]
       },
       ...sportsFixtures
         .filter((fixture) => fixture.kind === "basketball-hoop")
@@ -5124,7 +5465,7 @@ export function createLevelData(): LevelData {
       { id: "grandstand-shotgun", label: "Shotgun under the stand", weaponId: "shotgun", position: grandstandCenter },
       {
         id: "grandstand-flare-gun",
-        label: "Signal flare gun beside the kiosk hatch",
+        label: "Signal flare gun beside the east grandstand stair",
         weaponId: "flareGun",
         position: offsetPoint(grandstandCenter, grandstandRotation, grandstandFootprint.halfX * 0.46, grandstandFrontSign * (grandstandVisualHalfZ + 4.15))
       },

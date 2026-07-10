@@ -83,6 +83,7 @@ async function renderTarget(targetId: string, angleIndex: number): Promise<Previ
     (points) => terrain.averageGroundY(points)
   );
   builder.createObjectPreview(target);
+  await builder.whenAssetsReady();
 
   const camera = createCamera(target, angleIndex);
   renderer.render(scene, camera);
@@ -101,16 +102,25 @@ async function renderTarget(targetId: string, angleIndex: number): Promise<Previ
 
 function createCamera(target: ObjectPreviewTarget, angleIndex: number): THREE.PerspectiveCamera {
   const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 1200);
-  const angle = angleIndex * (Math.PI / 2) - Math.PI / 4;
-  const radius = Math.max(3.2, target.radius);
-  const centerY = terrain.groundY(target.position) + Math.max(0.55, target.height * 0.38);
-  const lookAt = new THREE.Vector3(target.position.x, centerY, target.position.z);
-  const distance = Math.max(radius * 2.35, target.height * 1.55, 5.2);
-  const cameraY = centerY + Math.max(target.height * 0.72, radius * 0.62, 3.2);
+  const normalizedAngle = ((angleIndex % ANGLES.length) + ANGLES.length) % ANGLES.length;
+  const viewPosition = normalizedAngle === 1 && target.detailViewPosition ? target.detailViewPosition : target.position;
+  const angle =
+    (target.viewAngle ?? -Math.PI / 4) +
+    (target.viewAngleOffsets?.[normalizedAngle] ?? normalizedAngle * (Math.PI / 2));
+  const radius = Math.max(3.2, normalizedAngle === 1 && target.detailViewRadius ? target.detailViewRadius : target.radius);
+  const centerY = terrain.groundY(viewPosition) + Math.max(0.55, target.height * 0.38);
+  const lookAt = new THREE.Vector3(viewPosition.x, centerY, viewPosition.z);
+  const flatTarget = target.height <= 4.5 && radius >= 6;
+  const distance = Math.max(radius * (flatTarget ? 2.35 : 1.9), target.height * 1.55, 5.2);
+  const elevated = target.elevatedViews?.[normalizedAngle] ?? (flatTarget || normalizedAngle >= 2);
+  const cameraLift = elevated
+    ? Math.max(target.height * 0.72, radius * 0.62, 3.2)
+    : Math.max(target.height * 0.18, Math.min(radius * 0.08, 1.8), 1.35);
+  const cameraY = centerY + cameraLift;
   camera.position.set(
-    target.position.x + Math.cos(angle) * distance,
+    viewPosition.x + Math.cos(angle) * distance,
     cameraY,
-    target.position.z + Math.sin(angle) * distance
+    viewPosition.z + Math.sin(angle) * distance
   );
   camera.lookAt(lookAt);
   camera.far = Math.max(1200, distance * 5);

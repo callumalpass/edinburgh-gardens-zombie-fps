@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { resolveObstacle, shouldBypassObstacle } from "../src/game/collision";
-import { distance, nearestPointOnPolygon, pointInPolygon, polygonCentroid } from "../src/game/geo";
+import { PLAYER_RADIUS } from "../src/game/gameConfig";
+import { distance, pointInPolygon, polygonCentroid } from "../src/game/geo";
 import { createLevelData } from "../src/game/levelData";
 import type { BoxObstacle } from "../src/game/types";
 
@@ -42,35 +43,57 @@ describe("collision system", () => {
     ).toBe(false);
   });
 
-  it("only bypasses the active tennis fence while the point remains inside the court footprint", () => {
-    const fixture = level.interactables.find((candidate) => candidate.id === "tennis-court-ladder");
-    if (!fixture?.raisedFootprint || fixture.raisedFootprint.shape !== "polygon") {
-      throw new Error("Missing tennis ladder fixture footprint");
-    }
-    const footprint = fixture.raisedFootprint;
-    const edge = nearestPointOnPolygon(footprint.center, footprint.polygon);
-    const outward = {
-      x: edge.x - footprint.center.x,
-      z: edge.z - footprint.center.z
-    };
-    const outwardLength = Math.hypot(outward.x, outward.z) || 1;
-    const pointFromEdge = (offset: number) => ({
-      x: edge.x + (outward.x / outwardLength) * offset,
-      z: edge.z + (outward.z / outwardLength) * offset
-    });
+  it("keeps the Blender Rotunda columns tangible without obstructing its stair landing", () => {
+    const fixture = level.interactables.find((candidate) => candidate.id === "rotunda-deck");
+    const columns = level.obstacles.filter((obstacle) => obstacle.id.startsWith("rotunda-column-"));
+    if (!fixture?.landingPosition) throw new Error("Missing Rotunda deck landing");
 
-    expect(
-      shouldBypassObstacle("tennis", pointFromEdge(-0.7), {
-        activeFixtureId: fixture.id,
-        interactables: level.interactables
-      })
-    ).toBe(true);
-    expect(
-      shouldBypassObstacle("tennis", pointFromEdge(0.25), {
-        activeFixtureId: fixture.id,
-        interactables: level.interactables
-      })
-    ).toBe(false);
+    expect(columns).toHaveLength(8);
+    for (const column of columns) {
+      expect(column.shape).toBeUndefined();
+      expect(distance(column.center, fixture.position)).toBeCloseTo(4.03, 2);
+      expect(distance(resolveObstacle(fixture.landingPosition, 0.34, column), fixture.landingPosition)).toBeLessThan(0.001);
+      expect(
+        shouldBypassObstacle(column.id, column.center, {
+          activeFixtureId: fixture.id,
+          interactables: level.interactables
+        })
+      ).toBe(false);
+    }
+  });
+
+  it("opens only the two photographed entrance-pavilion passages", () => {
+    const blocker = level.obstacles.find((obstacle) => obstacle.id === "osm-building-543505638");
+    const access = level.amenities.find((amenity) => amenity.id === "timber-entrance-pavilion-passage");
+    if (!blocker || blocker.shape !== "box" || !access) throw new Error("Missing entrance-pavilion navigation data");
+
+    expect(blocker.accessGaps).toHaveLength(2);
+    expect(distance(resolveObstacle(access.position, PLAYER_RADIUS, blocker), access.position)).toBeLessThan(0.001);
+    const endBayLocalX = blocker.halfX * 0.82;
+    const endBayPoint = {
+      x: blocker.center.x + endBayLocalX * Math.cos(blocker.angle),
+      z: blocker.center.z + endBayLocalX * Math.sin(blocker.angle)
+    };
+    expect(distance(resolveObstacle(endBayPoint, PLAYER_RADIUS, blocker), endBayPoint)).toBeGreaterThan(0.1);
+  });
+
+  it("keeps the full player-width route through the entrance pavilion clear", () => {
+    const blocker = level.obstacles.find((obstacle) => obstacle.id === "osm-building-543505638");
+    const access = level.amenities.find((amenity) => amenity.id === "timber-entrance-pavilion-passage");
+    if (!blocker || blocker.shape !== "box" || !access) throw new Error("Missing entrance-pavilion navigation data");
+    const gap = blocker.accessGaps?.[0];
+    if (!gap) throw new Error("Missing pavilion passage gap");
+    const samples = Array.from({ length: 9 }, (_, index) => {
+      const localZ = blocker.halfZ + 1.15 - index * ((blocker.halfZ * 2 + 2.3) / 8);
+      const point = {
+        x: blocker.center.x + gap.localCenterX * Math.cos(blocker.angle) - localZ * Math.sin(blocker.angle),
+        z: blocker.center.z + gap.localCenterX * Math.sin(blocker.angle) + localZ * Math.cos(blocker.angle)
+      };
+      return level.obstacles
+        .map((obstacle) => ({ id: obstacle.id, displacement: distance(point, resolveObstacle(point, PLAYER_RADIUS, obstacle)) }))
+        .filter((candidate) => candidate.displacement > 0.001);
+    });
+    expect(samples).toEqual(Array.from({ length: 9 }, () => []));
   });
 
   it("keeps fixture bypass ids tied to actual obstacles", () => {
@@ -133,13 +156,12 @@ describe("collision system", () => {
       "grandstand-umpire-room-access",
       "tennis-clubroom-access",
       "bowling-clubroom-access",
-      "bowling-roof-gutter-maintenance",
-      "bowling-green-service-locker",
       "timber-entrance-pavilion-passage",
       "emely-baker-community-room",
       "emely-baker-kitchenette",
       "emely-baker-exterior-service-cabinet",
-      "south-amenities-service-room",
+      "alfred-pavilion-main-entrance",
+      "alfred-pavilion-kiosk",
       "rotunda-memorial-plaque"
     ];
     const accessPoints = level.amenities.filter((amenity) => structureKinds.has(amenity.kind));
@@ -177,6 +199,123 @@ describe("collision system", () => {
         interactables: level.interactables
       })
     ).toBe(true);
+  });
+
+  it("keeps the documented tennis and bowling gates open to their clubroom interactions", () => {
+    for (const [fenceId, accessId] of [
+      ["tennis-precinct-perimeter-fence", "tennis-clubroom-access"],
+      ["bowling-precinct-perimeter-fence", "bowling-clubroom-access"]
+    ] as const) {
+      const fence = level.mappedFences.find((candidate) => candidate.id === fenceId);
+      const gate = fence?.gates?.[0];
+      const access = level.amenities.find((candidate) => candidate.id === accessId);
+      if (!fence || !gate || !access) throw new Error(`Missing navigation data for ${fenceId}`);
+
+      const routeBlockers = level.obstacles.filter(
+        (obstacle) => obstacle.sourceObjectKind === "mapped-fence" || obstacle.sourceObjectKind === "mapped-building"
+      );
+      const blockedSamples: string[] = [];
+      for (let step = 0; step <= 24; step += 1) {
+        const t = step / 24;
+        const point = {
+          x: gate.position.x + (access.position.x - gate.position.x) * t,
+          z: gate.position.z + (access.position.z - gate.position.z) * t
+        };
+        for (const obstacle of routeBlockers) {
+          if (distance(resolveObstacle(point, 0.34, obstacle), point) > 0.01) {
+            blockedSamples.push(`${step}:${obstacle.id}`);
+          }
+        }
+      }
+      expect(blockedSamples).toEqual([]);
+    }
+  });
+
+  it("makes the Hannah memorial brick piers solid while keeping the entrance walkable", () => {
+    const gate = level.mappedFences
+      .find((fence) => fence.id === "bowling-precinct-perimeter-fence")
+      ?.gates?.find((candidate) => candidate.id === "bowling-hannah-memorial-gate");
+    if (!gate) throw new Error("Missing Hannah memorial gate");
+
+    const piers = level.obstacles.filter((obstacle) => obstacle.id.startsWith("bowling-hannah-memorial-gate-pier-"));
+    const passage = level.interactables.find((fixture) => fixture.id === "bowling-hannah-memorial-gate-passage");
+    const access = level.amenities.find((amenity) => amenity.id === "bowling-clubroom-access");
+    expect(piers).toHaveLength(2);
+    expect(passage?.kind).toBe("gate");
+    expect(passage?.mode).toBe("auto");
+    expect(access).toBeTruthy();
+    expect(piers.every((pier) => distance(resolveObstacle(pier.center, 0, pier), pier.center) > 0.1)).toBe(true);
+    expect(piers.some((pier) => distance(resolveObstacle(gate.position, 0.58, pier), gate.position) > 0.01)).toBe(false);
+    expect(
+      piers.every((pier) =>
+        shouldBypassObstacle(pier.id, gate.position, {
+          activeFixtureId: null,
+          interactables: level.interactables
+        })
+      )
+    ).toBe(true);
+    expect(
+      piers.some((pier) =>
+        shouldBypassObstacle(pier.id, pier.center, {
+          activeFixtureId: null,
+          interactables: level.interactables.filter((fixture) => fixture.id !== passage?.id)
+        })
+      )
+    ).toBe(false);
+
+    const inwardLength = distance(gate.position, access!.position);
+    const inward = {
+      x: (access!.position.x - gate.position.x) / inwardLength,
+      z: (access!.position.z - gate.position.z) / inwardLength
+    };
+    const blockedSamples = Array.from({ length: 23 }, (_, index) => {
+      const progress = index * 0.5;
+      const point = {
+        x: gate.position.x + inward.x * (progress - 4),
+        z: gate.position.z + inward.z * (progress - 4)
+      };
+      return level.obstacles
+        .filter(
+          (obstacle) =>
+            !shouldBypassObstacle(obstacle.id, point, {
+              activeFixtureId: null,
+              interactables: level.interactables
+            })
+        )
+        .map((obstacle) => ({ id: obstacle.id, displacement: distance(point, resolveObstacle(point, PLAYER_RADIUS, obstacle)) }))
+        .filter((candidate) => candidate.displacement > 0.001);
+    });
+    expect(blockedSamples).toEqual(Array.from({ length: 23 }, () => []));
+  });
+
+  it("keeps the Emely Baker play-yard gate open to the community-room entrance", () => {
+    const westRear = level.obstacles.find((candidate) => candidate.id === "emely-courtyard-side-wall-west-rear");
+    const westFront = level.obstacles.find((candidate) => candidate.id === "emely-courtyard-side-wall-west-front");
+    const access = level.amenities.find((candidate) => candidate.id === "emely-baker-community-room");
+    if (!westRear || westRear.shape !== "polygon" || !westFront || westFront.shape !== "polygon" || !access) {
+      throw new Error("Missing Emely Baker courtyard navigation geometry");
+    }
+    const nearestGateEdges = westRear.polygon.flatMap((rearPoint) =>
+      westFront.polygon.map((frontPoint) => ({ rearPoint, frontPoint, gap: distance(rearPoint, frontPoint) }))
+    ).sort((a, b) => a.gap - b.gap)[0];
+    expect(nearestGateEdges.gap).toBeGreaterThan(1.55);
+    const gateCenter = {
+      x: (nearestGateEdges.rearPoint.x + nearestGateEdges.frontPoint.x) * 0.5,
+      z: (nearestGateEdges.rearPoint.z + nearestGateEdges.frontPoint.z) * 0.5
+    };
+    const blockers = level.obstacles;
+    const blockedSamples: string[] = [];
+    for (let step = 0; step <= 20; step += 1) {
+      const t = step / 20;
+      const point = {
+        x: gateCenter.x + (access.position.x - gateCenter.x) * t,
+        z: gateCenter.z + (access.position.z - gateCenter.z) * t
+      };
+      for (const obstacle of blockers) {
+        if (distance(resolveObstacle(point, 0.34, obstacle), point) > 0.01) blockedSamples.push(`${step}:${obstacle.id}`);
+      }
+    }
+    expect(blockedSamples).toEqual([]);
   });
 
   it("pushes the player out of solid tree trunk obstacles", () => {
