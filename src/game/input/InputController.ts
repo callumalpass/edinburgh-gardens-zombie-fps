@@ -152,6 +152,9 @@ export class InputController {
       return;
     }
     this.keys.add(event.code);
+    if ((["moveForward", "moveBackward", "moveLeft", "moveRight"] as InputAction[]).some((action) => this.uses(action, event.code))) {
+      event.preventDefault();
+    }
     this.actions.unlockAudio();
 
     const firstPress = !event.repeat;

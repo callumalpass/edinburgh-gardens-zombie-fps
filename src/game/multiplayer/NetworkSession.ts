@@ -183,7 +183,7 @@ export class NetworkSession {
     }
     const input: NetworkInputState = {
       sequence: ++this.inputSequence,
-      duration: Math.min(0.1, Math.max(0, this.inputDuration)),
+      duration: Math.min(0.25, Math.max(0, this.inputDuration)),
       ...frame
     };
     this.inputDuration = 0;

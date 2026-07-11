@@ -4,24 +4,30 @@ This codebase is organized around a small app shell with gameplay, rendering, an
 
 ## Runtime Boundaries
 
+- `electron/update-controller.mjs` owns the packaged-desktop release state machine. Electron's main process is the only layer allowed to use `electron-updater`; a narrow preload API exposes read/check/download/install requests, validates their local renderer origin, and broadcasts inert state objects to the web UI. Development and browser builds remain updater-free.
 - `src/game/GameApp.ts` owns browser integration, top-level system orchestration, HUD wiring, and the live Three.js scene.
 - `src/game/gameConfig.ts` is the single source for cross-system tuning constants such as player movement, stamina costs, wave pacing, bike speeds, and network tick rates.
-- `src/game/playerState.ts` creates and resets mutable local player state without duplicating starting values in the app shell.
+- `src/game/playerState.ts` creates the canonical `AuthoritativePlayerState` used by the in-process player. Network peers implement the same state contract, so loadout, condition, inventory, sprint, and weapon timing are not separate local-only concepts.
 - `src/game/characters.ts` is the canonical selectable-survivor registry and persistence boundary for stable avatar ids, player-facing metadata, asset paths, portraits, and first-person appearance colours.
 - `src/game/runtimeTypes.ts` contains runtime entity contracts shared by orchestration code, networking, combat, and interaction handling.
-- `src/game/runtime/FrameLoop.ts` owns requestAnimationFrame scheduling, frame delta clamping, and loop cancellation.
+- `src/game/runtime/FrameLoop.ts` owns requestAnimationFrame scheduling, loop cancellation, and both raw and render-safe elapsed time. World/render systems receive a 100 ms cap; authoritative player motion and condition retain up to 250 ms and substep movement at 60 Hz so low render FPS does not slow players or create large collision steps.
 - `src/game/runtime/GameEntityStore.ts` owns transient scene-backed gameplay collections, monotonic entity ids, and shared cleanup for restarts and network-authoritative resyncs.
 - `src/game/multiplayer/NetworkSession.ts` owns LAN transport lifecycle, host/client role checks, input/action sequencing, overshoot-preserving input/snapshot cadence, and replicated wave metadata. Player snapshots acknowledge the last host-processed input so owning clients can reconcile prediction without replacing local look rotation.
 - `src/game/multiplayer/RemotePlayerRoster.ts` owns remote-player runtime state, deterministic co-op spawn offsets, snapshot interpolation for position/yaw/elevation, asynchronous Blender-avatar installation, animation selection, weapon sockets, reset behavior, and scene removal. Bike ownership and positional interactions remain host-authoritative and are replicated in game snapshots.
-- `src/game/multiplayer/ClientPositionReconciler.ts` retains duration-bearing client input commands until the host acknowledges them. Clients rebuild predicted movement from the authoritative snapshot plus only the unacknowledged commands; an input sequence therefore identifies one discrete simulation step rather than a render-dependent sampled state.
+- `src/game/multiplayer/ClientPositionReconciler.ts` retains duration-bearing client input samples until the host acknowledges them. Clients rebuild predicted movement from the authoritative snapshot plus only the unacknowledged samples while the host independently advances the newest received state on authoritative time.
+- `src/game/multiplayer/ClientCameraSmoother.ts` preserves the camera anchor actually presented on screen across reconciliation. It carries the full prediction error forward and decays it on player-authoritative time, preventing snapshot cadence from restarting or clipping the smoothing curve after movement stops.
+- `src/game/multiplayer/authoritativeInput.ts` treats movement packets as sampled input state. A delayed burst collapses to its newest command and is advanced once per host frame, preventing packet backlogs from fast-forwarding a player. Stale held inputs are neutralized after a short grace period.
 
 ## Co-op Replication Contracts
 
 - The host owns every mutable shared entity. Full snapshots include zombies, pickups, weapon drops, portable world items, placed ladders, distractions, all rideable-bike state, and shared searched/repaired interaction ids.
+- Replicated weapon drops own client-side dynamic meshes. Reconciliation rebuilds a mesh if an id changes weapon type, reasserts scene attachment and visibility, disables frustum culling for the small pickup art, and disposes replaced or removed meshes.
 - Clients keep their deterministic provisional world while connecting. They do not move until a snapshot containing their assigned player id arrives, and the first accepted snapshot atomically reconciles provisional entities with host state.
-- Client movement messages carry a monotonic sequence and the exact simulated duration. The host queues each command, processes it once, and reports `lastProcessedInputSequence`; clients install that authoritative state and replay later commands in order.
+- Client movement messages carry a monotonic sequence and prediction duration. The host consumes the newest available input state once per authoritative frame and reports `lastProcessedInputSequence`; clients install authoritative position, velocity, condition, and loadout state before replaying later commands in order.
+- Lightweight movement commands run at 60 Hz while full world snapshots remain at 18 Hz. Owning-client camera correction replaces the previous correction instead of accumulating offsets across snapshots, keeping sustained movement responsive without increasing large snapshot traffic.
 - Client pickup, drop, ladder, distraction, skateboard, bike, amenity, weapon, and upgrade actions are requests. They mutate gameplay state only on the host and become visible to every peer through the next snapshot.
-- `tests/multiplayerCoop.spec.ts` runs two lightweight browser game instances through the real WebSocket relay and checks shared-object visibility plus client/host movement convergence.
+- Weapon fire is presented immediately on the owning client, then confirmed by the host through ammo/loadout state and a replicated `shotSequence`. `PlayerWeaponSimulation` applies the same cooldown, mount, stamina, reload, and ammunition gate to local and remote players. Monotonic action acknowledgements reject duplicate or reordered requests.
+- `tests/multiplayerCoop.spec.ts` runs two lightweight browser game instances through the real WebSocket relay and checks client weapon rendering/fire, action acknowledgement, sustained sprint smoothness, stamina recovery, and client/host convergence.
 
 ## Gameplay Modules
 
@@ -29,6 +35,8 @@ This codebase is organized around a small app shell with gameplay, rendering, an
 - `src/game/weapons.ts`, `src/game/playerCondition.ts`, `src/game/noise.ts`, `src/game/visibility.ts`, `src/game/loot.ts`, and `src/game/waves.ts` are pure or mostly pure gameplay rules with direct unit coverage.
 - `src/game/combat/` owns reusable combat rules that should stay independent of scene orchestration, including hit-zone targeting, melee arcs, ray tests, damage, stagger and zombie memory updates.
 - `src/game/systems/PlayerLocomotion.ts` applies shared local/remote player movement, sprint gating, bike movement, jump settling, fixture elevation, obstacle bypasses, and skate-bowl exit collision.
+- `src/game/systems/PlayerSimulation.ts` is the role-agnostic player motion boundary used by single-player authority, host simulation of peers, and client prediction/replay. `simulatePlayerCondition` provides the corresponding shared time-based condition step.
+- `src/game/systems/PlayerWeaponSimulation.ts` owns authoritative weapon resource mutation and attack gating for every player role.
 - `src/game/systems/WaveDirector.ts` keeps wave pacing independent from the app shell and scene graph.
 - `src/game/spatial/` owns reusable spatial acceleration and agent separation logic.
 

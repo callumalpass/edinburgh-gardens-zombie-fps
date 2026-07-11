@@ -88,21 +88,21 @@ These notes record the real-world sources and implementation decisions used to s
 - Captain Cook Society, Plaque to Cook at Edinburgh Gardens: https://www.captaincooksociety.com/remembering-cook/memorials/types-of-cook-memorials/plaque-to-cook-at-edinburgh-gardens-melbourne-victoria-australia
   - Used only to confirm the Rowe Street / Alfred Crescent entrance context for planter placement.
 - Yarra northern precinct consultation: https://yoursayyarra.com.au/eg-north
-  - Used for the northern activity precinct: playground, BBQ/picnic tables, chess/game elements, table tennis, skate/BMX and basketball half-court context.
+  - Used for the northern activity precinct and, on 2026-07-11, its downloadable endorsed precinct and final playground concept plans. The latter controls the relative positions of activity units A/F, triple and basket swings, spinner, trampoline, nature-play edges, planted buffer, grass mound, seats and three shade-sail areas.
 - Melbourne Playgrounds, Edinburgh Gardens South Playground: https://www.melbourneplaygrounds.com.au/edinburgh-gardens-south-playground-alfred-crescent-fitzroy-north
-  - Used for the south playground's fenced/safety-gated condition, all-abilities paths, timber fort, wave slide, rope web, sandpits, chalk walls, swings, toddler area and shelter.
+  - Used for the south playground's fenced/safety-gated condition, all-abilities paths, timber fort, wave slide, rope web, sandpits, chalk walls, swings, toddler area and shelter. Its dated 18 December 2010 overview is now registered against the Vicmap aerial for persistent internal massing rather than used as current-condition proof.
 - Melbourne Playgrounds, Edinburgh Gardens North Playground: https://www.melbourneplaygrounds.com.au/edinburgh-gardens-north-playground-alfred-crescent-fitzroy-north
   - Used for the current/recent north playground equipment mix and for the follow-up conclusion that current public wording does not support a north playground fence around the relocated footprint.
 - Mamma Knows North, Edinburgh Gardens and Playground: https://mammaknowsnorth.com.au/parks-and-playgrounds/edinburgh-gardens-and-playground-north-fitzroy
   - Used as a recent public-visit cross-check for the north playground's toddler/preschooler, ropes, swings and sandpit emphasis without a fence claim.
 - To Hot or Not, Edinburgh Gardens: https://tothotornot.com/edinburgh-gardens/
-  - Used as older/secondary public-visit evidence for playground equipment and earlier north-fence context; not used as current evidence for a fence around the relocated north playground footprint.
+  - Used as older/secondary public-visit evidence for playground equipment and earlier north-fence context; its three 2015 south-playground photographs now resolve the fort's three roofed bays, high eastern slide tower, low rope pyramid and sand/rock relationship. It is not used as current evidence for a fence around the relocated north playground footprint.
 - Busy City Guide, Edinburgh Gardens Fitzroy North: https://busycitykids.com.au/our-blog/2015/9/17/edinburghgardens-fitzroynorth
-  - Used as older/secondary public-visit evidence for the earlier north playground and for the south playground equipment mix.
+  - Used as older/secondary public-visit evidence for the earlier north playground and for the south playground equipment mix. Six 2015 images fix the single four-seat swing bank, black accessible bridge, viewing-mound shelter, toddler twin slide, chalk panels and red flower spinner relative to the fort.
 - Proludic, VIC Edinburgh Gardens playground: https://www.proludic.com.au/reference/vic-edinburgh-gardens-playground/
   - Used for the 2018 toddler-unit evidence at the smaller northern playground.
 - Yarra Your Say, Fitzy Skate Bowl: https://yoursayyarra.com.au/skatepark
-  - Used for the 2022 Fitzy Bowl upgrade context, including retention of the original bowls, added beginner/accessibility features and expanded skate/BMX area.
+  - Used for the 2022 Fitzy Bowl upgrade context and seven published winning-tender design images. Playce drawing `19321_003` supersedes the earlier three-ellipse approximation with two retained connected southern bowl complexes, northern street/transition work, rails, banks, rounded-end manual pad, pump bumps, the eastern timber spectator terrace, retained fountain/bin relationship and refurbished fence/1200 mm safety balustrade.
 - GOSKATE, Fitzroy Skatepark: https://goskate.com/sp/listing/fitzroy-skatepark/
   - Used for bowl depth and feature translation: two deeper bowls, a shallow beginner bowl, transition features and street-section obstacles.
 - Time Out Melbourne, Fitzroy Skatepark: https://www.timeout.com/melbourne/sport-and-fitness/fitzroy-skatepark
@@ -156,9 +156,20 @@ These notes record the real-world sources and implementation decisions used to s
   - Captured 26 January 2016. Used only to identify the formerly implemented blue jungle artwork as an older wall state. All six Flickr photos are All Rights Reserved visual references and are not embedded as textures.
 - Fitzroy Victoria Bowling & Sports Club official site: https://www.barefootbowling.com.au/
   - Used for current club/social-use context behind the bowling-club access point and green-side service cues.
+- OpenStreetMap 150 m context-belt extract: https://api.openstreetmap.org/api/0.6/map?bbox=144.97835096436717,-37.79124436676249,144.9873642356328,-37.78410843323751
+  - Supplies the finite outside-park building, street, service/path and Route 11 tram topology. Every one of the 448 rendered buildings has a committed per-way evidence record.
+- Vicmap Address: https://services-ap1.arcgis.com/P744lA0wf4LlBZ84/ArcGIS/rest/services/Vicmap_Address/FeatureServer/0
+  - Spatially cross-checks current official address points against context building polygons.
+- City of Yarra HO327 North Fitzroy heritage-area review: https://www.yarracity.vic.gov.au/sites/default/files/2024-05/www.yarracity.vic.gov.au/-/media/files/ycc/the-area/heritage/review-of-heritage-areas-2007-butler-updated-2013.pdf
+  - Controls the restrained Victorian/Edwardian house and St Georges Road shop-residence profiles around the park; it is not treated as an individual elevation survey.
+- City of Yarra Bargoonga Nganjin development summary: https://www.yarracity.vic.gov.au/planning-and-building/planning-permits/bargoonga-nganjin-north-fitzroy-library
+  - Establishes the library's three storeys, civic function, exterior screening and rooftop-garden cue.
+- OpenGameArt CC0 zombie vocal packs: https://opengameart.org/content/zomby-sfx-pack and https://opengameart.org/content/undead-moans
+  - Supply ten human-performed calls used as a shared raw pool for type- and cue-specific zombie vocal processing; the source pages identify both packs as CC0.
 
 ## Current Implementation
 
+- Packaged Electron builds use a main-process, explicit-consent GitHub Releases updater with progress/error state, restart-to-install, local-origin IPC validation and an atomic draft-to-published multi-platform release workflow. Source findings and signing limitations are recorded in `docs/research/deployment-and-packaging-2026-07-11.md`.
 - `WORLD_SCALE` is `1.28`, not strict 1:1.
   - The first terrain pass briefly used strict 1:1 metres, but the level felt too small for the FPS pacing.
   - `1.28x` keeps map-derived proportions while giving the player more playable space.
@@ -169,6 +180,12 @@ These notes record the real-world sources and implementation decisions used to s
   - `VICMAP_ELEVATION_GEO` stores contour/spot-height samples.
   - `GameApp.groundY()` interpolates them with inverse-distance weighting.
   - The park ground mesh is a clipped grid over the OSM boundary, not a flat shape.
+- The outside-park context world is a separate render-only system:
+  - 448 OSM-footprint buildings, 416 OSM road/path/tram ways, 1,048 outside Vicmap trees and 735 context elevation samples fill a researched 150 m belt.
+  - A 270 m painterly ground collar and fog close the horizon without inventing unsupported farther buildings.
+  - Building bodies/roofs are merged by tonal family; near facade details, trees and Route 11 poles are instanced and quality-tiered.
+  - Vicmap context elevations are calibrated and blended to the playable terrain so streets, pavements and building bases do not step at the park edge.
+  - The context root owns no collision, navigation, AI or interaction state, so the original park boundary remains the complete playable world.
 - OSM-mapped buildings use their exact public footprints and remain solid collision objects. CMP-controlled major structures add photographed roof, facade and entrance profiles while unresolved bowling sheds remain plain evidence-limited envelopes.
   - Tennis and bowls enclosure runs terminate at the real clubhouse/outbuilding closures rather than closing through the building fabric.
   - A deterministic Three.js preview audit checks every mapped building for finite, plausible render geometry and verifies that directional facade materials project toward the researched frontage.
@@ -191,6 +208,10 @@ These notes record the real-world sources and implementation decisions used to s
 - The 2026-07-10 physical-baseline audit supersedes the earlier 2030 completion pass. The two future courts, replacement trees, completed sports-pavilion rooms and completed-facility props are absent; the northern three tennis courts are active works surfaces while the southern three remain operational clay courts. Only the countdown clock says 2030.
 - The 2026-07-06 playground/fence pass models the south playground as fenced with gate gaps, leaves the relocated north playground unfenced after current-source review, adds the oval perimeter as a gated low rail blocker, makes only the low oval fence jumpable, and replaces the generic playground prop with separate south/north equipment layouts derived from public playground evidence.
 - The 2026-07-06 Fitzy Bowl correction removes the invisible full-footprint skatepark blocker and rebuilds the skatepark with lowered enterable bowls, visible coping gaps, ledges, rail, banks, quarter-pipe and seating.
+- The 2026-07-11 activity-precinct refinement joins the aerial-visible Bowling Club-to-grandstand passage at the exact endpoints of OSM ways `210387722` and `22760906`, samples it clear at full player radius, rebuilds the north playground from the council final concept plan, replaces the skatepark's three isolated ellipses with the tender drawing's two connected retained bowl complexes and plan-led 2022 street extension, and reorients the raingarden as four long-axis filtration bays with dense rush planting and a weathering-steel zig-zag channel.
+- The later user-highlighted aerial correction reclassifies OSM roof `1475006769` from a solid bowling shed to the open covered gate between the Bowling Club and Kevin Murray Stand. The exact roof envelope remains, the paved path now crosses its real collision opening into the eastern forecourt, the canopy provides shelter, and the rescue chain has moved to an ordinary private-track segment.
+- The 2026-07-11 gate/south-activity refinement separates three easily conflated heritage structures: the south-west relocated timber entrance pavilion and opposite Chandler Fountain remain in their CMP/OSM 2026 positions, the six-column Sportsman's Memorial remains south of the Bowling Club, and the smaller south-east Hannah memorial gate receives the photographed dark stepped caps, asymmetric plaques, folded-back green leaves and `FBC` threshold. Temporary rescue-scenario chains no longer block either heritage entrance.
+- The same refinement registers the south playground's fort, rope pyramid, four-seat swing bank, viewing mound/shelter and toddler cluster against the aerial and nine public photographs; relocates its climb interaction to the visible high fort bay; and adds the Fitzy Bowl plan's green safety balustrade/fountain-side opening, rounded manual pad, pump bumps and layered rounded timber spectator terrace without changing the painterly treatment.
 - The 2026-07-06 building access pass adds source-linked searchable structure access points at the grandstand changerooms, tennis clubroom, bowling club gate, Freeman Street gatehouse and Emely Baker Centre. The Alfred correction replaces the old generic south-amenities search with researched west clubroom, oval-kiosk and public-toilet interactions.
 - The public-use/weather research still informs gameplay rules and the rain/wind/wetness firearm modifier, but rule pages are no longer translated into invented physical signs without a photographed or mapped sign coordinate.
 - The structure-depth audit retains source-backed grandstand umpire-room, Emely Baker kitchenette and Rotunda plaque interactions, but removes the unsourced bowling service-locker/roof-kit and exterior appliance props. Visible access panels now attach to and align with the linked building wall.
@@ -202,7 +223,7 @@ These notes record the real-world sources and implementation decisions used to s
 - The 2026-07-06 cricket-net pass remodels the OSM cricket-nets point as a four-lane concrete/artificial-turf cage with cyclone-wire/pipe enclosure, rear mural-wall cue, internal divider nets and one front entrance.
 - The 2026-07-06 winter daylight/tree/zombie pass retunes the time-of-day cycle to Melbourne July 2026 sunrise/sunset, positions the key light from winter azimuth/altitude, makes elm/oak profiles sparser and branchier with heavier leaf litter, keeps gum-like profiles evergreen and adds modest weather/time zombie perception and footing modifiers.
 - The 2026-07-09 current OSM object audit adds the missing Freeman Street post box, moves the northern table-tennis object to OSM way `715659039`, replaces the simplified stormwater filtration garden with current OSM way `655160879`, adds small garden way `715802699`, adds the Kevin Murray Stand parking apron from OSM way `1392352940`, adds the south-east open pitch from OSM way `242003500`, refreshes small current connector paths, confirms that OSM tree/bin/fountain/bench/toilet/BBQ IDs still match the level, adds OSM way provenance to exact-matching landmarks/paths, and adds explicit uncertainty metadata for picnic-table points without public per-table GIS.
-- The baseline audit removes approximate picnic tables without public points, removes a duplicate oval loop, keeps open sports fences from closing through clubhouses, and now records 581 fixed physical entries, 43 gameplay entries and 53 explicit public-data gaps in `docs/research/edinburgh-gardens-2026-object-audit-ledger.json`. The memorial pass adds one physical east-inscription point plus the processional-bay gameplay corridor; semantic halos remain outside the fixed-object count.
+- The baseline audit removes approximate picnic tables without public points, removes a duplicate oval loop, keeps open sports fences from closing through clubhouses, and now records 582 fixed physical entries, 44 gameplay entries and 52 explicit public-data gaps in `docs/research/edinburgh-gardens-2026-object-audit-ledger.json`. The memorial pass adds one physical east-inscription point plus the processional-bay gameplay corridor, the Fitzy Bowl pass adds its plan-documented perimeter balustrade, and the covered-gateway correction resolves one former building uncertainty plus one source-linked passage fixture; semantic halos remain outside the fixed-object count.
 - The same audit adds a deterministic Playwright/WebGL inspection workflow that requires every physical ledger object to render from at least two angles, with four-angle support for buildings and major structures. The review corrected black primitive amenities caused by missing painterly vertex colours, terrain burial of coarse court/surface polygons, inspection framing for trees and sports fixtures, and structure-context views for building access components.
 - Both OSM-mapped barbecue units now use CMP Figure 67's faceted bluestone masonry, timber rim and metal cooking surface rather than an unsupported generic steel cabinet; exact 2026 replacement status remains stated as uncertain.
 - The same audit reconstructs the Hannah memorial gate from CMP Figure 72 as paired solid brick piers with plaques and open green gate leaves, while retaining a collision-tested pedestrian route to the bowling club frontage.
@@ -240,6 +261,10 @@ These notes record the real-world sources and implementation decisions used to s
 - Runtime artifact, facade-orientation and preview-output audit research is stored in `docs/research/realism-artifact-audit-2026-07-06.md`.
 - Playground and fence layout research is stored in `docs/research/playground-and-fence-layout-2026-07-06.md`.
 - Skatepark bowl and north-playground correction research is stored in `docs/research/skatepark-bowls-and-north-playground-correction-2026-07-06.md`.
+- The official-plan activity-precinct, Fitzy Bowl, raingarden and Bowling Club-to-grandstand passage refinement is stored in `docs/research/activity-precinct-and-passage-refinement-2026-07-11.md`.
+- The Hannah memorial entrance correction and aerial/photo/plan-led south-playground and Fitzy Bowl refinement are stored in `docs/research/hannah-gate-south-playground-fitzy-bowl-refinement-2026-07-11.md`.
+- The user-highlighted Bowling Club–grandstand covered-gateway correction, two-way navigation review and collision treatment are stored in `docs/research/bowling-grandstand-covered-gateway-correction-2026-07-11.md`.
+- The complete outside-park evidence model, source hierarchy, landmark profiles, uncertainty and render/performance audit are stored in `docs/research/outside-park-context-world-2026-07-11.md`; its per-building ledger is `docs/research/edinburgh-gardens-context-building-register.json`.
 - Building access interaction research is stored in `docs/research/building-access-interactions-2026-07-06.md`.
 - Public-use and weather realism research is stored in `docs/research/public-use-weather-realism-2026-07-06.md`.
 - Structure depth research is stored in `docs/research/structure-depth-pass-2026-07-06.md`.
@@ -251,6 +276,7 @@ These notes record the real-world sources and implementation decisions used to s
 - Cricket-net cage research is stored in `docs/research/cricket-net-cage-refresh-2026-07-06.md`.
 - Winter daylight, tree silhouette and zombie-environment research is stored in `docs/research/winter-daylight-tree-zombie-realism-2026-07-06.md`.
 - Current OSM fixed-object audit research is stored in `docs/research/current-osm-object-audit-2026-07-09.md`.
+- The recorded zombie-vocal pool, type treatments, cue mapping, crowd control and licensing are stored in `docs/research/zombie-vocal-audio-2026-07-11.md`.
 - Local raw research asset guidance is stored in `docs/research/raw-assets.md`.
 - Research/data pipeline automation is stored in `docs/research/data-pipeline-automation-2026-07-05.md` and `docs/research/research-manifest.json`.
 
@@ -270,6 +296,7 @@ These notes record the real-world sources and implementation decisions used to s
 - OSM parking way `1392352940` beside the Kevin Murray Stand is rendered as a source-backed asphalt polygon; bay paint, kerb detail and any associated small fixtures remain unresolved because public GIS subfeatures were not available.
 - Raw API responses are kept locally under ignored `docs/research/raw/` when useful. The durable checked-in artifacts are source notes plus compact derived constants in `src/game/levelData.ts`.
 - The Vicmap elevation samples are sparse. They are appropriate for broad park slope and local rise/fall, not for fine kerbs, gutters, steps or detailed drainage modelling.
+- Outside-park heights and fine facades are unevenly documented. The context register distinguishes explicit tags/official feature findings from conservative height/roof/profile inferences; tonal windows and doors are never claimed as measured elevation details.
 - Fine ground details such as crowns, shoulders, root mounds, swales and oval banking are represented as deterministic local terrain modifiers layered over the broad Vicmap interpolation.
 - Tree rendering distinguishes specimen, avenue and generic mapped trees with sourceable height/canopy-radius/density metadata plus instanced under-canopy ground wear. Measured Yarra specimens now move toward their recorded height with a sightline-safe 24% cap, heritage avenues receive a 10% height/width uplift, and generic or semi-mature replacement trees retain their existing scale.
 - Path material transitions are represented as sourceable visual patches for feathered edges, compacted junctions, muddy thresholds and informal desire paths.

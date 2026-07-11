@@ -595,13 +595,13 @@ const OSM_CENTRAL_GARDEN_BED_GEO = [
 const PLAYGROUND_FENCE_SOURCE =
   "OSM playground way 24489879; Edinburgh Gardens CMP 2004 section 3.4.22 and current public playground guides confirm the south playground is safety-gated and fully fenced; gate vertices are inferred from current access paths because no public gate nodes were found";
 const SOUTH_PLAYGROUND_LAYOUT_SOURCE =
-  "OSM way 24489879 current playground footprint; Melbourne Playgrounds and Busy City Guide describe the large fenced south playground, all-abilities paths, wooden fort, rope net, sandpits, swings, toddler area, chalk walls and central shelter";
+  "OSM way 24489879 current playground footprint; Vicmap AERIAL_WM_256 fixes the persistent fort, rope-pyramid, swing, viewing-mound/shelter and toddler-cluster relationships; Melbourne Playgrounds (2010), To Hot or Not (2015) and Busy City Guide (2015) resolve the all-abilities paths, long wooden fort, rope net, sand basins, single four-seat swing bank, toddler equipment, chalk panels and central shelter, with photo age recorded as uncertainty";
 const NORTH_PLAYGROUND_LAYOUT_SOURCE =
   "OSM way 543616019 current relocated playground footprint; City of Yarra 2018 Playground Upgrade Final Concept Plan fixes the relative positions of two activity units, triple and basket swings, spinner, trampoline, nature-play margins, planted buffer, grass mound, seats and shade sails; no current public fence source was found for the relocated footprint";
 const OVAL_FENCE_SOURCE =
   "OSM way 14946934 W.T. Peterson Oval footprint; OSM connector ways 403753751 and 403753754 align with fence-gate gaps; low jumpable fence height and exact gate widths are inferred from existing in-game oval fence treatment because no public barrier=fence way was available";
 const FITZY_BOWL_SOURCE =
-  "City of Yarra Fitzy Bowl upgrade page and Playce tender site plan 19321_003: the August 2022 build retained two connected southern bowl complexes and added the northern street extension, flat banks, quarter pipes, manual pad, curved rail, accessible transitions and timber spectator terrace";
+  "City of Yarra Fitzy Bowl upgrade page and Playce tender site plan 19321_003: the August 2022 build retained two connected southern bowl complexes and added the northern street extension, flat banks, quarter pipes, rounded manual pad, pump bumps, curved rail, accessible transitions, layered timber spectator terrace, refurbished perimeter fence and 1200 mm safety balustrade";
 const STRUCTURE_ACCESS_SOURCE =
   "Yarra Edinburgh Gardens facility listing; OSM building footprints; Lovell Chen Edinburgh Gardens CMP 2021 built-feature inventory and facade photographs; existing changeroom and umpire-room access only—future sports-pavilion rooms are excluded from the 2026 baseline";
 const STRUCTURE_SHELTER_SOURCE =
@@ -1940,11 +1940,12 @@ const OSM_EXTRA_PATHS_GEO: Array<{
     kind: "service",
     width: 2.35,
     surface: "asphalt",
-    source: "Vicmap AERIAL_WM_256 2026-07-10 visual fit: continuous worn service passage between OSM ways 210387722 and 22760906; intermediate centreline is aerial-fitted because no separate public path way is mapped",
+    source: "Vicmap AERIAL_WM_256 and user-supplied Google Maps aerial highlight reviewed 2026-07-11: continuous paved passage between OSM ways 210387722 and 22760906 crosses through the open-sided roof structure mapped as OSM way 1475006769, then continues across the eastern paved forecourt; intermediate centreline is aerial-fitted because no separate public path way is mapped",
     points: [
       g(-37.7880396, 144.9811556),
-      g(-37.7880730, 144.9811885),
-      g(-37.7881030, 144.9812240),
+      g(-37.7880154, 144.9811768),
+      g(-37.7879912, 144.9811980),
+      g(-37.7880400, 144.9812600),
       g(-37.7881334, 144.9812612)
     ]
   },
@@ -2684,11 +2685,11 @@ const OSM_BUILDING_FOOTPRINTS_GEO: Array<{
   },
   {
     id: "osm-building-1475006769",
-    label: "Bowling club outbuilding",
-    height: 2.8,
+    label: "Bowling Club–grandstand covered gateway",
+    height: 2.72,
     material: "utility",
-    detailProfile: "bowling-shed",
-    source: "OSM way 1475006769 full JSON; public facade photography and individual door, vent and equipment positions are unavailable",
+    detailProfile: "covered-gateway",
+    source: "OSM way 1475006769 fixes the long roof envelope; user-supplied Google Maps aerial highlight reviewed 2026-07-11 identifies this as the roofed gate in the Bowling Club–grandstand passage; Lovell Chen Edinburgh Gardens CMP 2021 section 3.2.9 confirms open-sided roof structures among the bowling-club ancillary fabric; post spacing, transverse opening width and fine gate hardware remain image-fitted rather than surveyed",
     collision: true,
     points: [
       g(-37.787959, 144.9811502),
@@ -2808,6 +2809,23 @@ const OSM_FENCES_GEO: Array<{
       }
     ],
     points: BOWLING_FENCE_GEO
+  },
+  {
+    id: "fitzy-bowl-perimeter-fence",
+    label: "Fitzy Bowl refurbished fence and safety balustrade",
+    height: 1.2,
+    width: 0.22,
+    source: "City of Yarra Fitzy Bowl upgrade page and Playce tender site plan 19321_003: retained/refurbished existing fence around the southern original bowls plus 1200 mm safety balustrade along the new outer transitions; OSM way 231049925 controls the current perimeter envelope",
+    gates: [
+      {
+        id: "fitzy-bowl-south-west-access",
+        label: "Fitzy Bowl south-west access beside retained drinking fountain",
+        point: g(-37.7866200, 144.9829957),
+        radius: 2.8,
+        source: "Playce tender site plan 19321_003: public footpath entry beside the retained drinking fountain and relocated bin; OSM node 8464870016 fixes the fountain point"
+      }
+    ],
+    points: SKATE_GEO
   },
   {
     id: "south-playground-fence",
@@ -3718,11 +3736,17 @@ export function createLevelData(): LevelData {
   // use that same fitted frame for blockers, access points and raised decks.
   const southPlaygroundFootprint = fittedFootprintFromPolygon(southPlayground);
   const northPlaygroundFootprint = fittedFootprintFromPolygon(northPlayground);
-  const southPlaygroundTowerCenter = offsetPoint(
+  const southPlaygroundFortAnchor = offsetPoint(
     southPlaygroundCenter,
     southPlaygroundFootprint.angle,
-    -southPlaygroundFootprint.halfX * 0.18,
-    -southPlaygroundFootprint.halfZ * 0.12
+    -southPlaygroundFootprint.halfX * 0.31,
+    -southPlaygroundFootprint.halfZ * 0.23
+  );
+  const southPlaygroundTowerCenter = offsetPoint(
+    southPlaygroundFortAnchor,
+    southPlaygroundFootprint.angle,
+    3.05,
+    0.35
   );
   const northPlaygroundTowerCenter = offsetPoint(
     northPlaygroundCenter,
@@ -3928,7 +3952,7 @@ export function createLevelData(): LevelData {
   };
   const grandstandDeckRadius = Math.max(12, boundingRadius(grandstand, grandstandCenter) + 1.2);
   const grandstandRaisedFootprint = raisedBox(grandstandCenter, grandstandFootprint.halfX + 0.8, grandstandFootprint.halfZ + 0.45, grandstandFootprint.angle);
-  const southPlaygroundTowerFootprint = raisedBox(southPlaygroundTowerCenter, 5.7 * 0.5, 4.8 * 0.5, southPlaygroundFootprint.angle);
+  const southPlaygroundTowerFootprint = raisedBox(southPlaygroundTowerCenter, 3.25 * 0.5, 3.0 * 0.5, southPlaygroundFootprint.angle);
   const northPlaygroundTowerFootprint = raisedBox(northPlaygroundTowerCenter, 3.8 * 0.5, 3.2 * 0.5, northPlaygroundFootprint.angle);
   const playgroundAccess = (center: Vec2, angle: number, width: number, depth: number) =>
     offsetPoint(center, angle, -width * 0.18, -depth * 0.55 - 0.7);
@@ -4624,6 +4648,12 @@ export function createLevelData(): LevelData {
     source: building.source,
     collision: building.collision
   })).filter((building) => pointInPolygon(polygonCentroid(building.polygon), boundary));
+  const coveredGatewayBuilding = mappedBuildings.find((building) => building.id === "osm-building-1475006769");
+  if (!coveredGatewayBuilding || coveredGatewayBuilding.detailProfile !== "covered-gateway") {
+    throw new Error("Missing Bowling Club–grandstand covered gateway footprint");
+  }
+  const coveredGatewayFootprint = fittedFootprintFromPolygon(coveredGatewayBuilding.polygon);
+  const coveredGatewayPassageHalfX = Math.min(2.2, coveredGatewayFootprint.halfX * 0.3);
   const mappedBuildingRoofHeight = (building: MappedBuilding): number => {
     switch (building.detailProfile) {
       case "tennis-pavilion":
@@ -4642,6 +4672,9 @@ export function createLevelData(): LevelData {
         // Blender tray deck rises from 3.12 to 3.60 m and its root is embedded
         // 0.04 m; this is the centre-line height of that shallow skillion.
         return 3.32;
+      case "covered-gateway":
+        // Shallow gable above the exact OSM roof envelope.
+        return building.height + 0.23;
       default:
         // Generic mapped sheds render a 0.18 m roof prism from height + 0.08.
         return building.height + 0.26;
@@ -4907,7 +4940,14 @@ export function createLevelData(): LevelData {
       linkedStructureId: "north-toilets",
       source: `${STRUCTURE_SHELTER_SOURCE}; City of Yarra's as-built north-toilet photograph documents the broad exposed-steel skillion and alternating opaque/translucent eaves; the footprint is fitted from OSM way 307404819 and the photographed overhang`
     },
-    shelterForBuildingRoof("osm-building-543505638", "Freeman Street gatehouse roof", 0.64, 0.7, 0.7)
+    shelterForBuildingRoof("osm-building-543505638", "Freeman Street gatehouse roof", 0.64, 0.7, 0.7),
+    shelterForBuildingRoof(
+      "osm-building-1475006769",
+      "Bowling Club–grandstand covered gateway roof",
+      0.68,
+      0.3,
+      0.3
+    )
   ]
     .filter((shelter): shelter is StructureShelter => shelter !== null)
     .filter((shelter) => pointInPolygon(shelter.footprint.center, boundary));
@@ -5409,7 +5449,12 @@ export function createLevelData(): LevelData {
         blocksSight: false
       },
       ...mappedBuildings
-        .filter((building) => building.collision && building.detailProfile !== "gatehouse")
+        .filter(
+          (building) =>
+            building.collision &&
+            building.detailProfile !== "gatehouse" &&
+            building.detailProfile !== "covered-gateway"
+        )
         .map((building) =>
           polygonObstacleFromPolygon(building.id, building.label, building.polygon, {
             sourceObjectId: building.id,
@@ -5449,6 +5494,28 @@ export function createLevelData(): LevelData {
             ]
           };
         }),
+      {
+        id: coveredGatewayBuilding.id,
+        label: coveredGatewayBuilding.label,
+        sourceObjectId: coveredGatewayBuilding.id,
+        sourceObjectKind: "mapped-building" as const,
+        shape: "box" as const,
+        center: coveredGatewayFootprint.center,
+        halfX: coveredGatewayFootprint.halfX,
+        halfZ: coveredGatewayFootprint.halfZ,
+        angle: coveredGatewayFootprint.angle,
+        blocksSight: false,
+        accessGaps: [
+          {
+            id: `${coveredGatewayBuilding.id}-open-transverse-passage`,
+            fixtureId: "bowling-grandstand-covered-gateway-passage",
+            localCenterX: 0,
+            localCenterZ: 0,
+            halfX: coveredGatewayPassageHalfX,
+            halfZ: coveredGatewayFootprint.halfZ + 1.35
+          }
+        ]
+      },
       ...emelyCourtyardWallObstacles,
       ...mappedFences.flatMap(fenceObstacles).filter((obstacle) => pointInPolygon(obstacle.center, boundary)),
       ...sportsFixtures.flatMap(sportsFixtureObstacles),
@@ -5505,12 +5572,27 @@ export function createLevelData(): LevelData {
               // respects the two visible brick piers as solid geometry.
               bypassObstacleIds: [
                 "bowling-precinct-perimeter-fence-segment-2-1",
-                "bowling-precinct-perimeter-fence-segment-4-1",
-                "osm-building-1475006769"
+                "bowling-precinct-perimeter-fence-segment-4-1"
               ]
             }
           ]
         : []),
+      {
+        id: "bowling-grandstand-covered-gateway-passage",
+        label: "Bowling Club–grandstand covered gateway passage",
+        kind: "gate",
+        position: coveredGatewayFootprint.center,
+        radius: coveredGatewayFootprint.halfZ + 1.2,
+        height: 0,
+        raisedFootprint: raisedBox(
+          coveredGatewayFootprint.center,
+          coveredGatewayPassageHalfX,
+          coveredGatewayFootprint.halfZ + 1.35,
+          coveredGatewayFootprint.angle
+        ),
+        prompt: "Walk through the covered gate",
+        mode: "auto"
+      },
       {
         id: "sportsmans-memorial-processional-bay",
         label: "Sportsman's Memorial processional bay",
@@ -5591,9 +5673,9 @@ export function createLevelData(): LevelData {
         label: "South playground tower",
         kind: "playground",
         position: southPlaygroundTowerCenter,
-        accessPosition: playgroundAccess(southPlaygroundTowerCenter, southPlaygroundFootprint.angle, 5.7, 4.8),
+        accessPosition: playgroundAccess(southPlaygroundTowerCenter, southPlaygroundFootprint.angle, 3.25, 3.0),
         landingPosition: southPlaygroundTowerCenter,
-        exitPosition: playgroundAccess(southPlaygroundTowerCenter, southPlaygroundFootprint.angle, 5.7, 4.8),
+        exitPosition: playgroundAccess(southPlaygroundTowerCenter, southPlaygroundFootprint.angle, 3.25, 3.0),
         accessRadius: 3.2,
         accessKind: "play-structure",
         radius: 3.5,

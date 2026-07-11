@@ -56,10 +56,10 @@ export const INPUT_ACTION_DEFINITIONS: readonly InputActionDefinition[] = [
 ] as const;
 
 export const DEFAULT_INPUT_BINDINGS: InputBindings = {
-  moveForward: ["KeyW"],
-  moveBackward: ["KeyS"],
-  moveLeft: ["KeyA"],
-  moveRight: ["KeyD"],
+  moveForward: ["KeyW", "ArrowUp"],
+  moveBackward: ["KeyS", "ArrowDown"],
+  moveLeft: ["KeyA", "ArrowLeft"],
+  moveRight: ["KeyD", "ArrowRight"],
   sprint: ["ShiftLeft", "ShiftRight"],
   crouch: ["KeyC", "ControlLeft"],
   jump: ["Space"],

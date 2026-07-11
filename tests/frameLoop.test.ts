@@ -43,4 +43,25 @@ describe("FrameLoop", () => {
     expect(cancel).toHaveBeenCalledWith(42);
     expect(loop.running).toBe(false);
   });
+
+  it("retains short renderer stalls without exposing an unsafe physics step", () => {
+    const callbacks: FrameRequestCallback[] = [];
+    globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
+      callbacks.push(callback);
+      return callbacks.length;
+    });
+    globalThis.cancelAnimationFrame = vi.fn();
+    const ticks: Array<{ dt: number; rawDt: number }> = [];
+    const loop = new FrameLoop((tick) => ticks.push({ dt: tick.dt, rawDt: tick.rawDt }));
+    loop.start();
+
+    callbacks.shift()!(100);
+    callbacks.shift()!(300);
+    loop.stop();
+
+    expect(ticks).toEqual([
+      { dt: 0, rawDt: 0 },
+      { dt: 0.1, rawDt: 0.2 }
+    ]);
+  });
 });

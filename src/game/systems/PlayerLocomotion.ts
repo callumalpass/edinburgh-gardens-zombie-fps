@@ -80,6 +80,10 @@ export class PlayerLocomotion {
     this.autoInteractables = world.interactables.filter((fixture) => fixture.mode === "auto");
   }
 
+  movementSurfaceAt(point: Vec2): MovementSurface {
+    return this.world.movementSurfaceAt(point);
+  }
+
   updateCrouch(actor: LocomotionActor, dt: number, crouching: boolean): void {
     actor.crouching = crouching;
     const target = actor.crouching ? 1 : 0;

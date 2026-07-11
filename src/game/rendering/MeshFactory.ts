@@ -1642,6 +1642,63 @@ export class MeshFactory {
       tube.castShadow = true;
       group.add(tube);
       this.addStickerTab(group, "TYRE", { x: 0, y: 0.38, z: -0.24 }, { x: -0.08 }, { width: 0.38, height: 0.024, depth: 0.14 });
+    } else if (itemId === "caretaker-key") {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.028, 7, 18), metal);
+      ring.position.set(0, 0.3, 0);
+      ring.rotation.x = Math.PI / 2;
+      ring.castShadow = true;
+      group.add(ring);
+      for (const [index, angle] of [-0.5, 0, 0.45].entries()) {
+        const key = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.035, 0.46), metal);
+        key.position.set((index - 1) * 0.12, 0.24, -0.28);
+        key.rotation.y = angle;
+        key.castShadow = true;
+        group.add(key);
+        const tooth = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.04, 0.09), metal);
+        tooth.position.set(key.position.x + 0.04, 0.24, -0.49);
+        tooth.rotation.y = angle;
+        group.add(tooth);
+      }
+      const tag = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.045, 0.24), ochre);
+      tag.position.set(0.28, 0.28, 0.12);
+      tag.rotation.y = -0.28;
+      tag.castShadow = true;
+      group.add(tag);
+      this.addStickerTab(group, "KEY", { x: 0.28, y: 0.315, z: 0.12 }, { x: -0.04 }, { width: 0.3, height: 0.02, depth: 0.13 });
+    } else if (itemId === "cart-battery") {
+      const shell = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.54, 0.48), dark);
+      shell.position.y = 0.34;
+      shell.castShadow = true;
+      group.add(shell);
+      const cap = new THREE.Mesh(new THREE.BoxGeometry(0.66, 0.08, 0.42), ochre);
+      cap.position.y = 0.64;
+      cap.castShadow = true;
+      group.add(cap);
+      for (const x of [-0.22, 0.22]) {
+        const terminal = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.08, 10), x < 0 ? red : metal);
+        terminal.position.set(x, 0.74, 0);
+        group.add(terminal);
+      }
+      const handle = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.028, 7, 16, Math.PI), metal);
+      handle.position.set(0, 0.74, 0);
+      handle.rotation.z = Math.PI;
+      group.add(handle);
+      this.addStickerTab(group, "48V", { x: 0, y: 0.38, z: -0.25 }, { x: -0.04 }, { width: 0.34, height: 0.022, depth: 0.16 });
+    } else if (itemId === "cart-wheel") {
+      const tyre = new THREE.Mesh(new THREE.TorusGeometry(0.36, 0.12, 10, 24), dark);
+      tyre.position.y = 0.43;
+      tyre.rotation.x = Math.PI / 2;
+      tyre.castShadow = true;
+      group.add(tyre);
+      const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.19, 0.13, 14), metal);
+      rim.position.y = 0.43;
+      rim.rotation.x = Math.PI / 2;
+      rim.castShadow = true;
+      group.add(rim);
+      const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.18, 10), ochre);
+      hub.position.y = 0.43;
+      hub.rotation.x = Math.PI / 2;
+      group.add(hub);
     } else if (itemId === "noise-radio") {
       const body = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.42, 0.26), ochre);
       body.position.y = 0.28;

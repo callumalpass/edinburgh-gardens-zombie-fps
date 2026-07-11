@@ -160,7 +160,7 @@ describe("NetworkSession", () => {
     expect(session.sendInputFrame(0.4, "playing", inputFrame)?.sequence).toBe(2);
     expect(session.sendInputFrame(1, "ready", inputFrame)).toBeNull();
     expect(transport.inputs.map((input) => input.sequence)).toEqual([1, 2]);
-    expect(transport.inputs.map((input) => input.duration)).toEqual([0.1, 0.1]);
+    expect(transport.inputs.map((input) => input.duration)).toEqual([0.25, 0.25]);
   });
 
   it("routes host events and sends authoritative snapshots on cadence", () => {

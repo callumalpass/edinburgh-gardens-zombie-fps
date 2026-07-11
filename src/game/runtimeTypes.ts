@@ -25,6 +25,20 @@ export interface PlayerRuntimeState {
   activeFixtureId: string | null;
 }
 
+/** Gameplay state owned by the authoritative simulation for every player. */
+export interface AuthoritativePlayerState extends PlayerRuntimeState {
+  loadout: Loadout;
+  condition: PlayerCondition;
+  inventory: InventoryItemId[];
+  carriedItem: LargeCarryItemId | null;
+  skateboardMounted: boolean;
+  isSprinting: boolean;
+  lastShotAt: number;
+  shotSequence: number;
+  shotBloom: number;
+  movementNoiseTimer: number;
+}
+
 export interface AmenitySearch {
   amenity: AmenityPoint;
   remaining: number;
@@ -62,6 +76,7 @@ export interface RideableBike {
   requiredItem?: WorldItemId;
   linkedDetailId?: string;
   rackId?: string;
+  vehicleKind?: "bike" | "maintenance-cart";
 }
 
 export interface DroppedWorldItem {
@@ -83,7 +98,7 @@ export interface PlacedLadder {
   angle: number;
 }
 
-export interface NetworkRemotePlayer {
+export interface NetworkRemotePlayer extends AuthoritativePlayerState {
   id: string;
   name: string;
   avatarId: AvatarId;
@@ -100,13 +115,17 @@ export interface NetworkRemotePlayer {
   pitch: number;
   health: number;
   scrap: number;
+  kills: number;
   loadout: Loadout;
   condition: PlayerCondition;
   input: NetworkInputState;
   pendingInputs: NetworkInputState[];
   lastProcessedInputSequence: number;
+  lastProcessedActionSequence: number;
   lastInputAt: number;
   lastShotAt: number;
+  shotSequence: number;
+  shotFlashTimer: number;
   shotBloom: number;
   movementNoiseTimer: number;
   isSprinting: boolean;

@@ -210,6 +210,14 @@ export class AtmosphereSystem {
     return this.currentWeather;
   }
 
+  /** Pins deterministic daylight/weather for visual audits without changing normal play. */
+  setElapsedSecondsForAudit(elapsedSeconds: number): void {
+    this.elapsedSeconds = Math.max(0, elapsedSeconds);
+    const timeOfDay = timeOfDayFromElapsed(this.elapsedSeconds);
+    this.currentWeather = weatherFromElapsed(this.elapsedSeconds);
+    this.applyTimeOfDay(timeOfDay, this.currentWeather);
+  }
+
   private applyTimeOfDay(timeOfDay: TimeOfDayState, weather: WeatherState): void {
     const dawnMix = timeOfDay.dawnDusk * 0.72;
     this.skyColors.top.lerpColors(this.nightPalette.top, this.dayPalette.top, timeOfDay.daylight).lerp(this.dawnPalette.top, dawnMix);

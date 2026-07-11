@@ -4,6 +4,8 @@ Date: 2026-07-06
 
 Purpose: correct the north playground fence assumption and rebuild the Fitzy Bowl skatepark so the playable space has enterable, lowered bowls instead of an invisible full-footprint blocker.
 
+> Superseded in part on 2026-07-11: the City of Yarra pages expose a final north-playground concept plan and seven Fitzy Bowl tender images, including Playce site plan `19321_003`. The earlier three-ellipse skate approximation and "no public plan" uncertainty are replaced by `activity-precinct-and-passage-refinement-2026-07-11.md`; the unfenced north-playground finding remains current.
+
 ## Sources
 
 - Melbourne Playgrounds, Edinburgh Gardens North Playground: https://www.melbourneplaygrounds.com.au/edinburgh-gardens-north-playground-alfred-crescent-fitzroy-north

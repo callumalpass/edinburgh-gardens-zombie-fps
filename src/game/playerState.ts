@@ -8,8 +8,9 @@ import {
   START_SCRAP,
   START_YAW
 } from "./gameConfig";
-import type { PlayerCondition } from "./playerCondition";
-import type { PlayerRuntimeState } from "./runtimeTypes";
+import { createInitialPlayerCondition, type PlayerCondition } from "./playerCondition";
+import type { AuthoritativePlayerState, PlayerRuntimeState } from "./runtimeTypes";
+import { createInitialLoadout } from "./weapons";
 
 export function createInitialPlayerState(groundY = START_POSITION.y): PlayerRuntimeState {
   return {
@@ -29,6 +30,22 @@ export function createInitialPlayerState(groundY = START_POSITION.y): PlayerRunt
     crouching: false,
     crouchAmount: 0,
     activeFixtureId: null
+  };
+}
+
+export function createInitialAuthoritativePlayerState(groundY = START_POSITION.y): AuthoritativePlayerState {
+  return {
+    ...createInitialPlayerState(groundY),
+    loadout: createInitialLoadout(),
+    condition: createInitialPlayerCondition(),
+    inventory: [],
+    carriedItem: null,
+    skateboardMounted: false,
+    isSprinting: false,
+    lastShotAt: 0,
+    shotSequence: 0,
+    shotBloom: 0,
+    movementNoiseTimer: 0
   };
 }
 

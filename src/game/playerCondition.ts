@@ -29,6 +29,30 @@ export interface HydrationFrame {
   sheltered?: boolean;
 }
 
+export interface PlayerConditionActor {
+  health: number;
+  reviveProtectionTimer: number;
+  height: number;
+  jumpHeight: number;
+  crouching: boolean;
+  activeFixtureId: string | null;
+}
+
+export interface PlayerConditionSimulationFrame {
+  sprinting: boolean;
+  scoped: boolean;
+  resting: boolean;
+  searching: boolean;
+  daylight: number;
+  sheltered: boolean;
+  bikePumpBoosted: boolean;
+}
+
+export interface PlayerConditionSimulationResult {
+  bleedDamage: number;
+  scopeExhausted: boolean;
+}
+
 export const MAX_STAMINA = 100;
 export const MAX_HYDRATION = 100;
 export const MAX_THROWABLES = 5;
@@ -88,6 +112,53 @@ export function nextHydration(hydration: number, dt: number, frame: HydrationFra
   const shelterRelief = frame.sheltered ? -0.12 : 0;
   const multiplier = Math.max(0.72, 1 + exertion + heightPressure + injuryPressure + daylightPressure + shelterRelief);
   return clampHydration(hydration - BASE_HYDRATION_DRAIN_PER_SECOND * multiplier * dt);
+}
+
+/**
+ * Advances the authoritative condition state for any player. The host player,
+ * network peers, and client-side replay all use this function so time-based
+ * condition rules cannot drift between local and multiplayer code paths.
+ */
+export function simulatePlayerCondition(
+  actor: PlayerConditionActor,
+  condition: PlayerCondition,
+  dt: number,
+  frame: PlayerConditionSimulationFrame
+): PlayerConditionSimulationResult {
+  const step = Math.max(0, dt);
+  actor.reviveProtectionTimer = Math.max(0, actor.reviveProtectionTimer - step);
+  condition.bleedTimer = Math.max(0, condition.bleedTimer - step);
+  condition.limpTimer = Math.max(0, condition.limpTimer - step);
+  condition.blurTimer = Math.max(0, condition.blurTimer - step);
+  condition.bikePumpTimer = Math.max(0, condition.bikePumpTimer - step);
+
+  condition.hydration = nextHydration(condition.hydration, step, {
+    sprinting: frame.sprinting,
+    elevated: actor.height + actor.jumpHeight > 1.2 || Boolean(actor.activeFixtureId),
+    bleeding: condition.bleedTimer > 0,
+    daylight: frame.daylight,
+    sheltered: frame.sheltered
+  });
+
+  const bleedDamage = bleedDamagePerSecond(condition.bleedTimer) * step;
+  if (bleedDamage > 0) actor.health -= bleedDamage;
+
+  condition.stamina = nextStamina(condition.stamina, step, {
+    sprinting: frame.sprinting,
+    scoped: frame.scoped,
+    resting: frame.resting,
+    searching: frame.searching,
+    crouching: actor.crouching,
+    bleeding: condition.bleedTimer > 0,
+    hydration: condition.hydration,
+    bikePumpBoosted: frame.bikePumpBoosted,
+    sheltered: frame.sheltered
+  });
+
+  return {
+    bleedDamage,
+    scopeExhausted: frame.scoped && condition.stamina <= 1
+  };
 }
 
 export function hydrateCondition(condition: PlayerCondition): PlayerCondition {

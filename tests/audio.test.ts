@@ -6,7 +6,8 @@ import {
   soundGainAtDistance,
   soundPanForSource,
   worldSoundAudibleRadius,
-  worldSoundBaseGain
+  worldSoundBaseGain,
+  zombieVoiceTreatment
 } from "../src/game/audio";
 
 describe("game audio profiles", () => {
@@ -51,6 +52,30 @@ describe("game audio profiles", () => {
       worldSoundAudibleRadius("zombieAttack", { zombieType: "shambler" })
     );
     expect(NOISE_SOUND_PROFILES.scream.baseGain).toBeGreaterThan(NOISE_SOUND_PROFILES.distraction.baseGain);
+  });
+
+  it("gives recorded zombie voices type-specific organic treatments", () => {
+    const bloater = zombieVoiceTreatment("bloater", "groan");
+    const sprinter = zombieVoiceTreatment("sprinter", "groan");
+    const crawler = zombieVoiceTreatment("crawler", "groan");
+    const screamer = zombieVoiceTreatment("screamer", "scream");
+
+    expect(bloater.playbackRate).toBeLessThan(sprinter.playbackRate);
+    expect(bloater.lowpassFrequency).toBeLessThan(sprinter.lowpassFrequency);
+    expect(crawler.distortion).toBeGreaterThan(sprinter.distortion);
+    expect(screamer.highpassFrequency).toBeGreaterThan(bloater.highpassFrequency);
+    expect(zombieVoiceTreatment("shambler", "death").playbackRate).toBeLessThan(
+      zombieVoiceTreatment("shambler", "attack").playbackRate
+    );
+  });
+
+  it("makes pain reactions shorter-range than death calls", () => {
+    expect(worldSoundAudibleRadius("zombiePain", { zombieType: "shambler" })).toBeLessThan(
+      worldSoundAudibleRadius("zombieDeath", { zombieType: "shambler" })
+    );
+    expect(worldSoundBaseGain("zombiePain", { zombieType: "screamer" })).toBeGreaterThan(
+      worldSoundBaseGain("zombiePain", { zombieType: "shambler" })
+    );
   });
 
   it("pans world sounds from the player's facing direction", () => {

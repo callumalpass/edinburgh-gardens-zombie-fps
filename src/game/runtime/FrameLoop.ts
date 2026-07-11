@@ -1,5 +1,6 @@
 export interface FrameLoopTick {
   dt: number;
+  rawDt: number;
   timeMs: number;
   elapsedSeconds: number;
 }
@@ -10,7 +11,10 @@ export class FrameLoop {
 
   constructor(
     private readonly onTick: (tick: FrameLoopTick) => void,
-    private readonly maxDt = 0.05
+    // World/render systems receive a bounded step. rawDt is also exposed so
+    // role-agnostic player simulation can retain more elapsed time and safely
+    // substep it without passing a large collision step to the rest of the game.
+    private readonly maxDt = 0.1
   ) {}
 
   get running(): boolean {
@@ -38,10 +42,10 @@ export class FrameLoop {
       return;
     }
 
-    const rawDt = this.lastFrameTime === null ? 0 : (timeMs - this.lastFrameTime) / 1000;
-    const dt = Math.max(0, Math.min(this.maxDt, rawDt));
+    const rawDt = Math.max(0, this.lastFrameTime === null ? 0 : (timeMs - this.lastFrameTime) / 1000);
+    const dt = Math.min(this.maxDt, rawDt);
     this.lastFrameTime = timeMs;
-    this.onTick({ dt, timeMs, elapsedSeconds: timeMs / 1000 });
+    this.onTick({ dt, rawDt, timeMs, elapsedSeconds: timeMs / 1000 });
 
     if (this.animationFrameId !== null) {
       this.animationFrameId = requestAnimationFrame(this.tick);

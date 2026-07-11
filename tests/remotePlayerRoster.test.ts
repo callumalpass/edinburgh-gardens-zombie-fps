@@ -67,6 +67,20 @@ describe("RemotePlayerRoster", () => {
     expect(meshFactory.weapons).toEqual(["knife", "carbine"]);
   });
 
+  it("shows a short muzzle flash for replicated firearm shots", () => {
+    const { roster } = createRoster();
+    const player = roster.add("peer-1", "One");
+    player.loadout = switchWeapon(addWeapon(player.loadout, "carbine"), "carbine");
+    roster.updateMesh(player);
+
+    roster.triggerShot(player, false);
+    const flash = player.mesh.getObjectByName("remote-shot-flash");
+    expect(flash?.visible).toBe(true);
+
+    roster.updateAnimations(0.1);
+    expect(flash?.visible).toBe(false);
+  });
+
   it("resets existing players without replacing vector instances", () => {
     const { roster } = createRoster();
     const player = roster.add("peer-1", "One");

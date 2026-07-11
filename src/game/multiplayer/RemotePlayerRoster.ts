@@ -115,6 +115,7 @@ export class RemotePlayerRoster {
       pitch: START_PITCH,
       health: START_HEALTH,
       scrap: START_SCRAP,
+      kills: 0,
       intermissionUpgradeWave: 0,
       reviveProtectionTimer: 0,
       loadout,
@@ -132,8 +133,11 @@ export class RemotePlayerRoster {
       },
       pendingInputs: [],
       lastProcessedInputSequence: 0,
+      lastProcessedActionSequence: 0,
       lastInputAt: this.now(),
       lastShotAt: 0,
+      shotSequence: 0,
+      shotFlashTimer: 0,
       shotBloom: 0,
       movementNoiseTimer: 0,
       isSprinting: false,
@@ -214,11 +218,14 @@ export class RemotePlayerRoster {
       player.pitch = START_PITCH;
       player.health = START_HEALTH;
       player.scrap = START_SCRAP;
+      player.kills = 0;
       player.intermissionUpgradeWave = 0;
       player.reviveProtectionTimer = 0;
       player.loadout = createInitialLoadout();
       player.condition = createInitialPlayerCondition();
       player.lastShotAt = 0;
+      player.shotSequence = 0;
+      player.shotFlashTimer = 0;
       player.shotBloom = 0;
       player.movementNoiseTimer = 0;
       player.isSprinting = false;
@@ -244,6 +251,7 @@ export class RemotePlayerRoster {
       };
       player.pendingInputs = [];
       player.lastProcessedInputSequence = player.input.sequence;
+      player.lastProcessedActionSequence = 0;
       player.inventory = [];
       player.carriedItem = null;
       this.updateMesh(player);
@@ -266,6 +274,9 @@ export class RemotePlayerRoster {
   updateAnimations(dt: number): void {
     this.updateNetworkTransforms(dt);
     for (const player of this.playersById.values()) {
+      player.shotFlashTimer = Math.max(0, player.shotFlashTimer - dt);
+      const shotFlash = player.mesh.getObjectByName("remote-shot-flash");
+      if (shotFlash) shotFlash.visible = player.shotFlashTimer > 0;
       const mixer = player.animationMixer;
       if (!mixer) continue;
       if (player.animationOverride) {
@@ -364,6 +375,28 @@ export class RemotePlayerRoster {
     if (!action) return;
     this.transitionAnimation(player, name, true);
     player.animationOverride = { name, remaining: Math.max(0.12, action.getClip().duration) };
+  }
+
+  triggerShot(player: NetworkRemotePlayer, melee: boolean): void {
+    if (melee) {
+      this.triggerAnimation(player, "Melee");
+      return;
+    }
+    const weapon = player.mesh.getObjectByName("remote-weapon");
+    if (!weapon) return;
+    let flash = weapon.getObjectByName("remote-shot-flash");
+    if (!flash) {
+      flash = new THREE.Mesh(
+        new THREE.SphereGeometry(0.12, 7, 5),
+        new THREE.MeshBasicMaterial({ color: 0xffc35f })
+      );
+      flash.name = "remote-shot-flash";
+      flash.position.set(0, 0.08, -1.1);
+      flash.renderOrder = 20;
+      weapon.add(flash);
+    }
+    flash.visible = true;
+    player.shotFlashTimer = 0.09;
   }
 
   private createMesh(weaponId: WeaponId, avatarId: AvatarId): THREE.Group {

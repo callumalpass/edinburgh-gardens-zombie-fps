@@ -6,7 +6,7 @@ import {
   type InputBindings
 } from "../input/inputBindings";
 import type { IntermissionUpgradeChoice } from "../intermissionChoices";
-import { ITEM_DEFINITIONS, type InventoryItemId, type LargeCarryItemId, type WorldItemId } from "../items";
+import { ITEM_DEFINITIONS, isQuestItem, type InventoryItemId, type LargeCarryItemId, type WorldItemId } from "../items";
 import type { WavePhase } from "../state";
 import type { AmenityPoint, InteractableFixture, ParkLifeDetail, UpgradeStation } from "../types";
 import {
@@ -43,6 +43,8 @@ interface HudRefs {
   area: HTMLElement;
   prompt: HTMLElement;
   status: HTMLElement;
+  objective: HTMLElement;
+  objectiveCopy: HTMLElement;
   inventory: HTMLElement;
   team: HTMLElement;
   intermission: HTMLElement;
@@ -71,6 +73,7 @@ export interface HudWeaponDrop {
 export interface HudBikeTarget {
   label: string;
   state?: "available" | "flat-tyres" | "locked";
+  vehicleKind?: "bike" | "maintenance-cart";
 }
 
 export interface HudWorldItemTarget {
@@ -128,6 +131,9 @@ export interface HudUpdate {
   carriedItem: LargeCarryItemId | null;
   bikePumpBoostRemaining: number;
   bikeMounted: boolean;
+  mountedVehicleKind: "bike" | "maintenance-cart" | null;
+  scenarioObjective: string | null;
+  scenarioAction: { label: string; action: string } | null;
   skateboardMounted: boolean;
   injuryStatus: string | null;
   hydrationStatus: string | null;
@@ -320,7 +326,8 @@ export class HudController {
     const thirst = Math.max(0, 100 - view.hydration);
     this.refs.hydration.textContent = `${Math.round(thirst)}`;
     setMeter(this.refs.hydrationFill, thirst / 100);
-    this.refs.tools.textContent = `${view.inventory.length}/${view.inventoryCapacity}`;
+    const occupiedToolSlots = view.inventory.filter((itemId) => !isQuestItem(itemId)).length;
+    this.refs.tools.textContent = `${occupiedToolSlots}/${view.inventoryCapacity}`;
     this.refs.visibility.textContent = visibilityLabel(view.visibility);
     setMeter(this.refs.visibilityFill, view.visibility);
     this.refs.noise.textContent = noiseLabel(view.noise);
@@ -333,6 +340,8 @@ export class HudController {
     this.refs.threat.dataset.threat = view.threat;
     this.refs.weather.textContent = `${view.weatherLabel} · ${view.timeLabel}${view.sheltered ? " · sheltered" : ""}`;
     this.refs.area.textContent = view.areaLabel;
+    this.refs.objective.hidden = !view.scenarioObjective;
+    this.refs.objectiveCopy.textContent = view.scenarioObjective ?? "";
     this.refs.damage.style.setProperty("--damage-angle", `${view.damageDirection}rad`);
     this.refs.damage.classList.toggle("active", view.damageActive);
 
@@ -340,7 +349,6 @@ export class HudController {
     this.refs.inventory.setAttribute("aria-hidden", view.inventoryOpen ? "false" : "true");
     if (view.inventoryOpen) {
       const inventorySignature = JSON.stringify({
-        weapon: view.loadout.weaponId,
         weapons: view.loadout.inventory,
         magazines: view.loadout.magazines,
         upgrades: view.loadout.upgrades,
@@ -356,6 +364,7 @@ export class HudController {
         this.inventorySignature = inventorySignature;
         this.refs.inventory.innerHTML = renderInventoryMenu(view);
       }
+      patchInventorySelection(this.refs.inventory, view.loadout);
     } else {
       this.inventorySignature = "";
     }
@@ -389,8 +398,11 @@ export class HudController {
           ? `Loading flare ${percent}%`
           : `Reloading ${percent}%`;
     } else if (view.bikeMounted) {
-      this.refs.prompt.textContent = `${key("interact")}  Dismount bike`;
-      this.refs.status.textContent = view.bikePumpBoostRemaining > 0 ? "Tuned bike" : "Bike";
+      this.refs.prompt.textContent = `${key("interact")}  ${view.mountedVehicleKind === "maintenance-cart" ? "Park cart" : "Dismount bike"}`;
+      this.refs.status.textContent = view.mountedVehicleKind === "maintenance-cart" ? "Maintenance cart" : view.bikePumpBoostRemaining > 0 ? "Tuned bike" : "Bike";
+    } else if (view.scenarioAction) {
+      this.refs.prompt.textContent = `${key("interact")}  ${view.scenarioAction.action}`;
+      this.refs.status.textContent = view.scenarioAction.label;
     } else if (view.nearestWorldItem) {
       this.refs.prompt.textContent = `${key("take")}  Take ${ITEM_DEFINITIONS[view.nearestWorldItem.itemId].label}`;
       this.refs.status.textContent = view.nearestWorldItem.label;
@@ -398,8 +410,10 @@ export class HudController {
       this.refs.prompt.textContent = `${key("take")}  Take ${WEAPON_DEFINITIONS[view.nearestWeaponDrop.weaponId].name}`;
       this.refs.status.textContent = view.nearestWeaponDrop.label;
     } else if (view.nearestBike) {
-      this.refs.prompt.textContent = view.nearestBike.state === "flat-tyres"
-        ? `${key("interact")}  Repair flat tyre`
+      this.refs.prompt.textContent = view.nearestBike.vehicleKind === "maintenance-cart"
+        ? `${key("interact")}  ${view.nearestBike.state === "available" ? "Drive maintenance cart" : "Inspect maintenance cart"}`
+        : view.nearestBike.state === "flat-tyres"
+          ? `${key("interact")}  Repair flat tyre`
         : view.nearestBike.state === "locked"
           ? `${key("interact")}  Cut bike chain`
           : `${key("interact")}  Ride bike`;
@@ -530,7 +544,13 @@ function renderInventoryMenu(view: HudUpdate): string {
     : `<li class="inventory-slot empty"><b>T</b><span>No tools carried</span></li>`;
   const carried = view.carriedItem ? ITEM_DEFINITIONS[view.carriedItem] : null;
   const stats = getWeaponStats(view.loadout);
-  const transport = view.bikeMounted ? "Bicycle" : view.skateboardMounted ? "Skateboard" : "On foot";
+  const transport = view.mountedVehicleKind === "maintenance-cart"
+    ? "Maintenance cart"
+    : view.bikeMounted
+      ? "Bicycle"
+      : view.skateboardMounted
+        ? "Skateboard"
+        : "On foot";
   const modifications = Object.values(UPGRADE_DEFINITIONS).map((upgrade) => {
     const level = view.loadout.upgrades[upgrade.id];
     return `<li><span><b>${escapeHtml(upgrade.label)}</b><small>${escapeHtml(upgrade.description)}</small></span><strong>${level}/${upgrade.maxLevel}</strong></li>`;
@@ -540,7 +560,7 @@ function renderInventoryMenu(view: HudUpdate): string {
     <div class="inventory-workbench">
       <div class="inventory-rail">
         ${renderWeaponInventory(view.loadout)}
-        <div class="inventory-section-title"><span>Tools</span><strong>${view.inventory.length}/${view.inventoryCapacity}</strong></div>
+        <div class="inventory-section-title"><span>Tools</span><strong>${view.inventory.filter((itemId) => !isQuestItem(itemId)).length}/${view.inventoryCapacity}</strong></div>
         <ul class="inventory-slots">${slots}</ul>
       </div>
       <section class="inventory-detail" aria-label="Equipped weapon details">
@@ -574,6 +594,36 @@ function renderWeaponInventory(loadout: Loadout): string {
     return `<li><button type="button" data-weapon-slot="${index}" class="inventory-weapon${active ? " active" : ""}" aria-pressed="${active}"><b>${index + 1}</b><span>${WEAPON_DEFINITIONS[weaponId].name}</span><strong>${ammo}</strong></button></li>`;
   }).join("");
   return `<section class="inventory-weapons"><div class="inventory-section-title"><span>Weapons</span><strong>${loadout.inventory.length}</strong></div><ul>${weapons}</ul></section>`;
+}
+
+function patchInventorySelection(root: HTMLElement, loadout: Loadout): void {
+  const stats = getWeaponStats(loadout);
+  const header = root.querySelector<HTMLElement>(".inventory-header strong");
+  if (header) header.textContent = stats.name;
+  for (const button of root.querySelectorAll<HTMLButtonElement>("[data-weapon-slot]")) {
+    const index = Number(button.dataset.weaponSlot);
+    const active = loadout.inventory[index] === loadout.weaponId;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", `${active}`);
+  }
+  const detail = root.querySelector<HTMLElement>(".inventory-detail");
+  if (!detail) return;
+  const title = detail.querySelector<HTMLElement>("h3");
+  const summary = detail.querySelector<HTMLElement>("p");
+  if (title) title.textContent = stats.name;
+  if (summary) {
+    summary.textContent = stats.kind === "melee"
+      ? "Quiet close-range fallback"
+      : `${stats.magazineSize}-round ${stats.reloadStyle === "single" ? "single-load" : "magazine"} firearm`;
+  }
+  const values = detail.querySelectorAll<HTMLElement>("dl dd");
+  const nextValues = [
+    `${Math.round(stats.damage * stats.pellets)}`,
+    `${Math.round(stats.range)}m`,
+    `${stats.fireDelay.toFixed(2)}s`,
+    stats.noiseMultiplier < 0.4 ? "Low" : stats.noiseMultiplier < 1.15 ? "Medium" : "High"
+  ];
+  values.forEach((value, index) => { value.textContent = nextValues[index] ?? ""; });
 }
 
 function renderBindingSettings(): string {
@@ -618,6 +668,9 @@ function createMarkup(): string {
       </section>
 
       <section class="hud team-hud" data-hud="team" aria-label="Co-op team" hidden></section>
+      <section class="hud quest-ribbon" data-hud="objective" aria-label="Current rescue objective" aria-live="polite" hidden>
+        <span>Park rescue</span><strong data-hud="objective-copy"></strong>
+      </section>
       <section class="hud weapon-hud" aria-label="Weapon status">
         <div class="ammo"><strong data-hud="ammo">MELEE</strong><span data-hud="reserve">Emergency knife</span></div>
         <div class="status-line" data-hud="status">Emergency knife · light on</div>
@@ -714,7 +767,7 @@ function findHudRefs(root: HTMLElement): HudRefs {
     scrap: find('[data-hud="scrap"]'), stamina: find('[data-hud="stamina"]'), staminaFill: find('[data-hud="stamina-fill"]'),
     hydration: find('[data-hud="hydration"]'), hydrationFill: find('[data-hud="hydration-fill"]'), tools: find('[data-hud="tools"]'),
     visibility: find('[data-hud="visibility"]'), visibilityFill: find('[data-hud="visibility-fill"]'), noise: find('[data-hud="noise"]'), noiseFill: find('[data-hud="noise-fill"]'), threat: find('[data-hud="threat"]'),
-    weather: find('[data-hud="weather"]'), area: find('[data-hud="area"]'), prompt: find('[data-hud="prompt"]'), status: find('[data-hud="status"]'),
+    weather: find('[data-hud="weather"]'), area: find('[data-hud="area"]'), prompt: find('[data-hud="prompt"]'), status: find('[data-hud="status"]'), objective: find('[data-hud="objective"]'), objectiveCopy: find('[data-hud="objective-copy"]'),
     inventory: find('[data-hud="inventory"]'), team: find('[data-hud="team"]'), intermission: find('[data-hud="intermission"]'), damage: find('[data-hud="damage"]'), hitMarker: find('[data-hud="hit-marker"]'),
     start: find('[data-action="start"]'), restart: find('[data-action="restart"]'), overlay: find('[data-hud="overlay"]'),
     outcome: find('[data-hud="outcome"]'), outcomeKicker: find('[data-hud="outcome-kicker"]'), outcomeTitle: find('[data-hud="outcome-title"]'), outcomeCopy: find('[data-hud="outcome-copy"]'), outcomeWave: find('[data-hud="outcome-wave"]'), outcomeCount: find('[data-hud="outcome-count"]'), outcomeTeam: find('[data-hud="outcome-team"]'),

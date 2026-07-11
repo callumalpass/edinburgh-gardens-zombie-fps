@@ -49,5 +49,5 @@ export const SKATEBOARD_REVERSE_SPEED = 3.2;
 export const SKATEBOARD_STRAFE_SPEED = 2.1;
 export const SKATEBOARD_CAMERA_HEIGHT_BONUS = 0.12;
 
-export const NETWORK_INPUT_HZ = 30;
+export const NETWORK_INPUT_HZ = 60;
 export const NETWORK_SNAPSHOT_HZ = 18;

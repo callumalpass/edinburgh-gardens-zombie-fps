@@ -128,6 +128,29 @@ Current local assets:
   - Source: Heritage Council Victoria, `https://assets.heritagecouncil.vic.gov.au/assets/HCV-Determination_WW1-Sportsmans-Memorial-Arbour_21APR26.pdf`.
   - Purpose: current 21 April 2026 primary evidence for the arbour's six Tuscan columns/pedestals, bowling-club relationship to the north, substation relationship to the west, relocated south path, diminished processional function and construction-fabric distinction.
   - Validation: `pdfinfo`, `pdftotext`, SHA-256 `f25d0da8a1eca26a7d4d9261b4eb92d3f5f7e46c6c94d5b1c608607d623c4ec0`; `npm run research:check` validates the registered non-empty optional raw file.
+- `docs/research/raw/gardens/2026-07-11/activity-precinct/endorsed-northern-precinct-plan.pdf` and `draft-playground-concept-plan.pdf`
+  - Source: City of Yarra northern precinct consultation downloads `https://yoursayyarra.com.au/download_file/321/497` and `https://yoursayyarra.com.au/download_file/322/497`.
+  - Purpose: official plan-view evidence for the relocated north playground, BBQ and activity-precinct relationship and the final relative playground equipment, seating, planting and shade-sail layout.
+  - Validation: `pdfinfo` confirms one page each; rendered at 180 dpi with `pdftoppm` and manually inspected. SHA-256: `55f0418b8c4bb05a0c7250ac8e3a003af018c926a0874e32bd5b20b32632a9d6` and `2bec9dbc5e82caf4579471fb166e4fd53585150ae50894f578a7043c4a436904` respectively.
+- `docs/research/raw/gardens/2026-07-11/activity-precinct/fitzy-bowl-design/*.jpg`
+  - Source: seven winning-tender design images embedded in `https://yoursayyarra.com.au/skatepark`.
+  - Purpose: control the retained connected bowls, 2022 street/transition extension, rails, banks, spectator terrace and perimeter relationships; `07-design-details.jpg` is the published Playce drawing `19321_003`.
+  - Rights: retained as ignored visual-research references; the images are not distributed as game textures.
+  - Validation: `identify` confirms six 2560 by 1309 JPEG renderings and one 2266 by 1567 site-plan JPEG; all seven were reviewed individually and as a contact sheet.
+- `docs/research/raw/gardens/2026-07-11/gate-fountain-audit/edinburgh-gardens-cmp-2021.pdf`
+  - Source: Lovell Chen 2021 CMP copy archived by the 3068 Group.
+  - Purpose: focused local copy used to compare Figure 72's Hannah entrance against Figures 61 and 66's separate timber entrance pavilion and Chandler Fountain relationship.
+  - Validation: `pdfinfo`, `pdftotext`, 180-dpi Poppler page renders and manual visual comparison.
+- `docs/research/raw/gardens/2026-07-11/bowling-grandstand-covered-gate/google-maps-user-highlight.png`
+  - Source: user-supplied annotated Google Maps satellite screenshot centred approximately at `-37.78802, 144.98118`.
+  - Purpose: identifies OSM roof `1475006769` as the covered gate/passable structure between the Bowling Club and Kevin Murray Stand, superseding the former solid-shed/around-route interpretation.
+  - Rights: ignored research reference only; it is not distributed as a game texture or committed asset.
+  - Validation: `file` and ImageMagick `identify` confirm a readable 2093 by 1433 RGB PNG; the full frame and a local crop were manually compared with OSM/Vicmap geometry and the old first-person render.
+- `docs/research/raw/gardens/2026-07-11/south-playground/melbourne-playgrounds-*`, `tothotornot-*` and `busycity-*`
+  - Source: Melbourne Playgrounds (2010), To Hot or Not (2015) and Busy City Guide (2015) public south-playground pages and photographs.
+  - Purpose: resolve the persistent fort bays/slides, rope pyramid, single four-seat swing bank, central mound/shelter, accessible bridge, sand margins and eastern toddler equipment inside the current OSM enclosure. These older photographs are never treated as proof of July 2026 paint or wear condition.
+  - Rights: ignored visual-research references only; the photographs are not distributed as game textures.
+  - Validation: `file` and `identify` confirm readable raster assets (some Busy City downloads contain WebP data despite their `.jpg` suffix); EXIF/page dates and every image were manually reviewed, then compared with the Vicmap aerial registration.
 - `docs/research/raw/2026-07-10/brunswick-street-oval-tree-management-plan.pdf`
   - Source: `https://www.yarracity.vic.gov.au/sites/default/files/2026-02/Tree_protection_management_plan_brunswick_street_oval.pdf`.
   - Purpose: official numbered April/May 2026 removal plan for the 39 trees affected by tennis and sports-pavilion works.
@@ -149,3 +172,32 @@ Current local assets:
   - Purpose: distinguish the current Melanie Caple St Georges Road mural from the superseded 150-year artwork, then control the current wall's subject order and palette without embedding the photographs as game textures.
   - Rights: the Flickr pages mark the photographs All Rights Reserved. These ignored local copies are visual-research references only and are not distributed in the game asset.
   - Validation: `identify docs/research/raw/2026-07-10/bowling-club-murals/*.jpg` confirms six readable 1024-pixel JPEGs; dates, geotags and titles were checked in each Flickr page's exported metadata.
+- `docs/research/raw/context/2026-07-11/osm-edinburgh-gardens-150m-context.xml`
+  - Source: OpenStreetMap map API bbox `144.97835096436717,-37.79124436676249,144.9873642356328,-37.78410843323751`.
+  - Purpose: finite 150 m building/road/tram/path evidence belt around OSM park boundary way `13815924`; the generator selects every outside-park building whose centroid is within the belt.
+  - Validation: `xmllint --noout`, then `node scripts/generate-context-world.mjs`; the committed register must contain 448 unique building-way records.
+- `docs/research/raw/context/2026-07-11/vicmap-aerial-edinburgh-gardens-150m-context.png`
+  - Source: Vicmap Basemap WMS `AERIAL_WM_256`, EPSG:3857 bbox `16138916.205401855,-4549977.472001034,16139919.558169527,-4548972.307211911`, 2048 by 2048 PNG.
+  - Purpose: whole-belt roof-presence/orientation/tone cross-check. It does not establish 2026 fine facade condition.
+  - Validation: `identify`, original-resolution visual review and SHA-256 `17f3481f993fc9b6123efb23b6f2ab900b9e5fa7e744c1dc9474704f4803d9d6`.
+- `docs/research/raw/context/2026-07-11/vicmap-address-150m-context.geojson`
+  - Source: current Vicmap Address FeatureServer layer 0 bbox query.
+  - Purpose: spatially match official address points to individual OSM building polygons; 369 of the 448 rendered buildings contain a Vicmap address point, while the stricter near/mid address evidence tier contains 238 records.
+  - Validation: `jq -e '.type == "FeatureCollection" and (.features | length == 1839)'` and generator uniqueness checks.
+- `docs/research/raw/context/2026-07-11/vicmap-tree-urban-150m-context.geojson`
+  - Source: Vicmap Vegetation Tree Urban FeatureServer layer 0 bbox query.
+  - Purpose: source the outside-park street/private-tree context; 1,048 points remain after park-boundary and belt filtering.
+  - Validation: `jq -e '.type == "FeatureCollection" and (.features | length == 1924)'` and generator output counts.
+- `docs/research/raw/context/2026-07-11/vicmap-ground-points-150m-context.geojson` and `vicmap-contours-150m-context.geojson`
+  - Source: Vicmap Elevation metro 1–5 m FeatureServer layers 0 and 1.
+  - Purpose: extend ground-height evidence beyond the playable park so roads, pavements, building bases and context terrain share a smoothly blended AHD-derived surface.
+  - Validation: `jq -e '.features | length > 0'`; generator output must contain 735 simplified elevation samples spanning 25–37 m AHD.
+- `docs/research/raw/context/2026-07-11/city-of-yarra-north-fitzroy-heritage-overlay-review-2013.pdf` and `city-of-yarra-heritage-significant-areas-2022.pdf`
+  - Source: City of Yarra heritage studies/database.
+  - Purpose: precinct-level evidence for the Victorian/Edwardian residential and shop typologies around the park, plus explicit heritage-status/date cross-checking. These sources guide restrained profiles; they never substitute for an unverified per-building height or exact window count.
+  - Validation: `pdfinfo`, `pdftotext` plus `rg 'HO327|North Fitzroy|Pitched gabled|St Georges Road'`; SHA-256 `44c12e76900ef96b300c9d346cc61411b87cca8d6b94c98e088eb975f3fc0f73` and `4dae4a69fe8b3406e0e50c2b614d48b950e67f1d8df8c65e246839dea23093c9`.
+- `docs/research/raw/2026-07-11-open-game-art-zombie-audio/*`
+  - Source: OpenGameArt “Zomby sfx pack” individual MP3 files and “Undead Moans” ZIP archive.
+  - Purpose: ignored source masters for the committed normalized Vorbis zombie-vocal derivatives under `public/audio/zombies/`.
+  - Rights: both source pages and the `Undead Moans` bundled license identify the recordings as CC0 1.0.
+  - Validation: `file`, `unzip -l`, `ffprobe -v error -show_entries format=filename,duration,size`, and `sha256sum public/audio/zombies/*.ogg`.

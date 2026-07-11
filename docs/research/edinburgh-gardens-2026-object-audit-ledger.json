@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-11T00:55:52.320Z",
+  "generatedAt": "2026-07-11T06:36:57.794Z",
   "physicalBaseline": "2026-07-10",
   "baselinePolicy": {
     "layout": "Physical park condition and active works as documented for 10 July 2026.",
@@ -10,14 +10,14 @@
     "duplicates": "Trees are represented once in physicalObjects; significantTrees, treePoints and treeColliders are supporting views of that tree register and are counted below, not duplicated."
   },
   "summary": {
-    "physicalObjectCount": 581,
-    "gameplayObjectCount": 43,
-    "renderTreatmentCount": 103,
+    "physicalObjectCount": 582,
+    "gameplayObjectCount": 44,
+    "renderTreatmentCount": 105,
     "scenographyObjectCount": 14,
     "categoryCounts": {
       "amenity": 56,
       "building": 14,
-      "fence": 5,
+      "fence": 6,
       "ground-surface": 1,
       "hardscape": 3,
       "landmark": 35,
@@ -30,19 +30,19 @@
     },
     "statusCounts": {
       "corrected-2026": 39,
-      "evidence-linked": 151,
+      "evidence-linked": 153,
       "evidence-linked-context": 7,
       "evidence-linked-historical": 331,
-      "unresolved-public-data-gap": 53
+      "unresolved-public-data-gap": 52
     },
-    "unresolvedObjectCount": 53,
+    "unresolvedObjectCount": 52,
     "derivedRegisterCounts": {
       "treePoints": 341,
       "significantTrees": 19,
       "treeColliders": 359,
       "elevationSamples": 94,
       "terrainModifiers": 471,
-      "collisionObstacles": 474,
+      "collisionObstacles": 480,
       "spawnPoints": 7,
       "pickupPoints": 6
     }
@@ -164,12 +164,6 @@
     },
     {
       "id": "osm-building-1475006768",
-      "category": "building",
-      "auditStatus": "unresolved-public-data-gap",
-      "uncertainty": "public facade photography and individual door, vent and equipment positions are unavailable"
-    },
-    {
-      "id": "osm-building-1475006769",
       "category": "building",
       "auditStatus": "unresolved-public-data-gap",
       "uncertainty": "public facade photography and individual door, vent and equipment positions are unavailable"
@@ -1144,17 +1138,17 @@
       "auditStatus": "evidence-linked",
       "evidenceClass": "openstreetmap",
       "uncertainty": "Current public mapping, but not survey-grade and potentially incomplete.",
-      "source": "Vicmap AERIAL_WM_256 2026-07-10 visual fit: continuous worn service passage between OSM ways 210387722 and 22760906; intermediate centreline is aerial-fitted because no separate public path way is mapped",
+      "source": "Vicmap AERIAL_WM_256 and user-supplied Google Maps aerial highlight reviewed 2026-07-11: continuous paved passage between OSM ways 210387722 and 22760906 crosses through the open-sided roof structure mapped as OSM way 1475006769, then continues across the eastern paved forecourt; intermediate centreline is aerial-fitted because no separate public path way is mapped",
       "geometry": {
         "centerWorld": {
-          "x": -185.8336,
-          "z": 58.5419
+          "x": -185.4963,
+          "z": 52.3678
         },
         "centerGeo": {
-          "lat": -37.7880872,
-          "lon": 144.9812073
+          "lat": -37.7880439,
+          "lon": 144.9812103
         },
-        "vertexCount": 4,
+        "vertexCount": 5,
         "width": 2.35,
         "height": null,
         "radius": null,
@@ -2424,7 +2418,7 @@
       "auditStatus": "evidence-linked",
       "evidenceClass": "openstreetmap",
       "uncertainty": "Current public mapping, but not survey-grade and potentially incomplete.",
-      "source": "OSM way 24489879 current playground footprint; Melbourne Playgrounds and Busy City Guide describe the large fenced south playground, all-abilities paths, wooden fort, rope net, sandpits, swings, toddler area, chalk walls and central shelter",
+      "source": "OSM way 24489879 current playground footprint; Vicmap AERIAL_WM_256 fixes the persistent fort, rope-pyramid, swing, viewing-mound/shelter and toddler-cluster relationships; Melbourne Playgrounds (2010), To Hot or Not (2015) and Busy City Guide (2015) resolve the all-abilities paths, long wooden fort, rope net, sand basins, single four-seat swing bank, toddler equipment, chalk panels and central shelter, with photo age recorded as uncertainty",
       "geometry": {
         "centerWorld": {
           "x": 110.2754,
@@ -14963,12 +14957,12 @@
     {
       "id": "osm-building-1475006769",
       "category": "building",
-      "label": "Bowling club outbuilding",
+      "label": "Bowling Club–grandstand covered gateway",
       "kind": null,
-      "auditStatus": "unresolved-public-data-gap",
+      "auditStatus": "evidence-linked",
       "evidenceClass": "openstreetmap",
-      "uncertainty": "public facade photography and individual door, vent and equipment positions are unavailable",
-      "source": "OSM way 1475006769 full JSON; public facade photography and individual door, vent and equipment positions are unavailable",
+      "uncertainty": "Current public mapping, but not survey-grade and potentially incomplete.",
+      "source": "OSM way 1475006769 fixes the long roof envelope; user-supplied Google Maps aerial highlight reviewed 2026-07-11 identifies this as the roofed gate in the Bowling Club–grandstand passage; Lovell Chen Edinburgh Gardens CMP 2021 section 3.2.9 confirms open-sided roof structures among the bowling-club ancillary fabric; post spacing, transverse opening width and fine gate hardware remain image-fitted rather than surveyed",
       "geometry": {
         "centerWorld": {
           "x": -189.8768,
@@ -14980,13 +14974,13 @@
         },
         "vertexCount": 5,
         "width": null,
-        "height": 2.8,
+        "height": 2.72,
         "radius": null,
         "angle": null
       },
       "design": {
         "material": "utility",
-        "profile": "bowling-shed",
+        "profile": "covered-gateway",
         "canopyGroup": null,
         "courtStatus": null,
         "linkedStructureId": null
@@ -15185,6 +15179,38 @@
       }
     },
     {
+      "id": "fitzy-bowl-perimeter-fence",
+      "category": "fence",
+      "label": "Fitzy Bowl refurbished fence and safety balustrade",
+      "kind": null,
+      "auditStatus": "evidence-linked",
+      "evidenceClass": "openstreetmap",
+      "uncertainty": "Current public mapping, but not survey-grade and potentially incomplete.",
+      "source": "City of Yarra Fitzy Bowl upgrade page and Playce tender site plan 19321_003: retained/refurbished existing fence around the southern original bowls plus 1200 mm safety balustrade along the new outer transitions; OSM way 231049925 controls the current perimeter envelope",
+      "geometry": {
+        "centerWorld": {
+          "x": 34.5062,
+          "z": -149.9581
+        },
+        "centerGeo": {
+          "lat": -37.786624,
+          "lon": 144.983164
+        },
+        "vertexCount": 7,
+        "width": 0.22,
+        "height": 1.2,
+        "radius": null,
+        "angle": null
+      },
+      "design": {
+        "material": null,
+        "profile": null,
+        "canopyGroup": null,
+        "courtStatus": null,
+        "linkedStructureId": null
+      }
+    },
+    {
       "id": "south-playground-fence",
       "category": "fence",
       "label": "South playground steel safety fence",
@@ -15192,7 +15218,7 @@
       "auditStatus": "evidence-linked",
       "evidenceClass": "openstreetmap",
       "uncertainty": "Current public mapping, but not survey-grade and potentially incomplete.",
-      "source": "OSM way 24489879 current playground footprint; Melbourne Playgrounds and Busy City Guide describe the large fenced south playground, all-abilities paths, wooden fort, rope net, sandpits, swings, toddler area, chalk walls and central shelter",
+      "source": "OSM way 24489879 current playground footprint; Vicmap AERIAL_WM_256 fixes the persistent fort, rope-pyramid, swing, viewing-mound/shelter and toddler-cluster relationships; Melbourne Playgrounds (2010), To Hot or Not (2015) and Busy City Guide (2015) resolve the all-abilities paths, long wooden fort, rope net, sand basins, single four-seat swing bank, toddler equipment, chalk panels and central shelter, with photo age recorded as uncertainty",
       "geometry": {
         "centerWorld": {
           "x": 110.2754,
@@ -15704,7 +15730,7 @@
       "auditStatus": "evidence-linked-context",
       "evidenceClass": "official-council-context",
       "uncertainty": "Source supports identity/context; exact survey precision is not asserted.",
-      "source": "City of Yarra Fitzy Bowl upgrade page and Playce tender site plan 19321_003: the August 2022 build retained two connected southern bowl complexes and added the northern street extension, flat banks, quarter pipes, manual pad, curved rail, accessible transitions and timber spectator terrace",
+      "source": "City of Yarra Fitzy Bowl upgrade page and Playce tender site plan 19321_003: the August 2022 build retained two connected southern bowl complexes and added the northern street extension, flat banks, quarter pipes, rounded manual pad, pump bumps, curved rail, accessible transitions, layered timber spectator terrace, refurbished perimeter fence and 1200 mm safety balustrade",
       "geometry": {
         "centerWorld": {
           "x": 25.0011,
@@ -15736,7 +15762,7 @@
       "auditStatus": "evidence-linked-context",
       "evidenceClass": "official-council-context",
       "uncertainty": "Source supports identity/context; exact survey precision is not asserted.",
-      "source": "City of Yarra Fitzy Bowl upgrade page and Playce tender site plan 19321_003: the August 2022 build retained two connected southern bowl complexes and added the northern street extension, flat banks, quarter pipes, manual pad, curved rail, accessible transitions and timber spectator terrace",
+      "source": "City of Yarra Fitzy Bowl upgrade page and Playce tender site plan 19321_003: the August 2022 build retained two connected southern bowl complexes and added the northern street extension, flat banks, quarter pipes, rounded manual pad, pump bumps, curved rail, accessible transitions, layered timber spectator terrace, refurbished perimeter fence and 1200 mm safety balustrade",
       "geometry": {
         "centerWorld": {
           "x": 25.3118,
@@ -15768,7 +15794,7 @@
       "auditStatus": "evidence-linked-context",
       "evidenceClass": "official-council-context",
       "uncertainty": "Source supports identity/context; exact survey precision is not asserted.",
-      "source": "City of Yarra Fitzy Bowl upgrade page and Playce tender site plan 19321_003: the August 2022 build retained two connected southern bowl complexes and added the northern street extension, flat banks, quarter pipes, manual pad, curved rail, accessible transitions and timber spectator terrace",
+      "source": "City of Yarra Fitzy Bowl upgrade page and Playce tender site plan 19321_003: the August 2022 build retained two connected southern bowl complexes and added the northern street extension, flat banks, quarter pipes, rounded manual pad, pump bumps, curved rail, accessible transitions, layered timber spectator terrace, refurbished perimeter fence and 1200 mm safety balustrade",
       "geometry": {
         "centerWorld": {
           "x": 36.7963,
@@ -15800,7 +15826,7 @@
       "auditStatus": "evidence-linked-context",
       "evidenceClass": "official-council-context",
       "uncertainty": "Source supports identity/context; exact survey precision is not asserted.",
-      "source": "City of Yarra Fitzy Bowl upgrade page and Playce tender site plan 19321_003: the August 2022 build retained two connected southern bowl complexes and added the northern street extension, flat banks, quarter pipes, manual pad, curved rail, accessible transitions and timber spectator terrace",
+      "source": "City of Yarra Fitzy Bowl upgrade page and Playce tender site plan 19321_003: the August 2022 build retained two connected southern bowl complexes and added the northern street extension, flat banks, quarter pipes, rounded manual pad, pump bumps, curved rail, accessible transitions, layered timber spectator terrace, refurbished perimeter fence and 1200 mm safety balustrade",
       "geometry": {
         "centerWorld": {
           "x": 37.2836,
@@ -19635,6 +19661,38 @@
       }
     },
     {
+      "id": "bowling-grandstand-covered-gateway-passage",
+      "category": "interaction-zone",
+      "label": "Bowling Club–grandstand covered gateway passage",
+      "kind": "gate",
+      "auditStatus": "gameplay-fiction",
+      "evidenceClass": "gameplay",
+      "uncertainty": "Deliberate game object, not asserted as a fixed 2026 park asset.",
+      "source": null,
+      "geometry": {
+        "centerWorld": {
+          "x": -189.2809,
+          "z": 48.2954
+        },
+        "centerGeo": {
+          "lat": -37.7880153,
+          "lon": 144.9811767
+        },
+        "vertexCount": 0,
+        "width": null,
+        "height": 0,
+        "radius": 4.008,
+        "angle": null
+      },
+      "design": {
+        "material": null,
+        "profile": null,
+        "canopyGroup": null,
+        "courtStatus": null,
+        "linkedStructureId": null
+      }
+    },
+    {
       "id": "sportsmans-memorial-processional-bay",
       "category": "interaction-zone",
       "label": "Sportsman's Memorial processional bay",
@@ -19773,12 +19831,12 @@
       "source": null,
       "geometry": {
         "centerWorld": {
-          "x": 95.7405,
-          "z": 198.8511
+          "x": 91.8149,
+          "z": 197.9812
         },
         "centerGeo": {
-          "lat": -37.7890719,
-          "lon": 144.9837078
+          "lat": -37.7890658,
+          "lon": 144.983673
         },
         "vertexCount": 0,
         "width": null,
@@ -20053,7 +20111,7 @@
     {
       "id": "osm-building-1475006769-roof",
       "category": "interaction-zone",
-      "label": "Bowling club outbuilding roof",
+      "label": "Bowling Club–grandstand covered gateway roof",
       "kind": "building",
       "auditStatus": "gameplay-fiction",
       "evidenceClass": "gameplay",
@@ -20070,7 +20128,7 @@
         },
         "vertexCount": 0,
         "width": null,
-        "height": 3.06,
+        "height": 2.95,
         "radius": 8.5753,
         "angle": null
       },
@@ -21131,6 +21189,38 @@
         "height": null,
         "radius": null,
         "angle": 0.0479
+      },
+      "design": {
+        "material": "dirt",
+        "profile": null,
+        "canopyGroup": null,
+        "courtStatus": null,
+        "linkedStructureId": null
+      }
+    },
+    {
+      "id": "surface-vicmap-bowling-grandstand-passage-4",
+      "category": "path-surface-treatment",
+      "label": "Bowling Club to Kevin Murray Stand passage feathered edge",
+      "kind": "path-edge-wear",
+      "auditStatus": "render-style-treatment",
+      "evidenceClass": "painterly-surface-treatment",
+      "uncertainty": "Non-object painterly surface variation; recorded for completeness but not asserted as surveyed park hardware or exact wear geometry.",
+      "source": "Vicmap AERIAL_WM_256 and user-supplied Google Maps aerial highlight reviewed 2026-07-11: continuous paved passage between OSM ways 210387722 and 22760906 crosses through the open-sided roof structure mapped as OSM way 1475006769, then continues across the eastern paved forecourt; intermediate centreline is aerial-fitted because no separate public path way is mapped; path-edge transition inferred from CMP asphalt-path and remnant-edge context",
+      "geometry": {
+        "centerWorld": {
+          "x": -181.424,
+          "z": 58.3132
+        },
+        "centerGeo": {
+          "lat": -37.7880856,
+          "lon": 144.9812465
+        },
+        "vertexCount": 0,
+        "width": 0.74,
+        "height": null,
+        "radius": null,
+        "angle": 1.5606
       },
       "design": {
         "material": "dirt",
@@ -23634,6 +23724,38 @@
         "canopyGroup": null,
         "courtStatus": null,
         "linkedStructureId": "osm-building-543505638"
+      }
+    },
+    {
+      "id": "osm-building-1475006769-shelter",
+      "category": "weather-shelter-envelope",
+      "label": "Bowling Club–grandstand covered gateway roof",
+      "kind": "roof",
+      "auditStatus": "render-style-treatment",
+      "evidenceClass": "painterly-surface-treatment",
+      "uncertainty": "Non-object painterly surface variation; recorded for completeness but not asserted as surveyed park hardware or exact wear geometry.",
+      "source": "OSM way 1475006769 fixes the long roof envelope; user-supplied Google Maps aerial highlight reviewed 2026-07-11 identifies this as the roofed gate in the Bowling Club–grandstand passage; Lovell Chen Edinburgh Gardens CMP 2021 section 3.2.9 confirms open-sided roof structures among the bowling-club ancillary fabric; post spacing, transverse opening width and fine gate hardware remain image-fitted rather than surveyed; Yarra Edinburgh Gardens facility listing confirms pavilion, public toilets and access-friendly park facilities; Yarra Brunswick Street Oval redevelopment confirms kiosk terrace, grandstand external stairs/gates and tennis social-space/amenity works; Yarra Emely Baker Centre venue page and venue manual confirm the gated outdoor area, dark shade sail, external play-yard doors and accessible use; Yarra Rotunda page confirms bookable shelter use but no current power; roof/eave shelter footprint is inferred from the mapped OSM building outline",
+      "geometry": {
+        "centerWorld": {
+          "x": -189.2809,
+          "z": 48.2954
+        },
+        "centerGeo": {
+          "lat": -37.7880153,
+          "lon": 144.9811767
+        },
+        "vertexCount": 0,
+        "width": null,
+        "height": null,
+        "radius": null,
+        "angle": 0.8813
+      },
+      "design": {
+        "material": null,
+        "profile": null,
+        "canopyGroup": null,
+        "courtStatus": null,
+        "linkedStructureId": "osm-building-1475006769"
       }
     }
   ],

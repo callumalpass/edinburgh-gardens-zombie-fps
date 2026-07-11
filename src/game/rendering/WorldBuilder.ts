@@ -1797,24 +1797,23 @@ export class WorldBuilder {
 
   private addRaingardenPlanting(center: Vec2, rotation: number, halfX: number, plantedDepth: number, polygon: Vec2[]): void {
     const positions: Array<{ point: Vec2; height: number; radius: number }> = [];
-    for (let row = 0; row < 4; row += 1) {
-      for (let column = 0; column < 10; column += 1) {
-        const localX = -halfX * 0.72 + column * ((halfX * 1.44) / 9) + (this.stableNoise(row, column, 41) - 0.5) * 0.34;
-        const localZ = -plantedDepth * 0.38 + row * ((plantedDepth * 0.76) / 3) + (this.stableNoise(row, column, 73) - 0.5) * 0.28;
-        if (Math.abs(localX) < halfX * 0.18 && row % 2 === 1) continue;
+    for (let row = 0; row < 10; row += 1) {
+      for (let column = 0; column < 28; column += 1) {
+        const localX = -halfX * 0.76 + column * ((halfX * 1.52) / 27) + (this.stableNoise(row, column, 41) - 0.5) * 0.24;
+        const localZ = -plantedDepth * 0.42 + row * ((plantedDepth * 0.84) / 9) + (this.stableNoise(row, column, 73) - 0.5) * 0.2;
         const point = this.localPoint(center, rotation, localX, localZ);
         if (!pointInPolygon(point, polygon)) continue;
         positions.push({
           point,
-          height: 0.55 + this.stableNoise(localX, localZ, 5) * 0.65,
-          radius: 0.18 + this.stableNoise(localX, localZ, 9) * 0.16
+          height: 0.48 + this.stableNoise(localX, localZ, 5) * 0.72,
+          radius: 0.034 + this.stableNoise(localX, localZ, 9) * 0.026
         });
       }
     }
     if (positions.length === 0) return;
 
-    const geometry = new THREE.ConeGeometry(1, 1, 5);
-    const material = new THREE.MeshStandardMaterial({ color: 0x58705b, roughness: 0.94 });
+    const geometry = new THREE.CylinderGeometry(0.5, 1, 1, 4);
+    const material = new THREE.MeshStandardMaterial({ color: 0x6f805e, roughness: 0.94 });
     const mesh = new THREE.InstancedMesh(geometry, material, positions.length);
     const matrix = new THREE.Matrix4();
     const quaternion = new THREE.Quaternion();
@@ -1822,7 +1821,7 @@ export class WorldBuilder {
     for (let i = 0; i < positions.length; i += 1) {
       const placement = positions[i];
       quaternion.setFromEuler(new THREE.Euler(0, (i % 7) * 0.38, 0));
-      scale.set(placement.radius, placement.height, placement.radius);
+      scale.set(placement.radius, placement.height, placement.radius * 0.72);
       matrix.compose(
         new THREE.Vector3(placement.point.x, this.groundY(placement.point) + 0.1 + placement.height * 0.5, placement.point.z),
         quaternion,
@@ -1992,6 +1991,15 @@ export class WorldBuilder {
         building,
         this.scene.children.filter((child) => !existingChildren.has(child))
       );
+      return;
+    }
+
+    // OSM maps the aerial roof envelope as a building, but the highlighted
+    // current aerial and CMP ancillary-structure description establish an
+    // open-sided covered gate here. A generic prism would close the real
+    // Bowling Club–grandstand passage, so only the roof/frame detail is built.
+    if (building.detailProfile === "covered-gateway") {
+      this.addMappedBuildingDetails(building, polygonCentroid(building.polygon));
       return;
     }
 
@@ -2262,6 +2270,78 @@ export class WorldBuilder {
       return;
     }
 
+    if (building.detailProfile === "covered-gateway") {
+      const roof = this.standardDetailMaterial("bowling-grandstand-covered-gateway-roof", 0xc5cbc7, 0.58, 0.22);
+      const frame = this.standardDetailMaterial("bowling-grandstand-covered-gateway-frame", 0x4e625d, 0.54, 0.34);
+      const rail = this.standardDetailMaterial("bowling-grandstand-covered-gateway-side-rails", 0x61746c, 0.58, 0.28);
+      const passageHalfX = Math.min(2.2, footprint.halfX * 0.3);
+      const postInsetZ = footprint.halfZ * 0.8;
+      const sideSegmentLength = Math.max(1.2, footprint.halfX - passageHalfX);
+      const sideSegmentCenter = passageHalfX + sideSegmentLength * 0.5;
+
+      // The roof envelope remains exact to OSM/aerial. Everything below the
+      // eaves is deliberately open at the broad transverse gate, matching the
+      // user-highlighted route instead of the former solid shed treatment.
+      this.addGabledRoof(
+        center,
+        rotation,
+        0,
+        0,
+        footprint.halfX * 2.12,
+        footprint.halfZ * 2.18,
+        building.height,
+        0.46,
+        roof
+      );
+
+      for (const xFactor of [-0.9, -0.58, -0.31, 0.31, 0.58, 0.9]) {
+        for (const zSide of [-1, 1]) {
+          const post = this.addLocalBox(
+            center,
+            rotation,
+            footprint.halfX * xFactor,
+            postInsetZ * zSide,
+            0.16,
+            building.height,
+            0.16,
+            frame,
+            building.height * 0.5
+          );
+          post.userData.kind = "bowling-grandstand-covered-gateway-post";
+        }
+      }
+
+      // Low side rails make the roofed object read as a gateway/corridor, but
+      // stop on both sides of the real opening so no visual or collision fabric
+      // crosses the player route.
+      for (const xSide of [-1, 1]) {
+        for (const zSide of [-1, 1]) {
+          const x = sideSegmentCenter * xSide;
+          for (const y of [0.62, 1.3]) {
+            this.addLocalBox(center, rotation, x, postInsetZ * zSide, sideSegmentLength, 0.085, 0.1, rail, y, false);
+          }
+        }
+      }
+
+      // A cross-frame above head height identifies the transverse gate without
+      // reducing its full-player clearance.
+      const lintel = this.addLocalBox(
+        center,
+        rotation,
+        0,
+        0,
+        0.16,
+        0.18,
+        footprint.halfZ * 1.72,
+        frame,
+        building.height - 0.12
+      );
+      lintel.userData.kind = "bowling-grandstand-covered-gateway-lintel";
+      this.addBuildingGutter(center, rotation, 0, frontZ + 0.06, footprint.halfX * 2.06, building.height + 0.02);
+      this.addBuildingGutter(center, rotation, 0, rearZ - 0.06, footprint.halfX * 2.06, building.height + 0.02);
+      return;
+    }
+
     if (building.detailProfile === "rotunda-pavilion") {
       const pavilionRadius = Math.min(footprint.halfX, footprint.halfZ) * 0.84;
       const dome = new THREE.Mesh(
@@ -2406,7 +2486,11 @@ export class WorldBuilder {
       const b = fence.points[i + 1];
       const intervals = this.fenceVisibleIntervals(a, b, gaps);
       for (const interval of intervals) {
-        this.addFenceSegment(a, b, interval.start, interval.end, height, postMaterial, railMaterial);
+        if (fence.id === "fitzy-bowl-perimeter-fence") {
+          this.addFitzyBowlBalustradeSegment(a, b, interval.start, interval.end, height);
+        } else {
+          this.addFenceSegment(a, b, interval.start, interval.end, height, postMaterial, railMaterial);
+        }
       }
     }
     this.addMappedFenceGateDetails(fence);
@@ -2424,17 +2508,40 @@ export class WorldBuilder {
     const openingHalfWidth = 1.18;
     const brick = this.standardDetailMaterial("hannah-memorial-gate-red-brick", 0xa94f35, 0.86, 0.01);
     const darkBrick = this.standardDetailMaterial("hannah-memorial-gate-dark-brick-base", 0x3c2621, 0.9, 0.01);
-    const capstone = this.standardDetailMaterial("hannah-memorial-gate-capstone", 0xc5b99a, 0.82, 0.01);
-    const bronze = this.standardDetailMaterial("hannah-memorial-gate-plaques", 0x70452f, 0.54, 0.16);
+    const capstone = this.standardDetailMaterial("hannah-memorial-gate-weathered-cap", 0x57483c, 0.86, 0.01);
+    const bronze = this.standardDetailMaterial("hannah-memorial-gate-left-honour-board", 0x70452f, 0.54, 0.16);
+    const ceramic = this.standardDetailMaterial("hannah-memorial-gate-right-notice", 0xd9d4c5, 0.72, 0.02);
+    const threshold = this.standardDetailMaterial("hannah-memorial-gate-fbc-threshold", 0xc88f78, 0.86, 0.01);
+    const thresholdLetter = this.standardDetailMaterial("hannah-memorial-gate-threshold-lettering", 0x725b55, 0.82, 0.01);
     const greenMetal = this.standardDetailMaterial("hannah-memorial-gate-green-metal", 0x426659, 0.58, 0.3);
 
     for (const side of [-1, 1]) {
       const localX = side * openingHalfWidth;
-      this.addLocalBox(hannahGate.position, rotation, localX, 0, 0.72, 0.56, 0.72, darkBrick, 0.3);
-      this.addLocalBox(hannahGate.position, rotation, localX, 0, 0.62, 1.42, 0.62, brick, 1.02);
-      this.addLocalBox(hannahGate.position, rotation, localX, 0, 0.72, 0.12, 0.72, capstone, 1.79);
-      this.addLocalBox(hannahGate.position, rotation, localX - side * 0.015, 0.335, 0.34, 0.46, 0.035, bronze, 1.22, false);
-      this.addOpenGateLeaf(hannahGate.position, rotation, side * (openingHalfWidth - 0.34), 0, 0.92, 1.3, side, greenMetal);
+      this.addLocalBox(hannahGate.position, rotation, localX, 0, 0.78, 0.52, 0.82, darkBrick, 0.27);
+      this.addLocalBox(hannahGate.position, rotation, localX, 0, 0.68, 1.48, 0.72, brick, 1.0);
+      // Figure 72 shows deep, dark, two-stage weathered caps rather than a
+      // pale concrete slab. Their stepped silhouette is one of the easiest
+      // ways to distinguish this small entrance from a generic fence break.
+      this.addLocalBox(hannahGate.position, rotation, localX, 0, 0.8, 0.11, 0.84, capstone, 1.77);
+      this.addLocalBox(hannahGate.position, rotation, localX, 0, 0.72, 0.09, 0.76, capstone, 1.87);
+      if (side < 0) {
+        this.addLocalBox(hannahGate.position, rotation, localX + 0.01, 0.385, 0.46, 0.54, 0.035, bronze, 1.18, false);
+      } else {
+        this.addLocalBox(hannahGate.position, rotation, localX - 0.01, 0.385, 0.4, 0.24, 0.035, ceramic, 1.26, false);
+        this.addLocalBox(hannahGate.position, rotation, localX - 0.01, 0.405, 0.1, 0.1, 0.04, bronze, 0.93, false);
+      }
+      // The photographed leaves are folded back beside the piers. Keeping
+      // them almost parallel with the adjoining walls makes the open passage
+      // legible and avoids the old visually cluttered half-open pose.
+      this.addOpenGateLeaf(hannahGate.position, rotation, side * (openingHalfWidth - 0.38), 0, 0.9, 1.32, side, greenMetal, 1.43);
+    }
+
+    // The pink FBC inset is visible at the public threshold in Figure 72.
+    // It is shallow, non-colliding detail; the three dark strokes preserve
+    // the identifying cue without introducing an unreadable texture.
+    this.addLocalBox(hannahGate.position, rotation, 0, 0.54, 1.28, 0.035, 0.7, threshold, 0.035, false);
+    for (const [localX, width] of [[-0.34, 0.18], [0, 0.2], [0.34, 0.18]] as const) {
+      this.addLocalBox(hannahGate.position, rotation, localX, 0.55, width, 0.018, 0.055, thresholdLetter, 0.064, false);
     }
   }
 
@@ -3006,7 +3113,8 @@ export class WorldBuilder {
     width: number,
     height: number,
     hingeSide: number,
-    material: THREE.Material
+    material: THREE.Material,
+    openAngle = 1.05
   ): void {
     const group = new THREE.Group();
     for (let index = 0; index < 4; index += 1) {
@@ -3023,7 +3131,7 @@ export class WorldBuilder {
     }
     const hinge = this.localPoint(center, rotation, localX, localZ);
     group.position.set(hinge.x, this.groundY(hinge), hinge.z);
-    group.rotation.y = rotation + hingeSide * 1.05;
+    group.rotation.y = rotation + hingeSide * openAngle;
     this.scene.add(group);
   }
 
@@ -4007,6 +4115,37 @@ export class WorldBuilder {
     }
   }
 
+  private addFitzyBowlBalustradeSegment(a: Vec2, b: Vec2, start: number, end: number, height: number): void {
+    const startPoint = { x: a.x + (b.x - a.x) * start, z: a.z + (b.z - a.z) * start };
+    const endPoint = { x: a.x + (b.x - a.x) * end, z: a.z + (b.z - a.z) * end };
+    const segmentLength = distance(startPoint, endPoint);
+    if (segmentLength < 0.45) return;
+    const angle = -Math.atan2(endPoint.z - startPoint.z, endPoint.x - startPoint.x);
+    const center = { x: (startPoint.x + endPoint.x) * 0.5, z: (startPoint.z + endPoint.z) * 0.5 };
+    const baseY = this.supportY([startPoint, endPoint]);
+    const green = this.standardDetailMaterial("fitzy-bowl-green-safety-balustrade", 0x31594f, 0.5, 0.34);
+    for (const y of [0.12, height - 0.08]) {
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(segmentLength, 0.09, 0.09), green);
+      rail.position.set(center.x, baseY + y, center.z);
+      rail.rotation.y = angle;
+      rail.castShadow = true;
+      this.scene.add(rail);
+    }
+    const barCount = Math.max(1, Math.ceil(segmentLength / 0.48));
+    for (let index = 0; index <= barCount; index += 1) {
+      const t = index / barCount;
+      const point = {
+        x: startPoint.x + (endPoint.x - startPoint.x) * t,
+        z: startPoint.z + (endPoint.z - startPoint.z) * t
+      };
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(0.055, height, 0.065), green);
+      bar.position.set(point.x, this.groundY(point) + height * 0.5, point.z);
+      bar.rotation.y = angle;
+      bar.castShadow = true;
+      this.scene.add(bar);
+    }
+  }
+
   private addLowHedgeAround(polygon: Vec2[], height: number, width: number): void {
     for (let i = 0; i < polygon.length; i += 1) {
       const a = polygon[i];
@@ -4358,28 +4497,289 @@ export class WorldBuilder {
   }
 
   private addSouthPlaygroundDetails(center: Vec2, rotation: number, halfX: number, halfZ: number): void {
+    // Persistent equipment is registered against the Vicmap aerial and the
+    // 2010/2015 photo sequence, rather than scattered evenly through the OSM
+    // enclosure. In the fitted playground frame the fort occupies the west
+    // centre, the rope pyramid and four-bay swings sit to its north, the
+    // viewing mound/shelter lies east of it, and the toddler cluster continues
+    // south-east around that mound.
     this.addPlaygroundPath(center, rotation, [
-      [-halfX * 0.82, -halfZ * 0.42],
-      [-halfX * 0.22, -halfZ * 0.12],
-      [halfX * 0.06, halfZ * 0.16],
-      [halfX * 0.82, halfZ * 0.36]
-    ], 1.1);
+      [-halfX * 0.84, -halfZ * 0.48],
+      [-halfX * 0.42, -halfZ * 0.22],
+      [halfX * 0.04, -halfZ * 0.08],
+      [halfX * 0.34, halfZ * 0.24],
+      [halfX * 0.78, halfZ * 0.38]
+    ], 1.18);
     this.addPlaygroundPath(center, rotation, [
-      [-halfX * 0.1, -halfZ * 0.72],
-      [-halfX * 0.05, -halfZ * 0.1],
-      [halfX * 0.04, halfZ * 0.62]
-    ], 0.92);
-    this.addPlaygroundTower(center, rotation, -halfX * 0.18, -halfZ * 0.12, 5.7, 4.8, 2.35, "south-main", 0xb74838);
-    this.addPlaygroundRopeWeb(center, rotation, halfX * 0.24, -halfZ * 0.18, 4.8, 3.1);
-    this.addSandpit(center, rotation, halfX * 0.42, halfZ * 0.35, 5.4, 3.6);
-    this.addSandpit(center, rotation, -halfX * 0.5, halfZ * 0.32, 3.8, 2.7);
-    this.addSwingSet(this.localPoint(center, rotation, -halfX * 0.58, -halfZ * 0.5), rotation + 0.08);
-    this.addSwingSet(this.localPoint(center, rotation, halfX * 0.62, -halfZ * 0.54), rotation - 0.12);
-    this.addPlaygroundShelter(center, rotation, 0, halfZ * 0.02);
-    this.addToddlerSlide(center, rotation, -halfX * 0.48, halfZ * 0.02, 0x609f8a);
-    this.addChalkWall(center, rotation, -halfX * 0.73, halfZ * 0.02, 1.35);
-    this.addSeesaw(center, rotation, halfX * 0.02, halfZ * 0.55);
-    this.addSpinner(center, rotation, halfX * 0.63, halfZ * 0.08);
+      [-halfX * 0.18, -halfZ * 0.82],
+      [-halfX * 0.18, -halfZ * 0.34],
+      [halfX * 0.2, -halfZ * 0.14],
+      [halfX * 0.32, halfZ * 0.66]
+    ], 0.98);
+
+    this.addSouthPlaygroundFort(center, rotation, -halfX * 0.31, -halfZ * 0.23);
+    this.addSouthPlaygroundRopePyramid(center, rotation, halfX * 0.08, -halfZ * 0.76);
+    this.addSouthPlaygroundSwingBank(center, rotation, -halfX * 0.45, -halfZ * 0.67);
+    this.addSouthPlaygroundMoundAndShelter(center, rotation, halfX * 0.2, -halfZ * 0.14);
+    this.addSouthPlaygroundSandBasin(center, rotation, -halfX * 0.02, -halfZ * 0.48, 8.8, 6.4);
+    this.addSouthPlaygroundSandBasin(center, rotation, halfX * 0.43, halfZ * 0.12, 6.6, 5.2);
+
+    // The toddler/photo cluster sits beyond the viewing mound, not at the
+    // western fort entrance as in the former approximation.
+    this.addToddlerSlide(center, rotation, halfX * 0.31, halfZ * 0.34, 0xf0c52f);
+    this.addSeesaw(center, rotation, halfX * 0.16, halfZ * 0.58);
+    this.addSouthPlaygroundFlowerSpinner(center, rotation, halfX * 0.45, halfZ * 0.57);
+    for (const [x, z, color] of [
+      [halfX * 0.5, -halfZ * 0.02, 0xd35a85],
+      [halfX * 0.56, halfZ * 0.08, 0xf08b45],
+      [halfX * 0.6, halfZ * 0.18, 0x79a84a]
+    ] as const) {
+      this.addSouthPlaygroundChalkPanel(center, rotation, x, z, color);
+    }
+  }
+
+  private addSouthPlaygroundFort(center: Vec2, rotation: number, localX: number, localZ: number): void {
+    const anchor = this.localPoint(center, rotation, localX, localZ);
+    const orange = this.standardDetailMaterial("south-playground-fort-orange-frame", 0xc8612e, 0.62, 0.02);
+    const red = this.standardDetailMaterial("south-playground-fort-red-rails", 0x9f3830, 0.62, 0.02);
+    const yellow = this.standardDetailMaterial("south-playground-fort-yellow-slides", 0xe3bb2d, 0.5, 0.03);
+    const paleRoof = this.standardDetailMaterial("south-playground-fort-pale-roofs", 0xc8bfa2, 0.76, 0.04);
+    const group = new THREE.Group();
+    const bays = [
+      { x: -5.2, z: -0.2, width: 3.8, depth: 3.1, deck: 1.35, roof: true },
+      { x: -1.25, z: 0.05, width: 4.1, depth: 3.25, deck: 1.72, roof: true },
+      { x: 3.05, z: 0.35, width: 3.25, depth: 3.0, deck: 2.37, roof: true }
+    ];
+    for (const [bayIndex, bay] of bays.entries()) {
+      for (const x of [-bay.width * 0.43, bay.width * 0.43]) {
+        for (const z of [-bay.depth * 0.4, bay.depth * 0.4]) {
+          const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.15, bay.deck + 1.72, 8), orange);
+          pole.position.set(bay.x + x, (bay.deck + 1.72) * 0.5, bay.z + z);
+          pole.castShadow = true;
+          group.add(pole);
+        }
+      }
+      const deck = new THREE.Mesh(new THREE.BoxGeometry(bay.width, 0.18, bay.depth), this.materials.timber);
+      deck.position.set(bay.x, bay.deck, bay.z);
+      deck.userData.kind = "playground-tower-deck";
+      deck.userData.playgroundKey = `south-fort-bay-${bayIndex + 1}`;
+      deck.castShadow = true;
+      group.add(deck);
+      for (const z of [-bay.depth * 0.42, bay.depth * 0.42]) {
+        const rail = new THREE.Mesh(new THREE.BoxGeometry(bay.width * 0.94, 0.13, 0.1), red);
+        rail.position.set(bay.x, bay.deck + 0.82, bay.z + z);
+        rail.castShadow = true;
+        group.add(rail);
+      }
+      if (bay.roof) {
+        const roof = new THREE.Mesh(new THREE.BoxGeometry(bay.width * 1.12, 0.14, bay.depth * 1.08), paleRoof);
+        roof.position.set(bay.x, bay.deck + 2.0, bay.z);
+        roof.rotation.z = bayIndex === 1 ? -0.035 : 0.025;
+        roof.castShadow = true;
+        group.add(roof);
+      }
+    }
+
+    // Photograph 2 shows the low red bridge rising into the high slide tower.
+    for (const [startX, endX, y] of [[-3.3, -2.9, 1.52], [0.8, 1.42, 2.08]] as const) {
+      const length = endX - startX;
+      const bridge = new THREE.Mesh(new THREE.BoxGeometry(length + 0.8, 0.16, 2.1), this.materials.timber);
+      bridge.position.set((startX + endX) * 0.5, y, 0.05);
+      bridge.rotation.z = 0.08;
+      bridge.castShadow = true;
+      group.add(bridge);
+      for (const z of [-1.0, 1.0]) {
+        const rail = new THREE.Mesh(new THREE.BoxGeometry(length + 0.8, 0.1, 0.08), red);
+        rail.position.set((startX + endX) * 0.5, y + 0.8, z);
+        group.add(rail);
+      }
+    }
+
+    // Segment the high yellow wave slide so its profile reads as the familiar
+    // steep/flattened/wave form instead of a single generic plank.
+    const slideSegments = [
+      { z: 2.25, y: 2.0, length: 2.2, tilt: -0.48 },
+      { z: 3.8, y: 1.18, length: 1.35, tilt: -0.22 },
+      { z: 4.85, y: 0.58, length: 1.45, tilt: -0.34 }
+    ];
+    for (const segment of slideSegments) {
+      const slide = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.13, segment.length), yellow);
+      slide.position.set(3.35, segment.y, segment.z);
+      slide.rotation.x = segment.tilt;
+      slide.castShadow = true;
+      group.add(slide);
+    }
+    const smallSlide = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.12, 2.65), yellow);
+    smallSlide.position.set(-4.65, 0.76, 2.05);
+    smallSlide.rotation.x = -0.35;
+    smallSlide.castShadow = true;
+    group.add(smallSlide);
+
+    // Western hanging-disc/monkey-rung run visible in the wide photographs.
+    for (const x of [-8.2, -6.8]) {
+      for (const z of [-0.85, 0.85]) {
+        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 2.7, 8), orange);
+        post.position.set(x, 1.35, z);
+        group.add(post);
+      }
+    }
+    const overhead = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 3.0, 8), red);
+    overhead.position.set(-7.5, 2.62, 0);
+    overhead.rotation.z = Math.PI / 2;
+    group.add(overhead);
+    for (const x of [-8.0, -7.5, -7.0]) {
+      const hanger = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 1.12, 6), this.materials.metal);
+      hanger.position.set(x, 2.02, 0);
+      group.add(hanger);
+      const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.06, 12), this.materials.rubber);
+      disc.position.set(x, 1.44, 0);
+      group.add(disc);
+    }
+
+    group.position.set(anchor.x, this.boxSupportY(anchor, rotation, 10.2, 5.5), anchor.z);
+    group.rotation.y = rotation;
+    this.scene.add(group);
+  }
+
+  private addSouthPlaygroundRopePyramid(center: Vec2, rotation: number, localX: number, localZ: number): void {
+    const position = this.localPoint(center, rotation, localX, localZ);
+    const rope = new THREE.LineBasicMaterial({ color: 0xe5d6b4, transparent: true, opacity: 0.9 });
+    const mastMaterial = this.standardDetailMaterial("south-playground-rope-pyramid-mast", 0x9d4b32, 0.62, 0.12);
+    this.addLocalCylinder(center, rotation, localX, localZ, 0.08, 0.11, 3.55, mastMaterial);
+    const ground = this.groundY(position);
+    const hub = new THREE.Vector3(position.x, ground + 3.46, position.z);
+    const spokes: THREE.Vector3[] = [];
+    const rings: THREE.Vector3[] = [];
+    for (let index = 0; index < 12; index += 1) {
+      const angle = rotation + (index / 12) * Math.PI * 2;
+      const outer = new THREE.Vector3(position.x + Math.cos(angle) * 4.5, ground + 0.2, position.z + Math.sin(angle) * 3.55);
+      spokes.push(hub, outer);
+      for (const scale of [0.34, 0.62, 0.86]) {
+        const nextAngle = rotation + ((index + 1) / 12) * Math.PI * 2;
+        rings.push(
+          new THREE.Vector3(position.x + Math.cos(angle) * 4.5 * scale, ground + 3.46 * (1 - scale) + 0.16, position.z + Math.sin(angle) * 3.55 * scale),
+          new THREE.Vector3(position.x + Math.cos(nextAngle) * 4.5 * scale, ground + 3.46 * (1 - scale) + 0.16, position.z + Math.sin(nextAngle) * 3.55 * scale)
+        );
+      }
+    }
+    this.scene.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints([...spokes, ...rings]), rope));
+  }
+
+  private addSouthPlaygroundSwingBank(center: Vec2, rotation: number, localX: number, localZ: number): void {
+    const position = this.localPoint(center, rotation, localX, localZ);
+    const group = new THREE.Group();
+    const frame = this.standardDetailMaterial("south-playground-four-bay-swing-frame", 0xb94d2d, 0.58, 0.18);
+    for (const x of [-4.0, 0, 4.0]) {
+      for (const z of [-0.62, 0.62]) {
+        const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.1, 3.35, 8), frame);
+        leg.position.set(x, 1.63, z);
+        leg.rotation.z = x < 0 ? -0.08 : x > 0 ? 0.08 : 0;
+        group.add(leg);
+      }
+    }
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 8.6, 8), frame);
+    beam.position.set(0, 3.2, 0);
+    beam.rotation.z = Math.PI / 2;
+    group.add(beam);
+    for (const [seatIndex, x] of [-3, -1, 1, 3].entries()) {
+      for (const offset of [-0.2, 0.2]) {
+        const chain = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 1.62, 6), this.materials.metal);
+        chain.position.set(x + offset, 2.28, 0);
+        group.add(chain);
+      }
+      const seatMaterial = seatIndex < 2 ? this.materials.rubber : frame;
+      const seat = new THREE.Mesh(new THREE.BoxGeometry(0.82, seatIndex < 2 ? 0.22 : 0.08, 0.38), seatMaterial);
+      seat.position.set(x, 1.45, 0);
+      group.add(seat);
+    }
+    group.position.set(position.x, this.boxSupportY(position, rotation, 4.4, 0.8), position.z);
+    group.rotation.y = rotation + 0.08;
+    this.scene.add(group);
+  }
+
+  private addSouthPlaygroundMoundAndShelter(center: Vec2, rotation: number, localX: number, localZ: number): void {
+    const position = this.localPoint(center, rotation, localX, localZ);
+    const ground = this.radialSupportY(position, 5.2);
+    const moundMaterial = this.standardDetailMaterial("south-playground-viewing-mound", 0x927a50, 0.96, 0.01);
+    const timber = this.standardDetailMaterial("south-playground-mound-shelter-timber", 0x674830, 0.76, 0.01);
+    const greenRoof = this.standardDetailMaterial("south-playground-mound-shelter-green-roof", 0x6f8674, 0.72, 0.05, true, 0.9);
+    const mound = new THREE.Mesh(new THREE.CylinderGeometry(5.2, 6.0, 0.72, 24), moundMaterial);
+    mound.scale.z = 0.72;
+    mound.position.set(position.x, ground + 0.34, position.z);
+    mound.rotation.y = rotation;
+    mound.receiveShadow = true;
+    this.scene.add(mound);
+    for (const x of [-2.65, 2.65]) {
+      for (const z of [-1.65, 1.65]) this.addLocalCylinder(position, rotation, x, z, 0.08, 0.11, 2.55, timber, 0.64);
+    }
+    for (let index = -3; index <= 3; index += 1) {
+      const slat = this.addLocalBox(position, rotation, index * 0.86, 0, 0.68, 0.12, 4.05, greenRoof, 3.06 + 0.13 * Math.cos(index * 0.62), false);
+      slat.rotation.z = index * 0.012;
+    }
+    this.addSouthPlaygroundAccessibleBridge(position, rotation, -6.2, 0.2);
+  }
+
+  private addSouthPlaygroundAccessibleBridge(center: Vec2, rotation: number, localX: number, localZ: number): void {
+    const deckMaterial = this.standardDetailMaterial("south-playground-accessible-bridge-deck", 0x393a36, 0.82, 0.02);
+    const railMaterial = this.standardDetailMaterial("south-playground-accessible-bridge-rails", 0x303b3a, 0.56, 0.3);
+    for (let index = 0; index < 7; index += 1) {
+      const t = index / 6;
+      const x = localX + (t - 0.5) * 7.2;
+      const y = 0.28 + Math.sin(t * Math.PI) * 0.52;
+      const deck = this.addLocalBox(center, rotation, x, localZ, 1.25, 0.12, 2.15, deckMaterial, y, false);
+      deck.rotation.z = Math.cos(t * Math.PI) * 0.07;
+      for (const z of [-1.02, 1.02]) {
+        this.addLocalCylinder(center, rotation, x, localZ + z, 0.035, 0.045, 1.05, railMaterial, y);
+        this.addLocalBox(center, rotation, x, localZ + z, 1.25, 0.055, 0.055, railMaterial, y + 0.94, false);
+      }
+    }
+  }
+
+  private addSouthPlaygroundSandBasin(center: Vec2, rotation: number, localX: number, localZ: number, width: number, depth: number): void {
+    const position = this.localPoint(center, rotation, localX, localZ);
+    const sand = this.standardDetailMaterial("south-playground-pale-sand", 0xd5c49b, 0.96, 0.01);
+    const rockMaterial = this.standardDetailMaterial("south-playground-sandstone-boulders", 0x9a8e78, 0.94, 0.01);
+    const basin = this.createTerrainOverlayEllipse(position, rotation, width * 0.5, depth * 0.5, PATH_SURFACE_Y + 0.022, sand);
+    basin.receiveShadow = true;
+    this.scene.add(basin);
+    for (let index = 0; index < 12; index += 1) {
+      if (index % 3 === 1) continue;
+      const angle = rotation + (index / 12) * Math.PI * 2;
+      const rockPosition = {
+        x: position.x + Math.cos(angle) * width * 0.48,
+        z: position.z + Math.sin(angle) * depth * 0.48
+      };
+      const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(0.42 + (index % 2) * 0.14, 0), rockMaterial);
+      rock.position.set(rockPosition.x, this.groundY(rockPosition) + 0.28, rockPosition.z);
+      rock.scale.y = 0.68;
+      rock.rotation.set(0.15, angle, 0.08);
+      rock.castShadow = true;
+      this.scene.add(rock);
+    }
+  }
+
+  private addSouthPlaygroundFlowerSpinner(center: Vec2, rotation: number, localX: number, localZ: number): void {
+    const position = this.localPoint(center, rotation, localX, localZ);
+    const red = this.standardDetailMaterial("south-playground-red-flower-spinner", 0xc83c45, 0.58, 0.02);
+    const hub = this.standardDetailMaterial("south-playground-flower-spinner-hub", 0xd9d2bf, 0.5, 0.22);
+    for (let index = 0; index < 4; index += 1) {
+      const angle = rotation + index * Math.PI * 0.5;
+      const seat = new THREE.Mesh(new THREE.SphereGeometry(0.74, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.58), red);
+      seat.position.set(position.x + Math.cos(angle) * 0.72, this.groundY(position) + 0.48, position.z + Math.sin(angle) * 0.72);
+      seat.rotation.y = -angle;
+      seat.castShadow = true;
+      this.scene.add(seat);
+    }
+    this.addLocalCylinder(center, rotation, localX, localZ, 0.08, 0.1, 0.9, hub, 0.2);
+    const handwheel = new THREE.Mesh(new THREE.CylinderGeometry(0.48, 0.48, 0.08, 18), hub);
+    handwheel.position.set(position.x, this.groundY(position) + 1.12, position.z);
+    handwheel.castShadow = true;
+    this.scene.add(handwheel);
+  }
+
+  private addSouthPlaygroundChalkPanel(center: Vec2, rotation: number, localX: number, localZ: number, color: number): void {
+    const panel = this.standardDetailMaterial(`south-playground-chalk-panel-${color.toString(16)}`, color, 0.7, 0.01);
+    this.addLocalBox(center, rotation, localX, localZ, 1.25, 1.75, 0.12, panel, 0.92, false);
   }
 
   private addNorthPlaygroundDetails(center: Vec2, rotation: number, halfX: number, halfZ: number): void {
@@ -4833,16 +5233,81 @@ export class WorldBuilder {
     const northEastReturn = this.addLocalBox(center, rotation, halfX * 0.48, halfZ * 0.65, Math.min(9.5, halfX * 0.68), 0.82, 2.5, bankMaterial, 0.42);
     northEastReturn.rotation.z = 0.16;
 
-    this.addLocalBox(center, rotation, halfX * 0.2, -halfZ * 0.05, Math.min(6.6, halfX * 0.44), 0.34, 1.2, ledgeMaterial, 0.2);
+    this.addFitzyBowlManualPad(center, rotation, halfX * 0.2, -halfZ * 0.05, Math.min(6.6, halfX * 0.44), ledgeMaterial);
     this.addLocalBox(center, rotation, halfX * 0.24, halfZ * 0.26, Math.min(5.5, halfX * 0.38), 0.42, 1.0, ledgeMaterial, 0.24);
     this.addSkateRail(this.localPoint(center, rotation, halfX * 0.06, -halfZ * 0.12), rotation + 0.02, Math.min(8.4, halfX * 0.58));
     this.addCurvedSkateRail(center, rotation, halfX * 0.02, halfZ * 0.18, Math.min(7.8, halfX * 0.54));
+    this.addFitzyBowlPumpBump(center, rotation, halfX * 0.38, halfZ * 0.02, 2.15, 1.45, 0.38, bankMaterial);
+    this.addFitzyBowlPumpBump(center, rotation, halfX * 0.48, halfZ * 0.3, 2.45, 1.7, 0.46, bankMaterial);
+    this.addFitzyBowlSpectatorTerrace(center, rotation, -halfX * 0.02, halfZ * 0.7);
+  }
 
-    const terraceConcrete = this.standardDetailMaterial("fitzy-bowl-spectator-terrace", 0x7d8581, 0.8, 0.03);
-    const terraceTimber = this.standardDetailMaterial("fitzy-bowl-timber-seat", 0xb7894c, 0.76, 0.01);
-    this.addLocalBox(center, rotation, -halfX * 0.02, halfZ * 0.72, Math.min(9.8, halfX * 0.72), 0.34, 3.4, terraceConcrete, 0.2);
-    this.addLocalBox(center, rotation, 0, halfZ * 0.72, Math.min(7.2, halfX * 0.52), 0.48, 2.15, terraceConcrete, 0.48);
-    this.addLocalBox(center, rotation, 0, halfZ * 0.7, Math.min(5.8, halfX * 0.42), 0.18, 1.45, terraceTimber, 0.82);
+  private addFitzyBowlManualPad(
+    center: Vec2,
+    rotation: number,
+    localX: number,
+    localZ: number,
+    length: number,
+    material: THREE.Material
+  ): void {
+    const bodyLength = Math.max(1.8, length - 1.2);
+    this.addLocalBox(center, rotation, localX - 0.45, localZ, bodyLength, 0.34, 1.22, material, 0.2);
+    const end = this.localPoint(center, rotation, localX + bodyLength * 0.5 - 0.42, localZ);
+    const round = new THREE.Mesh(new THREE.CylinderGeometry(0.61, 0.61, 0.34, 24), material);
+    round.position.set(end.x, this.groundY(end) + 0.2, end.z);
+    round.castShadow = true;
+    round.receiveShadow = true;
+    this.scene.add(round);
+  }
+
+  private addFitzyBowlPumpBump(
+    center: Vec2,
+    rotation: number,
+    localX: number,
+    localZ: number,
+    width: number,
+    depth: number,
+    height: number,
+    material: THREE.Material
+  ): void {
+    const position = this.localPoint(center, rotation, localX, localZ);
+    const bump = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 10, 0, Math.PI * 2, 0, Math.PI * 0.5), material);
+    bump.scale.set(width, height, depth);
+    bump.position.set(position.x, this.groundY(position) + 0.06, position.z);
+    bump.rotation.y = rotation;
+    bump.castShadow = true;
+    bump.receiveShadow = true;
+    this.scene.add(bump);
+  }
+
+  private addFitzyBowlSpectatorTerrace(center: Vec2, rotation: number, localX: number, localZ: number): void {
+    const concrete = this.standardDetailMaterial("fitzy-bowl-spectator-terrace", 0x737c78, 0.82, 0.03);
+    const darkEdge = this.standardDetailMaterial("fitzy-bowl-spectator-terrace-dark-edge", 0x3a4844, 0.64, 0.18);
+    const timber = this.standardDetailMaterial("fitzy-bowl-kidney-timber-seat", 0xb7894c, 0.76, 0.01);
+    const position = this.localPoint(center, rotation, localX, localZ);
+    const addCapsule = (width: number, depth: number, height: number, y: number, material: THREE.Material, offsetX = 0) => {
+      const capsule = new THREE.Group();
+      const rect = new THREE.Mesh(new THREE.BoxGeometry(Math.max(0.2, width - depth), height, depth), material);
+      rect.castShadow = true;
+      rect.receiveShadow = true;
+      capsule.add(rect);
+      for (const side of [-1, 1]) {
+        const end = new THREE.Mesh(new THREE.CylinderGeometry(depth * 0.5, depth * 0.5, height, 28), material);
+        end.position.x = side * (width - depth) * 0.5;
+        end.castShadow = true;
+        end.receiveShadow = true;
+        capsule.add(end);
+      }
+      capsule.position.set(position.x, this.groundY(position) + y, position.z);
+      capsule.rotation.y = rotation;
+      capsule.translateX(offsetX);
+      this.scene.add(capsule);
+    };
+    addCapsule(10.2, 3.55, 0.32, 0.2, concrete, 0);
+    addCapsule(8.0, 2.7, 0.42, 0.52, darkEdge, -0.15);
+    // The upper timber seat is the plan's distinctive rounded kidney/capsule,
+    // not the former rectangular bench block.
+    addCapsule(6.2, 2.05, 0.2, 0.84, timber, 0.18);
   }
 
   private addCurvedSkateRail(center: Vec2, rotation: number, localX: number, localZ: number, length: number): void {

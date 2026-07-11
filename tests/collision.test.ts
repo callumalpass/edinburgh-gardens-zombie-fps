@@ -337,6 +337,47 @@ describe("collision system", () => {
     expect(blockedSamples).toEqual(Array.from({ length: 23 }, () => []));
   });
 
+  it("keeps the aerial-fitted Bowling Club to grandstand passage clear at full player radius", () => {
+    const passage = level.paths.find((candidate) => candidate.id === "vicmap-bowling-grandstand-passage");
+    if (!passage) throw new Error("Missing Bowling Club to grandstand passage");
+    const blocked: string[] = [];
+    for (let segment = 0; segment < passage.points.length - 1; segment += 1) {
+      const start = passage.points[segment];
+      const end = passage.points[segment + 1];
+      for (let step = 0; step <= 12; step += 1) {
+        const t = step / 12;
+        const point = { x: start.x + (end.x - start.x) * t, z: start.z + (end.z - start.z) * t };
+        for (const obstacle of level.obstacles) {
+          if (distance(resolveObstacle(point, PLAYER_RADIUS, obstacle), point) > 0.001) {
+            blocked.push(`${segment}:${step}:${obstacle.id}`);
+          }
+        }
+      }
+    }
+    expect(blocked).toEqual([]);
+  });
+
+  it("crosses the covered Bowling Club–grandstand gate through real collision clearance", () => {
+    const blocker = level.obstacles.find((obstacle) => obstacle.id === "osm-building-1475006769");
+    const fixture = level.interactables.find((candidate) => candidate.id === "bowling-grandstand-covered-gateway-passage");
+    if (!blocker || blocker.shape !== "box" || fixture?.raisedFootprint?.shape !== "box") {
+      throw new Error("Missing covered-gateway navigation geometry");
+    }
+    expect(fixture.bypassObstacleIds).toBeUndefined();
+    const gap = blocker.accessGaps?.[0];
+    if (!gap) throw new Error("Missing covered-gateway collision opening");
+    const across = Array.from({ length: 17 }, (_, index) => {
+      const localZ = -blocker.halfZ - 1.2 + index * ((blocker.halfZ * 2 + 2.4) / 16);
+      return {
+        x: blocker.center.x - localZ * Math.sin(blocker.angle),
+        z: blocker.center.z + localZ * Math.cos(blocker.angle)
+      };
+    });
+    for (const point of across) {
+      expect(distance(resolveObstacle(point, PLAYER_RADIUS, blocker), point)).toBeLessThan(0.001);
+    }
+  });
+
   it("keeps the Emely Baker play-yard gate open to the community-room entrance", () => {
     const westRear = level.obstacles.find((candidate) => candidate.id === "emely-courtyard-side-wall-west-rear");
     const westFront = level.obstacles.find((candidate) => candidate.id === "emely-courtyard-side-wall-west-front");

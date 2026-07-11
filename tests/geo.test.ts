@@ -422,7 +422,7 @@ describe("map geometry", () => {
     expect(level.mappedBuildings.some((building) => building.source?.includes("CMP"))).toBe(true);
     const fenceIds = new Set(level.mappedFences.map((fence) => fence.id));
     expect(level.mappedFences.length).toBeGreaterThanOrEqual(3);
-    for (const id of ["south-playground-fence", "oval-fence", "osm-fence-715802680"]) {
+    for (const id of ["south-playground-fence", "fitzy-bowl-perimeter-fence", "oval-fence", "osm-fence-715802680"]) {
       expect(fenceIds.has(id)).toBe(true);
     }
     expect(fenceIds.has("north-playground-fence")).toBe(false);
@@ -433,8 +433,12 @@ describe("map geometry", () => {
   it("models the south playground fence and gated oval access as mapped blockers", () => {
     const fences = new Map(level.mappedFences.map((fence) => [fence.id, fence]));
     const south = fences.get("south-playground-fence");
+    const fitzy = fences.get("fitzy-bowl-perimeter-fence");
     const oval = fences.get("oval-fence");
     expect(south?.gates?.length).toBe(3);
+    expect(fitzy?.gates?.length).toBe(1);
+    expect(fitzy?.source).toContain("19321_003");
+    expect(fitzy?.gates?.[0].source).toContain("retained drinking fountain");
     expect(oval?.gates?.length).toBe(3);
     expect(south?.source).toContain("Melbourne Playgrounds");
     expect(oval?.source).toContain("OSM connector ways 403753751 and 403753754");
@@ -448,7 +452,7 @@ describe("map geometry", () => {
     expect(fenceObstacles.filter((obstacle) => obstacle.sourceObjectId === "oval-fence").every((obstacle) => obstacle.jumpable === true)).toBe(true);
     expect(fenceObstacles.filter((obstacle) => obstacle.sourceObjectId === "south-playground-fence").some((obstacle) => obstacle.jumpable)).toBe(false);
 
-    for (const fence of [south, oval]) {
+    for (const fence of [south, fitzy, oval]) {
       if (!fence?.gates) throw new Error(`Missing gates for ${fence?.id ?? "fence"}`);
       const segments = fenceObstacles.filter((obstacle) => obstacle.sourceObjectId === fence.id);
       expect(segments.length, `${fence.id} has no blocking segments`).toBeGreaterThan(0);
@@ -724,7 +728,7 @@ describe("map geometry", () => {
 
     const playgroundExpectations = {
       "north-playground-tower": { halfX: 1.9, halfZ: 1.6, height: 1.57 },
-      "south-playground-tower": { halfX: 2.85, halfZ: 2.4, height: 2.46 }
+      "south-playground-tower": { halfX: 1.625, halfZ: 1.5, height: 2.46 }
     };
     for (const [fixtureId, expected] of Object.entries(playgroundExpectations)) {
       const fixture = level.interactables.find((candidate) => candidate.id === fixtureId);
@@ -928,6 +932,20 @@ describe("map geometry", () => {
     }
 
     expect(surfacesById.get("osm-1392352940-grandstand-parking")?.source).toContain("1392352940");
+  });
+
+  it("joins the two mapped service paths through the aerial-visible Bowling Club to grandstand passage", () => {
+    const passage = level.paths.find((candidate) => candidate.id === "vicmap-bowling-grandstand-passage");
+    const bowlingService = level.paths.find((candidate) => candidate.id === "osm-210387722-bowling-service-track");
+    const grandstandService = level.paths.find((candidate) => candidate.id === "osm-22760906-tennis-service-path");
+    expect(passage?.source).toContain("Vicmap AERIAL_WM_256");
+    expect(passage?.surface).toBe("asphalt");
+    expect(passage?.points[0]).toEqual(bowlingService?.points[bowlingService.points.length - 1]);
+    expect(passage?.points[passage.points.length - 1]).toEqual(grandstandService?.points[0]);
+    const coveredGateway = level.mappedBuildings.find((building) => building.id === "osm-building-1475006769");
+    expect(coveredGateway?.detailProfile).toBe("covered-gateway");
+    expect(coveredGateway?.source).toContain("user-supplied Google Maps aerial highlight");
+    expect(passage?.points.some((point) => pointInPolygon(point, coveredGateway!.polygon))).toBe(true);
   });
 
   it("adds source-backed ornamental garden beds without marking them as cover", () => {
@@ -1161,13 +1179,22 @@ describe("map geometry", () => {
       "osm-building-543505639",
       "osm-building-1475006767",
       "osm-building-1475006768",
-      "osm-building-1475006769",
       "osm-building-1475006770",
       "osm-building-1475006771",
       "osm-building-1475006772",
       "osm-building-1475006773"
     ]) {
       expect(obstacleIds.has(buildingId), `${buildingId} should be solid while its surrounding precinct remains walkable`).toBe(true);
+    }
+    const coveredGateway = level.obstacles.find((obstacle) => obstacle.id === "osm-building-1475006769");
+    expect(coveredGateway?.shape).toBe("box");
+    if (coveredGateway?.shape === "box") {
+      expect(coveredGateway.blocksSight).toBe(false);
+      expect(coveredGateway.accessGaps?.map((gap) => gap.id)).toEqual([
+        "osm-building-1475006769-open-transverse-passage"
+      ]);
+      expect(coveredGateway.accessGaps?.[0].halfZ).toBeGreaterThan(coveredGateway.halfZ);
+      expect(coveredGateway.accessGaps?.[0].fixtureId).toBe("bowling-grandstand-covered-gateway-passage");
     }
     expect(obstacleIds.has("south-playground")).toBe(true);
     expect(obstacleIds.has("north-playground")).toBe(true);
@@ -1311,6 +1338,7 @@ describe("map geometry", () => {
     allow("tennis-smg", "tennis", "osm-building-403753784");
     allow("tennis-locker", "tennis", "osm-building-403753784");
     allow("bowling-clubroom-access", "bowling");
+    allow("bowling-grandstand-covered-gateway-passage", "osm-building-1475006769");
     for (const treePlanNumber of [9, 10, 12, 18]) {
       allow(`brunswick-removed-tree-${treePlanNumber}-stump`, "tennis");
     }

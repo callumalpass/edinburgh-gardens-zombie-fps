@@ -328,6 +328,11 @@
       "url": "https://base.maps.vic.gov.au/service?service=WMS&request=GetCapabilities"
     },
     {
+      "id": "google-maps-bowling-covered-gateway-highlight",
+      "label": "User-supplied Google Maps aerial highlight of Bowling Club–grandstand covered gateway",
+      "url": "https://www.google.com/maps/@-37.78802,144.98118,20z/data=!3m1!1e3"
+    },
+    {
       "id": "vicmap-web-services-change",
       "label": "Victorian Government Vicmap web-services endpoint guidance",
       "url": "https://www.data.vic.gov.au/changes-coming-vicmap-web-services"
@@ -411,6 +416,146 @@
       "id": "electron-supported-platforms",
       "label": "Electron advanced installation and supported platforms",
       "url": "https://www.electronjs.org/docs/latest/tutorial/installation"
+    },
+    {
+      "id": "electron-updating-applications",
+      "label": "Electron updating applications",
+      "url": "https://www.electronjs.org/docs/latest/tutorial/updates"
+    },
+    {
+      "id": "electron-security",
+      "label": "Electron security guidance",
+      "url": "https://www.electronjs.org/docs/latest/tutorial/security"
+    },
+    {
+      "id": "electron-builder-auto-update",
+      "label": "electron-builder auto update",
+      "url": "https://www.electron.build/docs/features/auto-update/"
+    },
+    {
+      "id": "electron-builder-publish",
+      "label": "electron-builder publishing artifacts",
+      "url": "https://www.electron.build/docs/publish/"
+    },
+    {
+      "id": "osm-context-belt-150m",
+      "label": "OpenStreetMap Edinburgh Gardens 150 metre context-belt extract",
+      "url": "https://api.openstreetmap.org/api/0.6/map?bbox=144.97835096436717,-37.79124436676249,144.9873642356328,-37.78410843323751"
+    },
+    {
+      "id": "vicmap-address-feature-server",
+      "label": "Vicmap Address FeatureServer layer 0",
+      "url": "https://services-ap1.arcgis.com/P744lA0wf4LlBZ84/ArcGIS/rest/services/Vicmap_Address/FeatureServer/0"
+    },
+    {
+      "id": "vicmap-buildings-catalogue",
+      "label": "Vicmap Buildings catalogue",
+      "url": "https://www.land.vic.gov.au/maps-and-spatial/spatial-data/vicmap-catalogue/vicmap-buildings"
+    },
+    {
+      "id": "yarra-north-fitzroy-heritage-review",
+      "label": "City of Yarra HO327 North Fitzroy heritage-area review",
+      "url": "https://www.yarracity.vic.gov.au/sites/default/files/2024-05/www.yarracity.vic.gov.au/-/media/files/ycc/the-area/heritage/review-of-heritage-areas-2007-butler-updated-2013.pdf"
+    },
+    {
+      "id": "yarra-heritage-significant-areas-database",
+      "label": "City of Yarra Database of Heritage Significant Areas April 2022",
+      "url": "https://www.yarracity.vic.gov.au/sites/default/files/2024-05/www.yarracity.vic.gov.au/-/media/files/ycc/the-area/heritage/heritage-database/incoproated-document--database-of-heritage-significant-areas-april-2022.pdf?la=en"
+    },
+    {
+      "id": "yarra-bargoonga-nganjin-development",
+      "label": "City of Yarra Bargoonga Nganjin development summary",
+      "url": "https://www.yarracity.vic.gov.au/planning-and-building/planning-permits/bargoonga-nganjin-north-fitzroy-library"
+    },
+    {
+      "id": "yarra-bargoonga-nganjin-current",
+      "label": "City of Yarra current Bargoonga Nganjin library page",
+      "url": "https://www.yarracity.vic.gov.au/our-libraries/hours-and-locations/bargoonga-nganjin-north-fitzroy-library"
+    },
+    {
+      "id": "yarra-fitzroy-community-school-minutes",
+      "label": "City of Yarra 4 August 2015 minutes Fitzroy Community School item",
+      "url": "https://www.yarracity.vic.gov.au/sites/default/files/2024-05/20150804-ordinary-council-minutes.pdf"
+    },
+    {
+      "id": "yarra-fitzroy-urban-conservation-study",
+      "label": "City of Yarra Fitzroy Urban Conservation Study Review 1992",
+      "url": "https://www.yarracity.vic.gov.au/sites/default/files/2024-05/www.yarracity.vic.gov.au/-/media/files/ycc/the-area/heritage/fitzroy-urban-conservation-study-review-1992.pdf"
+    },
+    {
+      "id": "context-red-gallery",
+      "label": "Red Gallery official site",
+      "url": "https://www.redgallery.com.au/"
+    },
+    {
+      "id": "context-stable-health-clinic",
+      "label": "Stable Health Clinic official site",
+      "url": "https://stablehealthclinic.com.au/"
+    },
+    {
+      "id": "context-cup-and-mug",
+      "label": "The Cup & Mug official site",
+      "url": "https://www.thecupandmug.com.au/"
+    },
+    {
+      "id": "context-enlocus",
+      "label": "Enlocus Architects official site",
+      "url": "https://enlocus.com/"
+    },
+    {
+      "id": "context-fitzroy-community-school",
+      "label": "Fitzroy Community School official site",
+      "url": "http://www.fcs.vic.edu.au/"
+    },
+    {
+      "id": "context-mannys",
+      "label": "Mannys official site",
+      "url": "https://www.mannys.com.au/"
+    },
+    {
+      "id": "context-horn-please",
+      "label": "Horn Please official site",
+      "url": "https://hornplease.com.au/"
+    },
+    {
+      "id": "context-error404",
+      "label": "Error404 Store official site",
+      "url": "https://shoperror404.org/"
+    },
+    {
+      "id": "context-quiescence",
+      "label": "Quiescence / Chinese Medicine Melbourne official site",
+      "url": "https://chinesemedicinemelbourne.com.au/"
+    },
+    {
+      "id": "context-public-wine-shop",
+      "label": "Public Wine Shop official site",
+      "url": "https://www.publicwineshop.com.au/"
+    },
+    {
+      "id": "context-old-post-office-antiques",
+      "label": "Old Post Office Antiques official site",
+      "url": "https://oldpostofficeantiques.com.au/"
+    },
+    {
+      "id": "context-standing-room",
+      "label": "Standing Room Coffee official site",
+      "url": "https://standingroomcoffee.com.au/"
+    },
+    {
+      "id": "opengameart-zomby-sfx-pack",
+      "label": "OpenGameArt Zomby sfx pack by saturn91",
+      "url": "https://opengameart.org/content/zomby-sfx-pack"
+    },
+    {
+      "id": "opengameart-undead-moans",
+      "label": "OpenGameArt Undead Moans by AntumDeluge",
+      "url": "https://opengameart.org/content/undead-moans"
+    },
+    {
+      "id": "creative-commons-cc0-1-0",
+      "label": "Creative Commons CC0 1.0 Universal",
+      "url": "https://creativecommons.org/publicdomain/zero/1.0/"
     }
   ],
   "documents": [
@@ -1016,6 +1161,44 @@
       ]
     },
     {
+      "id": "activity-precinct-passage-refinement",
+      "path": "docs/research/activity-precinct-and-passage-refinement-2026-07-11.md",
+      "requiredHeadings": ["## Sources", "## Findings", "## Implementation Translation", "## Uncertainty", "## Validation"],
+      "sourceIds": [
+        "yarra-northern-precinct",
+        "yarra-fitzy-bowl-skatepark",
+        "vicmap-basemap-wms",
+        "landezine-edinburgh-gardens-raingarden",
+        "atlan-stormtech-edinburgh-gardens-raingarden",
+        "melbourne-playgrounds-south-playground"
+      ]
+    },
+    {
+      "id": "hannah-gate-south-playground-fitzy-bowl-refinement",
+      "path": "docs/research/hannah-gate-south-playground-fitzy-bowl-refinement-2026-07-11.md",
+      "requiredHeadings": ["## Sources", "## Findings", "## Implementation Translation", "## Uncertainty", "## Validation"],
+      "sourceIds": [
+        "edinburgh-gardens-cmp-2021-3068",
+        "vicmap-basemap-wms",
+        "osm-way-api",
+        "melbourne-playgrounds-south-playground",
+        "to-hot-or-not-edinburgh-gardens",
+        "busy-city-guide-edinburgh-gardens",
+        "yarra-fitzy-bowl-skatepark"
+      ]
+    },
+    {
+      "id": "bowling-grandstand-covered-gateway-correction",
+      "path": "docs/research/bowling-grandstand-covered-gateway-correction-2026-07-11.md",
+      "requiredHeadings": ["## Sources", "## Findings", "## Implementation Translation", "## Uncertainty", "## Validation"],
+      "sourceIds": [
+        "google-maps-bowling-covered-gateway-highlight",
+        "osm-way-api",
+        "vicmap-basemap-wms",
+        "edinburgh-gardens-cmp-2021-3068"
+      ]
+    },
+    {
       "id": "data-pipeline-automation",
       "path": "docs/research/data-pipeline-automation-2026-07-05.md",
       "sourceIds": [
@@ -1027,6 +1210,38 @@
       ]
     },
     {
+      "id": "outside-park-context-world",
+      "path": "docs/research/outside-park-context-world-2026-07-11.md",
+      "requiredHeadings": ["## Sources", "## Findings", "## Implementation Translation", "## Uncertainty", "## Validation"],
+      "sourceIds": [
+        "osm-park-boundary",
+        "osm-context-belt-150m",
+        "vicmap-address-feature-server",
+        "vicmap-basemap-wms",
+        "vicmap-buildings-catalogue",
+        "vicmap-elevation-feature-server",
+        "vicmap-vegetation-tree-urban-feature-server",
+        "yarra-north-fitzroy-heritage-review",
+        "yarra-heritage-significant-areas-database",
+        "yarra-bargoonga-nganjin-development",
+        "yarra-bargoonga-nganjin-current",
+        "yarra-fitzroy-community-school-minutes",
+        "yarra-fitzroy-urban-conservation-study",
+        "context-red-gallery",
+        "context-stable-health-clinic",
+        "context-cup-and-mug",
+        "context-enlocus",
+        "context-fitzroy-community-school",
+        "context-mannys",
+        "context-horn-please",
+        "context-error404",
+        "context-quiescence",
+        "context-public-wine-shop",
+        "context-old-post-office-antiques",
+        "context-standing-room"
+      ]
+    },
+    {
       "id": "deployment-and-packaging",
       "path": "docs/research/deployment-and-packaging-2026-07-11.md",
       "requireIndexReference": false,
@@ -1034,7 +1249,21 @@
       "sourceIds": [
         "github-pages-custom-workflows",
         "electron-builder-github-actions",
-        "electron-supported-platforms"
+        "electron-supported-platforms",
+        "electron-updating-applications",
+        "electron-security",
+        "electron-builder-auto-update",
+        "electron-builder-publish"
+      ]
+    },
+    {
+      "id": "zombie-vocal-audio",
+      "path": "docs/research/zombie-vocal-audio-2026-07-11.md",
+      "requiredHeadings": ["## Sources", "## Findings", "## Implementation Translation", "## Uncertainty", "## Validation"],
+      "sourceIds": [
+        "opengameart-zomby-sfx-pack",
+        "opengameart-undead-moans",
+        "creative-commons-cc0-1-0"
       ]
     }
   ],
@@ -1240,6 +1469,118 @@
       "pathPattern": "docs/research/raw/gardens/2026-07-11/sportsmans-war-memorial/heritage-council-determination-2026-04-21.pdf",
       "format": "file",
       "sourceId": "heritage-council-sportsmans-memorial-2026",
+      "optional": true
+    },
+    {
+      "id": "yarra-activity-precinct-plan-pdfs",
+      "pathPattern": "docs/research/raw/gardens/2026-07-11/activity-precinct/*.pdf",
+      "format": "file",
+      "sourceId": "yarra-northern-precinct",
+      "optional": true
+    },
+    {
+      "id": "yarra-fitzy-bowl-final-design-images",
+      "pathPattern": "docs/research/raw/gardens/2026-07-11/activity-precinct/fitzy-bowl-design/*.jpg",
+      "format": "file",
+      "sourceId": "yarra-fitzy-bowl-skatepark",
+      "optional": true
+    },
+    {
+      "id": "hannah-gate-cmp-audit-pdf",
+      "pathPattern": "docs/research/raw/gardens/2026-07-11/gate-fountain-audit/edinburgh-gardens-cmp-2021.pdf",
+      "format": "file",
+      "sourceId": "edinburgh-gardens-cmp-2021-3068",
+      "optional": true
+    },
+    {
+      "id": "google-maps-bowling-covered-gateway-highlight",
+      "pathPattern": "docs/research/raw/gardens/2026-07-11/bowling-grandstand-covered-gate/google-maps-user-highlight.png",
+      "format": "file",
+      "sourceId": "google-maps-bowling-covered-gateway-highlight",
+      "optional": true
+    },
+    {
+      "id": "south-playground-melbourne-playgrounds-reference",
+      "pathPattern": "docs/research/raw/gardens/2026-07-11/south-playground/melbourne-playgrounds-*",
+      "format": "file",
+      "sourceId": "melbourne-playgrounds-south-playground",
+      "optional": true
+    },
+    {
+      "id": "south-playground-to-hot-or-not-reference",
+      "pathPattern": "docs/research/raw/gardens/2026-07-11/south-playground/tothotornot-*",
+      "format": "file",
+      "sourceId": "to-hot-or-not-edinburgh-gardens",
+      "optional": true
+    },
+    {
+      "id": "south-playground-busy-city-reference",
+      "pathPattern": "docs/research/raw/gardens/2026-07-11/south-playground/busycity-*",
+      "format": "file",
+      "sourceId": "busy-city-guide-edinburgh-gardens",
+      "optional": true
+    },
+    {
+      "id": "osm-context-belt-map-xml",
+      "pathPattern": "docs/research/raw/context/2026-07-11/osm-edinburgh-gardens-150m-context.xml",
+      "format": "osm-xml",
+      "sourceId": "osm-context-belt-150m",
+      "optional": true
+    },
+    {
+      "id": "vicmap-context-aerial",
+      "pathPattern": "docs/research/raw/context/2026-07-11/vicmap-aerial-edinburgh-gardens-150m-context.png",
+      "format": "file",
+      "sourceId": "vicmap-basemap-wms",
+      "optional": true
+    },
+    {
+      "id": "vicmap-context-addresses",
+      "pathPattern": "docs/research/raw/context/2026-07-11/vicmap-address-150m-context.geojson",
+      "format": "arcgis-features",
+      "sourceId": "vicmap-address-feature-server",
+      "optional": true
+    },
+    {
+      "id": "vicmap-context-trees",
+      "pathPattern": "docs/research/raw/context/2026-07-11/vicmap-tree-urban-150m-context.geojson",
+      "format": "arcgis-features",
+      "sourceId": "vicmap-vegetation-tree-urban-feature-server",
+      "optional": true
+    },
+    {
+      "id": "vicmap-context-ground-points",
+      "pathPattern": "docs/research/raw/context/2026-07-11/vicmap-ground-points-150m-context.geojson",
+      "format": "arcgis-features",
+      "sourceId": "vicmap-elevation-feature-server",
+      "optional": true
+    },
+    {
+      "id": "vicmap-context-contours",
+      "pathPattern": "docs/research/raw/context/2026-07-11/vicmap-contours-150m-context.geojson",
+      "format": "arcgis-features",
+      "sourceId": "vicmap-elevation-feature-server",
+      "optional": true
+    },
+    {
+      "id": "yarra-context-heritage-pdfs",
+      "pathPattern": "docs/research/raw/context/2026-07-11/city-of-yarra-*.pdf",
+      "format": "file",
+      "sourceId": "yarra-north-fitzroy-heritage-review",
+      "optional": true
+    },
+    {
+      "id": "opengameart-zomby-sfx-source-audio",
+      "pathPattern": "docs/research/raw/2026-07-11-open-game-art-zombie-audio/*_zombey.mp3",
+      "format": "file",
+      "sourceId": "opengameart-zomby-sfx-pack",
+      "optional": true
+    },
+    {
+      "id": "opengameart-undead-moans-source-archive",
+      "pathPattern": "docs/research/raw/2026-07-11-open-game-art-zombie-audio/undead-moans.zip",
+      "format": "file",
+      "sourceId": "opengameart-undead-moans",
       "optional": true
     }
   ]

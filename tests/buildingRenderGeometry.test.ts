@@ -184,7 +184,7 @@ describe("mapped-building render geometry", () => {
   it("matches playground blockers and raised floors to the rendered tower decks", () => {
     for (const [landmarkId, fixtureId, playgroundKey] of [
       ["north-playground", "north-playground-tower", "north-toddler-a"],
-      ["south-playground", "south-playground-tower", "south-main"]
+      ["south-playground", "south-playground-tower", "south-fort-bay-3"]
     ] as const) {
       const fixture = level.interactables.find((candidate) => candidate.id === fixtureId);
       const blocker = level.obstacles.find((candidate) => candidate.id === landmarkId);
@@ -217,9 +217,36 @@ describe("mapped-building render geometry", () => {
     const meshes = scene.children.flatMap(flattenMeshes);
     const brickPiers = meshes.filter((mesh) => meshMaterialNames(mesh).includes("hannah-memorial-gate-red-brick"));
     const gateLeaves = meshes.filter((mesh) => meshMaterialNames(mesh).includes("hannah-memorial-gate-green-metal"));
+    const weatheredCaps = meshes.filter((mesh) => meshMaterialNames(mesh).includes("hannah-memorial-gate-weathered-cap"));
+    const threshold = meshes.filter((mesh) => meshMaterialNames(mesh).includes("hannah-memorial-gate-fbc-threshold"));
     expect(brickPiers).toHaveLength(2);
     expect(gateLeaves.length).toBeGreaterThanOrEqual(8);
+    expect(weatheredCaps).toHaveLength(4);
+    expect(threshold).toHaveLength(1);
     expect(distance(aggregateBounds(brickPiers).getCenter(new THREE.Vector3()), gate!.position)).toBeLessThan(0.3);
+  });
+
+  it("renders the Bowling Club–grandstand footprint as an open covered gateway, not a solid shed", () => {
+    const scene = buildPreview("mapped-building:osm-building-1475006769");
+    const meshes = scene.children.flatMap(flattenMeshes);
+    expect(meshes.filter((mesh) => meshMaterialNames(mesh).includes("bowling-grandstand-covered-gateway-roof"))).toHaveLength(1);
+    expect(meshes.filter((mesh) => mesh.userData.kind === "bowling-grandstand-covered-gateway-post")).toHaveLength(12);
+    expect(meshes.filter((mesh) => mesh.userData.kind === "bowling-grandstand-covered-gateway-lintel")).toHaveLength(1);
+    expect(meshes.filter((mesh) => meshMaterialNames(mesh).includes("bowling-grandstand-covered-gateway-side-rails")).length).toBeGreaterThanOrEqual(8);
+    expect(meshes.some((mesh) => meshMaterialNames(mesh).includes("concrete"))).toBe(false);
+  });
+
+  it("renders the Fitzy Bowl plan-specific balustrade, rounded manual pad and kidney spectator seat", () => {
+    const fenceScene = buildPreview("mapped-fence:fitzy-bowl-perimeter-fence");
+    const fenceMeshes = fenceScene.children.flatMap(flattenMeshes);
+    expect(
+      fenceMeshes.filter((mesh) => meshMaterialNames(mesh).includes("fitzy-bowl-green-safety-balustrade")).length
+    ).toBeGreaterThan(20);
+
+    const skateScene = buildPreview("landmark:skate");
+    const skateMeshes = skateScene.children.flatMap(flattenMeshes);
+    expect(skateMeshes.filter((mesh) => meshMaterialNames(mesh).includes("fitzy-bowl-kidney-timber-seat")).length).toBeGreaterThanOrEqual(3);
+    expect(skateMeshes.filter((mesh) => meshMaterialNames(mesh).includes("fitzy-bowl-street-ledges")).length).toBeGreaterThanOrEqual(3);
   });
 
   it("keeps the Sportsman's Memorial inscription, pediment and urns on its east end", () => {

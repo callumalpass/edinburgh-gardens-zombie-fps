@@ -4,6 +4,8 @@ Captured: 2026-07-05
 
 Purpose: review all currently mapped park paths against a fresh bounded OSM extract, then replace the flat water patch south of the skate park with a source-backed Edinburgh Gardens raingarden treatment feature.
 
+> Refined on 2026-07-11: `activity-precinct-and-passage-refinement-2026-07-11.md` retains this footprint and stormwater interpretation but corrects the four filter bays to step along the long axis, replaces sparse cone-like planting with dense rush blades, and records the Bowling Club-to-grandstand connector absent from OSM.
+
 ## Path Review
 
 The live OSM map API extract for the Edinburgh Gardens bounding box returned 43 in-boundary `highway=footway|cycleway|service|steps` ways. The level already had the major axial, rail-trail, plinth, oval-loop and southern-entry routes, but still lacked several short connectors and the detailed Kevin Murray Stand stair network.

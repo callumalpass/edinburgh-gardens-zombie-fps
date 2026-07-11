@@ -1,4 +1,11 @@
-export type InventoryItemId = "tyre-kit" | "bolt-cutters" | "noise-bottle" | "noise-radio";
+export type InventoryItemId =
+  | "tyre-kit"
+  | "bolt-cutters"
+  | "noise-bottle"
+  | "noise-radio"
+  | "caretaker-key"
+  | "cart-battery"
+  | "cart-wheel";
 
 export type LargeCarryItemId = "ladder" | "skateboard";
 
@@ -38,6 +45,24 @@ export const ITEM_DEFINITIONS: Record<WorldItemId, ItemDefinition> = {
     description: "A loud reusable-looking lure. This one gets thrown and abandoned.",
     carry: "inventory"
   },
+  "caretaker-key": {
+    id: "caretaker-key",
+    label: "Caretaker's key ring",
+    description: "A tagged council key ring. One key fits a locked stall at the north toilets.",
+    carry: "inventory"
+  },
+  "cart-battery": {
+    id: "cart-battery",
+    label: "Cart battery",
+    description: "A heavy lithium pack for the park maintenance cart.",
+    carry: "inventory"
+  },
+  "cart-wheel": {
+    id: "cart-wheel",
+    label: "Cart wheel",
+    description: "A compact utility-cart wheel with the hub still attached.",
+    carry: "inventory"
+  },
   ladder: {
     id: "ladder",
     label: "Portable ladder",
@@ -58,4 +83,8 @@ export function isInventoryItem(itemId: WorldItemId): itemId is InventoryItemId 
 
 export function isNoiseItem(itemId: WorldItemId): itemId is "noise-bottle" | "noise-radio" {
   return itemId === "noise-bottle" || itemId === "noise-radio";
+}
+
+export function isQuestItem(itemId: WorldItemId): itemId is "caretaker-key" {
+  return itemId === "caretaker-key";
 }

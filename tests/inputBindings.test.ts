@@ -17,7 +17,7 @@ describe("input bindings", () => {
   it("swaps conflicting primary bindings instead of duplicating them", () => {
     const rebound = rebindInputAction(DEFAULT_INPUT_BINDINGS, "moveForward", "KeyS");
     expect(rebound.moveForward).toEqual(["KeyS"]);
-    expect(rebound.moveBackward).toEqual(["KeyW"]);
+    expect(rebound.moveBackward).toEqual(["KeyW", "ArrowDown"]);
   });
 
   it("persists normalized bindings and formats readable labels", () => {

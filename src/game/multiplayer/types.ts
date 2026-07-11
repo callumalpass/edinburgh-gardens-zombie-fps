@@ -55,9 +55,14 @@ export interface NetworkPlayerSnapshot {
   name: string;
   avatarId: AvatarId;
   lastProcessedInputSequence: number;
+  lastProcessedActionSequence: number;
+  shotSequence: number;
   x: number;
   y: number;
   z: number;
+  velocityX: number;
+  velocityY: number;
+  velocityZ: number;
   yaw: number;
   pitch: number;
   health: number;
@@ -98,6 +103,7 @@ export interface NetworkZombieSnapshot {
   maxHealth: number;
   radius: number;
   aiState: ZombieAiState;
+  role?: "caretaker";
 }
 
 export interface NetworkPickupSnapshot {
@@ -131,6 +137,7 @@ export interface NetworkBikeSnapshot {
   mountedByPlayerId: string | null;
   state: "available" | "flat-tyres" | "locked";
   requiredItem?: WorldItemId;
+  vehicleKind?: "bike" | "maintenance-cart";
 }
 
 export interface NetworkWorldItemSnapshot {
@@ -183,6 +190,24 @@ export interface NetworkGameSnapshot {
   repairedBrokenBikeIds: string[];
   bike: NetworkBikeSnapshot | null;
   bikes?: NetworkBikeSnapshot[];
+  rescueScenario?: {
+    phase: string;
+    caretakerZombieId: number | null;
+    caretakerSpawned: boolean;
+    keyDropped: boolean;
+    dogFreed: boolean;
+    cartRepaired: boolean;
+    unlockedGateIds: string[];
+    barricades: Array<{
+      id: string;
+      x: number;
+      z: number;
+      angle: number;
+      health: number;
+      destroyed: boolean;
+      grabbedBy: string | null;
+    }>;
+  };
 }
 
 export interface ClientHelloMessage {

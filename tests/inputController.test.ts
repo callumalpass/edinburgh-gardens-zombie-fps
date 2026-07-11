@@ -18,6 +18,11 @@ describe("InputController movement", () => {
     expect(movementInputFromKeys(keys())).toEqual({ x: 0, z: 0, length: 0 });
   });
 
+  it("supports arrow keys as the secondary movement controls", () => {
+    expect(movementInputFromKeys(keys("ArrowUp"))).toEqual({ x: 0, z: -1, length: 1 });
+    expect(movementInputFromKeys(keys("ArrowLeft"))).toEqual({ x: -1, z: 0, length: 1 });
+  });
+
   it("detects sprint and crouch intent from all supported modifier keys", () => {
     expect(sprintInputFromKeys(keys("ShiftRight"))).toBe(true);
     expect(crouchInputFromKeys(keys("ControlLeft"))).toBe(true);

@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "assetId": "edinburgh-gardens-wave-three-rescue",
+  "label": "Wave-three caretaker, rescue dog and maintenance cart",
+  "blenderVersion": "4.5.11 LTS",
+  "blend": "assets/blender/rescue-scenario/edinburgh-gardens-rescue-scenario.blend",
+  "generator": "scripts/blender/build_rescue_scenario_assets.py",
+  "designBasis": "Original painterly low-poly designs made for this game; no external likenesses, scans, or reference geometry.",
+  "palette": {
+    "parkTeal": "#315d58",
+    "tramOchre": "#d4a33f",
+    "paperCream": "#d9d2b6",
+    "ink": "#172120"
+  },
+  "runtimeContract": {
+    "caretakerClips": [
+      "Idle",
+      "Move",
+      "Chase",
+      "Attack",
+      "Stagger"
+    ],
+    "dogClips": [
+      "Idle",
+      "Walk",
+      "Sit"
+    ],
+    "cartStateTags": [
+      "damaged",
+      "repaired"
+    ],
+    "rootMotion": false,
+    "gameplayCollisionRemainsAuthoritative": true
+  },
+  "assets": [
+    {
+      "id": "caretaker",
+      "glb": "public/models/rescue-scenario/caretaker.glb",
+      "triangleCount": 4956,
+      "meshObjectCount": 25,
+      "armatureCount": 1
+    },
+    {
+      "id": "dog",
+      "glb": "public/models/rescue-scenario/rescue-dog.glb",
+      "triangleCount": 2026,
+      "meshObjectCount": 1,
+      "armatureCount": 1
+    },
+    {
+      "id": "cart",
+      "glb": "public/models/rescue-scenario/maintenance-cart.glb",
+      "triangleCount": 3960,
+      "meshObjectCount": 44,
+      "armatureCount": 0
+    }
+  ]
+}

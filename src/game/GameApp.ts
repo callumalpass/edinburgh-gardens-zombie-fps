@@ -4,7 +4,6 @@ import {
   addWeapon,
   applyUpgrade,
   canUpgrade,
-  consumeRound,
   createInitialLoadout,
   effectiveFirearmSpread,
   finishReloadIfReady,
@@ -42,14 +41,12 @@ import { movementNoiseKind, movementNoiseMultiplier, NoiseSystem, type MovementS
 import {
   MAX_THROWABLES,
   applyBikePumpBoost,
-  bleedDamagePerSecond,
   bikePumpSpeedMultiplier,
   createInitialPlayerCondition,
   hydrateCondition,
   hydrationStatus,
   injuryStatus,
-  nextHydration,
-  nextStamina,
+  simulatePlayerCondition,
   spendStamina
 } from "./playerCondition";
 import { SeededRandom } from "./random";
@@ -58,8 +55,11 @@ import { MeshFactory } from "./rendering/MeshFactory";
 import { PostProcessingPipeline } from "./rendering/PostProcessingPipeline";
 import { PainterlyContactShadows, type ContactShadowAnchor } from "./rendering/PainterlyContactShadows";
 import { SceneDecals } from "./rendering/SceneDecals";
+import { ContextWorldBuilder } from "./rendering/ContextWorldBuilder";
 import { WorldBuilder, type GameMaterials } from "./rendering/WorldBuilder";
 import { createGameMaterials } from "./rendering/materials";
+import { instantiateRescueAsset, setMaintenanceCartVisualState } from "./rendering/RescueScenarioAsset";
+import { RescueScenarioWorld, type ScenarioInteractionTarget } from "./rendering/RescueScenarioWorld";
 import { timeOfDayFromElapsed, type TimeOfDayState } from "./rendering/timeOfDay";
 import { weatherFromElapsed, type WeatherState } from "./rendering/weather";
 import { freezeStaticScene } from "./rendering/staticScene";
@@ -103,6 +103,8 @@ import { playerVisibilityMultiplier, weatherNoiseMaskForKind, zombieFacingThresh
 import { separateCircularAgents } from "./spatial/AgentSeparation";
 import { ObstacleIndex } from "./spatial/ObstacleIndex";
 import { WaveDirector } from "./systems/WaveDirector";
+import { PlayerSimulation, type PlayerMountState } from "./systems/PlayerSimulation";
+import { triggerAuthoritativeWeapon } from "./systems/PlayerWeaponSimulation";
 import {
   BOTTLE_BOMB_FUSE_SECONDS,
   BOTTLE_BOMB_PULSE_MAX_SECONDS,
@@ -117,6 +119,12 @@ import {
 import { NetworkSession, type NetworkInputFrame } from "./multiplayer/NetworkSession";
 import { RemotePlayerRoster } from "./multiplayer/RemotePlayerRoster";
 import { ClientPositionReconciler } from "./multiplayer/ClientPositionReconciler";
+import { ClientCameraSmoother } from "./multiplayer/ClientCameraSmoother";
+import {
+  consumeLatestAuthoritativeInput,
+  inputForAuthoritativeFrame,
+  queueAuthoritativeInput
+} from "./multiplayer/authoritativeInput";
 import type {
   NetworkAction,
   NetworkDistractionSnapshot,
@@ -137,8 +145,6 @@ import {
   DISTRACTION_STAMINA_COST,
   INTERMISSION_SECONDS,
   JUMP_STAMINA_COST,
-  MACHETE_STAMINA_COST,
-  MELEE_STAMINA_COST,
   PLAYER_HEIGHT,
   PLAYER_RADIUS,
   RAISED_SURFACE_EDGE_TOLERANCE,
@@ -150,7 +156,7 @@ import {
   ZOMBIE_SEPARATION_ITERATIONS,
   ZOMBIE_STATIC_COLLISION_PASSES
 } from "./gameConfig";
-import { createInitialPlayerState, resetPlayerState, reviveFallenSquadForIntermission } from "./playerState";
+import { createInitialAuthoritativePlayerState, resetPlayerState, reviveFallenSquadForIntermission } from "./playerState";
 import type {
   AmenityRest,
   AmenitySearch,
@@ -163,7 +169,7 @@ import type {
 } from "./runtimeTypes";
 import { FrameLoop } from "./runtime/FrameLoop";
 import { GameEntityStore } from "./runtime/GameEntityStore";
-import { PlayerLocomotion, type LocomotionInput } from "./systems/PlayerLocomotion";
+import { PlayerLocomotion } from "./systems/PlayerLocomotion";
 import type {
   AmenityPoint,
   CollisionObstacle,
@@ -181,10 +187,22 @@ import {
   ITEM_DEFINITIONS,
   isInventoryItem,
   isNoiseItem,
+  isQuestItem,
   type InventoryItemId,
   type LargeCarryItemId,
   type WorldItemId
 } from "./items";
+import {
+  CARETAKER_KEY_ITEM_ID,
+  CART_BATTERY_ITEM_ID,
+  CART_WHEEL_ITEM_ID,
+  MAINTENANCE_CART_ID,
+  createInitialRescueScenarioState,
+  createRescueScenarioLayout,
+  rescueScenarioObjective,
+  type RescueScenarioLayout,
+  type RescueScenarioState
+} from "./rescueScenario";
 
 const STRUCTURE_FLOODLIGHT_RADIUS = 34;
 const STRUCTURE_LIGHT_EXPOSURE_RADIUS = 28;
@@ -238,10 +256,12 @@ type ConditionClassKey = "bleeding" | "limping" | "blurred";
 export class GameApp {
   private readonly root: HTMLElement;
   private readonly level: LevelData;
+  private readonly rescueScenarioLayout: RescueScenarioLayout;
   private readonly obstacleIndex: ObstacleIndex;
   private readonly terrain: TerrainSampler;
   private readonly movementSurfaces: MovementSurfaceSampler;
   private readonly locomotion: PlayerLocomotion;
+  private readonly playerSimulation: PlayerSimulation;
   private readonly interactableById: Map<string, InteractableFixture>;
   private readonly toggleInteractables: InteractableFixture[];
   private readonly brokenBikeDetails: ParkLifeDetail[];
@@ -260,10 +280,11 @@ export class GameApp {
   private readonly waveDirector: WaveDirector;
   private readonly network = new NetworkSession();
   private readonly clientPositionReconciler = new ClientPositionReconciler();
-  private readonly networkCameraCorrection = new THREE.Vector3();
+  private readonly clientCameraSmoother = new ClientCameraSmoother();
   private hasInitialNetworkSnapshot = false;
   private readonly smokeMode = new URLSearchParams(window.location.search).has("smoke");
   private readonly networkTestMode = new URLSearchParams(window.location.search).has("network-test");
+  private readonly contextAuditMode = new URLSearchParams(window.location.search).has("context-audit");
   private readonly touchMode = shouldUseTouchControls();
   private readonly adaptiveQuality = new AdaptiveRenderQuality(this.smokeMode || this.touchMode ? "low" : "high");
   private settings: GameSettings = loadGameSettings();
@@ -278,6 +299,7 @@ export class GameApp {
   private miniMap!: MiniMapRenderer;
   private meshFactory!: MeshFactory;
   private world!: WorldBuilder;
+  private contextWorld!: ContextWorldBuilder;
   private atmosphere!: AtmosphereSystem;
   private postProcessing!: PostProcessingPipeline;
   private contactShadows!: PainterlyContactShadows;
@@ -288,15 +310,12 @@ export class GameApp {
   private paused = false;
   private testApi: GameTestApi | null = null;
   private readonly events = new AbortController();
-  private readonly frameLoop = new FrameLoop((tick) => this.tick(tick.dt, tick.elapsedSeconds));
+  private readonly frameLoop = new FrameLoop((tick) => this.tick(tick.dt, tick.elapsedSeconds, tick.rawDt));
   private disposed = false;
   private frame = 0;
-  private player = createInitialPlayerState();
-  private loadout: Loadout = createInitialLoadout();
-  private lastShotAt = 0;
+  private readonly localPlayerState = createInitialAuthoritativePlayerState();
   private intermissionThreatTimer = 0;
   private intermissionThreatsSpawned = 0;
-  private movementNoiseTimer = 0;
   private elevatedNoiseTimer = 0;
   private testCrouchOverride: boolean | null = null;
   private testCameraOverride = false;
@@ -318,8 +337,6 @@ export class GameApp {
   private nearestPlacedLadder: PlacedLadder | null = null;
   private activeAmenitySearch: AmenitySearch | null = null;
   private activeAmenityRest: AmenityRest | null = null;
-  private condition = createInitialPlayerCondition();
-  private isSprinting = false;
   private distractionCooldown = 0;
   private flashlightNoiseTimer = 0;
   private playerTorch: THREE.SpotLight | null = null;
@@ -332,7 +349,6 @@ export class GameApp {
   private recoilYaw = 0;
   private meleeSwing = 0;
   private meleeSwingSide = 1;
-  private shotBloom = 0;
   private scopeAmount = 0;
   private muzzleTimer = 0;
   private renderedTreeCount = 0;
@@ -351,13 +367,35 @@ export class GameApp {
   private bike: RideableBike | null = null;
   private bikes: RideableBike[] = [];
   private bikePedalPhase = 0;
-  private inventory: InventoryItemId[] = [];
   private inventoryMenuOpen = false;
-  private carriedItem: LargeCarryItemId | null = null;
   private placedLadders: PlacedLadder[] = [];
-  private skateboardMounted = false;
   private skateboardMesh: THREE.Group | null = null;
   private remotePlayers!: RemotePlayerRoster;
+  private rescueScenario = createInitialRescueScenarioState();
+  private rescueWorld!: RescueScenarioWorld;
+  private nearestScenarioTarget: ScenarioInteractionTarget | null = null;
+
+  private get player() { return this.localPlayerState; }
+  private get loadout() { return this.localPlayerState.loadout; }
+  private set loadout(value: Loadout) { this.localPlayerState.loadout = value; }
+  private get condition() { return this.localPlayerState.condition; }
+  private set condition(value: ReturnType<typeof createInitialPlayerCondition>) { this.localPlayerState.condition = value; }
+  private get inventory() { return this.localPlayerState.inventory; }
+  private set inventory(value: InventoryItemId[]) { this.localPlayerState.inventory = value; }
+  private get carriedItem() { return this.localPlayerState.carriedItem; }
+  private set carriedItem(value: LargeCarryItemId | null) { this.localPlayerState.carriedItem = value; }
+  private get skateboardMounted() { return this.localPlayerState.skateboardMounted; }
+  private set skateboardMounted(value: boolean) { this.localPlayerState.skateboardMounted = value; }
+  private get isSprinting() { return this.localPlayerState.isSprinting; }
+  private set isSprinting(value: boolean) { this.localPlayerState.isSprinting = value; }
+  private get lastShotAt() { return this.localPlayerState.lastShotAt; }
+  private set lastShotAt(value: number) { this.localPlayerState.lastShotAt = value; }
+  private get shotSequence() { return this.localPlayerState.shotSequence; }
+  private set shotSequence(value: number) { this.localPlayerState.shotSequence = value; }
+  private get shotBloom() { return this.localPlayerState.shotBloom; }
+  private set shotBloom(value: number) { this.localPlayerState.shotBloom = value; }
+  private get movementNoiseTimer() { return this.localPlayerState.movementNoiseTimer; }
+  private set movementNoiseTimer(value: number) { this.localPlayerState.movementNoiseTimer = value; }
 
   private get zombies(): Zombie[] {
     return this.entities.zombies;
@@ -467,6 +505,7 @@ export class GameApp {
   constructor(root: HTMLElement) {
     this.root = root;
     this.level = createLevelData();
+    this.rescueScenarioLayout = createRescueScenarioLayout(this.level);
     this.obstacleIndex = new ObstacleIndex(this.level.obstacles);
     this.terrain = new TerrainSampler(this.level);
     this.movementSurfaces = new MovementSurfaceSampler(this.level);
@@ -481,6 +520,7 @@ export class GameApp {
       bikeSurfaceSpeedMultiplier: (surface) => this.movementSurfaces.bikeSpeedMultiplier(surface),
       skateboardSurfaceSpeedMultiplier: (surface) => this.movementSurfaces.skateboardSpeedMultiplier(surface)
     });
+    this.playerSimulation = new PlayerSimulation(this.locomotion);
     this.interactableById = new Map(this.level.interactables.map((fixture) => [fixture.id, fixture]));
     this.toggleInteractables = this.level.interactables.filter((fixture) => fixture.mode === "toggle");
     this.brokenBikeDetails = this.level.parkLifeDetails.filter((detail) => detail.kind === "broken-bike");
@@ -539,6 +579,7 @@ export class GameApp {
     this.contactShadows = new PainterlyContactShadows();
     this.scene.add(this.contactShadows.root);
     this.atmosphere = new AtmosphereSystem(this.scene, this.rng, this.smokeMode, this.weatherAnchors());
+    if (this.contextAuditMode) this.atmosphere.setElapsedSecondsForAudit(300);
     this.postProcessing = new PostProcessingPipeline(this.renderer, this.scene, this.camera, this.smokeMode || this.touchMode);
     this.materials = createGameMaterials(this.rng);
     this.meshFactory = new MeshFactory(this.materials);
@@ -553,6 +594,12 @@ export class GameApp {
     this.addPlayerTorch();
     this.rebuildViewWeapon();
     this.createWorld();
+    this.rescueWorld = new RescueScenarioWorld(
+      this.scene,
+      this.rescueScenarioLayout,
+      (point) => this.groundY(point),
+      () => this.flashStatus("A barricade splintered under the horde")
+    );
     this.world.createUpgradeStations();
     this.applyRenderQuality(this.adaptiveQuality.current, false);
     freezeStaticScene(this.scene, [this.camera, this.atmosphere.root, this.atmosphere.worldWeatherRoot, this.contactShadows.root]);
@@ -627,6 +674,38 @@ export class GameApp {
         weaponAttachedToSocket: player.mesh.getObjectByName("remote-weapon")?.parent?.name === "WeaponSocket"
       })),
       testToggleBike: () => this.testToggleBike(),
+      testEquipNetworkPeer: (weaponId) => this.testEquipNetworkPeer(weaponId),
+      testStartRescueScenario: () => {
+        this.startRescueScenarioIfNeeded(true);
+        return this.snapshot();
+      },
+      testDefeatCaretaker: () => {
+        const caretaker = this.zombies.find((zombie) => zombie.role === "caretaker");
+        if (caretaker) this.killZombie(caretaker);
+        return this.snapshot();
+      },
+      testUnlockDogRoom: () => {
+        if (!this.hasInventoryItem(CARETAKER_KEY_ITEM_ID)) this.addInventoryItem(CARETAKER_KEY_ITEM_ID);
+        const gate = this.rescueScenarioLayout.gates.find((candidate) => candidate.objectiveGate);
+        if (gate) this.interactWithScenarioTarget({ kind: "gate", gate });
+        return this.snapshot();
+      },
+      testRepairMaintenanceCart: () => {
+        if (!this.hasInventoryItem(CART_BATTERY_ITEM_ID)) this.addInventoryItem(CART_BATTERY_ITEM_ID);
+        if (!this.hasInventoryItem(CART_WHEEL_ITEM_ID)) this.addInventoryItem(CART_WHEEL_ITEM_ID);
+        const cart = this.bikes.find((bike) => bike.id === MAINTENANCE_CART_ID);
+        if (cart) this.inspectBikeState(cart);
+        return this.snapshot();
+      },
+      testToggleMaintenanceCart: () => {
+        const cart = this.bikes.find((bike) => bike.id === MAINTENANCE_CART_ID);
+        if (!cart) return false;
+        if (!cart.mounted) {
+          this.player.position.set(cart.position.x, this.groundY(cart.position), cart.position.z);
+          this.updateBikes(0);
+        }
+        return this.toggleBike(cart);
+      },
       dispose: () => this.dispose()
     };
     installGameTestDriver(this.testApi);
@@ -652,6 +731,7 @@ export class GameApp {
     this.remotePlayers?.clear();
     this.audio.dispose();
     this.clearActiveFlareBeacons();
+    this.rescueWorld?.dispose();
 
     disposeThreeResources(this.scene);
     disposeZombieAssetTemplates();
@@ -763,15 +843,7 @@ export class GameApp {
         },
         input: (playerId, input) => {
           const player = this.remotePlayers.get(playerId) ?? this.remotePlayers.add(playerId, `Player ${playerId}`);
-          if (
-            input.sequence <= player.lastProcessedInputSequence
-            || player.pendingInputs.some((candidate) => candidate.sequence === input.sequence)
-          ) return;
-          player.pendingInputs.push({
-            ...input,
-            duration: THREE.MathUtils.clamp(input.duration || 0, 0, 0.1)
-          });
-          player.pendingInputs.sort((a, b) => a.sequence - b.sequence);
+          if (!queueAuthoritativeInput(player.pendingInputs, player.lastProcessedInputSequence, input)) return;
           player.yaw = input.yaw;
           player.pitch = input.pitch;
           player.lastInputAt = performance.now() / 1000;
@@ -786,10 +858,45 @@ export class GameApp {
   private handleShootInput(now: number): void {
     if (this.paused || this.player.health <= 0) return;
     if (this.sendNetworkAction("shoot")) {
+      this.previewNetworkShot(now);
       this.hudNoiseLevel = Math.max(this.hudNoiseLevel, 0.9);
       return;
     }
     this.shoot(now);
+  }
+
+  private previewNetworkShot(now: number): void {
+    const stats = getWeaponStats(this.loadout);
+    if (now - this.lastShotAt < stats.fireDelay || this.loadout.reloadingUntil > now) return;
+    if (stats.kind === "melee") {
+      this.lastShotAt = now;
+      this.meleeSwingSide *= -1;
+      this.meleeSwing = 1;
+      this.recoil = Math.min(1.25, this.recoil + stats.recoilKick);
+      this.emitNoise("melee", { x: this.player.position.x, z: this.player.position.z }, stats.noiseMultiplier, {
+        weaponId: this.loadout.weaponId
+      });
+      return;
+    }
+    if (this.loadout.ammoInMagazine <= 0) {
+      this.audio.playWorld("dryFire");
+      return;
+    }
+    this.lastShotAt = now;
+    const crouchRecoil = this.player.crouching ? 0.7 : 1;
+    const aimRecoil = THREE.MathUtils.lerp(1, stats.aimRecoilMultiplier, this.scopeAmount) * crouchRecoil;
+    this.recoil = Math.min(1.75, this.recoil + stats.recoilKick * aimRecoil);
+    this.recoilYaw += this.rng.range(-stats.recoilDrift, stats.recoilDrift) * aimRecoil;
+    this.muzzleTimer = 0.07;
+    if (this.muzzleFlash) this.muzzleFlash.visible = true;
+    if (this.muzzleLight) this.muzzleLight.visible = true;
+    this.spawnShellCasing();
+    this.spawnMuzzleSmoke();
+    const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion);
+    this.addTracer(this.camera.position, this.camera.position.clone().addScaledVector(direction, Math.min(stats.range, 80)));
+    this.emitNoise("gunshot", { x: this.player.position.x, z: this.player.position.z }, stats.noiseMultiplier, {
+      weaponId: this.loadout.weaponId
+    });
   }
 
   private handleReloadInput(now: number): void {
@@ -945,6 +1052,8 @@ export class GameApp {
     this.activeAmenitySearch = null;
     this.activeAmenityRest = null;
     this.entities.clearInteractionMemory();
+    this.rescueScenario = createInitialRescueScenarioState();
+    this.rescueWorld.reset();
     this.inventory = [];
     this.inventoryMenuOpen = false;
     this.carriedItem = null;
@@ -954,6 +1063,7 @@ export class GameApp {
     this.nearestBrokenBike = null;
     this.nearestWorldItem = null;
     this.nearestPlacedLadder = null;
+    this.nearestScenarioTarget = null;
     this.resetRideableBikes();
     this.spawnWorldItems();
     if (this.isNetworkHost) {
@@ -973,7 +1083,7 @@ export class GameApp {
     this.sendNetworkSnapshotNow();
   }
 
-  private tick(dt: number, now: number): void {
+  private tick(dt: number, now: number, rawDt = dt): void {
     if (this.disposed) {
       return;
     }
@@ -981,7 +1091,7 @@ export class GameApp {
 
     const lanContinues = this.paused && this.network.enabled;
     if (this.state === "playing" && (!this.paused || lanContinues)) {
-      this.update(dt, now);
+      this.update(dt, now, Math.min(0.25, rawDt));
     } else if (this.smokeMode) {
       this.camera.position.set(42, 42, 82);
       this.camera.lookAt(0, 0, 0);
@@ -998,7 +1108,7 @@ export class GameApp {
     if (this.zombieRenderLod.update(this.zombies, this.player.position, RENDER_QUALITY_SETTINGS[this.adaptiveQuality.current])) {
       this.renderer.shadowMap.needsUpdate = !this.smokeMode;
     }
-    const atmosphere = this.atmosphere.update(simulationDt, this.camera.position, now);
+    const atmosphere = this.atmosphere.update(this.contextAuditMode ? 0 : simulationDt, this.camera.position, this.contextAuditMode ? 300 : now);
     const { timeOfDay, weather } = atmosphere;
     this.currentWeather = weather;
     this.currentTimeOfDay = timeOfDay;
@@ -1041,22 +1151,20 @@ export class GameApp {
     this.contactShadows.update(this.contactShadowAnchors);
   }
 
-  private update(dt: number, now: number): void {
+  private update(dt: number, now: number, playerDt = dt): void {
     if (this.isNetworkClient) {
-      this.updateNetworkClientFrame(dt, now);
+      this.updateNetworkClientFrame(dt, now, playerDt);
       return;
     }
 
     this.loadout = finishReloadIfReady(this.loadout, now);
     this.noise.update(dt);
-    this.updateCrouch(dt);
-    this.updateJumpState(dt);
-    this.updateMovement(dt);
-    this.updateVerticalState(dt);
+    this.updateMovement(playerDt);
+    this.updateRescueScenarioWorld(dt);
     this.updateElevatedNoise(dt);
     this.updateDistractions(dt);
     this.updateActiveFlareBeacons(dt);
-    this.updateNetworkHostPlayers(dt, now);
+    this.updateNetworkHostPlayers(playerDt, now);
     this.updateWavePacing(dt);
     this.updateZombies(dt, now);
     this.updatePickups(dt);
@@ -1078,8 +1186,9 @@ export class GameApp {
     this.updateNearestBrokenBike();
     this.updateNearestFixture();
     this.updateNearestPlacedLadder();
+    this.updateNearestScenarioTarget();
     this.updateScope(dt, now);
-    this.updatePlayerCondition(dt);
+    this.updatePlayerCondition(playerDt);
     this.updateWeaponModel(dt);
     this.updateCamera();
     this.updateAudio(dt);
@@ -1096,14 +1205,15 @@ export class GameApp {
     }
   }
 
-  private updateNetworkClientFrame(dt: number, now: number): void {
-    const input = this.sendNetworkInputFrame(dt);
+  private updateNetworkClientFrame(dt: number, now: number, playerDt = dt): void {
+    const input = this.sendNetworkInputFrame(playerDt);
     this.loadout = finishReloadIfReady(this.loadout, now);
     if (input) {
       this.simulateLocalNetworkInput(input);
       this.clientPositionReconciler.record(input);
     }
     this.syncNetworkPlayerBikeMeshes();
+    this.updateRescueScenarioWorld(dt);
     this.updateWeaponDrops(dt);
     this.updateNetworkClientBikeTarget();
     this.updateWorldItems(dt);
@@ -1120,10 +1230,11 @@ export class GameApp {
     this.updateNearestBrokenBike();
     this.updateNearestFixture();
     this.updateNearestPlacedLadder();
+    this.updateNearestScenarioTarget();
     this.updateScope(dt, now);
     this.updateWeaponModel(dt);
     this.updateCamera();
-    this.decayNetworkCameraCorrection(dt);
+    this.decayNetworkCameraCorrection(playerDt);
     this.updateAudio(dt);
     this.updateHud();
     this.updateMiniMap(now);
@@ -1149,43 +1260,36 @@ export class GameApp {
     const previousPitch = this.player.pitch;
     this.player.yaw = input.yaw;
     this.player.pitch = input.pitch;
-    this.locomotion.updateCrouch(this.player, input.duration, input.crouch && !this.mountedBike() && !this.skateboardMounted);
-    this.locomotion.updateJumpState(this.player, input.duration, {
-      disabled: this.mountedBike() !== null || this.skateboardMounted
-    });
-    const movement = {
-      x: input.moveX,
-      z: input.moveZ,
-      length: Math.hypot(input.moveX, input.moveZ)
-    };
     const bike = this.mountedBike();
+    const mount: PlayerMountState = bike
+      ? { kind: "bike", pumpSpeedMultiplier: bikePumpSpeedMultiplier(this.condition) }
+      : this.skateboardMounted ? { kind: "skateboard" } : { kind: "foot" };
+    const result = this.playerSimulation.simulateMotion(this.player, this.condition, input.duration, {
+      input: {
+        moveX: input.moveX,
+        moveZ: input.moveZ,
+        sprint: input.sprint,
+        crouch: input.crouch
+      },
+      mount
+    });
+    this.isSprinting = result.sprinting;
     if (bike) {
-      const result = this.locomotion.moveOnBike(this.player, input.duration, movement, {
-        wantsSprint: input.sprint,
-        condition: this.condition,
-        pumpSpeedMultiplier: bikePumpSpeedMultiplier(this.condition)
-      });
-      this.isSprinting = result.sprinting;
       bike.position.set(this.player.position.x, this.groundY(this.player.position), this.player.position.z);
       bike.angle = input.yaw;
-    } else if (this.skateboardMounted) {
-      const result = this.locomotion.moveOnSkateboard(this.player, input.duration, movement, {
-        wantsSprint: input.sprint,
-        condition: this.condition
-      });
-      this.isSprinting = result.sprinting;
-      if (!result.usable) {
-        this.skateboardMounted = false;
-        this.carriedItem = "skateboard";
-      }
-    } else {
-      this.isSprinting = this.locomotion.moveOnFoot(this.player, input.duration, movement, {
-        wantsSprint: input.sprint,
-        condition: this.condition
-      }).sprinting;
     }
-    this.locomotion.updateFixtureElevation(this.player, input.duration, {
-      forceGrounded: this.mountedBike() !== null || this.skateboardMounted
+    if (mount.kind === "skateboard" && !result.skateboardUsable) {
+      this.skateboardMounted = false;
+      this.carriedItem = "skateboard";
+    }
+    simulatePlayerCondition(this.player, this.condition, input.duration, {
+      sprinting: this.isSprinting,
+      scoped: input.aim,
+      resting: false,
+      searching: false,
+      daylight: this.currentTimeOfDay.daylight,
+      sheltered: this.structureShelterProtectionForLocalPlayer() >= 0.56,
+      bikePumpBoosted: mount.kind === "bike" && this.condition.bikePumpTimer > 0
     });
     this.player.yaw = previousYaw;
     this.player.pitch = previousPitch;
@@ -1274,6 +1378,16 @@ export class GameApp {
       })),
       searchedAmenityIds: [...this.searchedAmenityIds],
       repairedBrokenBikeIds: [...this.repairedBrokenBikeIds],
+      rescueScenario: {
+        phase: this.rescueScenario.phase,
+        caretakerZombieId: this.rescueScenario.caretakerZombieId,
+        caretakerSpawned: this.rescueScenario.caretakerSpawned,
+        keyDropped: this.rescueScenario.keyDropped,
+        dogFreed: this.rescueScenario.dogFreed,
+        cartRepaired: this.rescueScenario.cartRepaired,
+        unlockedGateIds: [...this.rescueScenario.unlockedGateIds],
+        barricades: this.rescueWorld.barricadeSnapshots()
+      },
       bike: this.bike
         ? {
             id: this.bike.id,
@@ -1284,7 +1398,8 @@ export class GameApp {
             mounted: this.bike.mounted,
             mountedByPlayerId: this.bike.mountedByPlayerId,
             state: this.bike.state,
-            requiredItem: this.bike.requiredItem
+            requiredItem: this.bike.requiredItem,
+            vehicleKind: this.bike.vehicleKind
           }
         : null,
       bikes: this.bikes.map((bike) => ({
@@ -1296,7 +1411,8 @@ export class GameApp {
         mounted: bike.mounted,
         mountedByPlayerId: bike.mountedByPlayerId,
         state: bike.state,
-        requiredItem: bike.requiredItem
+        requiredItem: bike.requiredItem,
+        vehicleKind: bike.vehicleKind
       }))
     };
   }
@@ -1307,9 +1423,14 @@ export class GameApp {
       name: this.network.config.playerName,
       avatarId: this.network.config.avatarId,
       lastProcessedInputSequence: 0,
+      lastProcessedActionSequence: 0,
+      shotSequence: this.shotSequence,
       x: this.player.position.x,
       y: this.player.position.y,
       z: this.player.position.z,
+      velocityX: this.player.velocity.x,
+      velocityY: this.player.velocity.y,
+      velocityZ: this.player.velocity.z,
       yaw: this.player.yaw,
       pitch: this.player.pitch,
       health: this.player.health,
@@ -1346,9 +1467,14 @@ export class GameApp {
       name: player.name,
       avatarId: player.avatarId,
       lastProcessedInputSequence: player.lastProcessedInputSequence,
+      lastProcessedActionSequence: player.lastProcessedActionSequence,
+      shotSequence: player.shotSequence,
       x: player.position.x,
       y: player.position.y,
       z: player.position.z,
+      velocityX: player.velocity.x,
+      velocityY: player.velocity.y,
+      velocityZ: player.velocity.z,
       yaw: player.yaw,
       pitch: player.pitch,
       health: player.health,
@@ -1383,6 +1509,7 @@ export class GameApp {
     return {
       id: zombie.id,
       type: zombie.type,
+      role: zombie.role,
       x: zombie.position.x,
       y: zombie.position.y,
       z: zombie.position.z,
@@ -1394,73 +1521,65 @@ export class GameApp {
     };
   }
 
-  private updateNetworkHostPlayers(_dt: number, now: number): void {
+  private updateNetworkHostPlayers(dt: number, now: number): void {
     if (!this.isNetworkHost) {
       return;
     }
     for (const player of this.remotePlayers.values()) {
       player.loadout = finishReloadIfReady(player.loadout, now);
+      const latestInput = consumeLatestAuthoritativeInput(player.pendingInputs);
+      if (latestInput && latestInput.sequence > player.lastProcessedInputSequence) {
+        player.input = latestInput;
+        player.yaw = latestInput.yaw;
+        player.pitch = latestInput.pitch;
+        player.lastProcessedInputSequence = latestInput.sequence;
+      }
       if (player.health <= 0) {
-        player.pendingInputs = [];
         this.releaseNetworkPlayerBike(player.id);
         player.mountedBikeId = null;
         player.velocity.multiplyScalar(0.72);
         this.remotePlayers.updateMesh(player);
         continue;
       }
-      for (const input of player.pendingInputs.splice(0)) {
-        if (input.sequence <= player.lastProcessedInputSequence) continue;
-        player.input = input;
-        player.yaw = input.yaw;
-        player.pitch = input.pitch;
-        this.updateNetworkPlayerCrouch(player, input.duration);
-        this.updateNetworkPlayerJumpState(player, input.duration);
-        this.updateNetworkPlayerMovement(player, input.duration, now);
-        this.updateNetworkPlayerVerticalState(player, input.duration);
-        this.updateNetworkPlayerCondition(player, input.duration);
-        player.lastProcessedInputSequence = input.sequence;
-      }
+      this.updateNetworkPlayerMovement(player, dt, now);
+      this.updateNetworkPlayerCondition(player, dt);
       this.remotePlayers.updateMesh(player);
     }
   }
 
-  private updateNetworkPlayerCrouch(player: NetworkRemotePlayer, dt: number): void {
-    this.locomotion.updateCrouch(player, dt, player.input.crouch);
-  }
-
   private updateNetworkPlayerMovement(player: NetworkRemotePlayer, dt: number, now: number): void {
-    const stale = now - player.lastInputAt > 1.5;
-    const input = {
-      x: stale ? 0 : player.input.moveX,
-      z: stale ? 0 : player.input.moveZ,
-      length: stale ? 0 : Math.hypot(player.input.moveX, player.input.moveZ)
-    };
+    const input = inputForAuthoritativeFrame(player.input, player.lastInputAt, now);
+    if (input !== player.input) player.input = input;
     const mountedBike = player.mountedBikeId
       ? this.bikes.find((bike) => bike.id === player.mountedBikeId && bike.mountedByPlayerId === player.id) ?? null
       : null;
-    const movement = mountedBike
-      ? this.locomotion.moveOnBike(player, dt, input, {
-          wantsSprint: !stale && player.input.sprint,
-          condition: player.condition,
-          pumpSpeedMultiplier: bikePumpSpeedMultiplier(player.condition)
-        })
-      : player.skateboardMounted
-        ? this.locomotion.moveOnSkateboard(player, dt, input, {
-            wantsSprint: !stale && player.input.sprint,
-            condition: player.condition
-          })
-        : this.locomotion.moveOnFoot(player, dt, input, {
-          wantsSprint: !stale && player.input.sprint,
-          condition: player.condition
-        });
+    const mount: PlayerMountState = mountedBike
+      ? { kind: "bike", pumpSpeedMultiplier: bikePumpSpeedMultiplier(player.condition) }
+      : player.skateboardMounted ? { kind: "skateboard" } : { kind: "foot" };
+    const movement = this.playerSimulation.simulateMotion(player, player.condition, dt, {
+      input: {
+        moveX: input.moveX,
+        moveZ: input.moveZ,
+        sprint: input.sprint,
+        crouch: input.crouch
+      },
+      mount
+    });
+    const resolved = this.rescueWorld.resolveCollision(
+      player.position,
+      PLAYER_RADIUS + (mountedBike ? 0.45 : 0),
+      { ignoreGrabbedBy: player.id }
+    );
+    player.position.set(resolved.x, this.groundY(resolved), resolved.z);
     if (mountedBike) {
       mountedBike.position.set(player.position.x, this.groundY(player.position), player.position.z);
       mountedBike.angle = player.yaw;
       this.bike = mountedBike;
       this.syncBikeMesh(mountedBike);
     }
-    if (player.skateboardMounted && "usable" in movement && !movement.usable) {
+    if (player.skateboardMounted && !movement.skateboardUsable) {
       player.skateboardMounted = false;
+      player.carriedItem = "skateboard";
     }
     player.isSprinting = movement.sprinting;
     if (movement.moved) {
@@ -1469,41 +1588,16 @@ export class GameApp {
   }
 
   private updateNetworkPlayerCondition(player: NetworkRemotePlayer, dt: number): void {
-    player.reviveProtectionTimer = Math.max(0, player.reviveProtectionTimer - dt);
-    player.condition.bleedTimer = Math.max(0, player.condition.bleedTimer - dt);
-    player.condition.limpTimer = Math.max(0, player.condition.limpTimer - dt);
-    player.condition.blurTimer = Math.max(0, player.condition.blurTimer - dt);
-    player.condition.bikePumpTimer = Math.max(0, player.condition.bikePumpTimer - dt);
-    player.condition.hydration = nextHydration(player.condition.hydration, dt, {
+    const sheltered = this.structureShelterProtectionForCombatant(this.combatantRefForNetworkPlayer(player)) >= 0.56;
+    simulatePlayerCondition(player, player.condition, dt, {
       sprinting: player.isSprinting,
-      elevated: player.height + player.jumpHeight > 1.2 || Boolean(player.activeFixtureId),
-      bleeding: player.condition.bleedTimer > 0,
-      daylight: this.currentTimeOfDay.daylight,
-      sheltered: this.structureShelterProtectionForCombatant(this.combatantRefForNetworkPlayer(player)) >= 0.56
-    });
-    const bleedDamage = bleedDamagePerSecond(player.condition.bleedTimer) * dt;
-    if (bleedDamage > 0) {
-      player.health -= bleedDamage;
-    }
-    const scoped = player.input.aim;
-    player.condition.stamina = nextStamina(player.condition.stamina, dt, {
-      sprinting: player.isSprinting,
-      scoped,
+      scoped: player.input.aim,
       resting: false,
       searching: false,
-      crouching: player.crouching,
-      bleeding: player.condition.bleedTimer > 0,
-      hydration: player.condition.hydration,
-      sheltered: this.structureShelterProtectionForCombatant(this.combatantRefForNetworkPlayer(player)) >= 0.56
+      daylight: this.currentTimeOfDay.daylight,
+      sheltered,
+      bikePumpBoosted: player.mountedBikeId !== null && player.condition.bikePumpTimer > 0
     });
-  }
-
-  private updateNetworkPlayerJumpState(player: NetworkRemotePlayer, dt: number): void {
-    this.locomotion.updateJumpState(player, dt, { disabled: player.mountedBikeId !== null || player.skateboardMounted });
-  }
-
-  private updateNetworkPlayerVerticalState(player: NetworkRemotePlayer, dt: number): void {
-    this.locomotion.updateFixtureElevation(player, dt, { forceGrounded: player.mountedBikeId !== null || player.skateboardMounted });
   }
 
   private emitNetworkPlayerMovementNoise(player: NetworkRemotePlayer, dt: number, sprinting: boolean): void {
@@ -1526,6 +1620,8 @@ export class GameApp {
     if (!player || player.health <= 0 || this.state !== "playing") {
       return;
     }
+    if (action.sequence <= player.lastProcessedActionSequence) return;
+    player.lastProcessedActionSequence = action.sequence;
     player.yaw = action.yaw;
     player.pitch = action.pitch;
     player.input = {
@@ -1535,7 +1631,7 @@ export class GameApp {
       aim: player.input.aim
     };
     const now = performance.now() / 1000;
-    if (action.type === "shoot") this.shootNetworkPlayer(player, now);
+    if (action.type === "shoot") this.shootNetworkPlayer(player, now, action.sequence);
     if (action.type === "reload") this.reloadNetworkPlayer(player, now);
     if (action.type === "interact") this.interactNetworkPlayer(player);
     if (action.type === "take") this.takeNetworkPlayer(player);
@@ -1550,25 +1646,19 @@ export class GameApp {
     }
   }
 
-  private shootNetworkPlayer(player: NetworkRemotePlayer, now: number): void {
-    const stats = getWeaponStats(player.loadout);
-    if (now - player.lastShotAt < stats.fireDelay) {
+  private shootNetworkPlayer(player: NetworkRemotePlayer, now: number, shotSequence: number): void {
+    const trigger = triggerAuthoritativeWeapon(player, now, {
+      mounted: player.mountedBikeId !== null || player.skateboardMounted,
+      canFireMounted: this.weaponCanFireOnBike(player.loadout.weaponId)
+    });
+    if (trigger.kind === "denied" || trigger.kind === "dry") return;
+    const stats = trigger.stats;
+    if (trigger.kind === "melee") {
+      this.swingNetworkPlayerMelee(player, stats, shotSequence);
       return;
     }
-    if (stats.kind === "melee") {
-      this.swingNetworkPlayerMelee(player, now, stats);
-      return;
-    }
-    if (player.loadout.reloadingUntil > now) {
-      return;
-    }
-    if (player.loadout.ammoInMagazine <= 0) {
-      player.loadout = startReload(player.loadout, now);
-      return;
-    }
-
-    player.loadout = consumeRound(player.loadout);
-    player.lastShotAt = now;
+    player.shotSequence = shotSequence;
+    this.remotePlayers.triggerShot(player, false);
     player.shotBloom = Math.min(stats.maxBloom, player.shotBloom + stats.bloomPerShot);
     this.emitNoise("gunshot", { x: player.position.x, z: player.position.z }, stats.noiseMultiplier * (player.crouching ? 0.96 : 1), {
       weaponId: player.loadout.weaponId
@@ -1595,6 +1685,7 @@ export class GameApp {
       this.fireFlareRound(origin, direction, stats, { x: player.position.x, z: player.position.z }, player);
       return;
     }
+    const voicedPain = new Set<number>();
     for (let pellet = 0; pellet < stats.pellets; pellet += 1) {
       const direction = this.directionFromYawPitch(player.yaw, player.pitch);
       direction.x += this.rng.range(-totalSpread, totalSpread);
@@ -1611,20 +1702,22 @@ export class GameApp {
         this.createHitSpark(hit.point);
         if (result.killed) {
           this.killZombie(hit.zombie, player);
+        } else if (!voicedPain.has(hit.zombie.id)) {
+          this.audio.playWorld("zombiePain", { x: hit.zombie.position.x, z: hit.zombie.position.z }, { zombieType: hit.zombie.type });
+          hit.zombie.vocalCooldown = Math.max(hit.zombie.vocalCooldown, 1.1);
+          voicedPain.add(hit.zombie.id);
         }
       }
       this.addTracer(origin, endPoint);
     }
   }
 
-  private swingNetworkPlayerMelee(player: NetworkRemotePlayer, now: number, stats: ReturnType<typeof getWeaponStats>): void {
-    const staminaCost = player.loadout.weaponId === "machete" ? MACHETE_STAMINA_COST : MELEE_STAMINA_COST;
-    const stamina = spendStamina(player.condition.stamina, staminaCost);
-    if (!stamina.spent) {
-      return;
-    }
-    player.condition.stamina = stamina.stamina;
-    player.lastShotAt = now;
+  private swingNetworkPlayerMelee(
+    player: NetworkRemotePlayer,
+    stats: ReturnType<typeof getWeaponStats>,
+    shotSequence: number
+  ): void {
+    player.shotSequence = shotSequence;
     this.remotePlayers.triggerAnimation(player, "Melee");
     this.emitNoise("melee", { x: player.position.x, z: player.position.z }, stats.noiseMultiplier * (player.crouching ? 0.7 : 1), {
       weaponId: player.loadout.weaponId
@@ -1639,6 +1732,9 @@ export class GameApp {
       this.createHitSpark(hit.point);
       if (result.killed) {
         this.killZombie(hit.zombie, player);
+      } else {
+        this.audio.playWorld("zombiePain", { x: hit.zombie.position.x, z: hit.zombie.position.z }, { zombieType: hit.zombie.type });
+        hit.zombie.vocalCooldown = Math.max(hit.zombie.vocalCooldown, 1.1);
       }
     }
   }
@@ -1722,6 +1818,24 @@ export class GameApp {
       : null;
     if (mountedBike) {
       return this.toggleNetworkPlayerBike(player, mountedBike);
+    }
+    const scenarioTarget = this.rescueWorld.nearestInteraction(player.position);
+    if (scenarioTarget) {
+      if (scenarioTarget.kind === "barricade") {
+        return this.rescueWorld.toggleBarricade(scenarioTarget.id, player.id);
+      }
+      const itemIndex = player.inventory.indexOf(scenarioTarget.gate.unlockItem);
+      if (itemIndex < 0) return false;
+      if (scenarioTarget.gate.unlockItem === CARETAKER_KEY_ITEM_ID) player.inventory.splice(itemIndex, 1);
+      this.rescueWorld.unlockGate(scenarioTarget.gate.id);
+      this.rescueScenario.unlockedGateIds.add(scenarioTarget.gate.id);
+      if (scenarioTarget.gate.objectiveGate) {
+        this.rescueScenario.dogFreed = true;
+        this.rescueScenario.phase = "find-cart-parts";
+        this.rescueWorld.setDogFreed(true);
+        this.spawnScenarioRepairItems();
+      }
+      return true;
     }
     const nearestBike = this.bikes
       .filter((bike) => bike.mountedByPlayerId === null)
@@ -1833,6 +1947,18 @@ export class GameApp {
   }
 
   private repairOrUnlockBikeForNetworkPlayer(player: NetworkRemotePlayer, bike: RideableBike): boolean {
+    if (bike.vehicleKind === "maintenance-cart") {
+      const batteryIndex = player.inventory.indexOf(CART_BATTERY_ITEM_ID);
+      const wheelIndex = player.inventory.indexOf(CART_WHEEL_ITEM_ID);
+      if (!this.rescueScenario.dogFreed || batteryIndex < 0 || wheelIndex < 0) return false;
+      player.inventory.splice(Math.max(batteryIndex, wheelIndex), 1);
+      player.inventory.splice(Math.min(batteryIndex, wheelIndex), 1);
+      bike.state = "available";
+      this.rescueScenario.cartRepaired = true;
+      this.rescueScenario.phase = "complete";
+      this.rebuildBikeMesh(bike);
+      return true;
+    }
     const requiredItem = bike.state === "flat-tyres" ? "tyre-kit" : "bolt-cutters";
     const itemIndex = player.inventory.indexOf(requiredItem);
     if (itemIndex < 0 && !(bike.state === "flat-tyres" && player.condition.bikePumpTimer > 0)) return false;
@@ -1898,7 +2024,8 @@ export class GameApp {
       .sort((a, b) => a.position.distanceTo(player.position) - b.position.distanceTo(player.position))[0] ?? null;
     if (worldItem) {
       if (isInventoryItem(worldItem.itemId)) {
-        if (player.inventory.length >= INVENTORY_CAPACITY) return false;
+        const occupiedSlots = player.inventory.filter((itemId) => !isQuestItem(itemId)).length;
+        if (!isQuestItem(worldItem.itemId) && occupiedSlots >= INVENTORY_CAPACITY) return false;
         player.inventory.push(worldItem.itemId);
       } else {
         if (player.carriedItem || player.skateboardMounted) return false;
@@ -1906,6 +2033,12 @@ export class GameApp {
       }
       this.scene.remove(worldItem.mesh);
       this.droppedItems = this.droppedItems.filter((candidate) => candidate !== worldItem);
+      if (worldItem.itemId === CARETAKER_KEY_ITEM_ID) this.rescueScenario.phase = "unlock-dog";
+      if (worldItem.itemId === CART_BATTERY_ITEM_ID || worldItem.itemId === CART_WHEEL_ITEM_ID) {
+        this.rescueScenario.phase = player.inventory.includes(CART_BATTERY_ITEM_ID) && player.inventory.includes(CART_WHEEL_ITEM_ID)
+          ? "repair-cart"
+          : "find-cart-parts";
+      }
       return true;
     }
     const drop = this.nearestWeaponDropForPoint(player.position, 8.2);
@@ -2041,6 +2174,18 @@ export class GameApp {
     this.applyDistractionSnapshots(snapshot.distractions ?? []);
     this.replaceSet(this.searchedAmenityIds, snapshot.searchedAmenityIds ?? []);
     this.replaceSet(this.repairedBrokenBikeIds, snapshot.repairedBrokenBikeIds ?? []);
+    if (snapshot.rescueScenario) {
+      this.rescueScenario.phase = snapshot.rescueScenario.phase as RescueScenarioState["phase"];
+      this.rescueScenario.caretakerZombieId = snapshot.rescueScenario.caretakerZombieId;
+      this.rescueScenario.caretakerSpawned = snapshot.rescueScenario.caretakerSpawned;
+      this.rescueScenario.keyDropped = snapshot.rescueScenario.keyDropped;
+      this.rescueScenario.dogFreed = snapshot.rescueScenario.dogFreed;
+      this.rescueScenario.cartRepaired = snapshot.rescueScenario.cartRepaired;
+      this.replaceSet(this.rescueScenario.unlockedGateIds, snapshot.rescueScenario.unlockedGateIds);
+      for (const gateId of this.rescueScenario.unlockedGateIds) this.rescueWorld.unlockGate(gateId);
+      this.rescueWorld.setDogFreed(this.rescueScenario.dogFreed);
+      this.rescueWorld.applyBarricadeSnapshots(snapshot.rescueScenario.barricades ?? []);
+    }
     if (snapshot.state === "gameover") {
       this.hud.showGameOver(snapshot.wave);
       this.hud.setStatus(`Overrun at wave ${snapshot.wave}`);
@@ -2050,15 +2195,16 @@ export class GameApp {
   private applyLocalPlayerSnapshot(snapshot: NetworkPlayerSnapshot): void {
     const previousWeapon = this.loadout.weaponId;
     const previousHealth = this.player.health;
-    const cameraBefore = this.localPlayerCameraAnchor();
+    const cameraBefore = this.clientCameraSmoother.presentedAnchor(this.localPlayerCameraAnchor());
     const localYaw = this.player.yaw;
     const localPitch = this.player.pitch;
     const unacknowledgedInputs = this.clientPositionReconciler.acknowledge(snapshot.lastProcessedInputSequence ?? 0);
     this.player.position.set(snapshot.x, snapshot.y, snapshot.z);
+    this.player.velocity.set(snapshot.velocityX, snapshot.velocityY, snapshot.velocityZ);
     this.player.health = snapshot.health;
     this.player.scrap = snapshot.scrap;
     this.player.crouching = snapshot.crouching;
-    this.player.crouchAmount = snapshot.crouching ? Math.max(this.player.crouchAmount, 0.75) : this.player.crouchAmount;
+    this.player.crouchAmount = snapshot.crouching ? 1 : 0;
     this.player.height = snapshot.height;
     this.player.jumpHeight = snapshot.jumpHeight;
     this.player.activeFixtureId = snapshot.activeFixtureId;
@@ -2076,6 +2222,7 @@ export class GameApp {
     this.condition.flashlightOn = snapshot.flashlightOn;
     this.inventory = [...(snapshot.inventory ?? [])];
     this.carriedItem = snapshot.carriedItem ?? null;
+    this.isSprinting = snapshot.sprinting ?? false;
     for (const input of unacknowledgedInputs) this.simulateLocalNetworkInput(input);
     this.player.yaw = localYaw;
     this.player.pitch = localPitch;
@@ -2099,8 +2246,12 @@ export class GameApp {
     for (const snapshot of snapshots) {
       seen.add(snapshot.id);
       const player = this.remotePlayers.get(snapshot.id) ?? this.remotePlayers.add(snapshot.id, snapshot.name, snapshot.avatarId);
+      const previousShotSequence = player.shotSequence;
       player.name = snapshot.name;
       this.remotePlayers.setAvatar(player, snapshot.avatarId);
+      // A new roster entry updates its mesh while applying the first
+      // transform, so install the replicated loadout before that update.
+      player.loadout = snapshot.loadout;
       this.remotePlayers.applyNetworkTransform(player, {
         position: new THREE.Vector3(snapshot.x, snapshot.y, snapshot.z),
         yaw: snapshot.yaw,
@@ -2111,7 +2262,6 @@ export class GameApp {
       player.pitch = snapshot.pitch;
       player.health = snapshot.health;
       player.scrap = snapshot.scrap;
-      player.loadout = snapshot.loadout;
       player.condition.stamina = snapshot.stamina;
       player.condition.hydration = snapshot.hydration;
       player.condition.bleedTimer = snapshot.bleedTimer;
@@ -2123,6 +2273,10 @@ export class GameApp {
       player.inventory = [...(snapshot.inventory ?? [])];
       player.carriedItem = snapshot.carriedItem ?? null;
       player.lastProcessedInputSequence = snapshot.lastProcessedInputSequence ?? 0;
+      player.shotSequence = snapshot.shotSequence ?? 0;
+      if (player.shotSequence > previousShotSequence) {
+        this.remotePlayers.triggerShot(player, getWeaponStats(snapshot.loadout).kind === "melee");
+      }
       player.activeFixtureId = snapshot.activeFixtureId;
       player.intermissionUpgradeWave = snapshot.intermissionUpgradeWave ?? 0;
       player.reviveProtectionTimer = snapshot.reviveProtectionTimer ?? 0;
@@ -2130,6 +2284,7 @@ export class GameApp {
       player.isSprinting = snapshot.sprinting ?? false;
       player.mountedBikeId = snapshot.bikeMounted ? player.mountedBikeId : null;
       player.skateboardMounted = snapshot.skateboardMounted ?? false;
+      this.remotePlayers.updateMesh(player);
     }
     for (const id of [...this.remotePlayers.keys()]) {
       if (!seen.has(id)) {
@@ -2170,9 +2325,14 @@ export class GameApp {
           vocalCooldown: 0,
           stepCooldown: 0,
           staggerTimer: 0,
-          screamCooldown: 0
+          screamCooldown: 0,
+          role: snapshot.role
         };
         this.zombies.push(zombie);
+        void this.installBlenderZombie(zombie);
+      }
+      if (zombie.role !== snapshot.role) {
+        zombie.role = snapshot.role;
         void this.installBlenderZombie(zombie);
       }
       zombie.position.set(snapshot.x, snapshot.y, snapshot.z);
@@ -2230,6 +2390,12 @@ export class GameApp {
     for (const snapshot of snapshots) {
       seen.add(snapshot.id);
       let drop = byId.get(snapshot.id);
+      if (drop && drop.weaponId !== snapshot.weaponId) {
+        this.scene.remove(drop.mesh);
+        disposeThreeResources(drop.mesh);
+        this.weaponDrops = this.weaponDrops.filter((candidate) => candidate !== drop);
+        drop = undefined;
+      }
       if (!drop) {
         const mesh = this.meshFactory.createWeaponDropMesh(snapshot.weaponId);
         mesh.userData.dynamic = true;
@@ -2250,10 +2416,20 @@ export class GameApp {
       drop.ttl = snapshot.ttl;
       drop.position.set(snapshot.x, snapshot.y, snapshot.z);
       drop.mesh.position.copy(drop.position);
+      drop.mesh.visible = true;
+      drop.mesh.matrixAutoUpdate = true;
+      drop.mesh.matrixWorldAutoUpdate = true;
+      drop.mesh.traverse((object) => {
+        object.frustumCulled = false;
+        if (object instanceof THREE.Mesh) object.visible = true;
+      });
+      if (drop.mesh.parent !== this.scene) this.scene.add(drop.mesh);
+      drop.mesh.updateMatrixWorld(true);
     }
     for (const drop of [...this.weaponDrops]) {
       if (!seen.has(drop.id)) {
         this.scene.remove(drop.mesh);
+        disposeThreeResources(drop.mesh);
         this.weaponDrops = this.weaponDrops.filter((candidate) => candidate !== drop);
       }
     }
@@ -2383,6 +2559,7 @@ export class GameApp {
     bike.mountedByPlayerId = snapshot.mountedByPlayerId;
     bike.state = snapshot.state;
     bike.requiredItem = snapshot.requiredItem;
+    bike.vehicleKind = snapshot.vehicleKind ?? bike.vehicleKind;
     this.bike = bike;
     if (stateChanged) this.rebuildBikeMesh(bike);
     else this.syncBikeMesh(bike);
@@ -2395,15 +2572,6 @@ export class GameApp {
     for (const player of this.remotePlayers.values()) {
       player.mountedBikeId = bikeByOwner.get(player.id) ?? null;
     }
-  }
-
-  private updateCrouch(dt: number): void {
-    const inputCrouching =
-      !this.mountedBike() &&
-      !this.skateboardMounted &&
-      (this.input?.isCrouching() ?? false);
-    this.locomotion.updateCrouch(this.player, dt, this.testCrouchOverride ?? inputCrouching);
-    this.root.classList.toggle("is-crouched", this.player.crouching);
   }
 
   private updateWavePacing(dt: number): void {
@@ -2420,6 +2588,7 @@ export class GameApp {
     if (update.startedWave) {
       this.resetIntermissionThreats();
       this.flashStatus(`Wave ${this.wave}`);
+      this.startRescueScenarioIfNeeded();
     }
 
     if (this.wavePhase === "intermission") {
@@ -2435,6 +2604,22 @@ export class GameApp {
 
   private spawnWaveZombie(anchor?: Vec2): void {
     this.addZombie(createZombieSpawn(getWaveConfig(this.wave), this.level.spawnPoints, this.rng, anchor));
+  }
+
+  private startRescueScenarioIfNeeded(force = false): void {
+    if ((!force && this.wave < 3) || this.rescueScenario.caretakerSpawned || this.isNetworkClient) return;
+    const config = getWaveConfig(3);
+    const spawn = createZombieSpawn(config, [this.rescueScenarioLayout.caretakerSpawnPosition], this.rng, this.rescueScenarioLayout.caretakerSpawnPosition);
+    spawn.type = "shambler";
+    spawn.position = { ...this.rescueScenarioLayout.caretakerSpawnPosition };
+    spawn.health = Math.round(spawn.health * 1.45);
+    spawn.speed *= 1.08;
+    spawn.reward += 18;
+    const caretaker = this.addZombie(spawn, "caretaker");
+    this.rescueScenario.caretakerZombieId = caretaker.id;
+    this.rescueScenario.caretakerSpawned = true;
+    this.rescueScenario.phase = "find-caretaker";
+    this.flashStatus("A council radio crackles near the bowling green. Find the infected caretaker.");
   }
 
   private resetIntermissionThreats(): void {
@@ -2542,37 +2727,42 @@ export class GameApp {
   }
 
   private updateMovement(dt: number): void {
-    if (this.player.health <= 0) {
-      this.player.velocity.multiplyScalar(0.72);
-      this.isSprinting = false;
-      return;
-    }
-    if (this.activeAmenityRest) {
-      this.player.velocity.set(0, 0, 0);
-      this.isSprinting = false;
-      return;
-    }
-
     const movement = this.input?.movement() ?? { x: 0, z: 0, length: 0 };
-
-    if (this.mountedBike()) {
-      this.updateBikeMovement(dt, movement);
-      return;
-    }
-
-    if (this.skateboardMounted) {
-      this.updateSkateboardMovement(dt, movement);
-      return;
-    }
-
-    const movementResult = this.locomotion.moveOnFoot(this.player, dt, movement, {
-      wantsSprint: this.input?.isSprinting() ?? false,
-      condition: this.condition
+    const mount = this.localPlayerMountState();
+    const result = this.playerSimulation.simulateMotion(this.player, this.condition, dt, {
+      input: {
+        moveX: movement.x,
+        moveZ: movement.z,
+        sprint: this.input?.isSprinting() ?? false,
+        crouch: this.testCrouchOverride ?? (this.input?.isCrouching() ?? false)
+      },
+      mount,
+      movementDisabled: Boolean(this.activeAmenityRest)
     });
-    this.isSprinting = movementResult.sprinting;
-    if (movementResult.moved) {
-      this.emitMovementNoise(dt, movementResult.sprinting);
+    this.isSprinting = result.sprinting;
+    this.root.classList.toggle("is-crouched", this.player.crouching);
+
+    if (mount.kind === "skateboard" && !result.skateboardUsable) {
+      this.skateboardMounted = false;
+      this.carriedItem = "skateboard";
+      this.player.velocity.multiplyScalar(0.2);
+      this.syncSkateboardMesh();
+      this.flashStatus("Skateboard bogged down on grass");
+      return;
     }
+    if (!result.moved) return;
+    if (mount.kind === "skateboard") {
+      this.emitSkateboardNoise(dt, result.sprinting, result.surface);
+    } else {
+      this.emitMovementNoise(dt, result.sprinting);
+    }
+  }
+
+  private localPlayerMountState(): PlayerMountState {
+    if (this.mountedBike()) {
+      return { kind: "bike", pumpSpeedMultiplier: bikePumpSpeedMultiplier(this.condition) };
+    }
+    return this.skateboardMounted ? { kind: "skateboard" } : { kind: "foot" };
   }
 
   private jump(): boolean {
@@ -2596,37 +2786,6 @@ export class GameApp {
     this.flashStatus("Jumped");
     this.emitNoise("footstep", { x: this.player.position.x, z: this.player.position.z }, 0.46, { volume: 0.38 });
     return true;
-  }
-
-  private updateBikeMovement(dt: number, input: LocomotionInput): void {
-    const movement = this.locomotion.moveOnBike(this.player, dt, input, {
-      wantsSprint: this.input?.isSprinting() ?? false,
-      condition: this.condition,
-      pumpSpeedMultiplier: bikePumpSpeedMultiplier(this.condition)
-    });
-    this.isSprinting = movement.sprinting;
-    if (movement.moved) {
-      this.emitMovementNoise(dt, movement.sprinting);
-    }
-  }
-
-  private updateSkateboardMovement(dt: number, input: LocomotionInput): void {
-    const movement = this.locomotion.moveOnSkateboard(this.player, dt, input, {
-      wantsSprint: this.input?.isSprinting() ?? false,
-      condition: this.condition
-    });
-    this.isSprinting = movement.sprinting;
-    if (!movement.usable) {
-      this.skateboardMounted = false;
-      this.carriedItem = "skateboard";
-      this.player.velocity.multiplyScalar(0.2);
-      this.syncSkateboardMesh();
-      this.flashStatus("Skateboard bogged down on grass");
-      return;
-    }
-    if (movement.moved) {
-      this.emitSkateboardNoise(dt, movement.sprinting, movement.surface);
-    }
   }
 
   private toggleSkateboard(): boolean {
@@ -2708,39 +2867,19 @@ export class GameApp {
   }
 
   private updatePlayerCondition(dt: number): void {
-    this.player.reviveProtectionTimer = Math.max(0, this.player.reviveProtectionTimer - dt);
-    this.condition.bleedTimer = Math.max(0, this.condition.bleedTimer - dt);
-    this.condition.limpTimer = Math.max(0, this.condition.limpTimer - dt);
-    this.condition.blurTimer = Math.max(0, this.condition.blurTimer - dt);
-    this.condition.bikePumpTimer = Math.max(0, this.condition.bikePumpTimer - dt);
     this.distractionCooldown = Math.max(0, this.distractionCooldown - dt);
     const sheltered = this.structureShelterProtectionForLocalPlayer() >= 0.56;
-    this.condition.hydration = nextHydration(this.condition.hydration, dt, {
-      sprinting: this.isSprinting,
-      elevated: this.playerElevation() > 1.2 || Boolean(this.player.activeFixtureId),
-      bleeding: this.condition.bleedTimer > 0,
-      daylight: this.currentTimeOfDay.daylight,
-      sheltered
-    });
-
-    const bleedDamage = bleedDamagePerSecond(this.condition.bleedTimer) * dt;
-    if (bleedDamage > 0) {
-      this.player.health -= bleedDamage;
-    }
-
     const scoped = this.scopeAmount > 0.58 && this.aimHeld;
-    this.condition.stamina = nextStamina(this.condition.stamina, dt, {
+    const result = simulatePlayerCondition(this.player, this.condition, dt, {
       sprinting: this.isSprinting,
       scoped,
       resting: Boolean(this.activeAmenityRest),
       searching: Boolean(this.activeAmenitySearch),
-      crouching: this.player.crouching,
-      bleeding: this.condition.bleedTimer > 0,
-      hydration: this.condition.hydration,
+      daylight: this.currentTimeOfDay.daylight,
+      sheltered,
       bikePumpBoosted: this.mountedBike() !== null && this.condition.bikePumpTimer > 0,
-      sheltered
     });
-    if (scoped && this.condition.stamina <= 1) {
+    if (result.scopeExhausted) {
       this.aimHeld = false;
       this.flashStatus("Too winded to hold breath");
     }
@@ -3190,7 +3329,7 @@ export class GameApp {
   }
 
   private updateCamera(): void {
-    if (this.smokeMode && !this.touchMode && !this.testCameraOverride && document.pointerLockElement !== this.canvas) {
+    if (this.smokeMode && !this.networkTestMode && !this.touchMode && !this.testCameraOverride && document.pointerLockElement !== this.canvas) {
       const t = this.frame * 0.005;
       this.player.yaw = -2.2 + Math.sin(t) * 0.18;
       this.player.pitch = -0.1 + Math.sin(t * 0.7) * 0.04;
@@ -3199,7 +3338,7 @@ export class GameApp {
       this.player.position.x,
       this.player.position.y + PLAYER_HEIGHT + this.playerElevation() + (this.mountedBike() ? BIKE_CAMERA_HEIGHT_BONUS : this.skateboardMounted ? SKATEBOARD_CAMERA_HEIGHT_BONUS : 0) - this.player.crouchAmount * 0.58,
       this.player.position.z
-    ).add(this.networkCameraCorrection);
+    ).add(this.clientCameraSmoother.offset);
     this.camera.rotation.order = "YXZ";
     this.camera.rotation.y = this.player.yaw + this.recoilYaw * 0.006;
     this.camera.rotation.x = this.player.pitch - this.recoil * 0.012;
@@ -3214,12 +3353,11 @@ export class GameApp {
   }
 
   private compensateNetworkCamera(previousAnchor: THREE.Vector3): void {
-    this.networkCameraCorrection.add(previousAnchor.sub(this.localPlayerCameraAnchor()));
+    this.clientCameraSmoother.reconcile(previousAnchor, this.localPlayerCameraAnchor());
   }
 
   private decayNetworkCameraCorrection(dt: number): void {
-    this.networkCameraCorrection.multiplyScalar(Math.exp(-dt * 12));
-    if (this.networkCameraCorrection.lengthSq() < 0.000001) this.networkCameraCorrection.set(0, 0, 0);
+    this.clientCameraSmoother.decay(dt);
   }
 
   private forceSpawnZombie(type?: ZombieType): void {
@@ -3238,7 +3376,7 @@ export class GameApp {
     });
   }
 
-  private addZombie(spawn: ZombieSpawn): void {
+  private addZombie(spawn: ZombieSpawn, role?: Zombie["role"]): Zombie {
     const mesh = this.meshFactory.createZombieMesh(spawn.type);
     mesh.userData.dynamic = true;
     mesh.userData.zombieSimulationAccumulator = this.rng.range(0, 1 / 15);
@@ -3270,10 +3408,12 @@ export class GameApp {
       vocalCooldown: this.rng.range(2.5, 8),
       stepCooldown: this.rng.range(0.1, 0.7),
       staggerTimer: 0,
-      screamCooldown: this.rng.range(2.5, 6)
+      screamCooldown: this.rng.range(2.5, 6),
+      role
     };
     this.zombies.push(zombie);
     void this.installBlenderZombie(zombie);
+    return zombie;
   }
 
   private updateZombies(dt: number, now: number): void {
@@ -3561,6 +3701,10 @@ export class GameApp {
       }
     }
 
+    if (this.rescueWorld) {
+      next = this.rescueWorld.resolveCollision(next, zombie.radius);
+    }
+
     zombie.position.set(next.x, this.groundY(next), next.z);
   }
 
@@ -3581,7 +3725,7 @@ export class GameApp {
       },
       2.4
     );
-    return next;
+    return this.rescueWorld ? this.rescueWorld.resolveCollision(next, radius) : next;
   }
 
   private syncZombieMeshPosition(zombie: Zombie, now: number): void {
@@ -3950,31 +4094,32 @@ export class GameApp {
     if (this.state !== "playing") {
       return;
     }
-    const stats = getWeaponStats(this.loadout);
-    if (!force && now - this.lastShotAt < stats.fireDelay) {
+    const trigger = triggerAuthoritativeWeapon(this.localPlayerState, now, {
+      mounted: Boolean(this.mountedBike() || this.skateboardMounted),
+      canFireMounted: this.weaponCanFireOnBike(this.loadout.weaponId),
+      ignoreCooldown: force
+    });
+    if (trigger.kind === "denied") {
+      if (trigger.reason === "mounted") {
+        this.flashStatus("Cannot fire this safely while riding");
+        this.audio.playWorld("deny");
+        this.aimHeld = false;
+      } else if (trigger.reason === "stamina") {
+        this.flashStatus("Too winded to swing");
+        this.audio.playWorld("deny");
+      }
       return;
     }
-    if ((this.mountedBike() || this.skateboardMounted) && !this.weaponCanFireOnBike(this.loadout.weaponId)) {
-      this.flashStatus("Cannot fire this safely while riding");
-      this.audio.playWorld("deny");
-      this.aimHeld = false;
-      return;
-    }
-    if (stats.kind === "melee") {
-      this.swingMelee(now, stats);
-      return;
-    }
-    if (this.loadout.reloadingUntil > now) {
-      return;
-    }
-    if (this.loadout.ammoInMagazine <= 0) {
-      this.loadout = startReload(this.loadout, now);
+    if (trigger.kind === "dry") {
       this.audio.playWorld("dryFire");
       return;
     }
-
-    this.loadout = consumeRound(this.loadout);
-    this.lastShotAt = now;
+    const stats = trigger.stats;
+    if (trigger.kind === "melee") {
+      this.swingMelee(stats);
+      return;
+    }
+    this.shotSequence += 1;
     const crouchRecoil = this.player.crouching ? 0.7 : 1;
     const aimRecoil = THREE.MathUtils.lerp(1, stats.aimRecoilMultiplier, this.scopeAmount) * crouchRecoil;
     this.recoil = Math.min(1.75, this.recoil + stats.recoilKick * aimRecoil);
@@ -4014,6 +4159,7 @@ export class GameApp {
     let registeredHit = false;
     let playedImpact = false;
     let hitSparksThisShot = 0;
+    const voicedPain = new Set<number>();
     for (let pellet = 0; pellet < stats.pellets; pellet += 1) {
       const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion);
       direction.x += this.rng.range(-totalSpread, totalSpread);
@@ -4044,6 +4190,11 @@ export class GameApp {
           this.hud.flashHit("kill");
           this.killZombie(hit.zombie);
         } else {
+          if (!voicedPain.has(hit.zombie.id)) {
+            this.audio.playWorld("zombiePain", { x: hit.zombie.position.x, z: hit.zombie.position.z }, { zombieType: hit.zombie.type });
+            hit.zombie.vocalCooldown = Math.max(hit.zombie.vocalCooldown, 1.1);
+            voicedPain.add(hit.zombie.id);
+          }
           this.hud.flashHit(hit.zone === "head" ? "headshot" : "hit");
         }
       }
@@ -4058,16 +4209,8 @@ export class GameApp {
     return BIKE_ALLOWED_WEAPONS.has(weaponId);
   }
 
-  private swingMelee(now: number, stats: ReturnType<typeof getWeaponStats>): void {
-    const staminaCost = this.loadout.weaponId === "machete" ? MACHETE_STAMINA_COST : MELEE_STAMINA_COST;
-    const stamina = spendStamina(this.condition.stamina, staminaCost);
-    if (!stamina.spent) {
-      this.flashStatus("Too winded to swing");
-      this.audio.playWorld("deny");
-      return;
-    }
-    this.condition.stamina = stamina.stamina;
-    this.lastShotAt = now;
+  private swingMelee(stats: ReturnType<typeof getWeaponStats>): void {
+    this.shotSequence += 1;
     this.aimHeld = false;
     this.meleeSwing = 1;
     this.meleeSwingSide *= -1;
@@ -4099,6 +4242,8 @@ export class GameApp {
         this.hud.flashHit("kill");
         this.killZombie(hit.zombie);
       } else {
+        this.audio.playWorld("zombiePain", { x: hit.zombie.position.x, z: hit.zombie.position.z }, { zombieType: hit.zombie.type });
+        hit.zombie.vocalCooldown = Math.max(hit.zombie.vocalCooldown, 1.1);
         this.hud.flashHit(hit.zone === "head" ? "headshot" : "hit");
       }
     }
@@ -4150,6 +4295,16 @@ export class GameApp {
     const weaponDrop = chooseZombieWeaponDrop(zombie.type, this.wave, this.rng);
     if (weaponDrop) {
       this.addWeaponDrop(weaponDrop, zombie.position, "zombie", 30);
+    }
+    if (zombie.role === "caretaker" && !this.rescueScenario.keyDropped) {
+      this.addDroppedWorldItem(CARETAKER_KEY_ITEM_ID, zombie.position, {
+        label: "Caretaker's tagged key ring",
+        angle: zombie.mesh.rotation.y,
+        ttl: Number.POSITIVE_INFINITY
+      });
+      this.rescueScenario.keyDropped = true;
+      this.rescueScenario.phase = "take-key";
+      this.flashStatus("The caretaker dropped a tagged key ring");
     }
   }
 
@@ -4297,6 +4452,28 @@ export class GameApp {
       this.bikes.push(bike);
       this.syncBikeMesh(bike);
     }
+    const cartPlaceholder = this.meshFactory.createBikeMesh({ issue: "flat-tyres" });
+    cartPlaceholder.scale.setScalar(1.45);
+    cartPlaceholder.userData.dynamic = true;
+    this.scene.add(cartPlaceholder);
+    const cart: RideableBike = {
+      id: MAINTENANCE_CART_ID,
+      label: "Park maintenance cart",
+      mesh: cartPlaceholder,
+      position: new THREE.Vector3(
+        this.rescueScenarioLayout.cartPosition.x,
+        this.groundY(this.rescueScenarioLayout.cartPosition),
+        this.rescueScenarioLayout.cartPosition.z
+      ),
+      angle: this.rescueScenarioLayout.cartAngle,
+      mounted: false,
+      mountedByPlayerId: null,
+      state: this.rescueScenario.cartRepaired ? "available" : "flat-tyres",
+      vehicleKind: "maintenance-cart"
+    };
+    this.bikes.push(cart);
+    this.syncBikeMesh(cart);
+    void this.installMaintenanceCartAsset(cart);
     this.bike = this.bikes.find((candidate) => candidate.id === this.level.rideableBike.id) ?? this.bikes[0] ?? null;
   }
 
@@ -4315,7 +4492,21 @@ export class GameApp {
     }
     for (const bike of this.bikes) {
       const spawn = this.level.rideableBikes.find((candidate) => candidate.id === bike.id);
-      if (!spawn) continue;
+      if (!spawn) {
+        if (bike.vehicleKind === "maintenance-cart") {
+          bike.mounted = false;
+          bike.mountedByPlayerId = null;
+          bike.state = this.rescueScenario.cartRepaired ? "available" : "flat-tyres";
+          bike.position.set(
+            this.rescueScenarioLayout.cartPosition.x,
+            this.groundY(this.rescueScenarioLayout.cartPosition),
+            this.rescueScenarioLayout.cartPosition.z
+          );
+          bike.angle = this.rescueScenarioLayout.cartAngle;
+          this.rebuildBikeMesh(bike);
+        }
+        continue;
+      }
       bike.mounted = false;
       bike.mountedByPlayerId = null;
       bike.state = spawn.state ?? "available";
@@ -4397,6 +4588,10 @@ export class GameApp {
   }
 
   private rebuildBikeMesh(bike: RideableBike): void {
+    if (bike.vehicleKind === "maintenance-cart") {
+      void this.installMaintenanceCartAsset(bike);
+      return;
+    }
     this.scene.remove(bike.mesh);
     const mesh = this.meshFactory.createBikeMesh({ issue: bike.state === "available" ? undefined : bike.state });
     mesh.scale.setScalar(1.45);
@@ -4404,6 +4599,27 @@ export class GameApp {
     this.scene.add(mesh);
     bike.mesh = mesh;
     this.syncBikeMesh(bike);
+  }
+
+  private async installMaintenanceCartAsset(cart: RideableBike): Promise<void> {
+    try {
+      const asset = await instantiateRescueAsset("cart");
+      const wrapper = new THREE.Group();
+      wrapper.userData.dynamic = true;
+      wrapper.userData.vehicleKind = "maintenance-cart";
+      asset.root.scale.setScalar(1.12);
+      wrapper.add(asset.root);
+      setMaintenanceCartVisualState(wrapper, cart.state === "available");
+      const previous = cart.mesh;
+      this.scene.remove(previous);
+      disposeThreeResources(previous);
+      cart.mesh = wrapper;
+      this.scene.add(wrapper);
+      this.syncBikeMesh(cart);
+      this.renderer.shadowMap.needsUpdate = !this.smokeMode;
+    } catch {
+      setMaintenanceCartVisualState(cart.mesh, cart.state === "available");
+    }
   }
 
   private toggleBike(target = this.nearestBike ?? this.mountedBike()): boolean {
@@ -4419,7 +4635,7 @@ export class GameApp {
       bike.angle = this.player.yaw;
       this.player.velocity.multiplyScalar(0.35);
       this.syncBikeMesh(bike);
-      this.flashStatus("Dismounted bike");
+      this.flashStatus(bike.vehicleKind === "maintenance-cart" ? "Parked maintenance cart" : "Dismounted bike");
       this.audio.playWorld("equip");
       return true;
     }
@@ -4463,6 +4679,32 @@ export class GameApp {
   }
 
   private inspectBikeState(bike: RideableBike): boolean {
+    if (bike.vehicleKind === "maintenance-cart") {
+      const hasBattery = this.hasInventoryItem(CART_BATTERY_ITEM_ID);
+      const hasWheel = this.hasInventoryItem(CART_WHEEL_ITEM_ID);
+      if (!this.rescueScenario.dogFreed) {
+        this.flashStatus("The cart needs a battery and front wheel. Rescue Miso first.");
+        this.audio.playWorld("deny");
+        return true;
+      }
+      if (!hasBattery || !hasWheel) {
+        const missing = [!hasBattery ? "battery" : "", !hasWheel ? "wheel" : ""].filter(Boolean).join(" and ");
+        this.rescueScenario.phase = "find-cart-parts";
+        this.flashStatus(`Maintenance cart still needs the ${missing}`);
+        this.audio.playWorld("deny");
+        return true;
+      }
+      this.consumeInventoryItem(CART_BATTERY_ITEM_ID);
+      this.consumeInventoryItem(CART_WHEEL_ITEM_ID);
+      bike.state = "available";
+      this.rescueScenario.cartRepaired = true;
+      this.rescueScenario.phase = "complete";
+      this.rebuildBikeMesh(bike);
+      this.emitNoise("scavenge", { x: bike.position.x, z: bike.position.z }, 0.92, { volume: 0.72 });
+      this.flashStatus("Battery seated, wheel fitted. Maintenance cart running.");
+      this.audio.playWorld("upgrade", bike.position);
+      return true;
+    }
     if (bike.state === "flat-tyres") {
       if (this.hasInventoryItem("tyre-kit")) {
         this.consumeInventoryItem("tyre-kit");
@@ -4634,7 +4876,24 @@ export class GameApp {
     this.nearestWorldItem = null;
     this.flashStatus(`Picked up ${ITEM_DEFINITIONS[item.itemId].label}`);
     this.audio.playWorld("pickup");
+    this.onScenarioItemPickedUp(item.itemId);
     return true;
+  }
+
+  private onScenarioItemPickedUp(itemId: WorldItemId): void {
+    if (itemId === CARETAKER_KEY_ITEM_ID) {
+      this.rescueScenario.phase = "unlock-dog";
+      this.flashStatus("Key tag reads: NORTH TOILETS · SERVICE");
+      return;
+    }
+    if (itemId === CART_BATTERY_ITEM_ID || itemId === CART_WHEEL_ITEM_ID) {
+      this.rescueScenario.phase = this.hasInventoryItem(CART_BATTERY_ITEM_ID) && this.hasInventoryItem(CART_WHEEL_ITEM_ID)
+        ? "repair-cart"
+        : "find-cart-parts";
+      if (this.rescueScenario.dogFreed) {
+        this.flashStatus(this.rescueScenario.phase === "repair-cart" ? "Both cart parts found. Return to the maintenance cart." : `Found ${ITEM_DEFINITIONS[itemId].label}`);
+      }
+    }
   }
 
   private pickupPlacedLadder(ladder: PlacedLadder): boolean {
@@ -4675,7 +4934,8 @@ export class GameApp {
   }
 
   private addInventoryItem(itemId: InventoryItemId): boolean {
-    if (this.inventory.length >= this.inventoryCapacity) {
+    const occupiedSlots = this.inventory.filter((candidate) => !isQuestItem(candidate)).length;
+    if (!isQuestItem(itemId) && occupiedSlots >= this.inventoryCapacity) {
       return false;
     }
     this.inventory.push(itemId);
@@ -4789,6 +5049,9 @@ export class GameApp {
     if (this.mountedBike()) {
       return this.toggleBike();
     }
+    if (this.nearestScenarioTarget) {
+      return this.interactWithScenarioTarget(this.nearestScenarioTarget);
+    }
     if (this.nearestBike) {
       return this.toggleBike();
     }
@@ -4805,6 +5068,87 @@ export class GameApp {
       return this.useAmenity(this.nearestAmenity);
     }
     return this.buyUpgrade();
+  }
+
+  private updateNearestScenarioTarget(): void {
+    if (this.mountedBike() || this.skateboardMounted) {
+      this.nearestScenarioTarget = null;
+      return;
+    }
+    this.nearestScenarioTarget = this.rescueWorld.nearestInteraction(this.player.position);
+  }
+
+  private interactWithScenarioTarget(target: ScenarioInteractionTarget): boolean {
+    if (target.kind === "barricade") {
+      const moved = this.rescueWorld.toggleBarricade(target.id, this.network.localId);
+      if (moved) {
+        this.player.velocity.multiplyScalar(0.25);
+        this.flashStatus(target.grabbed ? "Barricade set" : "Moving barricade. Use again to set it down.");
+        this.audio.playWorld("equip");
+      }
+      return moved;
+    }
+
+    const { gate } = target;
+    if (!this.hasInventoryItem(gate.unlockItem)) {
+      this.flashStatus(gate.unlockItem === CARETAKER_KEY_ITEM_ID ? "The toilet stall is locked. Find the caretaker's key." : "Chained shut. Need bolt cutters.");
+      this.audio.playWorld("deny");
+      return true;
+    }
+    if (gate.unlockItem === CARETAKER_KEY_ITEM_ID) {
+      this.consumeInventoryItem(CARETAKER_KEY_ITEM_ID);
+    }
+    this.rescueWorld.unlockGate(gate.id);
+    this.rescueScenario.unlockedGateIds.add(gate.id);
+    this.emitNoise("scavenge", gate.position, gate.objectiveGate ? 0.72 : 1.12, { volume: 0.72 });
+    if (gate.objectiveGate) {
+      this.rescueScenario.dogFreed = true;
+      this.rescueScenario.phase = "find-cart-parts";
+      this.rescueWorld.setDogFreed(true);
+      this.spawnScenarioRepairItems();
+      this.flashStatus("Miso is safe. His lead tag marks the cart's two missing parts.");
+    } else {
+      this.flashStatus(`${gate.label} opened`);
+    }
+    this.audio.playWorld("equip", gate.position);
+    return true;
+  }
+
+  private spawnScenarioRepairItems(): void {
+    const ownedOrDropped = (itemId: WorldItemId) => this.hasInventoryItem(itemId as InventoryItemId)
+      || this.droppedItems.some((item) => item.itemId === itemId);
+    if (!ownedOrDropped(CART_BATTERY_ITEM_ID)) {
+      this.addDroppedWorldItem(CART_BATTERY_ITEM_ID, this.rescueScenarioLayout.batteryPosition, {
+        label: "Maintenance cart battery hidden by the east lawn planters",
+        ttl: Number.POSITIVE_INFINITY
+      });
+    }
+    if (!ownedOrDropped(CART_WHEEL_ITEM_ID)) {
+      this.addDroppedWorldItem(CART_WHEEL_ITEM_ID, this.rescueScenarioLayout.wheelPosition, {
+        label: "Replacement cart wheel by the south-west gatehouse bike",
+        ttl: Number.POSITIVE_INFINITY
+      });
+    }
+  }
+
+  private updateRescueScenarioWorld(dt: number): void {
+    if (!this.rescueWorld) return;
+    this.rescueWorld.update(
+      dt,
+      [
+        { id: this.network.localId, position: this.player.position, yaw: this.player.yaw },
+        ...[...this.remotePlayers.values()].map((player) => ({ id: player.id, position: player.position, yaw: player.yaw }))
+      ],
+      this.player.position,
+      this.player.yaw,
+      this.zombies
+    );
+    const resolved = this.rescueWorld.resolveCollision(
+      this.player.position,
+      PLAYER_RADIUS + (this.mountedBike() ? 0.45 : 0),
+      { ignoreGrabbedBy: this.network.localId }
+    );
+    this.player.position.set(resolved.x, this.groundY(resolved), resolved.z);
   }
 
   private updateNearestAmenity(): void {
@@ -5475,14 +5819,6 @@ export class GameApp {
     return "Climbed";
   }
 
-  private updateVerticalState(dt: number): void {
-    this.locomotion.updateFixtureElevation(this.player, dt, { forceGrounded: this.mountedBike() !== null || this.skateboardMounted });
-  }
-
-  private updateJumpState(dt: number): void {
-    this.locomotion.updateJumpState(this.player, dt, { disabled: this.mountedBike() !== null || this.skateboardMounted });
-  }
-
   private updateElevatedNoise(dt: number): void {
     if (this.player.height <= 1.4) {
       this.elevatedNoiseTimer = 0;
@@ -5590,6 +5926,15 @@ export class GameApp {
       this.updateBikes(0);
     }
     return this.toggleBike(bike);
+  }
+
+  private testEquipNetworkPeer(weaponId: WeaponId = "carbine"): boolean {
+    const player = this.remotePlayers.values().next().value as NetworkRemotePlayer | undefined;
+    if (!this.isNetworkHost || !player) return false;
+    player.loadout = addWeapon(player.loadout, weaponId);
+    this.remotePlayers.updateMesh(player);
+    this.sendNetworkSnapshotNow();
+    return true;
   }
 
   private testRepairFlatBike(): boolean {
@@ -5729,6 +6074,7 @@ export class GameApp {
     return this.zombies.map((zombie) => ({
       id: zombie.id,
       type: zombie.type,
+      role: zombie.role,
       aiState: zombie.aiState,
       hasTarget: Boolean(zombie.target),
       targetDistance: zombie.target ? Number(distance({ x: zombie.position.x, z: zombie.position.z }, zombie.target).toFixed(2)) : null,
@@ -5857,6 +6203,21 @@ export class GameApp {
 
   private snapshot(): Snapshot {
     const shelterProtection = this.structureShelterProtectionForLocalPlayer();
+    const contextStats = this.contextWorld.getStats();
+    let viewWeaponMeshes = 0;
+    this.weaponModel.traverse((object) => {
+      if (object instanceof THREE.Mesh && object.visible) viewWeaponMeshes += 1;
+    });
+    let visibleWeaponDrops = 0;
+    let weaponDropMeshes = 0;
+    for (const drop of this.weaponDrops) {
+      let visibleMeshes = 0;
+      drop.mesh.traverse((object) => {
+        if (object instanceof THREE.Mesh && object.visible) visibleMeshes += 1;
+      });
+      weaponDropMeshes += visibleMeshes;
+      if (drop.mesh.parent === this.scene && drop.mesh.visible && visibleMeshes > 0) visibleWeaponDrops += 1;
+    }
     return {
       ready: true,
       state: this.state,
@@ -5865,6 +6226,8 @@ export class GameApp {
       playerZ: Number(this.player.position.z.toFixed(2)),
       playerYaw: Number(this.player.yaw.toFixed(3)),
       playerPitch: Number(this.player.pitch.toFixed(3)),
+      cameraX: Number(this.camera.position.x.toFixed(3)),
+      cameraZ: Number(this.camera.position.z.toFixed(3)),
       wave: this.wave,
       paused: this.paused,
       zombies: this.zombies.length,
@@ -5874,6 +6237,8 @@ export class GameApp {
       weapon: this.loadout.weaponId,
       upgrades: { ...this.loadout.upgrades },
       weaponDrops: this.weaponDrops.length,
+      visibleWeaponDrops,
+      weaponDropMeshes,
       elevation: Number(this.playerElevation().toFixed(2)),
       jumpHeight: Number(this.player.jumpHeight.toFixed(2)),
       renderedTrees: this.renderedTreeCount,
@@ -5884,6 +6249,11 @@ export class GameApp {
       renderPixelRatio: Number(this.renderer.getPixelRatio().toFixed(2)),
       rendererCalls: this.renderer.info.render.calls,
       rendererTriangles: this.renderer.info.render.triangles,
+      contextBuildings: contextStats.buildings,
+      contextRoads: contextStats.roads,
+      contextTrees: contextStats.trees,
+      contextMeshes: contextStats.meshes,
+      contextTriangles: Math.round(contextStats.triangles),
       renderedMistBanks: this.atmosphere.getGroundMistBankCount(),
       renderedRainDrops: this.atmosphere.getRainDropCount(),
       renderedWeatherAnchors: this.atmosphere.getWeatherAnchorCount(),
@@ -5910,6 +6280,7 @@ export class GameApp {
       amenityAction: this.activeAmenityRest ? "rest" : this.activeAmenitySearch ? "search" : null,
       amenityActionRemaining: Number((this.activeAmenityRest?.remaining ?? this.activeAmenitySearch?.remaining ?? 0).toFixed(2)),
       stamina: Number(this.condition.stamina.toFixed(1)),
+      sprinting: this.isSprinting,
       hydration: Number(this.condition.hydration.toFixed(1)),
       bleeding: this.condition.bleedTimer > 0,
       limp: this.condition.limpTimer > 0,
@@ -5930,13 +6301,37 @@ export class GameApp {
       placedLadders: this.placedLadders.length,
       bikePumpBoostRemaining: Number(this.condition.bikePumpTimer.toFixed(1)),
       repairedBrokenBikes: this.repairedBrokenBikeIds.size,
+      rescueScenarioPhase: this.rescueScenario.phase,
+      dogFreed: this.rescueScenario.dogFreed,
+      cartRepaired: this.rescueScenario.cartRepaired,
+      unlockedScenarioGates: this.rescueScenario.unlockedGateIds.size,
+      intactBarricades: this.rescueWorld.intactBarricadeCount,
       networkReady: !this.isNetworkClient || this.hasInitialNetworkSnapshot,
-      networkPlayers: [...this.remotePlayers.values()].map((player) => ({
-        id: player.id,
-        x: Number(player.position.x.toFixed(3)),
-        z: Number(player.position.z.toFixed(3)),
-        lastProcessedInputSequence: player.lastProcessedInputSequence
-      }))
+      networkPlayers: [...this.remotePlayers.values()].map((player) => {
+        const weapon = player.mesh.getObjectByName("remote-weapon");
+        let weaponMeshes = 0;
+        weapon?.traverse((object) => {
+          if (object instanceof THREE.Mesh && object.visible) weaponMeshes += 1;
+        });
+        return {
+          id: player.id,
+          x: Number(player.position.x.toFixed(3)),
+          z: Number(player.position.z.toFixed(3)),
+          lastProcessedInputSequence: player.lastProcessedInputSequence,
+          lastProcessedActionSequence: player.lastProcessedActionSequence,
+          weapon: player.loadout.weaponId,
+          ammo: player.loadout.ammoInMagazine,
+          stamina: Number(player.condition.stamina.toFixed(2)),
+          sprinting: player.isSprinting,
+          moveSpeed: Number(player.velocity.length().toFixed(3)),
+          weaponVisible: weapon?.visible === true,
+          weaponMeshes
+        };
+      }),
+      viewWeaponVisible: this.weaponModel.visible,
+      viewWeaponMeshes,
+      muzzleFlashVisible: this.muzzleFlash?.visible === true,
+      networkCorrection: Number(this.clientCameraSmoother.offset.length().toFixed(4))
     };
   }
 
@@ -5953,6 +6348,7 @@ export class GameApp {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, this.smokeMode ? 1 : settings.maxPixelRatio));
     this.postProcessing.setPixelRatio(this.renderer.getPixelRatio());
     this.world.setQualityLevel(level);
+    this.contextWorld.setQualityLevel(level);
     // A quality transition can dispose the old depth texture while resizing the
     // shadow map. Force Three.js to create and populate its replacement before
     // shadow-receiving terrain and tree materials sample it.
@@ -6022,6 +6418,19 @@ export class GameApp {
       carriedItem: this.carriedItem,
       bikePumpBoostRemaining: this.condition.bikePumpTimer,
       bikeMounted: this.mountedBike() !== null,
+      mountedVehicleKind: this.mountedBike()?.vehicleKind ?? (this.mountedBike() ? "bike" : null),
+      scenarioObjective: rescueScenarioObjective(this.rescueScenario),
+      scenarioAction: this.nearestScenarioTarget
+        ? this.nearestScenarioTarget.kind === "gate"
+          ? {
+              label: this.nearestScenarioTarget.gate.label,
+              action: this.nearestScenarioTarget.gate.unlockItem === CARETAKER_KEY_ITEM_ID ? "Unlock stall" : "Cut chain"
+            }
+          : {
+              label: "Movable maintenance barricade",
+              action: this.nearestScenarioTarget.grabbed ? "Set barricade down" : "Move barricade"
+            }
+        : null,
       skateboardMounted: this.skateboardMounted,
       injuryStatus: injuryStatus(this.condition),
       hydrationStatus: hydrationStatus(this.condition),
@@ -6149,6 +6558,12 @@ export class GameApp {
   }
 
   private createWorld(): void {
+    this.contextWorld = new ContextWorldBuilder(
+      this.scene,
+      this.level.boundary,
+      (point) => this.groundY(point)
+    );
+    this.contextWorld.create();
     this.world = new WorldBuilder(
       this.scene,
       this.level,
@@ -6217,6 +6632,16 @@ export class GameApp {
     this.meleeSwing = 0;
     const stats = getWeaponStats(this.loadout);
     const weapon = this.meshFactory.createWeaponMesh(this.loadout.weaponId, true, this.network.config.avatarId);
+    weapon.traverse((object) => {
+      object.frustumCulled = false;
+      if (!(object instanceof THREE.Mesh)) return;
+      object.renderOrder = 1000;
+      const materials = Array.isArray(object.material) ? object.material : [object.material];
+      for (const material of materials) {
+        material.depthTest = false;
+        material.depthWrite = false;
+      }
+    });
     if (stats.kind === "melee") {
       weapon.position.set(0.44, -0.47, -0.42);
       weapon.rotation.set(-0.46, -0.34, 0.42);
@@ -6226,14 +6651,16 @@ export class GameApp {
       weapon.rotation.set(0.03, -0.08, 0.02);
     }
     this.weaponModel.add(weapon);
+    this.weaponModel.visible = true;
 
     const flash = new THREE.Mesh(
       new THREE.ConeGeometry(0.18, 0.55, 9),
-      new THREE.MeshBasicMaterial({ color: 0xffc35f, transparent: true, opacity: 0.92 })
+      new THREE.MeshBasicMaterial({ color: 0xffc35f, transparent: true, opacity: 0.92, depthTest: false, depthWrite: false })
     );
     flash.position.set(0.5, -0.3, -1.28);
     flash.rotation.x = -Math.PI / 2;
     flash.visible = false;
+    flash.renderOrder = 1001;
     this.weaponModel.add(flash);
     this.muzzleFlash = flash;
 
@@ -6404,7 +6831,10 @@ export class GameApp {
 
   private async installBlenderZombie(zombie: Zombie): Promise<void> {
     try {
-      const asset = await instantiateZombieAsset(zombie.type);
+      const asset = zombie.role === "caretaker"
+        ? await instantiateRescueAsset("caretaker")
+        : await instantiateZombieAsset(zombie.type);
+      if (zombie.role === "caretaker") asset.root.scale.setScalar(1.5);
       if (!this.zombies.includes(zombie) || zombie.mesh.parent !== this.scene) {
         disposeThreeResources(asset.root);
         return;

@@ -34,6 +34,7 @@ export interface Zombie {
   stepCooldown: number;
   staggerTimer: number;
   screamCooldown: number;
+  role?: "caretaker";
 }
 
 export interface Pickup {
@@ -81,6 +82,8 @@ export interface Snapshot {
   playerZ: number;
   playerYaw: number;
   playerPitch: number;
+  cameraX: number;
+  cameraZ: number;
   wave: number;
   paused: boolean;
   zombies: number;
@@ -90,6 +93,8 @@ export interface Snapshot {
   weapon: WeaponId;
   upgrades: Record<UpgradeId, number>;
   weaponDrops: number;
+  visibleWeaponDrops: number;
+  weaponDropMeshes: number;
   elevation: number;
   jumpHeight: number;
   renderedTrees: number;
@@ -100,6 +105,11 @@ export interface Snapshot {
   renderPixelRatio: number;
   rendererCalls: number;
   rendererTriangles: number;
+  contextBuildings: number;
+  contextRoads: number;
+  contextTrees: number;
+  contextMeshes: number;
+  contextTriangles: number;
   renderedMistBanks: number;
   renderedRainDrops: number;
   renderedWeatherAnchors: number;
@@ -126,6 +136,7 @@ export interface Snapshot {
   amenityAction: "rest" | "search" | null;
   amenityActionRemaining: number;
   stamina: number;
+  sprinting: boolean;
   hydration: number;
   bleeding: boolean;
   limp: boolean;
@@ -146,13 +157,30 @@ export interface Snapshot {
   placedLadders: number;
   bikePumpBoostRemaining: number;
   repairedBrokenBikes: number;
+  rescueScenarioPhase: string;
+  dogFreed: boolean;
+  cartRepaired: boolean;
+  unlockedScenarioGates: number;
+  intactBarricades: number;
   networkReady: boolean;
   networkPlayers: Array<{
     id: string;
     x: number;
     z: number;
     lastProcessedInputSequence: number;
+    lastProcessedActionSequence: number;
+    weapon: WeaponId;
+    ammo: number;
+    stamina: number;
+    sprinting: boolean;
+    moveSpeed: number;
+    weaponVisible: boolean;
+    weaponMeshes: number;
   }>;
+  viewWeaponVisible: boolean;
+  viewWeaponMeshes: number;
+  muzzleFlashVisible: boolean;
+  networkCorrection: number;
 }
 
 export interface GameTestApi {
@@ -185,7 +213,7 @@ export interface GameTestApi {
     maxZombieFootPenetration: number;
     zombiesMeasured: number;
   };
-  testZombieStates: () => Array<{ id: number; type: ZombieType; aiState: ZombieAiState; hasTarget: boolean; targetDistance: number | null; x: number; z: number }>;
+  testZombieStates: () => Array<{ id: number; type: ZombieType; role?: "caretaker"; aiState: ZombieAiState; hasTarget: boolean; targetDistance: number | null; x: number; z: number }>;
   testZombieAssetStates: () => Array<{ id: number; type: ZombieType; assetLoaded: boolean; animation: string }>;
   testZombieFacing: () => Array<{ id: number; faceAlignment: number; targetDistance: number }>;
   testSetCrouching: (crouching: boolean) => boolean;
@@ -195,5 +223,11 @@ export interface GameTestApi {
   testAddTeammate: (name?: string, avatarId?: AvatarId) => boolean;
   testAvatarStates: () => Array<{ id: string; avatarId: AvatarId; assetLoaded: boolean; animation: string; weaponAttachedToSocket: boolean }>;
   testToggleBike: () => boolean;
+  testEquipNetworkPeer: (weaponId?: WeaponId) => boolean;
+  testStartRescueScenario: () => Snapshot;
+  testDefeatCaretaker: () => Snapshot;
+  testUnlockDogRoom: () => Snapshot;
+  testRepairMaintenanceCart: () => Snapshot;
+  testToggleMaintenanceCart: () => boolean;
   dispose: () => void;
 }

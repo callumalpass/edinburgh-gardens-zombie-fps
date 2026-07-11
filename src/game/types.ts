@@ -201,6 +201,7 @@ export interface MappedBuilding {
     | "gatehouse"
     | "rotunda-pavilion"
     | "community-centre"
+    | "covered-gateway"
     | "bowling-shed"
     | "amenities";
   facade?: {
