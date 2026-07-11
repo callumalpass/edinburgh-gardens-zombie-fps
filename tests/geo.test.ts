@@ -388,9 +388,12 @@ describe("map geometry", () => {
     const bowlModifiers = level.terrainModifiers.filter((modifier) => modifier.kind === "skate-bowl");
 
     expect(obstacleIds.has("skate")).toBe(false);
-    expect(level.skateBowls).toHaveLength(3);
+    expect(level.skateBowls).toHaveLength(4);
+    expect(new Set(level.skateBowls.map((bowl) => bowl.groupId))).toEqual(
+      new Set(["fitzy-west-double-bowl", "fitzy-east-deep-bowl"])
+    );
     expect(level.skateBowls.filter((bowl) => bowl.difficulty === "deep")).toHaveLength(2);
-    expect(level.skateBowls.some((bowl) => bowl.difficulty === "beginner" && bowl.depth <= 0.4)).toBe(true);
+    expect(level.skateBowls.some((bowl) => bowl.difficulty === "beginner" && bowl.depth <= 0.55)).toBe(true);
     expect(bowlModifiers).toHaveLength(level.skateBowls.length);
     expect(bowlModifiers.every((modifier) => modifier.shape === "ellipse" && modifier.delta < -0.25)).toBe(true);
 
@@ -1171,7 +1174,7 @@ describe("map geometry", () => {
     expect(obstacleIds.has("skate")).toBe(false);
     expect(level.obstacles.find((obstacle) => obstacle.id === "south-playground")?.blocksSight).toBe(false);
     expect(level.obstacles.find((obstacle) => obstacle.id === "north-playground")?.blocksSight).toBe(false);
-    expect(level.skateBowls.length).toBe(3);
+    expect(level.skateBowls.length).toBe(4);
     expect(level.terrainModifiers.filter((modifier) => modifier.kind === "skate-bowl").length).toBe(level.skateBowls.length);
     for (const fixture of level.interactables) {
       for (const obstacleId of fixture.bypassObstacleIds ?? []) {

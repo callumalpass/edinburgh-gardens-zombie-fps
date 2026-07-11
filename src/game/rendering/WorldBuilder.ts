@@ -1725,32 +1725,40 @@ export class WorldBuilder {
     const footprint = this.fitBoxFromPolygon(polygon, 1.8, 1.35);
     const center = footprint.center;
     const rotation = -footprint.angle;
-    const terraceWidth = Math.max(4.5, footprint.halfX * 1.72);
-    const terraceDepth = Math.max(1.2, footprint.halfZ * 0.32);
-    const plantedDepth = Math.max(6, footprint.halfZ * 1.55);
-    const startZ = -plantedDepth * 0.5 + terraceDepth * 0.5;
+    const plantedLength = Math.max(12, footprint.halfX * 1.68);
+    const plantedDepth = Math.max(6, footprint.halfZ * 1.52);
+    const terraceLength = plantedLength / 4;
+    const startX = -plantedLength * 0.5 + terraceLength * 0.5;
 
-    const base = this.createTerrainRect(center, rotation, terraceWidth + 1.2, plantedDepth + 1.1, 0.066, 0.028, this.materials.leafLitter);
+    const base = this.createTerrainRect(center, rotation, plantedLength + 1.1, plantedDepth + 1.0, 0.066, 0.028, this.materials.leafLitter);
     base.receiveShadow = true;
     this.scene.add(base);
     this.addFeatureOutline(polygon, 0x7fa08c, 0.5);
 
+    // The GHD/Landezine plan and photographs show four bays stepping along the
+    // long axis, bounded by pale concrete and crossed by a weathering-steel
+    // zig-zag. The previous renderer incorrectly drew four long parallel bars.
     for (let terrace = 0; terrace < 4; terrace += 1) {
-      const localZ = startZ + terrace * (plantedDepth / 4);
+      const localX = startX + terrace * terraceLength;
       const material = terrace % 2 === 0 ? this.materials.mulch : this.materials.wornGrass;
-      this.addLocalBox(center, rotation, 0, localZ, terraceWidth, 0.04, terraceDepth, material, 0.08, false);
+      this.addLocalBox(center, rotation, localX, 0, terraceLength * 0.92, 0.04, plantedDepth * 0.9, material, 0.08, false);
       if (terrace < 3) {
-        this.addLocalBox(center, rotation, 0, localZ + terraceDepth * 0.58, terraceWidth * 0.94, 0.18, 0.13, this.materials.basalt, 0.15);
+        const dividerX = -plantedLength * 0.5 + (terrace + 1) * terraceLength;
+        this.addLocalBox(center, rotation, dividerX, 0, 0.13, 0.2, plantedDepth * 0.92, this.materials.concrete, 0.15);
       }
     }
 
+    for (const side of [-1, 1]) {
+      this.addLocalBox(center, rotation, 0, side * plantedDepth * 0.5, plantedLength + 0.8, 0.24, 0.18, this.materials.concrete, 0.16);
+    }
+
     const channelLocal: Vec2[] = [
-      { x: -footprint.halfX * 0.62, z: -plantedDepth * 0.42 },
-      { x: footprint.halfX * 0.54, z: -plantedDepth * 0.25 },
-      { x: -footprint.halfX * 0.5, z: -plantedDepth * 0.07 },
-      { x: footprint.halfX * 0.52, z: plantedDepth * 0.12 },
-      { x: -footprint.halfX * 0.36, z: plantedDepth * 0.29 },
-      { x: footprint.halfX * 0.58, z: plantedDepth * 0.43 }
+      { x: -plantedLength * 0.48, z: -plantedDepth * 0.42 },
+      { x: -plantedLength * 0.28, z: plantedDepth * 0.18 },
+      { x: -plantedLength * 0.08, z: -plantedDepth * 0.34 },
+      { x: plantedLength * 0.12, z: plantedDepth * 0.22 },
+      { x: plantedLength * 0.31, z: -plantedDepth * 0.3 },
+      { x: plantedLength * 0.48, z: plantedDepth * 0.36 }
     ];
     this.addRaingardenLowFlowChannel(center, rotation, channelLocal);
 
@@ -1760,7 +1768,7 @@ export class WorldBuilder {
     this.addLocalCylinder(center, rotation, inlet.x - 0.55, inlet.z - 0.25, 0.35, 0.35, 0.045, this.materials.metal, 0.09);
     this.addLocalCylinder(center, rotation, outlet.x + 0.4, outlet.z + 0.25, 0.48, 0.52, 0.08, this.materials.concrete);
     this.addLocalCylinder(center, rotation, outlet.x + 0.4, outlet.z + 0.25, 0.28, 0.28, 0.04, this.materials.metal, 0.08);
-    this.addLocalBox(center, rotation, 0, plantedDepth * 0.49, terraceWidth * 0.62, 0.035, 0.32, this.materials.concrete, 0.105, false);
+    this.addLocalBox(center, rotation, plantedLength * 0.44, plantedDepth * 0.47, plantedLength * 0.16, 0.035, 0.32, this.materials.concrete, 0.105, false);
     this.addRaingardenPlanting(center, rotation, footprint.halfX, plantedDepth, polygon);
   }
 
@@ -4376,17 +4384,98 @@ export class WorldBuilder {
 
   private addNorthPlaygroundDetails(center: Vec2, rotation: number, halfX: number, halfZ: number): void {
     this.addPlaygroundPath(center, rotation, [
-      [-halfX * 0.75, 0],
-      [-halfX * 0.22, -halfZ * 0.12],
-      [halfX * 0.72, -halfZ * 0.08]
+      [-halfX * 0.78, -halfZ * 0.42],
+      [-halfX * 0.46, -halfZ * 0.18],
+      [halfX * 0.08, -halfZ * 0.12],
+      [halfX * 0.72, -halfZ * 0.18]
     ], 0.9);
-    this.addPlaygroundTower(center, rotation, -halfX * 0.16, -halfZ * 0.08, 3.8, 3.2, 1.46, "north-toddler", 0x4f9c82);
-    this.addToddlerSlide(center, rotation, halfX * 0.18, halfZ * 0.28, 0xd6b85d);
-    this.addSwingSet(this.localPoint(center, rotation, -halfX * 0.54, halfZ * 0.28), rotation + 0.05);
-    this.addBalanceLogs(this.localPoint(center, rotation, halfX * 0.46, -halfZ * 0.36), rotation - 0.25);
-    this.addTunnel(center, rotation, halfX * 0.42, halfZ * 0.18);
-    this.addSpringRider(center, rotation, -halfX * 0.54, -halfZ * 0.32, 0xc86d3b);
-    this.addSpringRider(center, rotation, halfX * 0.62, -halfZ * 0.04, 0x5f86a6);
+    this.addPlaygroundPath(center, rotation, [
+      [-halfX * 0.52, halfZ * 0.08],
+      [halfX * 0.02, halfZ * 0.18],
+      [halfX * 0.58, halfZ * 0.34]
+    ], 0.82);
+
+    // City of Yarra's 2018 final concept plan is used as a diagram, not merely
+    // an equipment list: A is the northern toddler unit and F is the larger
+    // southern/eastern activity unit, with swings and spinner between them.
+    this.addPlaygroundTower(center, rotation, -halfX * 0.42, halfZ * 0.06, 3.8, 3.2, 1.46, "north-toddler-a", 0x74b94d);
+    this.addPlaygroundTower(center, rotation, halfX * 0.3, halfZ * 0.28, 5.4, 4.0, 1.62, "north-activity-f", 0xd3a62f);
+    this.addSwingSet(this.localPoint(center, rotation, -halfX * 0.02, -halfZ * 0.48), rotation + 0.02);
+    this.addBasketSwing(center, rotation, halfX * 0.02, -halfZ * 0.12);
+    this.addSpinner(center, rotation, -halfX * 0.04, halfZ * 0.48);
+    this.addPlaygroundTrampoline(center, rotation, halfX * 0.55, -halfZ * 0.3);
+
+    this.addBalanceLogs(this.localPoint(center, rotation, -halfX * 0.38, -halfZ * 0.36), rotation - 0.22);
+    this.addBalanceLogs(this.localPoint(center, rotation, halfX * 0.2, halfZ * 0.5), rotation + 0.18);
+    this.addSandpit(center, rotation, -halfX * 0.34, halfZ * 0.36, 3.8, 2.5);
+    this.addNorthPlaygroundSeats(center, rotation, halfX, halfZ);
+    this.addNorthPlaygroundShadeSails(center, rotation, halfX, halfZ);
+  }
+
+  private addBasketSwing(center: Vec2, rotation: number, localX: number, localZ: number): void {
+    const position = this.localPoint(center, rotation, localX, localZ);
+    const frame = this.standardDetailMaterial("north-playground-basket-swing-frame", 0x3c4542, 0.58, 0.28);
+    for (const x of [-1.45, 1.45]) {
+      for (const z of [-0.48, 0.48]) {
+        this.addLocalCylinder(position, rotation, x, z, 0.055, 0.075, 2.8, frame);
+      }
+    }
+    this.addLocalBox(position, rotation, 0, 0, 3.35, 0.09, 0.1, frame, 2.72);
+    for (const x of [-0.34, 0.34]) {
+      this.addLocalCylinder(position, rotation, x, 0, 0.018, 0.018, 1.45, this.materials.metal, 1.18);
+    }
+    const basket = new THREE.Mesh(new THREE.TorusGeometry(0.62, 0.09, 6, 16), this.materials.rubber);
+    basket.position.set(position.x, this.groundY(position) + 1.08, position.z);
+    basket.rotation.x = Math.PI / 2;
+    basket.rotation.y = rotation;
+    basket.castShadow = true;
+    this.scene.add(basket);
+  }
+
+  private addPlaygroundTrampoline(center: Vec2, rotation: number, localX: number, localZ: number): void {
+    const position = this.localPoint(center, rotation, localX, localZ);
+    const rope = new THREE.LineBasicMaterial({ color: 0xe1b33f, transparent: true, opacity: 0.86 });
+    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.92, 1.02, 0.16, 18), this.materials.rubber);
+    hub.position.set(position.x, this.groundY(position) + 0.22, position.z);
+    hub.castShadow = true;
+    this.scene.add(hub);
+    const points: THREE.Vector3[] = [];
+    for (let index = 0; index < 10; index += 1) {
+      const angle = rotation + (index / 10) * Math.PI * 2;
+      const outer = { x: position.x + Math.cos(angle) * 2.65, z: position.z + Math.sin(angle) * 2.65 };
+      this.addLocalCylinder(outer, 0, 0, 0, 0.045, 0.06, 1.25, this.materials.metal);
+      points.push(
+        new THREE.Vector3(position.x + Math.cos(angle) * 0.86, this.groundY(position) + 0.34, position.z + Math.sin(angle) * 0.86),
+        new THREE.Vector3(outer.x, this.groundY(outer) + 1.18, outer.z)
+      );
+    }
+    this.scene.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(points), rope));
+  }
+
+  private addNorthPlaygroundSeats(center: Vec2, rotation: number, halfX: number, halfZ: number): void {
+    const seatMaterial = this.standardDetailMaterial("north-playground-concept-plan-seats", 0x8f6a45, 0.78, 0.01);
+    for (const [x, z] of [
+      [-halfX * 0.46, -halfZ * 0.66],
+      [halfX * 0.02, halfZ * 0.7],
+      [halfX * 0.46, halfZ * 0.58],
+      [halfX * 0.58, -halfZ * 0.08]
+    ]) {
+      this.addLocalBox(center, rotation, x, z, 2.3, 0.16, 0.52, seatMaterial, 0.42);
+      for (const side of [-0.76, 0.76]) this.addLocalBox(center, rotation, x + side, z, 0.1, 0.42, 0.32, this.materials.metal, 0.22);
+    }
+  }
+
+  private addNorthPlaygroundShadeSails(center: Vec2, rotation: number, halfX: number, halfZ: number): void {
+    const sail = this.standardDetailMaterial("north-playground-concept-plan-shade-sails", 0x4d4f49, 0.9, 0.01, true, 0.9);
+    const add = (x: number, z: number, width: number, depth: number, tilt: number) => this.addLocalShadeSail(center, rotation, [
+      { x: x - width, z: z - depth, y: 3.25 + tilt },
+      { x: x + width, z: z - depth, y: 3.05 - tilt },
+      { x: x + width, z: z + depth, y: 3.35 + tilt },
+      { x: x - width, z: z + depth, y: 3.0 - tilt }
+    ], sail);
+    add(-halfX * 0.4, halfZ * 0.06, 3.8, 3.2, 0.16);
+    add(0, -halfZ * 0.3, 4.1, 3.0, -0.12);
+    add(halfX * 0.28, halfZ * 0.28, 4.4, 3.4, 0.1);
   }
 
   private addPlaygroundPath(center: Vec2, rotation: number, localPoints: Array<[number, number]>, width: number): void {
@@ -4684,7 +4773,11 @@ export class WorldBuilder {
       const startAngle = (index / segments) * Math.PI * 2;
       const endAngle = ((index + 0.82) / segments) * Math.PI * 2;
       const midAngle = (startAngle + endAngle) * 0.5;
-      if (this.isSkateBowlExitAngle(bowl, midAngle, bowl.exitWidth * 1.15)) {
+      const midPoint = this.skateBowlPoint(bowl, midAngle, 1.02);
+      if (
+        this.isSkateBowlExitAngle(bowl, midAngle, bowl.exitWidth * 1.15) ||
+        this.isInsideConnectedSkateBowl(bowl, midPoint)
+      ) {
         continue;
       }
 
@@ -4728,22 +4821,42 @@ export class WorldBuilder {
     const ledgeMaterial = this.standardDetailMaterial("fitzy-bowl-street-ledges", 0x8a908a, 0.78, 0.04);
     const bankMaterial = this.standardDetailMaterial("fitzy-bowl-bank-faces", 0x969c96, 0.78, 0.03);
 
-    this.addSkateRail(this.localPoint(center, rotation, halfX * 0.18, -halfZ * 0.03), rotation + 0.05, Math.min(8.6, halfX * 0.7));
-    this.addLocalBox(center, rotation, halfX * 0.36, halfZ * 0.36, Math.min(6.8, halfX * 0.55), 0.42, 0.82, ledgeMaterial, 0.25);
-    this.addLocalBox(center, rotation, -halfX * 0.18, halfZ * 0.43, Math.min(5.2, halfX * 0.45), 0.36, 1.1, ledgeMaterial, 0.22);
-    this.addLocalBox(center, rotation, halfX * 0.56, -halfZ * 0.34, Math.min(4.8, halfX * 0.38), 0.5, 1.15, ledgeMaterial, 0.28);
+    // Playce drawing 19321_003 places the 2022 street extension north of the
+    // retained bowl complexes: long west bank, north quarter-pipe return,
+    // central manual pad/rail and the raised timber spectator terrace to east.
+    const westBank = this.addLocalBox(center, rotation, halfX * 0.12, -halfZ * 0.7, Math.min(16.5, halfX * 1.08), 0.9, 3.0, bankMaterial, 0.46);
+    westBank.rotation.z = 0.16;
+    const northWestBank = this.addLocalBox(center, rotation, halfX * 0.63, -halfZ * 0.42, Math.min(8.2, halfX * 0.56), 0.72, 2.7, bankMaterial, 0.38);
+    northWestBank.rotation.z = -0.17;
+    const northQuarter = this.addLocalBox(center, rotation, halfX * 0.72, halfZ * 0.08, Math.min(11.8, halfX * 0.78), 0.96, 2.8, bankMaterial, 0.48);
+    northQuarter.rotation.x = -0.19;
+    const northEastReturn = this.addLocalBox(center, rotation, halfX * 0.48, halfZ * 0.65, Math.min(9.5, halfX * 0.68), 0.82, 2.5, bankMaterial, 0.42);
+    northEastReturn.rotation.z = 0.16;
 
-    const leftBank = this.addLocalBox(center, rotation, -halfX * 0.55, -halfZ * 0.1, Math.min(5.8, halfX * 0.46), 0.72, 2.8, bankMaterial, 0.36);
-    leftBank.rotation.z = 0.18;
-    const rightBank = this.addLocalBox(center, rotation, halfX * 0.54, halfZ * 0.02, Math.min(5.8, halfX * 0.46), 0.72, 2.8, bankMaterial, 0.36);
-    rightBank.rotation.z = -0.18;
+    this.addLocalBox(center, rotation, halfX * 0.2, -halfZ * 0.05, Math.min(6.6, halfX * 0.44), 0.34, 1.2, ledgeMaterial, 0.2);
+    this.addLocalBox(center, rotation, halfX * 0.24, halfZ * 0.26, Math.min(5.5, halfX * 0.38), 0.42, 1.0, ledgeMaterial, 0.24);
+    this.addSkateRail(this.localPoint(center, rotation, halfX * 0.06, -halfZ * 0.12), rotation + 0.02, Math.min(8.4, halfX * 0.58));
+    this.addCurvedSkateRail(center, rotation, halfX * 0.02, halfZ * 0.18, Math.min(7.8, halfX * 0.54));
 
-    const quarterPipe = this.addLocalBox(center, rotation, 0, -halfZ * 0.62, Math.min(9.5, halfX * 0.8), 0.92, 1.35, bankMaterial, 0.46);
-    quarterPipe.rotation.x = -0.2;
+    const terraceConcrete = this.standardDetailMaterial("fitzy-bowl-spectator-terrace", 0x7d8581, 0.8, 0.03);
+    const terraceTimber = this.standardDetailMaterial("fitzy-bowl-timber-seat", 0xb7894c, 0.76, 0.01);
+    this.addLocalBox(center, rotation, -halfX * 0.02, halfZ * 0.72, Math.min(9.8, halfX * 0.72), 0.34, 3.4, terraceConcrete, 0.2);
+    this.addLocalBox(center, rotation, 0, halfZ * 0.72, Math.min(7.2, halfX * 0.52), 0.48, 2.15, terraceConcrete, 0.48);
+    this.addLocalBox(center, rotation, 0, halfZ * 0.7, Math.min(5.8, halfX * 0.42), 0.18, 1.45, terraceTimber, 0.82);
+  }
 
-    const seatMaterial = this.standardDetailMaterial("fitzy-bowl-concrete-seating", 0xa8aba3, 0.78, 0.03);
-    this.addLocalBox(center, rotation, -halfX * 0.58, halfZ * 0.68, Math.min(4.8, halfX * 0.42), 0.38, 0.8, seatMaterial, 0.24);
-    this.addLocalBox(center, rotation, -halfX * 0.12, halfZ * 0.72, Math.min(5.4, halfX * 0.46), 0.38, 0.8, seatMaterial, 0.24);
+  private addCurvedSkateRail(center: Vec2, rotation: number, localX: number, localZ: number, length: number): void {
+    const points: THREE.Vector3[] = [];
+    for (let index = 0; index <= 10; index += 1) {
+      const t = index / 10;
+      const point = this.localPoint(center, rotation, localX + (t - 0.5) * length, localZ + Math.sin((t - 0.5) * Math.PI) * 0.8);
+      points.push(new THREE.Vector3(point.x, this.groundY(point) + 0.78, point.z));
+      if (index === 2 || index === 8) this.addLocalCylinder(point, 0, 0, 0, 0.045, 0.055, 0.78, this.materials.metal);
+    }
+    const curve = new THREE.CatmullRomCurve3(points);
+    const rail = new THREE.Mesh(new THREE.TubeGeometry(curve, 24, 0.055, 8, false), this.materials.metal);
+    rail.castShadow = true;
+    this.scene.add(rail);
   }
 
   private skateBowlPoint(bowl: SkateBowlFeature, angle: number, scale: number): Vec2 {
@@ -4753,6 +4866,20 @@ export class WorldBuilder {
   private isSkateBowlExitAngle(bowl: SkateBowlFeature, angle: number, width: number): boolean {
     const delta = Math.atan2(Math.sin(angle - bowl.exitAngle), Math.cos(angle - bowl.exitAngle));
     return Math.abs(delta) <= width;
+  }
+
+  private isInsideConnectedSkateBowl(bowl: SkateBowlFeature, point: Vec2): boolean {
+    if (!bowl.groupId) return false;
+    return this.level.skateBowls.some((candidate) => {
+      if (candidate === bowl || candidate.groupId !== bowl.groupId) return false;
+      const dx = point.x - candidate.center.x;
+      const dz = point.z - candidate.center.z;
+      const cos = Math.cos(candidate.angle);
+      const sin = Math.sin(candidate.angle);
+      const localX = dx * cos + dz * sin;
+      const localZ = -dx * sin + dz * cos;
+      return (localX * localX) / (candidate.radiusX * candidate.radiusX) + (localZ * localZ) / (candidate.radiusZ * candidate.radiusZ) < 0.92;
+    });
   }
 
   private addSkateRail(position: Vec2, rotation: number, length: number): void {

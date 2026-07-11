@@ -609,6 +609,30 @@ function createMarkup(): string {
       <div class="interaction-prompt" data-hud="prompt"></div>
       <section class="intermission-panel" data-hud="intermission" aria-live="polite" hidden></section>
 
+      <section class="touch-controls" aria-label="Touch game controls">
+        <div class="touch-look-zone" data-touch-look aria-label="Drag to look"></div>
+        <div class="touch-movement">
+          <div class="touch-stick" data-touch-stick aria-label="Movement joystick"><span></span></div>
+          <button type="button" data-touch-action="sprint">Run</button>
+          <button type="button" data-touch-action="crouch">Crouch</button>
+        </div>
+        <div class="touch-actions touch-actions-primary">
+          <button class="touch-fire" type="button" data-touch-action="fire">Attack</button>
+          <button type="button" data-touch-action="aim">Aim</button>
+          <button class="touch-context" type="button" data-touch-action="interact">Use</button>
+          <button type="button" data-touch-action="take">Take</button>
+          <button type="button" data-touch-action="jump">Jump</button>
+          <button type="button" data-touch-action="reload">Reload</button>
+        </div>
+        <div class="touch-actions touch-actions-utility">
+          <button type="button" data-touch-action="weapon">Weapon</button>
+          <button type="button" data-touch-action="inventory">Bag</button>
+          <button type="button" data-touch-action="flashlight">Light</button>
+          <button type="button" data-touch-action="throw">Lure</button>
+          <button type="button" data-touch-action="skateboard">Board</button>
+        </div>
+      </section>
+
       <section class="outcome-overlay" data-hud="outcome" data-mode="downed" role="status" aria-live="polite" aria-hidden="true" hidden>
         <div class="outcome-panel">
           <p class="kicker" data-hud="outcome-kicker">Down, not out</p>

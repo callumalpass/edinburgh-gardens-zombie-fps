@@ -17,7 +17,7 @@ const ledger = JSON.parse(
 describe("physical-object visual-audit coverage", () => {
   it("maps every 2026 physical ledger object to exactly one runtime preview", () => {
     expect(ledger.physicalObjects).toHaveLength(ledger.summary.physicalObjectCount);
-    expect(ledger.summary.physicalObjectCount).toBe(579);
+    expect(ledger.summary.physicalObjectCount).toBe(581);
 
     const targetCounts = new Map<string, number>();
     for (const target of targets) {

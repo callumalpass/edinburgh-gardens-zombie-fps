@@ -182,9 +182,9 @@ describe("mapped-building render geometry", () => {
   });
 
   it("matches playground blockers and raised floors to the rendered tower decks", () => {
-    for (const [landmarkId, fixtureId] of [
-      ["north-playground", "north-playground-tower"],
-      ["south-playground", "south-playground-tower"]
+    for (const [landmarkId, fixtureId, playgroundKey] of [
+      ["north-playground", "north-playground-tower", "north-toddler-a"],
+      ["south-playground", "south-playground-tower", "south-main"]
     ] as const) {
       const fixture = level.interactables.find((candidate) => candidate.id === fixtureId);
       const blocker = level.obstacles.find((candidate) => candidate.id === landmarkId);
@@ -194,7 +194,7 @@ describe("mapped-building render geometry", () => {
       const scene = buildPreview(`landmark:${landmarkId}`);
       const deck = scene.children
         .flatMap(flattenMeshes)
-        .find((mesh) => mesh.userData.kind === "playground-tower-deck");
+        .find((mesh) => mesh.userData.kind === "playground-tower-deck" && mesh.userData.playgroundKey === playgroundKey);
       expect(deck, `${landmarkId} has no tagged tower deck`).toBeTruthy();
       const bounds = meshBounds(deck!);
       const center = bounds.getCenter(new THREE.Vector3());

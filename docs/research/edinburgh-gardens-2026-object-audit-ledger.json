@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-11T00:33:44.960Z",
+  "generatedAt": "2026-07-11T00:55:52.320Z",
   "physicalBaseline": "2026-07-10",
   "baselinePolicy": {
     "layout": "Physical park condition and active works as documented for 10 July 2026.",
@@ -10,9 +10,9 @@
     "duplicates": "Trees are represented once in physicalObjects; significantTrees, treePoints and treeColliders are supporting views of that tree register and are counted below, not duplicated."
   },
   "summary": {
-    "physicalObjectCount": 579,
+    "physicalObjectCount": 581,
     "gameplayObjectCount": 43,
-    "renderTreatmentCount": 107,
+    "renderTreatmentCount": 103,
     "scenographyObjectCount": 14,
     "categoryCounts": {
       "amenity": 56,
@@ -22,16 +22,16 @@
       "hardscape": 3,
       "landmark": 35,
       "park-detail": 42,
-      "path": 52,
-      "skate-bowl": 3,
+      "path": 53,
+      "skate-bowl": 4,
       "sports-fixture": 4,
       "street-edge": 5,
       "tree": 359
     },
     "statusCounts": {
       "corrected-2026": 39,
-      "evidence-linked": 150,
-      "evidence-linked-context": 6,
+      "evidence-linked": 151,
+      "evidence-linked-context": 7,
       "evidence-linked-historical": 331,
       "unresolved-public-data-gap": 53
     },
@@ -41,7 +41,7 @@
       "significantTrees": 19,
       "treeColliders": 359,
       "elevationSamples": 94,
-      "terrainModifiers": 468,
+      "terrainModifiers": 471,
       "collisionObstacles": 474,
       "spawnPoints": 7,
       "pickupPoints": 6
@@ -58,7 +58,7 @@
       "id": "north-playground",
       "category": "landmark",
       "auditStatus": "unresolved-public-data-gap",
-      "uncertainty": "exact current equipment positions are unavailable, and no current public fence source was found for the relocated footprint"
+      "uncertainty": "no current public fence source was found for the relocated footprint"
     },
     {
       "id": "st-georges-display-bed-north",
@@ -1124,6 +1124,38 @@
         },
         "vertexCount": 8,
         "width": 1.9,
+        "height": null,
+        "radius": null,
+        "angle": null
+      },
+      "design": {
+        "material": null,
+        "profile": null,
+        "canopyGroup": null,
+        "courtStatus": null,
+        "linkedStructureId": null
+      }
+    },
+    {
+      "id": "vicmap-bowling-grandstand-passage",
+      "category": "path",
+      "label": "Bowling Club to Kevin Murray Stand passage",
+      "kind": "service",
+      "auditStatus": "evidence-linked",
+      "evidenceClass": "openstreetmap",
+      "uncertainty": "Current public mapping, but not survey-grade and potentially incomplete.",
+      "source": "Vicmap AERIAL_WM_256 2026-07-10 visual fit: continuous worn service passage between OSM ways 210387722 and 22760906; intermediate centreline is aerial-fitted because no separate public path way is mapped",
+      "geometry": {
+        "centerWorld": {
+          "x": -185.8336,
+          "z": 58.5419
+        },
+        "centerGeo": {
+          "lat": -37.7880872,
+          "lon": 144.9812073
+        },
+        "vertexCount": 4,
+        "width": 2.35,
         "height": null,
         "radius": null,
         "angle": null
@@ -2423,8 +2455,8 @@
       "kind": "playground",
       "auditStatus": "unresolved-public-data-gap",
       "evidenceClass": "official-council-context",
-      "uncertainty": "exact current equipment positions are unavailable, and no current public fence source was found for the relocated footprint",
-      "source": "OSM way 543616019 current relocated playground footprint; Yarra 2018 northern precinct plan, Proludic 2018 toddler unit reference, Melbourne Playgrounds and Mama Knows North describe younger-age equipment, natural-play/log elements and nearby BBQ/activity precinct; exact current equipment positions are unavailable, and no current public fence source was found for the relocated footprint",
+      "uncertainty": "no current public fence source was found for the relocated footprint",
+      "source": "OSM way 543616019 current relocated playground footprint; City of Yarra 2018 Playground Upgrade Final Concept Plan fixes the relative positions of two activity units, triple and basket swings, spinner, trampoline, nature-play margins, planted buffer, grass mound, seats and shade sails; no current public fence source was found for the relocated footprint",
       "geometry": {
         "centerWorld": {
           "x": 14.9757,
@@ -15665,22 +15697,86 @@
       }
     },
     {
-      "id": "fitzy-original-west-deep-bowl",
+      "id": "fitzy-west-double-bowl-north-lobe",
       "category": "skate-bowl",
-      "label": "Fitzy Bowl original west deep bowl",
+      "label": "Fitzy Bowl retained west double bowl north lobe",
       "kind": null,
       "auditStatus": "evidence-linked-context",
       "evidenceClass": "official-council-context",
       "uncertainty": "Source supports identity/context; exact survey precision is not asserted.",
-      "source": "Yarra Fitzy Bowl upgrade page: 2022 upgraded Fitzy Bowl doubled the facility, kept the original bowls and added beginner/accessibility features; GOSKATE lists two deep concrete bowls around 1.2m and 1.5m deep plus a shallow 0.3m beginners bowl, roll-over/spine/hip transfer and street section; Time Out and Skater Maps confirm multiple concrete bowls and a beginner double bowl",
+      "source": "City of Yarra Fitzy Bowl upgrade page and Playce tender site plan 19321_003: the August 2022 build retained two connected southern bowl complexes and added the northern street extension, flat banks, quarter pipes, manual pad, curved rail, accessible transitions and timber spectator terrace",
       "geometry": {
         "centerWorld": {
-          "x": 24.848,
-          "z": -144.5654
+          "x": 25.0011,
+          "z": -147.0627
         },
         "centerGeo": {
-          "lat": -37.7866618,
-          "lon": 144.9830783
+          "lat": -37.7866443,
+          "lon": 144.9830796
+        },
+        "vertexCount": 0,
+        "width": null,
+        "height": null,
+        "radius": null,
+        "angle": -1.5096
+      },
+      "design": {
+        "material": null,
+        "profile": null,
+        "canopyGroup": null,
+        "courtStatus": null,
+        "linkedStructureId": null
+      }
+    },
+    {
+      "id": "fitzy-west-double-bowl-south-lobe",
+      "category": "skate-bowl",
+      "label": "Fitzy Bowl retained west double bowl south lobe",
+      "kind": null,
+      "auditStatus": "evidence-linked-context",
+      "evidenceClass": "official-council-context",
+      "uncertainty": "Source supports identity/context; exact survey precision is not asserted.",
+      "source": "City of Yarra Fitzy Bowl upgrade page and Playce tender site plan 19321_003: the August 2022 build retained two connected southern bowl complexes and added the northern street extension, flat banks, quarter pipes, manual pad, curved rail, accessible transitions and timber spectator terrace",
+      "geometry": {
+        "centerWorld": {
+          "x": 25.3118,
+          "z": -142.8551
+        },
+        "centerGeo": {
+          "lat": -37.7866738,
+          "lon": 144.9830824
+        },
+        "vertexCount": 0,
+        "width": null,
+        "height": null,
+        "radius": null,
+        "angle": -1.5896
+      },
+      "design": {
+        "material": null,
+        "profile": null,
+        "canopyGroup": null,
+        "courtStatus": null,
+        "linkedStructureId": null
+      }
+    },
+    {
+      "id": "fitzy-east-deep-bowl-north-lobe",
+      "category": "skate-bowl",
+      "label": "Fitzy Bowl retained east deep bowl north lobe",
+      "kind": null,
+      "auditStatus": "evidence-linked-context",
+      "evidenceClass": "official-council-context",
+      "uncertainty": "Source supports identity/context; exact survey precision is not asserted.",
+      "source": "City of Yarra Fitzy Bowl upgrade page and Playce tender site plan 19321_003: the August 2022 build retained two connected southern bowl complexes and added the northern street extension, flat banks, quarter pipes, manual pad, curved rail, accessible transitions and timber spectator terrace",
+      "geometry": {
+        "centerWorld": {
+          "x": 36.7963,
+          "z": -146.7122
+        },
+        "centerGeo": {
+          "lat": -37.7866468,
+          "lon": 144.9831844
         },
         "vertexCount": 0,
         "width": null,
@@ -15697,60 +15793,28 @@
       }
     },
     {
-      "id": "fitzy-original-east-deep-bowl",
+      "id": "fitzy-east-deep-bowl-south-lobe",
       "category": "skate-bowl",
-      "label": "Fitzy Bowl original east deep bowl",
+      "label": "Fitzy Bowl retained east deep bowl south lobe",
       "kind": null,
       "auditStatus": "evidence-linked-context",
       "evidenceClass": "official-council-context",
       "uncertainty": "Source supports identity/context; exact survey precision is not asserted.",
-      "source": "Yarra Fitzy Bowl upgrade page: 2022 upgraded Fitzy Bowl doubled the facility, kept the original bowls and added beginner/accessibility features; GOSKATE lists two deep concrete bowls around 1.2m and 1.5m deep plus a shallow 0.3m beginners bowl, roll-over/spine/hip transfer and street section; Time Out and Skater Maps confirm multiple concrete bowls and a beginner double bowl",
+      "source": "City of Yarra Fitzy Bowl upgrade page and Playce tender site plan 19321_003: the August 2022 build retained two connected southern bowl complexes and added the northern street extension, flat banks, quarter pipes, manual pad, curved rail, accessible transitions and timber spectator terrace",
       "geometry": {
         "centerWorld": {
-          "x": 24.0776,
-          "z": -155.3842
+          "x": 37.2836,
+          "z": -141.4006
         },
         "centerGeo": {
-          "lat": -37.7865859,
-          "lon": 144.9830714
+          "lat": -37.786684,
+          "lon": 144.9831887
         },
         "vertexCount": 0,
         "width": null,
         "height": null,
         "radius": null,
-        "angle": -1.5996
-      },
-      "design": {
-        "material": null,
-        "profile": null,
-        "canopyGroup": null,
-        "courtStatus": null,
-        "linkedStructureId": null
-      }
-    },
-    {
-      "id": "fitzy-beginner-double-bowl",
-      "category": "skate-bowl",
-      "label": "Fitzy Bowl shallow beginners double bowl",
-      "kind": null,
-      "auditStatus": "evidence-linked-context",
-      "evidenceClass": "official-council-context",
-      "uncertainty": "Source supports identity/context; exact survey precision is not asserted.",
-      "source": "Yarra Fitzy Bowl upgrade page: 2022 upgraded Fitzy Bowl doubled the facility, kept the original bowls and added beginner/accessibility features; GOSKATE lists two deep concrete bowls around 1.2m and 1.5m deep plus a shallow 0.3m beginners bowl, roll-over/spine/hip transfer and street section; Time Out and Skater Maps confirm multiple concrete bowls and a beginner double bowl",
-      "geometry": {
-        "centerWorld": {
-          "x": 39.7765,
-          "z": -145.7487
-        },
-        "centerGeo": {
-          "lat": -37.7866535,
-          "lon": 144.9832108
-        },
-        "vertexCount": 0,
-        "width": null,
-        "height": null,
-        "radius": null,
-        "angle": -1.3696
+        "angle": -1.6196
       },
       "design": {
         "material": null,
@@ -19677,12 +19741,12 @@
       "source": null,
       "geometry": {
         "centerWorld": {
-          "x": 16.3731,
-          "z": -225.1185
+          "x": 14.898,
+          "z": -232.6738
         },
         "centerGeo": {
-          "lat": -37.7860965,
-          "lon": 144.983003
+          "lat": -37.7860435,
+          "lon": 144.9829899
         },
         "vertexCount": 0,
         "width": null,
@@ -21077,7 +21141,7 @@
       }
     },
     {
-      "id": "surface-osm-south-playground-path-3",
+      "id": "surface-osm-south-playground-path-5",
       "category": "path-surface-treatment",
       "label": "South playground path feathered edge",
       "kind": "path-edge-wear",
@@ -21087,18 +21151,18 @@
       "source": "OpenStreetMap way 242003530; path-edge transition inferred from CMP asphalt-path and remnant-edge context",
       "geometry": {
         "centerWorld": {
-          "x": 159.8135,
-          "z": 187.129
+          "x": 138.9532,
+          "z": 180.8982
         },
         "centerGeo": {
-          "lat": -37.7889897,
-          "lon": 144.9842768
+          "lat": -37.788946,
+          "lon": 144.9840916
         },
         "vertexCount": 0,
         "width": 0.94,
         "height": null,
         "radius": null,
-        "angle": -2.5681
+        "angle": 3.0265
       },
       "design": {
         "material": "dirt",
@@ -21109,7 +21173,7 @@
       }
     },
     {
-      "id": "surface-osm-south-playground-path-6",
+      "id": "surface-osm-south-playground-path-8",
       "category": "path-surface-treatment",
       "label": "South playground path feathered edge",
       "kind": "path-edge-wear",
@@ -21119,18 +21183,18 @@
       "source": "OpenStreetMap way 242003530; path-edge transition inferred from CMP asphalt-path and remnant-edge context",
       "geometry": {
         "centerWorld": {
-          "x": 124.3643,
-          "z": 178.3365
+          "x": 96.1092,
+          "z": 153.86
         },
         "centerGeo": {
-          "lat": -37.788928,
-          "lon": 144.983962
+          "lat": -37.7887562,
+          "lon": 144.9837111
         },
         "vertexCount": 0,
         "width": 0.94,
         "height": null,
         "radius": null,
-        "angle": -2.9989
+        "angle": -2.0466
       },
       "design": {
         "material": "dirt",
@@ -21141,7 +21205,7 @@
       }
     },
     {
-      "id": "surface-osm-oval-loop-detailed-2",
+      "id": "surface-osm-oval-loop-detailed-1",
       "category": "path-surface-treatment",
       "label": "Detailed oval loop feathered edge",
       "kind": "path-edge-wear",
@@ -21151,18 +21215,18 @@
       "source": "OpenStreetMap way 403753756 with connector context from ways 403753751 and 403753754; path-edge transition inferred from CMP asphalt-path and remnant-edge context",
       "geometry": {
         "centerWorld": {
-          "x": -285.578,
-          "z": 227.497
+          "x": -274.1275,
+          "z": 247.8164
         },
         "centerGeo": {
-          "lat": -37.789273,
-          "lon": 144.9803216
+          "lat": -37.7894156,
+          "lon": 144.9804232
         },
         "vertexCount": 0,
         "width": 0.94,
         "height": null,
         "radius": null,
-        "angle": -1.812
+        "angle": -2.1116
       },
       "design": {
         "material": "dirt",
@@ -21173,7 +21237,7 @@
       }
     },
     {
-      "id": "surface-osm-oval-loop-detailed-5",
+      "id": "surface-osm-oval-loop-detailed-4",
       "category": "path-surface-treatment",
       "label": "Detailed oval loop feathered edge",
       "kind": "path-edge-wear",
@@ -21183,18 +21247,18 @@
       "source": "OpenStreetMap way 403753756 with connector context from ways 403753751 and 403753754; path-edge transition inferred from CMP asphalt-path and remnant-edge context",
       "geometry": {
         "centerWorld": {
-          "x": -267.9132,
-          "z": 129.8421
+          "x": -282.2966,
+          "z": 157.4087
         },
         "centerGeo": {
-          "lat": -37.7885876,
-          "lon": 144.9804784
+          "lat": -37.7887811,
+          "lon": 144.9803507
         },
         "vertexCount": 0,
         "width": 0.94,
         "height": null,
         "radius": null,
-        "angle": -0.9287
+        "angle": -1.2825
       },
       "design": {
         "material": "dirt",
@@ -21205,7 +21269,7 @@
       }
     },
     {
-      "id": "surface-osm-oval-loop-detailed-8",
+      "id": "surface-osm-oval-loop-detailed-7",
       "category": "path-surface-treatment",
       "label": "Detailed oval loop feathered edge",
       "kind": "path-edge-wear",
@@ -21215,18 +21279,18 @@
       "source": "OpenStreetMap way 403753756 with connector context from ways 403753751 and 403753754; path-edge transition inferred from CMP asphalt-path and remnant-edge context",
       "geometry": {
         "centerWorld": {
-          "x": -167.0671,
-          "z": 103.699
+          "x": -213.4128,
+          "z": 102.2182
         },
         "centerGeo": {
-          "lat": -37.7884042,
-          "lon": 144.981374
+          "lat": -37.7883938,
+          "lon": 144.9809624
         },
         "vertexCount": 0,
         "width": 0.94,
         "height": null,
         "radius": null,
-        "angle": 0.1724
+        "angle": -0.0431
       },
       "design": {
         "material": "dirt",
@@ -21237,7 +21301,7 @@
       }
     },
     {
-      "id": "surface-osm-oval-loop-detailed-11",
+      "id": "surface-osm-oval-loop-detailed-10",
       "category": "path-surface-treatment",
       "label": "Detailed oval loop feathered edge",
       "kind": "path-edge-wear",
@@ -21247,18 +21311,18 @@
       "source": "OpenStreetMap way 403753756 with connector context from ways 403753751 and 403753754; path-edge transition inferred from CMP asphalt-path and remnant-edge context",
       "geometry": {
         "centerWorld": {
-          "x": -85.6715,
-          "z": 182.3842
+          "x": -96.2698,
+          "z": 139.8825
         },
         "centerGeo": {
-          "lat": -37.7889564,
-          "lon": 144.9820968
+          "lat": -37.7886581,
+          "lon": 144.9820027
         },
         "vertexCount": 0,
         "width": 0.94,
         "height": null,
         "radius": null,
-        "angle": 1.5431
+        "angle": 1.0239
       },
       "design": {
         "material": "dirt",
@@ -21269,7 +21333,7 @@
       }
     },
     {
-      "id": "surface-osm-oval-loop-detailed-14",
+      "id": "surface-osm-oval-loop-detailed-13",
       "category": "path-surface-treatment",
       "label": "Detailed oval loop feathered edge",
       "kind": "path-edge-wear",
@@ -21279,18 +21343,18 @@
       "source": "OpenStreetMap way 403753756 with connector context from ways 403753751 and 403753754; path-edge transition inferred from CMP asphalt-path and remnant-edge context",
       "geometry": {
         "centerWorld": {
-          "x": -125.203,
-          "z": 277.1249
+          "x": -99.8336,
+          "z": 251.2659
         },
         "centerGeo": {
-          "lat": -37.7896213,
-          "lon": 144.9817457
+          "lat": -37.7894398,
+          "lon": 144.981971
         },
         "vertexCount": 0,
         "width": 0.94,
         "height": null,
         "radius": null,
-        "angle": 2.6877
+        "angle": 2.2284
       },
       "design": {
         "material": "dirt",
@@ -21301,7 +21365,7 @@
       }
     },
     {
-      "id": "surface-osm-oval-loop-detailed-17",
+      "id": "surface-osm-oval-loop-detailed-16",
       "category": "path-surface-treatment",
       "label": "Detailed oval loop feathered edge",
       "kind": "path-edge-wear",
@@ -21311,18 +21375,18 @@
       "source": "OpenStreetMap way 403753756 with connector context from ways 403753751 and 403753754; path-edge transition inferred from CMP asphalt-path and remnant-edge context",
       "geometry": {
         "centerWorld": {
-          "x": -257.2525,
-          "z": 263.3136
+          "x": -225.1395,
+          "z": 277.5318
         },
         "centerGeo": {
-          "lat": -37.7895243,
-          "lon": 144.9805731
+          "lat": -37.7896241,
+          "lon": 144.9808583
         },
         "vertexCount": 0,
         "width": 0.94,
         "height": null,
         "radius": null,
-        "angle": -2.4874
+        "angle": -2.9322
       },
       "design": {
         "material": "dirt",
@@ -21333,71 +21397,7 @@
       }
     },
     {
-      "id": "surface-osm-403753751-oval-north-entry-1",
-      "category": "path-surface-treatment",
-      "label": "Oval north entry connector feathered edge",
-      "kind": "path-edge-wear",
-      "auditStatus": "render-style-treatment",
-      "evidenceClass": "painterly-surface-treatment",
-      "uncertainty": "Non-object painterly surface variation; recorded for completeness but not asserted as surveyed park hardware or exact wear geometry.",
-      "source": "OpenStreetMap way 403753751; path-edge transition inferred from CMP asphalt-path and remnant-edge context",
-      "geometry": {
-        "centerWorld": {
-          "x": -300.5657,
-          "z": 273.3344
-        },
-        "centerGeo": {
-          "lat": -37.7895947,
-          "lon": 144.9801885
-        },
-        "vertexCount": 0,
-        "width": 0.94,
-        "height": null,
-        "radius": null,
-        "angle": -0.5705
-      },
-      "design": {
-        "material": "dirt",
-        "profile": null,
-        "canopyGroup": null,
-        "courtStatus": null,
-        "linkedStructureId": null
-      }
-    },
-    {
-      "id": "surface-osm-403753760-oval-north-rail-link-12",
-      "category": "path-surface-treatment",
-      "label": "Oval north-east to rail trail connector feathered edge",
-      "kind": "path-edge-wear",
-      "auditStatus": "render-style-treatment",
-      "evidenceClass": "painterly-surface-treatment",
-      "uncertainty": "Non-object painterly surface variation; recorded for completeness but not asserted as surveyed park hardware or exact wear geometry.",
-      "source": "OpenStreetMap way 403753760; path-edge transition inferred from CMP asphalt-path and remnant-edge context",
-      "geometry": {
-        "centerWorld": {
-          "x": -81.2743,
-          "z": 295.1176
-        },
-        "centerGeo": {
-          "lat": -37.7897476,
-          "lon": 144.9821359
-        },
-        "vertexCount": 0,
-        "width": 0.94,
-        "height": null,
-        "radius": null,
-        "angle": 1.1737
-      },
-      "design": {
-        "material": "dirt",
-        "profile": null,
-        "canopyGroup": null,
-        "courtStatus": null,
-        "linkedStructureId": null
-      }
-    },
-    {
-      "id": "surface-osm-western-perimeter-walk-2",
+      "id": "surface-osm-western-perimeter-walk-4",
       "category": "path-surface-treatment",
       "label": "Western perimeter walk feathered edge",
       "kind": "path-edge-wear",
@@ -21407,18 +21407,18 @@
       "source": "OpenStreetMap way 599677908 with south-west connector way 403753785; path-edge transition inferred from CMP asphalt-path and remnant-edge context",
       "geometry": {
         "centerWorld": {
-          "x": -195.6976,
-          "z": -149.7164
+          "x": -244.3857,
+          "z": -62.7278
         },
         "centerGeo": {
-          "lat": -37.7866257,
-          "lon": 144.9811197
+          "lat": -37.7872362,
+          "lon": 144.9806874
         },
         "vertexCount": 0,
         "width": 0.94,
         "height": null,
         "radius": null,
-        "angle": 2.1699
+        "angle": 1.9699
       },
       "design": {
         "material": "dirt",
@@ -21429,7 +21429,7 @@
       }
     },
     {
-      "id": "surface-osm-northern-perimeter-walk-1",
+      "id": "surface-osm-northern-perimeter-walk-3",
       "category": "path-surface-treatment",
       "label": "Northern perimeter walk feathered edge",
       "kind": "path-edge-wear",
@@ -21439,18 +21439,18 @@
       "source": "OpenStreetMap way 981948921 with north-east connector way 1103672692; path-edge transition inferred from CMP asphalt-path and remnant-edge context",
       "geometry": {
         "centerWorld": {
-          "x": 202.8383,
-          "z": -263.5356
+          "x": 126.4502,
+          "z": -300.5877
         },
         "centerGeo": {
-          "lat": -37.7858269,
-          "lon": 144.9846589
+          "lat": -37.7855669,
+          "lon": 144.9839805
         },
         "vertexCount": 0,
         "width": 0.94,
         "height": null,
         "radius": null,
-        "angle": -2.5702
+        "angle": -2.8444
       },
       "design": {
         "material": "dirt",
@@ -21461,71 +21461,7 @@
       }
     },
     {
-      "id": "surface-osm-northern-perimeter-walk-4",
-      "category": "path-surface-treatment",
-      "label": "Northern perimeter walk feathered edge",
-      "kind": "path-edge-wear",
-      "auditStatus": "render-style-treatment",
-      "evidenceClass": "painterly-surface-treatment",
-      "uncertainty": "Non-object painterly surface variation; recorded for completeness but not asserted as surveyed park hardware or exact wear geometry.",
-      "source": "OpenStreetMap way 981948921 with north-east connector way 1103672692; path-edge transition inferred from CMP asphalt-path and remnant-edge context",
-      "geometry": {
-        "centerWorld": {
-          "x": 85.4681,
-          "z": -313.5257
-        },
-        "centerGeo": {
-          "lat": -37.7854761,
-          "lon": 144.9836166
-        },
-        "vertexCount": 0,
-        "width": 0.94,
-        "height": null,
-        "radius": null,
-        "angle": -3.0162
-      },
-      "design": {
-        "material": "dirt",
-        "profile": null,
-        "canopyGroup": null,
-        "courtStatus": null,
-        "linkedStructureId": null
-      }
-    },
-    {
-      "id": "surface-osm-northern-perimeter-walk-7",
-      "category": "path-surface-treatment",
-      "label": "Northern perimeter walk feathered edge",
-      "kind": "path-edge-wear",
-      "auditStatus": "render-style-treatment",
-      "evidenceClass": "painterly-surface-treatment",
-      "uncertainty": "Non-object painterly surface variation; recorded for completeness but not asserted as surveyed park hardware or exact wear geometry.",
-      "source": "OpenStreetMap way 981948921 with north-east connector way 1103672692; path-edge transition inferred from CMP asphalt-path and remnant-edge context",
-      "geometry": {
-        "centerWorld": {
-          "x": -14.6518,
-          "z": -305.2034
-        },
-        "centerGeo": {
-          "lat": -37.7855345,
-          "lon": 144.9827275
-        },
-        "vertexCount": 0,
-        "width": 0.94,
-        "height": null,
-        "radius": null,
-        "angle": 2.8882
-      },
-      "design": {
-        "material": "dirt",
-        "profile": null,
-        "canopyGroup": null,
-        "courtStatus": null,
-        "linkedStructureId": null
-      }
-    },
-    {
-      "id": "surface-osm-rail-trail-north-3",
+      "id": "surface-osm-rail-trail-north-2",
       "category": "path-surface-treatment",
       "label": "Inner Circle Rail Trail north feathered edge",
       "kind": "path-edge-wear",
@@ -21535,18 +21471,18 @@
       "source": "OpenStreetMap Inner Circle Rail Trail way 1006838304; OSM disused rail segment way 1006838305; path-edge transition inferred from CMP asphalt-path and remnant-edge context",
       "geometry": {
         "centerWorld": {
-          "x": 67.9936,
-          "z": -157.6302
+          "x": 53.9928,
+          "z": -146.6379
         },
         "centerGeo": {
-          "lat": -37.7865701,
-          "lon": 144.9834614
+          "lat": -37.7866473,
+          "lon": 144.9833371
         },
         "vertexCount": 0,
         "width": 0.94,
         "height": null,
         "radius": null,
-        "angle": -0.9585
+        "angle": -1.013
       },
       "design": {
         "material": "dirt",
@@ -21557,7 +21493,7 @@
       }
     },
     {
-      "id": "surface-osm-rail-trail-north-6",
+      "id": "surface-osm-rail-trail-north-5",
       "category": "path-surface-treatment",
       "label": "Inner Circle Rail Trail north feathered edge",
       "kind": "path-edge-wear",
@@ -21567,18 +21503,18 @@
       "source": "OpenStreetMap Inner Circle Rail Trail way 1006838304; OSM disused rail segment way 1006838305; path-edge transition inferred from CMP asphalt-path and remnant-edge context",
       "geometry": {
         "centerWorld": {
-          "x": 122.8883,
-          "z": -227.2309
+          "x": 97.7446,
+          "z": -192.9268
         },
         "centerGeo": {
-          "lat": -37.7860817,
-          "lon": 144.9839489
+          "lat": -37.7863224,
+          "lon": 144.9837256
         },
         "vertexCount": 0,
         "width": 0.94,
         "height": null,
         "radius": null,
-        "angle": -0.8062
+        "angle": -0.8092
       },
       "design": {
         "material": "dirt",
@@ -21589,7 +21525,7 @@
       }
     },
     {
-      "id": "surface-osm-north-south-spine-2",
+      "id": "surface-osm-north-south-spine-4",
       "category": "path-surface-treatment",
       "label": "North-south shared path spine feathered edge",
       "kind": "path-edge-wear",
@@ -21599,18 +21535,18 @@
       "source": "OpenStreetMap way 1103672693; path-edge transition inferred from CMP asphalt-path and remnant-edge context",
       "geometry": {
         "centerWorld": {
-          "x": -183.1581,
-          "z": -157.6887
+          "x": 9.7029,
+          "z": -133.1027
         },
         "centerGeo": {
-          "lat": -37.7865697,
-          "lon": 144.9812311
+          "lat": -37.7867423,
+          "lon": 144.9829438
         },
         "vertexCount": 0,
         "width": 0.94,
         "height": null,
         "radius": null,
-        "angle": 0.2118
+        "angle": 0.0889
       },
       "design": {
         "material": "dirt",
@@ -21621,7 +21557,7 @@
       }
     },
     {
-      "id": "surface-osm-rail-trail-central-1",
+      "id": "surface-osm-rail-trail-central-3",
       "category": "path-surface-treatment",
       "label": "Inner Circle Rail Trail central feathered edge",
       "kind": "path-edge-wear",
@@ -21631,18 +21567,18 @@
       "source": "OpenStreetMap Inner Circle Rail Trail way 1103672694; path-edge transition inferred from CMP asphalt-path and remnant-edge context",
       "geometry": {
         "centerWorld": {
-          "x": 7.7801,
-          "z": -1.2345
+          "x": 14.7243,
+          "z": -43.8032
         },
         "centerGeo": {
-          "lat": -37.7876677,
-          "lon": 144.9829267
+          "lat": -37.787369,
+          "lon": 144.9829884
         },
         "vertexCount": 0,
         "width": 0.94,
         "height": null,
         "radius": null,
-        "angle": -1.4539
+        "angle": -1.3456
       },
       "design": {
         "material": "dirt",
@@ -21653,28 +21589,28 @@
       }
     },
     {
-      "id": "surface-osm-rail-trail-central-4",
+      "id": "surface-osm-western-edge-2",
       "category": "path-surface-treatment",
-      "label": "Inner Circle Rail Trail central feathered edge",
+      "label": "Western edge path feathered edge",
       "kind": "path-edge-wear",
       "auditStatus": "render-style-treatment",
       "evidenceClass": "painterly-surface-treatment",
       "uncertainty": "Non-object painterly surface variation; recorded for completeness but not asserted as surveyed park hardware or exact wear geometry.",
-      "source": "OpenStreetMap Inner Circle Rail Trail way 1103672694; path-edge transition inferred from CMP asphalt-path and remnant-edge context",
+      "source": "OpenStreetMap way 1340462807; path-edge transition inferred from CMP asphalt-path and remnant-edge context",
       "geometry": {
         "centerWorld": {
-          "x": 16.1009,
-          "z": -69.4531
+          "x": -252.7842,
+          "z": 292.1078
         },
         "centerGeo": {
-          "lat": -37.787189,
-          "lon": 144.9830006
+          "lat": -37.7897264,
+          "lon": 144.9806128
         },
         "vertexCount": 0,
         "width": 0.94,
         "height": null,
         "radius": null,
-        "angle": -1.2517
+        "angle": 0.1322
       },
       "design": {
         "material": "dirt",
