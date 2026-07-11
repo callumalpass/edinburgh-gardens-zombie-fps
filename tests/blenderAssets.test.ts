@@ -19,7 +19,8 @@ const assets = [
   "assets/blender/kevin-murray-stand/edinburgh-gardens-kevin-murray-stand.asset.json",
   "assets/blender/emely-baker-centre/edinburgh-gardens-emely-baker-centre.asset.json",
   "assets/blender/alfred-crescent-pavilion/edinburgh-gardens-alfred-crescent-pavilion.asset.json",
-  "assets/blender/north-toilets/edinburgh-gardens-north-toilets.asset.json"
+  "assets/blender/north-toilets/edinburgh-gardens-north-toilets.asset.json",
+  "assets/blender/sportsmans-war-memorial/edinburgh-gardens-sportsmans-war-memorial.asset.json"
 ];
 
 describe("Blender building assets", () => {

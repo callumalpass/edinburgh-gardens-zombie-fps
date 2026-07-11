@@ -124,6 +124,10 @@ Current local assets:
   - Source: generated locally by `node scripts/generate-aerial-audit-overlay.mjs` from the current level register and Vicmap PNG.
   - Purpose: object-by-object visual audit of projected paths, buildings, open fence runs, trees, amenities and park details; the contact sheet provides a consistent 36-pixel crop around every OSM bench.
   - Validation: regenerate with `node scripts/generate-aerial-audit-overlay.mjs`, inspect with `file`, and rasterise with ImageMagick for manual review.
+- `docs/research/raw/gardens/2026-07-11/sportsmans-war-memorial/heritage-council-determination-2026-04-21.pdf`
+  - Source: Heritage Council Victoria, `https://assets.heritagecouncil.vic.gov.au/assets/HCV-Determination_WW1-Sportsmans-Memorial-Arbour_21APR26.pdf`.
+  - Purpose: current 21 April 2026 primary evidence for the arbour's six Tuscan columns/pedestals, bowling-club relationship to the north, substation relationship to the west, relocated south path, diminished processional function and construction-fabric distinction.
+  - Validation: `pdfinfo`, `pdftotext`, SHA-256 `f25d0da8a1eca26a7d4d9261b4eb92d3f5f7e46c6c94d5b1c608607d623c4ec0`; `npm run research:check` validates the registered non-empty optional raw file.
 - `docs/research/raw/2026-07-10/brunswick-street-oval-tree-management-plan.pdf`
   - Source: `https://www.yarracity.vic.gov.au/sites/default/files/2026-02/Tree_protection_management_plan_brunswick_street_oval.pdf`.
   - Purpose: official numbered April/May 2026 removal plan for the 39 trees affected by tennis and sports-pavilion works.

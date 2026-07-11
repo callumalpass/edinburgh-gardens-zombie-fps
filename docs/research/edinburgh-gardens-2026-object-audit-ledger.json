@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-10T18:13:06.379Z",
+  "generatedAt": "2026-07-11T00:33:44.960Z",
   "physicalBaseline": "2026-07-10",
   "baselinePolicy": {
     "layout": "Physical park condition and active works as documented for 10 July 2026.",
@@ -10,12 +10,12 @@
     "duplicates": "Trees are represented once in physicalObjects; significantTrees, treePoints and treeColliders are supporting views of that tree register and are counted below, not duplicated."
   },
   "summary": {
-    "physicalObjectCount": 578,
-    "gameplayObjectCount": 30,
+    "physicalObjectCount": 579,
+    "gameplayObjectCount": 43,
     "renderTreatmentCount": 107,
     "scenographyObjectCount": 14,
     "categoryCounts": {
-      "amenity": 55,
+      "amenity": 56,
       "building": 14,
       "fence": 5,
       "ground-surface": 1,
@@ -30,7 +30,7 @@
     },
     "statusCounts": {
       "corrected-2026": 39,
-      "evidence-linked": 149,
+      "evidence-linked": 150,
       "evidence-linked-context": 6,
       "evidence-linked-historical": 331,
       "unresolved-public-data-gap": 53
@@ -42,7 +42,7 @@
       "treeColliders": 359,
       "elevationSamples": 94,
       "terrainModifiers": 468,
-      "collisionObstacles": 467,
+      "collisionObstacles": 474,
       "spawnPoints": 7,
       "pickupPoints": 6
     }
@@ -130,7 +130,7 @@
       "id": "sportsmans-war-memorial",
       "category": "landmark",
       "auditStatus": "unresolved-public-data-gap",
-      "uncertainty": "no public survey resolves the surrounding rosemary-hedge geometry"
+      "uncertainty": "Vicmap Basemap AERIAL_WM_256 orthophoto pixel fit approximately -37.788058, 144.980790 places the visible arbour immediately east of the square substation and south of the exact OSM bowling-club wall;"
     },
     {
       "id": "osm-building-403753784",
@@ -3095,22 +3095,22 @@
       "kind": "memorial",
       "auditStatus": "unresolved-public-data-gap",
       "evidenceClass": "official-council-context",
-      "uncertainty": "no public survey resolves the surrounding rosemary-hedge geometry",
-      "source": "Australian War Memorial Places of Pride coordinate -37.7880136, 144.9805024; Yarra Sportsman's Memorial page; Lovell Chen Edinburgh Gardens CMP 2021 section 3.2.7 and Figures 64-65; no public survey resolves the surrounding rosemary-hedge geometry",
+      "uncertainty": "Vicmap Basemap AERIAL_WM_256 orthophoto pixel fit approximately -37.788058, 144.980790 places the visible arbour immediately east of the square substation and south of the exact OSM bowling-club wall;",
+      "source": "Vicmap Basemap AERIAL_WM_256 orthophoto pixel fit approximately -37.788058, 144.980790 places the visible arbour immediately east of the square substation and south of the exact OSM bowling-club wall; Australian War Memorial Places of Pride identifies the place but its -37.7880136, 144.9805024 pin visibly falls on the club roof and is not used as survey geometry; Heritage Council Victoria determination 21 April 2026 confirms the two-storey club close to the north, substation abutting the west, six Tuscan columns and diminished processional passage; City of Yarra confirms the completed 2018 restoration, replica porcelain wreath/bronze names panel and large reproductive team photograph; Lovell Chen CMP 2021 section 3.2.7 and Figures 62, 64-65 resolve the moulded arbour, south dedication, east IN MEMORIAM panel/swags/urns and adjacent wall faces; no public survey resolves the surrounding rosemary-hedge geometry",
       "geometry": {
         "centerWorld": {
-          "x": -265.2135,
-          "z": 48.0475
+          "x": -232.8276,
+          "z": 54.374
         },
         "centerGeo": {
-          "lat": -37.7880136,
-          "lon": 144.9805024
+          "lat": -37.788058,
+          "lon": 144.98079
         },
         "vertexCount": 0,
         "width": null,
         "height": null,
         "radius": 4.5,
-        "angle": null
+        "angle": -0.106
       },
       "design": {
         "material": null,
@@ -17489,6 +17489,38 @@
       }
     },
     {
+      "id": "sportsmans-memorial-east-inscription",
+      "category": "amenity",
+      "label": "Sportsman's Memorial east inscription",
+      "kind": "memorial_plaque",
+      "auditStatus": "evidence-linked",
+      "evidenceClass": "conservation-plan",
+      "uncertainty": "Design evidence is photographic/documentary rather than a 2026 measured building survey.",
+      "source": "Australian War Memorial Places of Pride coordinate; Lovell Chen Edinburgh Gardens CMP 2021 Figures 62 and 64-65 place the recessed IN MEMORIAM inscription, rectangular swag panel and paired restored urns on the east elevation; City of Yarra's current Sportsman's Memorial page confirms the 2018 restoration and re-dedication",
+      "geometry": {
+        "centerWorld": {
+          "x": -229.1285,
+          "z": 53.9804
+        },
+        "centerGeo": {
+          "lat": -37.7880552,
+          "lon": 144.9808228
+        },
+        "vertexCount": 0,
+        "width": null,
+        "height": null,
+        "radius": null,
+        "angle": null
+      },
+      "design": {
+        "material": null,
+        "profile": null,
+        "canopyGroup": null,
+        "courtStatus": null,
+        "linkedStructureId": "sportsmans-war-memorial"
+      }
+    },
+    {
       "id": "rotunda-memorial-plaque",
       "category": "amenity",
       "label": "Rotunda memorial plaque",
@@ -19539,6 +19571,38 @@
       }
     },
     {
+      "id": "sportsmans-memorial-processional-bay",
+      "category": "interaction-zone",
+      "label": "Sportsman's Memorial processional bay",
+      "kind": "gate",
+      "auditStatus": "gameplay-fiction",
+      "evidenceClass": "gameplay",
+      "uncertainty": "Deliberate game object, not asserted as a fixed 2026 park asset.",
+      "source": null,
+      "geometry": {
+        "centerWorld": {
+          "x": -231.4153,
+          "z": 55.8328
+        },
+        "centerGeo": {
+          "lat": -37.7880682,
+          "lon": 144.9808025
+        },
+        "vertexCount": 0,
+        "width": null,
+        "height": 0,
+        "radius": 3.8,
+        "angle": null
+      },
+      "design": {
+        "material": null,
+        "profile": null,
+        "canopyGroup": null,
+        "courtStatus": null,
+        "linkedStructureId": null
+      }
+    },
+    {
       "id": "rotunda-deck",
       "category": "interaction-zone",
       "label": "Rotunda raised platform",
@@ -19558,7 +19622,7 @@
         },
         "vertexCount": 0,
         "width": null,
-        "height": 1.86,
+        "height": 2,
         "radius": 5.8,
         "angle": null
       },
@@ -19613,16 +19677,16 @@
       "source": null,
       "geometry": {
         "centerWorld": {
-          "x": 13.7112,
-          "z": -221.2636
+          "x": 16.3731,
+          "z": -225.1185
         },
         "centerGeo": {
-          "lat": -37.7861236,
-          "lon": 144.9829794
+          "lat": -37.7860965,
+          "lon": 144.983003
         },
         "vertexCount": 0,
         "width": null,
-        "height": 2.35,
+        "height": 1.57,
         "radius": 3.5,
         "angle": null
       },
@@ -19645,16 +19709,16 @@
       "source": null,
       "geometry": {
         "centerWorld": {
-          "x": 104.5217,
-          "z": 197.4404
+          "x": 95.7405,
+          "z": 198.8511
         },
         "centerGeo": {
-          "lat": -37.789062,
-          "lon": 144.9837858
+          "lat": -37.7890719,
+          "lon": 144.9837078
         },
         "vertexCount": 0,
         "width": null,
-        "height": 2.35,
+        "height": 2.46,
         "radius": 3.5,
         "angle": null
       },
@@ -19686,8 +19750,392 @@
         },
         "vertexCount": 0,
         "width": null,
-        "height": 3.58,
+        "height": 4.65,
         "radius": 25.3552,
+        "angle": null
+      },
+      "design": {
+        "material": null,
+        "profile": null,
+        "canopyGroup": null,
+        "courtStatus": null,
+        "linkedStructureId": null
+      }
+    },
+    {
+      "id": "north-toilets-roof",
+      "category": "interaction-zone",
+      "label": "North toilets roof",
+      "kind": "building",
+      "auditStatus": "gameplay-fiction",
+      "evidenceClass": "gameplay",
+      "uncertainty": "Deliberate game object, not asserted as a fixed 2026 park asset.",
+      "source": null,
+      "geometry": {
+        "centerWorld": {
+          "x": -68.5005,
+          "z": -248.3477
+        },
+        "centerGeo": {
+          "lat": -37.7859335,
+          "lon": 144.9822493
+        },
+        "vertexCount": 0,
+        "width": null,
+        "height": 3.515,
+        "radius": 8.5002,
+        "angle": null
+      },
+      "design": {
+        "material": null,
+        "profile": null,
+        "canopyGroup": null,
+        "courtStatus": null,
+        "linkedStructureId": null
+      }
+    },
+    {
+      "id": "osm-building-403753784-roof",
+      "category": "interaction-zone",
+      "label": "Fitzroy Tennis Club rooms roof",
+      "kind": "building",
+      "auditStatus": "gameplay-fiction",
+      "evidenceClass": "gameplay",
+      "uncertainty": "Deliberate game object, not asserted as a fixed 2026 park asset.",
+      "source": null,
+      "geometry": {
+        "centerWorld": {
+          "x": -115.9994,
+          "z": 81.6765
+        },
+        "centerGeo": {
+          "lat": -37.7882496,
+          "lon": 144.9818275
+        },
+        "vertexCount": 0,
+        "width": null,
+        "height": 4.47,
+        "radius": 19.9247,
+        "angle": null
+      },
+      "design": {
+        "material": null,
+        "profile": null,
+        "canopyGroup": null,
+        "courtStatus": null,
+        "linkedStructureId": null
+      }
+    },
+    {
+      "id": "osm-building-543505638-roof",
+      "category": "interaction-zone",
+      "label": "Reconstructed timber entrance pavilion roof",
+      "kind": "building",
+      "auditStatus": "gameplay-fiction",
+      "evidenceClass": "gameplay",
+      "uncertainty": "Deliberate game object, not asserted as a fixed 2026 park asset.",
+      "source": null,
+      "geometry": {
+        "centerWorld": {
+          "x": -294.5704,
+          "z": 282.5569
+        },
+        "centerGeo": {
+          "lat": -37.7896594,
+          "lon": 144.9802417
+        },
+        "vertexCount": 0,
+        "width": null,
+        "height": 3.18,
+        "radius": 11.8076,
+        "angle": null
+      },
+      "design": {
+        "material": null,
+        "profile": null,
+        "canopyGroup": null,
+        "courtStatus": null,
+        "linkedStructureId": null
+      }
+    },
+    {
+      "id": "osm-building-543505639-roof",
+      "category": "interaction-zone",
+      "label": "Fitzroy Victoria Bowling Club rooms roof",
+      "kind": "building",
+      "auditStatus": "gameplay-fiction",
+      "evidenceClass": "gameplay",
+      "uncertainty": "Deliberate game object, not asserted as a fixed 2026 park asset.",
+      "source": null,
+      "geometry": {
+        "centerWorld": {
+          "x": -253.0713,
+          "z": 45.7086
+        },
+        "centerGeo": {
+          "lat": -37.7879972,
+          "lon": 144.9806102
+        },
+        "vertexCount": 0,
+        "width": null,
+        "height": 3.11,
+        "radius": 40.1531,
+        "angle": null
+      },
+      "design": {
+        "material": null,
+        "profile": null,
+        "canopyGroup": null,
+        "courtStatus": null,
+        "linkedStructureId": null
+      }
+    },
+    {
+      "id": "osm-building-543505702-roof",
+      "category": "interaction-zone",
+      "label": "Emely Baker Centre roof",
+      "kind": "building",
+      "auditStatus": "gameplay-fiction",
+      "evidenceClass": "gameplay",
+      "uncertainty": "Deliberate game object, not asserted as a fixed 2026 park asset.",
+      "source": null,
+      "geometry": {
+        "centerWorld": {
+          "x": -41.7397,
+          "z": -274.2934
+        },
+        "centerGeo": {
+          "lat": -37.7857514,
+          "lon": 144.9824869
+        },
+        "vertexCount": 0,
+        "width": null,
+        "height": 3.32,
+        "radius": 16.7306,
+        "angle": null
+      },
+      "design": {
+        "material": null,
+        "profile": null,
+        "canopyGroup": null,
+        "courtStatus": null,
+        "linkedStructureId": null
+      }
+    },
+    {
+      "id": "osm-building-1475006767-roof",
+      "category": "interaction-zone",
+      "label": "Bowling club outbuilding roof",
+      "kind": "building",
+      "auditStatus": "gameplay-fiction",
+      "evidenceClass": "gameplay",
+      "uncertainty": "Deliberate game object, not asserted as a fixed 2026 park asset.",
+      "source": null,
+      "geometry": {
+        "centerWorld": {
+          "x": -209.616,
+          "z": 44.862
+        },
+        "centerGeo": {
+          "lat": -37.7879912,
+          "lon": 144.9809961
+        },
+        "vertexCount": 0,
+        "width": null,
+        "height": 3.16,
+        "radius": 5.0638,
+        "angle": null
+      },
+      "design": {
+        "material": null,
+        "profile": null,
+        "canopyGroup": null,
+        "courtStatus": null,
+        "linkedStructureId": null
+      }
+    },
+    {
+      "id": "osm-building-1475006768-roof",
+      "category": "interaction-zone",
+      "label": "Bowling club shed roof",
+      "kind": "building",
+      "auditStatus": "gameplay-fiction",
+      "evidenceClass": "gameplay",
+      "uncertainty": "Deliberate game object, not asserted as a fixed 2026 park asset.",
+      "source": null,
+      "geometry": {
+        "centerWorld": {
+          "x": -240.6906,
+          "z": 58.0781
+        },
+        "centerGeo": {
+          "lat": -37.788084,
+          "lon": 144.9807202
+        },
+        "vertexCount": 0,
+        "width": null,
+        "height": 2.86,
+        "radius": 4.2716,
+        "angle": null
+      },
+      "design": {
+        "material": null,
+        "profile": null,
+        "canopyGroup": null,
+        "courtStatus": null,
+        "linkedStructureId": null
+      }
+    },
+    {
+      "id": "osm-building-1475006769-roof",
+      "category": "interaction-zone",
+      "label": "Bowling club outbuilding roof",
+      "kind": "building",
+      "auditStatus": "gameplay-fiction",
+      "evidenceClass": "gameplay",
+      "uncertainty": "Deliberate game object, not asserted as a fixed 2026 park asset.",
+      "source": null,
+      "geometry": {
+        "centerWorld": {
+          "x": -189.2809,
+          "z": 48.2954
+        },
+        "centerGeo": {
+          "lat": -37.7880153,
+          "lon": 144.9811767
+        },
+        "vertexCount": 0,
+        "width": null,
+        "height": 3.06,
+        "radius": 8.5753,
+        "angle": null
+      },
+      "design": {
+        "material": null,
+        "profile": null,
+        "canopyGroup": null,
+        "courtStatus": null,
+        "linkedStructureId": null
+      }
+    },
+    {
+      "id": "osm-building-1475006770-roof",
+      "category": "interaction-zone",
+      "label": "Bowling green shed roof",
+      "kind": "building",
+      "auditStatus": "gameplay-fiction",
+      "evidenceClass": "gameplay",
+      "uncertainty": "Deliberate game object, not asserted as a fixed 2026 park asset.",
+      "source": null,
+      "geometry": {
+        "centerWorld": {
+          "x": -186.854,
+          "z": -17.5576
+        },
+        "centerGeo": {
+          "lat": -37.7875532,
+          "lon": 144.9811983
+        },
+        "vertexCount": 0,
+        "width": null,
+        "height": 2.66,
+        "radius": 7.3103,
+        "angle": null
+      },
+      "design": {
+        "material": null,
+        "profile": null,
+        "canopyGroup": null,
+        "courtStatus": null,
+        "linkedStructureId": null
+      }
+    },
+    {
+      "id": "osm-building-1475006771-roof",
+      "category": "interaction-zone",
+      "label": "Bowling green shed roof",
+      "kind": "building",
+      "auditStatus": "gameplay-fiction",
+      "evidenceClass": "gameplay",
+      "uncertainty": "Deliberate game object, not asserted as a fixed 2026 park asset.",
+      "source": null,
+      "geometry": {
+        "centerWorld": {
+          "x": -254.4539,
+          "z": -23.5607
+        },
+        "centerGeo": {
+          "lat": -37.787511,
+          "lon": 144.980598
+        },
+        "vertexCount": 0,
+        "width": null,
+        "height": 2.56,
+        "radius": 5.1966,
+        "angle": null
+      },
+      "design": {
+        "material": null,
+        "profile": null,
+        "canopyGroup": null,
+        "courtStatus": null,
+        "linkedStructureId": null
+      }
+    },
+    {
+      "id": "osm-building-1475006772-roof",
+      "category": "interaction-zone",
+      "label": "Bowling green shed roof",
+      "kind": "building",
+      "auditStatus": "gameplay-fiction",
+      "evidenceClass": "gameplay",
+      "uncertainty": "Deliberate game object, not asserted as a fixed 2026 park asset.",
+      "source": null,
+      "geometry": {
+        "centerWorld": {
+          "x": -268.0575,
+          "z": 15.0786
+        },
+        "centerGeo": {
+          "lat": -37.7877822,
+          "lon": 144.9804771
+        },
+        "vertexCount": 0,
+        "width": null,
+        "height": 2.56,
+        "radius": 5.6453,
+        "angle": null
+      },
+      "design": {
+        "material": null,
+        "profile": null,
+        "canopyGroup": null,
+        "courtStatus": null,
+        "linkedStructureId": null
+      }
+    },
+    {
+      "id": "osm-building-1475006773-roof",
+      "category": "interaction-zone",
+      "label": "Bowling green shed roof",
+      "kind": "building",
+      "auditStatus": "gameplay-fiction",
+      "evidenceClass": "gameplay",
+      "uncertainty": "Deliberate game object, not asserted as a fixed 2026 park asset.",
+      "source": null,
+      "geometry": {
+        "centerWorld": {
+          "x": -184.8117,
+          "z": 13.9426
+        },
+        "centerGeo": {
+          "lat": -37.7877742,
+          "lon": 144.9812164
+        },
+        "vertexCount": 0,
+        "width": null,
+        "height": 2.56,
+        "radius": 10.2018,
         "angle": null
       },
       "design": {

@@ -358,6 +358,16 @@
       "url": "https://placesofpride.awm.gov.au/memorials/241121"
     },
     {
+      "id": "yarra-sportsmans-memorial",
+      "label": "City of Yarra Sportsman's Memorial public-art record",
+      "url": "https://www.yarracity.vic.gov.au/things-to-do/arts/gallery/public-art/sportsmans-memorial"
+    },
+    {
+      "id": "heritage-council-sportsmans-memorial-2026",
+      "label": "Heritage Council Victoria WW1 Sportsman's Memorial Arbour determination 21 April 2026",
+      "url": "https://assets.heritagecouncil.vic.gov.au/assets/HCV-Determination_WW1-Sportsmans-Memorial-Arbour_21APR26.pdf"
+    },
+    {
       "id": "yarra-annual-report-2021-22",
       "label": "City of Yarra Annual Report 2021-22",
       "url": "https://www.yarracity.vic.gov.au/sites/default/files/2024-04/annual_report_2021_to_2022_accessible_version.pdf"
@@ -865,6 +875,8 @@
         "yarra-fitzroy-bowls-mural",
         "yarra-annual-report-2021-22",
         "awm-sportsmans-memorial",
+        "yarra-sportsmans-memorial",
+        "heritage-council-sportsmans-memorial-2026",
         "vicmap-basemap-wms",
         "vicmap-web-services-change",
         "osm-map-bbox",
@@ -971,6 +983,20 @@
         "yarra-annual-report-2021-22",
         "edinburgh-gardens-cmp-2021-3068",
         "vicmap-basemap-wms",
+        "blender-4-5-10-linux"
+      ]
+    },
+    {
+      "id": "sportsmans-war-memorial-blender-asset",
+      "path": "docs/research/sportsmans-war-memorial-blender-asset-2026-07-11.md",
+      "requiredHeadings": ["## Sources", "## Findings", "## Implementation Translation", "## Uncertainty", "## Validation"],
+      "sourceIds": [
+        "heritage-council-sportsmans-memorial-2026",
+        "yarra-sportsmans-memorial",
+        "edinburgh-gardens-cmp-2021-3068",
+        "awm-sportsmans-memorial",
+        "vicmap-basemap-wms",
+        "osm-way-api",
         "blender-4-5-10-linux"
       ]
     },
@@ -1181,6 +1207,13 @@
       "pathPattern": "docs/research/raw/gardens/2026-07-10/north-public-toilets/*",
       "format": "file",
       "sourceId": "yarra-new-public-toilets",
+      "optional": true
+    },
+    {
+      "id": "heritage-council-sportsmans-memorial-determination-pdf",
+      "pathPattern": "docs/research/raw/gardens/2026-07-11/sportsmans-war-memorial/heritage-council-determination-2026-04-21.pdf",
+      "format": "file",
+      "sourceId": "heritage-council-sportsmans-memorial-2026",
       "optional": true
     }
   ]

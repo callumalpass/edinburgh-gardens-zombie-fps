@@ -41,7 +41,11 @@ export async function instantiateCharacterAsset(avatarId: AvatarId): Promise<Cha
 
   return {
     root,
-    animations: template.animations.map((clip) => clip.clone())
+    animations: template.animations.map((source) => {
+      const clip = source.clone();
+      clip.name = source.name.replace(/^(milo|asha|jules|maeve)_/, "");
+      return clip;
+    })
   };
 }
 

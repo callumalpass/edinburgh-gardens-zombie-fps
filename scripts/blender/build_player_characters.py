@@ -29,6 +29,25 @@ from mathutils import Vector
 
 ASSET_ID = "edinburgh-gardens-survivor-roster"
 
+PLAYER_CLIPS = (
+    "Idle",
+    "Walk",
+    "Run",
+    "Crouch",
+    "CrouchWalk",
+    "Aim",
+    "AimLongGun",
+    "AimSidearm",
+    "MeleeReady",
+    "Melee",
+    "Reload",
+    "Jump",
+    "BikeIdle",
+    "BikeRide",
+    "Skateboard",
+    "Downed",
+)
+
 
 @dataclass(frozen=True)
 class AvatarSpec:
@@ -482,13 +501,17 @@ def make_action(armature: bpy.types.Object, name: str, poses: list[tuple[int, di
 
 
 def create_actions(armature: bpy.types.Object) -> dict[str, bpy.types.Action]:
-    existing = {name: bpy.data.actions.get(name) for name in ("Idle", "Walk", "Run", "Crouch", "CrouchWalk", "Aim", "Melee", "Reload", "Jump", "Downed")}
+    action_prefix = f"{armature['eg_avatar_id']}_"
+    existing = {name: bpy.data.actions.get(f"{action_prefix}{name}") for name in PLAYER_CLIPS}
     if all(existing.values()):
         return existing  # type: ignore[return-value]
 
+    def action(name: str, poses: list[tuple[int, dict]]) -> bpy.types.Action:
+        return make_action(armature, f"{action_prefix}{name}", poses)
+
     idle_a = {"Chest": {"rotation": (0.025, 0, -0.018)}, "Head": {"rotation": (-0.015, 0, 0.025)}}
     idle_b = {"Chest": {"rotation": (-0.018, 0, 0.018)}, "Head": {"rotation": (0.018, 0.04, -0.018)}, "Pelvis": {"location": (0, 0, 0.012)}}
-    actions = {"Idle": make_action(armature, "Idle", [(1, idle_a), (24, idle_b), (48, idle_a)])}
+    actions = {"Idle": action("Idle", [(1, idle_a), (24, idle_b), (48, idle_a)])}
 
     walk: list[tuple[int, dict]] = []
     run: list[tuple[int, dict]] = []
@@ -522,17 +545,102 @@ def create_actions(armature: bpy.types.Object) -> dict[str, bpy.types.Action]:
             "Shin.L": {"rotation": (-0.48, 0, 0)},
             "Shin.R": {"rotation": (-0.48, 0, 0)},
         }))
-    actions["Walk"] = make_action(armature, "Walk", walk)
-    actions["Run"] = make_action(armature, "Run", run)
+    actions["Walk"] = action("Walk", walk)
+    actions["Run"] = action("Run", run)
     crouched = {"Pelvis": {"location": (0, 0, -0.25)}, "Spine": {"rotation": (0.22, 0, 0)}, "Thigh.L": {"rotation": (0.31, 0, 0.05)}, "Thigh.R": {"rotation": (0.31, 0, -0.05)}, "Shin.L": {"rotation": (-0.5, 0, 0)}, "Shin.R": {"rotation": (-0.5, 0, 0)}}
-    actions["Crouch"] = make_action(armature, "Crouch", [(1, crouched), (30, {**crouched, "Chest": {"rotation": (0.025, 0, 0.02)}}), (60, crouched)])
-    actions["CrouchWalk"] = make_action(armature, "CrouchWalk", crouch_walk)
-    aim = {"Chest": {"rotation": (0.08, 0, 0)}, "UpperArm.L": {"rotation": (-1.12, -0.1, 0.16)}, "Forearm.L": {"rotation": (-0.42, 0.12, -0.18)}, "UpperArm.R": {"rotation": (-1.2, 0.08, -0.12)}, "Forearm.R": {"rotation": (-0.5, -0.08, 0.15)}, "Head": {"rotation": (-0.05, 0, 0)}}
-    actions["Aim"] = make_action(armature, "Aim", [(1, aim), (24, {**aim, "Chest": {"rotation": (0.065, 0, 0.012)}}), (48, aim)])
-    actions["Melee"] = make_action(armature, "Melee", [(1, aim), (8, {"Chest": {"rotation": (0.1, 0, -0.48)}, "UpperArm.R": {"rotation": (-0.58, 0.22, -0.65)}, "Forearm.R": {"rotation": (-0.32, 0, -0.2)}}), (16, {"Chest": {"rotation": (0.14, 0, 0.35)}, "UpperArm.R": {"rotation": (-1.48, -0.2, 0.38)}, "Forearm.R": {"rotation": (-0.12, 0, 0.16)}}), (28, aim)])
-    actions["Reload"] = make_action(armature, "Reload", [(1, aim), (12, {"Chest": {"rotation": (0.08, 0, 0.08)}, "UpperArm.L": {"rotation": (-0.65, -0.2, 0.45)}, "Forearm.L": {"rotation": (-0.92, 0.25, -0.25)}, "UpperArm.R": {"rotation": (-0.82, 0.1, -0.15)}}), (28, {"Chest": {"rotation": (0.05, 0, -0.05)}, "UpperArm.L": {"rotation": (-0.95, 0.1, 0.1)}, "Forearm.L": {"rotation": (-0.55, 0, 0.2)}, "UpperArm.R": {"rotation": (-0.9, 0.05, -0.1)}}), (44, aim)])
-    actions["Jump"] = make_action(armature, "Jump", [(1, {}), (10, {"Pelvis": {"location": (0, 0, -0.08)}, "Thigh.L": {"rotation": (0.34, 0, 0)}, "Thigh.R": {"rotation": (0.34, 0, 0)}, "Shin.L": {"rotation": (-0.48, 0, 0)}, "Shin.R": {"rotation": (-0.48, 0, 0)}}), (22, {"Pelvis": {"location": (0, 0, 0.12)}, "UpperArm.L": {"rotation": (-0.42, 0, 0.25)}, "UpperArm.R": {"rotation": (-0.42, 0, -0.25)}}), (38, {})])
-    actions["Downed"] = make_action(armature, "Downed", [(1, {}), (18, {"Root": {"rotation": (0, 1.38, 0)}, "Pelvis": {"location": (0, 0.04, -0.55)}, "UpperArm.L": {"rotation": (-0.8, 0.2, 0.2)}, "UpperArm.R": {"rotation": (0.5, -0.2, -0.3)}}), (40, {"Root": {"rotation": (0, 1.52, 0)}, "Pelvis": {"location": (0, 0.02, -0.7)}})])
+    actions["Crouch"] = action("Crouch", [(1, crouched), (30, {**crouched, "Chest": {"rotation": (0.025, 0, 0.02)}}), (60, crouched)])
+    actions["CrouchWalk"] = action("CrouchWalk", crouch_walk)
+    # The arm bones point down in their rest pose, so positive local X reaches
+    # toward Blender +Y (the avatar's forward direction). The previous negative
+    # rotations folded both arms backward and made the aiming silhouette read in
+    # reverse after glTF conversion.
+    long_gun_aim = {
+        "Chest": {"rotation": (0, 0, -0.025)},
+        "UpperArm.L": {"rotation": (0.92904, -0.72086, 0.86143)},
+        "Forearm.L": {"rotation": (0.0659, 0.03003, -0.46797)},
+        "Hand.L": {"rotation": (-0.22975, -0.00078, -0.09791)},
+        "UpperArm.R": {"rotation": (-0.87549, -2.12839, -0.75254)},
+        "Forearm.R": {"rotation": (-0.00151, 0.00359, -0.04795)},
+        # Counter-rotate the trigger hand so WeaponSocket local +Y stays exactly
+        # character-forward instead of inheriting the forearm's backwards roll.
+        "Hand.R": {"rotation": (-1.73062, -0.77806, 0.22679)},
+        "Head": {"rotation": (-0.045, 0.055, 0.025)},
+    }
+    sidearm_aim = {
+        "Chest": {"rotation": (0, 0, -0.012)},
+        "UpperArm.L": {"rotation": (1.19872, -0.68333, 0.65084)},
+        "Forearm.L": {"rotation": (0.00513, 0.01091, -0.14964)},
+        "Hand.L": {"rotation": (-0.04841, -0.00145, -0.06285)},
+        "UpperArm.R": {"rotation": (-1.23763, -2.30004, -0.55668)},
+        "Forearm.R": {"rotation": (0.066, -0.03002, 0.46812)},
+        "Hand.R": {"rotation": (-1.68825, -0.82402, -0.03845)},
+        "Head": {"rotation": (-0.03, 0.025, 0.015)},
+    }
+    melee_ready = {
+        "Chest": {"rotation": (-0.04, 0, -0.08)},
+        "UpperArm.L": {"rotation": (0.42, -0.08, -0.12)},
+        "Forearm.L": {"rotation": (-0.18, 0.08, 0.08)},
+        "UpperArm.R": {"rotation": (0.72, 0.05, 0.34)},
+        "Forearm.R": {"rotation": (0.58, -0.08, -0.3)},
+        "Hand.R": {"rotation": (-0.22, 0, 0.08)},
+        "Head": {"rotation": (-0.025, 0.04, 0.02)},
+    }
+    actions["Aim"] = action("Aim", [(1, long_gun_aim), (24, {**long_gun_aim, "Chest": {"rotation": (0, 0, -0.015)}}), (48, long_gun_aim)])
+    actions["AimLongGun"] = action("AimLongGun", [(1, long_gun_aim), (24, {**long_gun_aim, "Chest": {"rotation": (0, 0, -0.015)}}), (48, long_gun_aim)])
+    actions["AimSidearm"] = action("AimSidearm", [(1, sidearm_aim), (24, {**sidearm_aim, "Chest": {"rotation": (0, 0, -0.006)}}), (48, sidearm_aim)])
+    actions["MeleeReady"] = action("MeleeReady", [(1, melee_ready), (24, {**melee_ready, "Chest": {"rotation": (-0.025, 0, -0.06)}}), (48, melee_ready)])
+    actions["Melee"] = action("Melee", [(1, melee_ready), (8, {"Chest": {"rotation": (-0.08, 0, -0.48)}, "UpperArm.R": {"rotation": (0.58, 0.22, -0.65)}, "Forearm.R": {"rotation": (0.32, 0, -0.2)}}), (16, {"Chest": {"rotation": (-0.12, 0, 0.35)}, "UpperArm.R": {"rotation": (1.48, -0.2, 0.38)}, "Forearm.R": {"rotation": (0.12, 0, 0.16)}}), (28, melee_ready)])
+    actions["Reload"] = action("Reload", [(1, long_gun_aim), (12, {"Chest": {"rotation": (-0.08, 0, 0.08)}, "UpperArm.L": {"rotation": (0.65, -0.2, 0.45)}, "Forearm.L": {"rotation": (0.92, 0.25, -0.25)}, "UpperArm.R": {"rotation": (0.82, 0.1, -0.15)}}), (28, {"Chest": {"rotation": (-0.05, 0, -0.05)}, "UpperArm.L": {"rotation": (0.95, 0.1, 0.1)}, "Forearm.L": {"rotation": (0.55, 0, 0.2)}, "UpperArm.R": {"rotation": (0.9, 0.05, -0.1)}}), (44, long_gun_aim)])
+    actions["Jump"] = action("Jump", [(1, {}), (10, {"Pelvis": {"location": (0, 0, -0.08)}, "Thigh.L": {"rotation": (0.34, 0, 0)}, "Thigh.R": {"rotation": (0.34, 0, 0)}, "Shin.L": {"rotation": (-0.48, 0, 0)}, "Shin.R": {"rotation": (-0.48, 0, 0)}}), (22, {"Pelvis": {"location": (0, 0, 0.12)}, "UpperArm.L": {"rotation": (-0.42, 0, 0.25)}, "UpperArm.R": {"rotation": (-0.42, 0, -0.25)}}), (38, {})])
+    bike_idle = {
+        # Pelvis locations are in bone-local space: local +Y raises the rider
+        # and local +Z moves them toward Blender -Y (back onto the saddle).
+        "Pelvis": {"location": (0, 0.30, 0.32), "rotation": (-0.04, 0, 0)},
+        "Spine": {"rotation": (-0.70, 0, 0)},
+        "Chest": {"rotation": (-0.40, 0, 0)},
+        "Neck": {"rotation": (0.35, 0, 0)},
+        "Head": {"rotation": (0.72, 0, 0)},
+        "UpperArm.L": {"rotation": (1.91841, -0.11244, 0.43679)},
+        "Forearm.L": {"rotation": (0.06595, 0.03003, -0.46804)},
+        "Hand.L": {"rotation": (-0.22983, -0.00077, -0.09783)},
+        "UpperArm.R": {"rotation": (1.22593, -0.11315, 2.70506)},
+        "Forearm.R": {"rotation": (0.06595, -0.03003, 0.46804)},
+        "Hand.R": {"rotation": (-0.22983, 0.00077, 0.09783)},
+        "Thigh.L": {"rotation": (0.29476, -1.01505, -0.62633)},
+        "Shin.L": {"rotation": (0.06343, -0.00177, 0.0033)},
+        "Foot.L": {"rotation": (0.17157, -0.00015, 0.00171)},
+        "Thigh.R": {"rotation": (-1.29594, -2.23745, 0.86213)},
+        "Shin.R": {"rotation": (1.05698, 0.04063, -0.03045)},
+        "Foot.R": {"rotation": (1.30962, 0.01597, -0.01454)},
+    }
+    actions["BikeIdle"] = action("BikeIdle", [(1, bike_idle), (30, {**bike_idle, "Chest": {"rotation": (-0.385, 0, 0.01)}}), (60, bike_idle)])
+    bike_left = {**bike_idle, "Pelvis": {"location": (0, 0.315, 0.32), "rotation": (-0.04, 0, 0)}}
+    bike_right = {
+        **bike_idle,
+        "Pelvis": {"location": (0, 0.285, 0.32), "rotation": (-0.04, 0, 0)},
+        "Thigh.L": {"rotation": (0.35837, -0.84551, -0.94618)},
+        "Shin.L": {"rotation": (1.05698, -0.04063, 0.03045)},
+        "Foot.L": {"rotation": (1.30962, -0.01597, 0.01454)},
+        "Thigh.R": {"rotation": (-0.843, -2.10461, 0.56017)},
+        "Shin.R": {"rotation": (0.06343, 0.00177, -0.0033)},
+        "Foot.R": {"rotation": (0.17157, 0.00015, -0.00171)},
+    }
+    actions["BikeRide"] = action("BikeRide", [(1, bike_left), (20, bike_idle), (40, bike_right), (60, bike_idle), (80, bike_left)])
+    skateboard = {
+        "Pelvis": {"location": (0, 0.28, 0), "rotation": (-0.08, 0, 0.16)},
+        "Spine": {"rotation": (-0.12, 0, -0.1)},
+        "Chest": {"rotation": (-0.08, 0, -0.14)},
+        "UpperArm.L": {"rotation": (0.18, -0.08, -0.58)},
+        "UpperArm.R": {"rotation": (-0.12, 0.08, 0.64)},
+        "Thigh.L": {"rotation": (0.40952, 0.01586, 0.24082)},
+        "Shin.L": {"rotation": (-0.15544, 0.00361, -0.01136)},
+        "Foot.L": {"rotation": (-0.60304, -0.00117, -0.0044)},
+        "Thigh.R": {"rotation": (0.21454, -2.92961, -0.00003)},
+        "Shin.R": {"rotation": (-0.11056, -0.00268, 0.00688)},
+        "Foot.R": {"rotation": (-0.35817, 0.00052, 0.0031)},
+    }
+    actions["Skateboard"] = action("Skateboard", [(1, skateboard), (24, {**skateboard, "Pelvis": {"location": (0, 0.265, 0), "rotation": (-0.06, 0, 0.12)}, "Chest": {"rotation": (-0.06, 0, -0.08)}}), (48, skateboard)])
+    actions["Downed"] = action("Downed", [(1, {}), (18, {"Root": {"rotation": (0, 1.38, 0)}, "Pelvis": {"location": (0, 0.04, -0.55)}, "UpperArm.L": {"rotation": (-0.8, 0.2, 0.2)}, "UpperArm.R": {"rotation": (0.5, -0.2, -0.3)}}), (40, {"Root": {"rotation": (0, 1.52, 0)}, "Pelvis": {"location": (0, 0.02, -0.7)}})])
     reset_pose(armature)
     return actions
 
@@ -635,6 +743,16 @@ def export_avatar(collection: bpy.types.Collection, filepath: Path) -> None:
         obj.select_set(True)
     armature = next(obj for obj in collection.all_objects if obj.type == "ARMATURE")
     bpy.context.view_layer.objects.active = armature
+    from io_scene_gltf2 import GLTF2_filter_action
+    if not hasattr(bpy.types.Scene, "gltf_action_filter"):
+        bpy.types.Scene.gltf_action_filter = bpy.props.CollectionProperty(type=GLTF2_filter_action)
+        bpy.types.Scene.gltf_action_filter_active = bpy.props.IntProperty()
+    action_prefix = f"{armature['eg_avatar_id']}_"
+    bpy.context.scene.gltf_action_filter.clear()
+    for action in bpy.data.actions:
+        item = bpy.context.scene.gltf_action_filter.add()
+        item.action = action
+        item.keep = action.name.startswith(action_prefix)
     bpy.ops.export_scene.gltf(
         filepath=str(filepath),
         export_format="GLB",
@@ -645,6 +763,7 @@ def export_avatar(collection: bpy.types.Collection, filepath: Path) -> None:
         export_apply=False,
         export_animations=True,
         export_animation_mode="ACTIONS",
+        export_action_filter=True,
         export_force_sampling=True,
         export_skins=True,
         export_morph=False,
@@ -681,7 +800,7 @@ def write_manifest(path: Path, avatar_collections: dict[str, bpy.types.Collectio
         "designBasis": "Original fictional survivors shaped for the existing low-poly Melbourne anime palette; no external likenesses or scanned character assets.",
         "animationContract": {
             "rootMotion": False,
-            "clips": ["Idle", "Walk", "Run", "Crouch", "CrouchWalk", "Aim", "Melee", "Reload", "Jump", "Downed"],
+            "clips": list(PLAYER_CLIPS),
             "weaponSocket": "WeaponSocket parented to Hand.R",
         },
         "avatars": [],

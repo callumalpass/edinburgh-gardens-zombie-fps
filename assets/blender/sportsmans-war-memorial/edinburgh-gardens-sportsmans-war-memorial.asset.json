@@ -11,8 +11,18 @@
   "primaryEvidence": [
     "https://www.yarracity.vic.gov.au/things-to-do/arts/gallery/public-art/sportsmans-memorial",
     "https://placesofpride.awm.gov.au/memorials/241121",
-    "https://the3068group.org/wp-content/uploads/2025/11/2021-conservation-management-plan-_merged.pdf"
+    "https://the3068group.org/wp-content/uploads/2025/11/2021-conservation-management-plan-_merged.pdf",
+    "https://assets.heritagecouncil.vic.gov.au/assets/HCV-Determination_WW1-Sportsmans-Memorial-Arbour_21APR26.pdf"
   ],
+  "placementEvidence": {
+    "coordinate": {
+      "lat": -37.788058,
+      "lon": 144.98079
+    },
+    "method": "Vicmap AERIAL_WM_256 approximate pixel (360, 1221), registered against the exact OSM bowling-club wall and square substation",
+    "orientationRadians": -0.106,
+    "rejectedSurveyUse": "The Places of Pride pin falls visibly on the bowling-club roof and is retained for identity only."
+  },
   "translatedCondition": "Restored 2026 memorial arbour including the 2018 interpretation/photo and replica-wreath/name-panel works",
   "dimensionsGameUnits": {
     "arbourLength": 6.4,
@@ -26,7 +36,7 @@
     "restorationPanels": "team photograph and replica wreath/name panel remain visible on their photographed adjacent wall faces"
   },
   "uncertainty": [
-    "The AWM/Yarra sources fix the point and current identity, but no public measured plan fixes overall dimensions or exact column centres.",
+    "The AWM/Yarra records fix identity, but neither supplies survey geometry; the runtime point is an approximately 0.4 m/pixel Vicmap orthophoto fit and no public measured plan fixes overall dimensions or exact column centres.",
     "The 6.40 x 3.10 horizontal frame retains the existing photograph/aerial-fitted game dimensions and is not claimed as a survey.",
     "The short substation wall return is limited to the portion visible in CMP Figures 64-65; no unverified full substation shell is invented.",
     "The reproductive team photograph is a painterly geometric interpretation, not a copied raster image or portrait reconstruction.",
@@ -37,6 +47,6 @@
     "objectCount": 282,
     "meshObjectCount": 281,
     "materialCount": 14,
-    "triangleCount": 24403
+    "triangleCount": 24930
   }
 }

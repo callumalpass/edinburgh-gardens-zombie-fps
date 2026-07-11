@@ -18,9 +18,15 @@
       "Crouch",
       "CrouchWalk",
       "Aim",
+      "AimLongGun",
+      "AimSidearm",
+      "MeleeReady",
       "Melee",
       "Reload",
       "Jump",
+      "BikeIdle",
+      "BikeRide",
+      "Skateboard",
       "Downed"
     ],
     "weaponSocket": "WeaponSocket parented to Hand.R"

@@ -41,7 +41,8 @@ describe("Blender character assets", () => {
     expect(manifest.animationContract.rootMotion).toBe(false);
     expect(manifest.animationContract.weaponSocket).toContain("WeaponSocket");
     expect(manifest.animationContract.clips).toEqual([
-      "Idle", "Walk", "Run", "Crouch", "CrouchWalk", "Aim", "Melee", "Reload", "Jump", "Downed"
+      "Idle", "Walk", "Run", "Crouch", "CrouchWalk", "Aim", "AimLongGun", "AimSidearm", "MeleeReady",
+      "Melee", "Reload", "Jump", "BikeIdle", "BikeRide", "Skateboard", "Downed"
     ]);
     expect(manifest.avatars.find((avatar) => avatar.id === "milo")?.distinctiveFeature).toMatch(/light-brown curly hair.*bush hat/i);
   });

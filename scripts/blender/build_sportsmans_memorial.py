@@ -1,15 +1,17 @@
 """Build the restored 2026 Sportsman's War Memorial arbour.
 
-The Australian War Memorial/Places of Pride point controls placement. Lovell
-Chen CMP Figures 62 and 64-65 control the six Tuscan columns, pedestals,
+The Australian War Memorial/Places of Pride record controls identity; its pin
+is not treated as survey geometry. Vicmap aerial registration against the OSM
+bowling-club wall and substation controls placement. Lovell Chen CMP Figures
+62 and 64-65 control the six Tuscan columns, pedestals,
 perimeter beams, textured frieze, cornices, rafters, east IN MEMORIAM panel,
 raised swag panel and restored urn finials. City of Yarra's current public-art
 page controls the 2018 restoration additions: replica wreath/name panel and
 large reproductive team photograph.
 
 Blender +X is east; Blender -Y / glTF +Z is the current south footpath
-approach. Runtime rotation retains the existing photo/aerial-fitted 0.18-radian
-map axis while collision is limited to the six visible pedestals.
+approach. Runtime rotation uses the Vicmap/OSM wall-aligned -0.106-radian map
+axis while collision is limited to the six visible pedestals.
 """
 
 from __future__ import annotations
@@ -222,7 +224,7 @@ def text_mesh(
     # occupy only a few screen pixels in the game. Preserve the silhouette
     # while keeping the joined GLB within the same budget as other artifacts.
     decimate = obj.modifiers.new("Runtime inscription decimation", "DECIMATE")
-    decimate.ratio = 0.08 if face == "east" else 0.03
+    decimate.ratio = 0.16 if face == "east" else 0.03
     bpy.context.view_layer.objects.active = obj
     bpy.ops.object.modifier_apply(modifier=decimate.name)
     return finish(obj, target, root, mat, kind)
@@ -299,7 +301,11 @@ def add_team_photo_panel(
     dark: bpy.types.Material,
     light: bpy.types.Material,
 ) -> None:
-    y = 1.61
+    # Keep the interpretation surface visibly proud of the independently
+    # loaded bowling-club wall. The aerial-fit wall clearance is sub-pixel;
+    # placing this photographed applied panel at the inner column line avoids
+    # runtime depth occlusion without moving the memorial or club footprint.
+    y = 1.34
     box("2018 reproductive team photograph backing", (4.28, 0.075, 2.32), (0.42, y, 1.72), frame, target, root, "restoration-team-photo-frame", bevel=0.035)
     box("2018 reproductive team photograph", (4.12, 0.035, 2.16), (0.42, y - 0.055, 1.72), photo, target, root, "restoration-team-photo")
     for index in range(1, 6):
@@ -358,6 +364,7 @@ def build(target: bpy.types.Collection) -> None:
     root["eg_condition_date"] = "2026-07-11"
     root["eg_east_face"] = "Blender +X"
     root["eg_south_approach"] = "Blender -Y / Three.js +Z"
+    root["eg_runtime_map_angle"] = "-0.106 radians; parallel to the adjacent exact OSM bowling-club south wall"
 
     stone = material("Sportsman's Memorial restored warm-grey concrete", 0xB9B3A3, 0.76)
     stone_light = material("Sportsman's Memorial cornice highlight", 0xD2CCBA, 0.70)
@@ -578,7 +585,14 @@ def manifest(path: Path, target: bpy.types.Collection, blend: Path, glb: Path) -
             "https://www.yarracity.vic.gov.au/things-to-do/arts/gallery/public-art/sportsmans-memorial",
             "https://placesofpride.awm.gov.au/memorials/241121",
             "https://the3068group.org/wp-content/uploads/2025/11/2021-conservation-management-plan-_merged.pdf",
+            "https://assets.heritagecouncil.vic.gov.au/assets/HCV-Determination_WW1-Sportsmans-Memorial-Arbour_21APR26.pdf",
         ],
+        "placementEvidence": {
+            "coordinate": {"lat": -37.788058, "lon": 144.980790},
+            "method": "Vicmap AERIAL_WM_256 approximate pixel (360, 1221), registered against the exact OSM bowling-club wall and square substation",
+            "orientationRadians": -0.106,
+            "rejectedSurveyUse": "The Places of Pride pin falls visibly on the bowling-club roof and is retained for identity only.",
+        },
         "translatedCondition": "Restored 2026 memorial arbour including the 2018 interpretation/photo and replica-wreath/name-panel works",
         "dimensionsGameUnits": {"arbourLength": ASSET_LENGTH, "arbourDepth": ASSET_DEPTH, "urnTipHeight": 5.10},
         "navigationContract": {
@@ -588,7 +602,7 @@ def manifest(path: Path, target: bpy.types.Collection, blend: Path, glb: Path) -
             "restorationPanels": "team photograph and replica wreath/name panel remain visible on their photographed adjacent wall faces",
         },
         "uncertainty": [
-            "The AWM/Yarra sources fix the point and current identity, but no public measured plan fixes overall dimensions or exact column centres.",
+            "The AWM/Yarra records fix identity, but neither supplies survey geometry; the runtime point is an approximately 0.4 m/pixel Vicmap orthophoto fit and no public measured plan fixes overall dimensions or exact column centres.",
             "The 6.40 x 3.10 horizontal frame retains the existing photograph/aerial-fitted game dimensions and is not claimed as a survey.",
             "The short substation wall return is limited to the portion visible in CMP Figures 64-65; no unverified full substation shell is invented.",
             "The reproductive team photograph is a painterly geometric interpretation, not a copied raster image or portrait reconstruction.",
