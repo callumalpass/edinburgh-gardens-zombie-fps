@@ -120,6 +120,7 @@ import { NetworkSession, type NetworkInputFrame } from "./multiplayer/NetworkSes
 import { RemotePlayerRoster } from "./multiplayer/RemotePlayerRoster";
 import { ClientPositionReconciler } from "./multiplayer/ClientPositionReconciler";
 import { ClientCameraSmoother } from "./multiplayer/ClientCameraSmoother";
+import { ClientZombieInterpolator } from "./multiplayer/ClientZombieInterpolator";
 import {
   consumeLatestAuthoritativeInput,
   inputForAuthoritativeFrame,
@@ -281,6 +282,7 @@ export class GameApp {
   private readonly network = new NetworkSession();
   private readonly clientPositionReconciler = new ClientPositionReconciler();
   private readonly clientCameraSmoother = new ClientCameraSmoother();
+  private readonly clientZombieInterpolator = new ClientZombieInterpolator();
   private hasInitialNetworkSnapshot = false;
   private readonly smokeMode = new URLSearchParams(window.location.search).has("smoke");
   private readonly networkTestMode = new URLSearchParams(window.location.search).has("network-test");
@@ -310,7 +312,7 @@ export class GameApp {
   private paused = false;
   private testApi: GameTestApi | null = null;
   private readonly events = new AbortController();
-  private readonly frameLoop = new FrameLoop((tick) => this.tick(tick.dt, tick.elapsedSeconds, tick.rawDt));
+  private readonly frameLoop = new FrameLoop((tick) => this.tick(tick.dt, tick.elapsedSeconds));
   private disposed = false;
   private frame = 0;
   private readonly localPlayerState = createInitialAuthoritativePlayerState();
@@ -728,6 +730,7 @@ export class GameApp {
       document.exitPointerLock?.();
     }
     this.network.close();
+    this.clientZombieInterpolator.clear();
     this.remotePlayers?.clear();
     this.audio.dispose();
     this.clearActiveFlareBeacons();
@@ -1083,7 +1086,7 @@ export class GameApp {
     this.sendNetworkSnapshotNow();
   }
 
-  private tick(dt: number, now: number, rawDt = dt): void {
+  private tick(dt: number, now: number): void {
     if (this.disposed) {
       return;
     }
@@ -1091,7 +1094,10 @@ export class GameApp {
 
     const lanContinues = this.paused && this.network.enabled;
     if (this.state === "playing" && (!this.paused || lanContinues)) {
-      this.update(dt, now, Math.min(0.25, rawDt));
+      // Keep all authoritative actors on the same bounded frame step. Letting
+      // every moving player independently catch up a long renderer stall
+      // multiplies collision substeps by player count and can prolong the stall.
+      this.update(dt, now, dt);
     } else if (this.smokeMode) {
       this.camera.position.set(42, 42, 82);
       this.camera.lookAt(0, 0, 0);
@@ -1212,6 +1218,8 @@ export class GameApp {
       this.simulateLocalNetworkInput(input);
       this.clientPositionReconciler.record(input);
     }
+    this.clientZombieInterpolator.update(this.zombies, dt);
+    for (const zombie of this.zombies) this.syncZombieMeshPosition(zombie, now);
     this.syncNetworkPlayerBikeMeshes();
     this.updateRescueScenarioWorld(dt);
     this.updateWeaponDrops(dt);
@@ -2165,8 +2173,16 @@ export class GameApp {
       this.applyLocalPlayerSnapshot(self);
       this.hasInitialNetworkSnapshot = true;
     }
-    this.applyRemotePlayerSnapshots(snapshot.players.filter((player) => player.id !== this.network.localId));
-    this.applyZombieSnapshots(snapshot.zombies);
+    const hostSnapshotAt = snapshot.sentAt / 1000;
+    this.applyRemotePlayerSnapshots(
+      snapshot.players.filter((player) => player.id !== this.network.localId),
+      hostSnapshotAt
+    );
+    // Bike snapshots arrive before their owning player snapshots. Reattach
+    // mounted bikes only after local replay and remote transform smoothing so
+    // an older authoritative bike transform is never presented for one frame.
+    this.syncNetworkPlayerBikeMeshes();
+    this.applyZombieSnapshots(snapshot.zombies, hostSnapshotAt);
     this.applyPickupSnapshots(snapshot.pickups);
     this.applyWeaponDropSnapshots(snapshot.weaponDrops);
     this.applyWorldItemSnapshots(snapshot.worldItems ?? []);
@@ -2241,7 +2257,7 @@ export class GameApp {
     }
   }
 
-  private applyRemotePlayerSnapshots(snapshots: NetworkPlayerSnapshot[]): void {
+  private applyRemotePlayerSnapshots(snapshots: NetworkPlayerSnapshot[], snapshotAt: number): void {
     const seen = new Set<string>();
     for (const snapshot of snapshots) {
       seen.add(snapshot.id);
@@ -2252,13 +2268,17 @@ export class GameApp {
       // A new roster entry updates its mesh while applying the first
       // transform, so install the replicated loadout before that update.
       player.loadout = snapshot.loadout;
-      this.remotePlayers.applyNetworkTransform(player, {
-        position: new THREE.Vector3(snapshot.x, snapshot.y, snapshot.z),
-        yaw: snapshot.yaw,
-        height: snapshot.height,
-        jumpHeight: snapshot.jumpHeight,
-        crouching: snapshot.crouching
-      });
+      this.remotePlayers.applyNetworkTransform(
+        player,
+        {
+          position: new THREE.Vector3(snapshot.x, snapshot.y, snapshot.z),
+          yaw: snapshot.yaw,
+          height: snapshot.height,
+          jumpHeight: snapshot.jumpHeight,
+          crouching: snapshot.crouching
+        },
+        snapshotAt
+      );
       player.pitch = snapshot.pitch;
       player.health = snapshot.health;
       player.scrap = snapshot.scrap;
@@ -2293,12 +2313,13 @@ export class GameApp {
     }
   }
 
-  private applyZombieSnapshots(snapshots: NetworkZombieSnapshot[]): void {
+  private applyZombieSnapshots(snapshots: NetworkZombieSnapshot[], snapshotAt: number): void {
     const seen = new Set<number>();
     const byId = new Map(this.zombies.map((zombie) => [zombie.id, zombie]));
     for (const snapshot of snapshots) {
       seen.add(snapshot.id);
       let zombie = byId.get(snapshot.id);
+      const isNewZombie = !zombie;
       if (!zombie) {
         const mesh = this.meshFactory.createZombieMesh(snapshot.type);
         mesh.userData.dynamic = true;
@@ -2335,16 +2356,24 @@ export class GameApp {
         zombie.role = snapshot.role;
         void this.installBlenderZombie(zombie);
       }
-      zombie.position.set(snapshot.x, snapshot.y, snapshot.z);
       zombie.health = snapshot.health;
       zombie.maxHealth = snapshot.maxHealth;
       zombie.radius = snapshot.radius;
       zombie.aiState = snapshot.aiState;
-      zombie.mesh.position.set(snapshot.x, snapshot.y, snapshot.z);
-      zombie.mesh.rotation.y = snapshot.rotationY;
+      const transform = {
+        position: new THREE.Vector3(snapshot.x, snapshot.y, snapshot.z),
+        rotationY: snapshot.rotationY
+      };
+      if (isNewZombie) {
+        this.clientZombieInterpolator.reset(zombie, transform, snapshotAt);
+        this.syncZombieMeshPosition(zombie, performance.now() / 1000);
+      } else {
+        this.clientZombieInterpolator.push(zombie, transform, snapshotAt);
+      }
     }
     for (const zombie of [...this.zombies]) {
       if (!seen.has(zombie.id)) {
+        this.clientZombieInterpolator.remove(zombie.id);
         this.removeZombieVisual(zombie);
         this.zombies = this.zombies.filter((candidate) => candidate !== zombie);
       }
@@ -2562,7 +2591,7 @@ export class GameApp {
     bike.vehicleKind = snapshot.vehicleKind ?? bike.vehicleKind;
     this.bike = bike;
     if (stateChanged) this.rebuildBikeMesh(bike);
-    else this.syncBikeMesh(bike);
+    else if (snapshot.mountedByPlayerId !== this.network.localId) this.syncBikeMesh(bike);
   }
 
   private syncNetworkBikeOwnership(snapshots: NonNullable<NetworkGameSnapshot["bike"]>[]): void {
