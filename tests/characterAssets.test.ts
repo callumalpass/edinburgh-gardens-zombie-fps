@@ -33,6 +33,11 @@ describe("Blender character assets", () => {
       const definition = AVATAR_DEFINITIONS[avatar.id as keyof typeof AVATAR_DEFINITIONS];
       expect(definition.assetPath).toBe(avatar.glb.replace(/^public\//, ""));
       expect(existsSync(`public/${definition.portraitPath}`)).toBe(true);
+
+      const glb = readGlbJson(avatar.glb);
+      const sockets = (glb.nodes ?? []).filter((node) => node.extras?.eg_kind === "weapon-socket");
+      expect(sockets, `${avatar.id} must export one tagged weapon socket`).toHaveLength(1);
+      expect(sockets[0]?.name).toMatch(/^WeaponSocket(?:\.\d+)?$/);
     }
   });
 
@@ -47,3 +52,13 @@ describe("Blender character assets", () => {
     expect(manifest.avatars.find((avatar) => avatar.id === "milo")?.distinctiveFeature).toMatch(/light-brown curly hair.*bush hat/i);
   });
 });
+
+function readGlbJson(path: string): {
+  nodes?: Array<{ name?: string; extras?: { eg_kind?: string } }>;
+} {
+  const bytes = readFileSync(path);
+  const jsonChunkLength = bytes.readUInt32LE(12);
+  return JSON.parse(bytes.subarray(20, 20 + jsonChunkLength).toString("utf8")) as {
+    nodes?: Array<{ name?: string; extras?: { eg_kind?: string } }>;
+  };
+}

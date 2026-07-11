@@ -261,8 +261,16 @@ export class RemotePlayerRoster {
   }
 
   updateMesh(player: NetworkRemotePlayer): void {
-    if (player.weaponIdRendered !== player.loadout.weaponId) {
+    const weapon = player.mesh.getObjectByName("remote-weapon");
+    if (player.weaponIdRendered !== player.loadout.weaponId || !weapon) {
       this.rebuildWeapon(player);
+    } else {
+      const socket = this.weaponSocket(player);
+      const expectedParent = socket ?? player.mesh;
+      if (weapon.parent !== expectedParent) {
+        weapon.parent?.remove(weapon);
+        this.attachWeapon(player, weapon);
+      }
     }
     player.mesh.position.set(player.position.x, player.position.y + player.height + player.jumpHeight, player.position.z);
     player.mesh.rotation.y = player.yaw;
@@ -454,7 +462,7 @@ export class RemotePlayerRoster {
   }
 
   private attachWeapon(player: NetworkRemotePlayer, weapon: THREE.Object3D): void {
-    const socket = player.avatarVisual?.getObjectByName("WeaponSocket");
+    const socket = this.weaponSocket(player);
     if (!socket) {
       player.mesh.add(weapon);
       this.positionPlaceholderWeapon(weapon);
@@ -465,6 +473,21 @@ export class RemotePlayerRoster {
     weapon.rotation.set(0, 0, 0);
     weapon.scale.setScalar(weaponScale(player.loadout.weaponId));
     weapon.userData.mountProfile = weaponMountProfile(player.loadout.weaponId);
+  }
+
+  private weaponSocket(player: NetworkRemotePlayer): THREE.Object3D | undefined {
+    const avatar = player.avatarVisual;
+    if (!avatar) return undefined;
+    const exact = avatar.getObjectByName("WeaponSocket");
+    if (exact) return exact;
+    let socket: THREE.Object3D | undefined;
+    avatar.traverse((object) => {
+      if (!socket && (object.userData.eg_kind === "weapon-socket" || /^WeaponSocket\.\d+$/.test(object.name))) {
+        socket = object;
+      }
+    });
+    if (socket) socket.name = "WeaponSocket";
+    return socket;
   }
 
   private async loadAvatar(player: NetworkRemotePlayer, avatarId: AvatarId): Promise<void> {

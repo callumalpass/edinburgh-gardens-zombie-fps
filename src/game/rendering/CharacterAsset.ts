@@ -23,6 +23,13 @@ export async function instantiateCharacterAsset(avatarId: AvatarId): Promise<Cha
   root.userData.kind = "blender-player-avatar";
   root.userData.avatarId = avatarId;
 
+  // Blender object names are global within the source .blend, so sockets in
+  // later avatar collections export as WeaponSocket.001, .002, and .003.
+  // Runtime code needs one stable contract after each GLB is cloned.
+  const weaponSocket = root.getObjectByName("WeaponSocket")
+    ?? findObject(root, (object) => object.userData.eg_kind === "weapon-socket" || /^WeaponSocket\.\d+$/.test(object.name));
+  if (weaponSocket) weaponSocket.name = "WeaponSocket";
+
   const orphanHelper = root.children.find((child) => child.name === "Icosphere" && Object.keys(child.userData).length === 0);
   if (orphanHelper) root.remove(orphanHelper);
 
@@ -47,6 +54,14 @@ export async function instantiateCharacterAsset(avatarId: AvatarId): Promise<Cha
       return clip;
     })
   };
+}
+
+function findObject(root: THREE.Object3D, predicate: (object: THREE.Object3D) => boolean): THREE.Object3D | undefined {
+  let found: THREE.Object3D | undefined;
+  root.traverse((object) => {
+    if (!found && predicate(object)) found = object;
+  });
+  return found;
 }
 
 function loadCharacterTemplate(avatarId: AvatarId): Promise<CharacterTemplate> {

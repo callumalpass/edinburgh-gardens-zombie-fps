@@ -67,6 +67,37 @@ describe("RemotePlayerRoster", () => {
     expect(meshFactory.weapons).toEqual(["knife", "carbine"]);
   });
 
+  it("restores a replicated weapon that was detached without a loadout change", () => {
+    const { meshFactory, roster } = createRoster();
+    const player = roster.add("peer-1", "One");
+    const weapon = player.mesh.getObjectByName("remote-weapon");
+    weapon?.parent?.remove(weapon);
+
+    roster.updateMesh(player);
+
+    expect(player.mesh.getObjectByName("remote-weapon")).toBeDefined();
+    expect(meshFactory.weapons).toEqual(["knife", "knife"]);
+  });
+
+  it("reattaches a replicated weapon to the avatar socket", async () => {
+    const loadCharacterAsset = vi.fn(async () => {
+      const root = new THREE.Group();
+      const socket = Object.assign(new THREE.Group(), { name: "WeaponSocket.003" });
+      socket.userData.eg_kind = "weapon-socket";
+      root.add(socket);
+      return { root, animations: [new THREE.AnimationClip("Idle", 1, [])] };
+    });
+    const { roster } = createRoster(loadCharacterAsset);
+    const player = roster.add("peer-1", "One");
+    await vi.waitFor(() => expect(player.avatarVisual).not.toBeNull());
+    const weapon = player.mesh.getObjectByName("remote-weapon")!;
+    player.mesh.add(weapon);
+
+    roster.updateMesh(player);
+
+    expect(weapon.parent?.name).toBe("WeaponSocket");
+  });
+
   it("shows a short muzzle flash for replicated firearm shots", () => {
     const { roster } = createRoster();
     const player = roster.add("peer-1", "One");
