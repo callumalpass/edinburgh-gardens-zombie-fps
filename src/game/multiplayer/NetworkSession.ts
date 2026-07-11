@@ -192,6 +192,15 @@ export class NetworkSession {
     return input;
   }
 
+  pendingPredictionFrame(frame: NetworkInputFrame): NetworkInputState | null {
+    if (!this.isClient || !this.client?.connected || this.inputDuration <= 0.000001) return null;
+    return {
+      sequence: this.inputSequence + 1,
+      duration: Math.min(0.25, Math.max(0, this.inputDuration)),
+      ...frame
+    };
+  }
+
   sendSnapshotFrame(dt: number, buildSnapshot: () => NetworkGameSnapshot): boolean {
     if (!this.isHost || !this.connected || !this.client) {
       return false;

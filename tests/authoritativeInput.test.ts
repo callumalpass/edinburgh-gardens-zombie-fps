@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  consumeLatestAuthoritativeInput,
-  inputForAuthoritativeFrame,
+  consumeAuthoritativeInputBudget,
   queueAuthoritativeInput
 } from "../src/game/multiplayer/authoritativeInput";
 import type { NetworkInputState } from "../src/game/multiplayer/types";
@@ -19,25 +18,31 @@ const input = (sequence: number, moveZ = -1): NetworkInputState => ({
 });
 
 describe("authoritative input sampling", () => {
-  it("collapses a delayed packet burst to the newest state instead of fast-forwarding it", () => {
+  it("consumes queued simulation time once without exceeding the host frame budget", () => {
     const pending: NetworkInputState[] = [];
-    for (let sequence = 1; sequence <= 20; sequence += 1) {
+    for (let sequence = 1; sequence <= 3; sequence += 1) {
       expect(queueAuthoritativeInput(pending, 0, input(sequence))).toBe(true);
     }
 
-    const latest = consumeLatestAuthoritativeInput(pending);
-    expect(latest?.sequence).toBe(20);
+    const first = consumeAuthoritativeInputBudget(pending, 1 / 40);
+    expect(first.map((slice) => [slice.input.sequence, slice.completedSequence])).toEqual([[1, 1], [2, null]]);
+    expect(first[0]!.input.duration).toBeCloseTo(1 / 60);
+    expect(first[1]!.input.duration).toBeCloseTo(1 / 120);
+    expect(pending).toHaveLength(2);
+    expect(pending[0]!.sequence).toBe(2);
+    expect(pending[0]!.duration).toBeCloseTo(1 / 120);
+
+    const second = consumeAuthoritativeInputBudget(pending, 1 / 40);
+    expect(second.map((slice) => slice.completedSequence)).toEqual([2, 3]);
+    expect(second.reduce((total, slice) => total + slice.input.duration, 0)).toBeCloseTo(1 / 40);
     expect(pending).toEqual([]);
   });
 
-  it("rejects acknowledged inputs and neutralizes a stale held key", () => {
+  it("rejects acknowledged inputs and keeps a bounded ordered queue", () => {
     const pending: NetworkInputState[] = [];
     expect(queueAuthoritativeInput(pending, 4, input(4))).toBe(false);
     expect(queueAuthoritativeInput(pending, 4, input(5))).toBe(true);
-
-    const active = inputForAuthoritativeFrame(input(5), 10, 10.2);
-    const stale = inputForAuthoritativeFrame(input(5), 10, 10.31);
-    expect(active.sprint).toBe(true);
-    expect(stale).toMatchObject({ moveX: 0, moveZ: 0, sprint: false, aim: false });
+    expect(queueAuthoritativeInput(pending, 4, input(5))).toBe(false);
+    expect(pending.map((candidate) => candidate.sequence)).toEqual([5]);
   });
 });

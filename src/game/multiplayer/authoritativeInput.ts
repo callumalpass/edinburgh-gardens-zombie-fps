@@ -1,7 +1,11 @@
 import type { NetworkInputState } from "./types";
 
-export const NETWORK_INPUT_STALE_SECONDS = 0.3;
-const MAX_PENDING_INPUTS = 12;
+const MAX_PENDING_INPUTS = 180;
+
+export interface AuthoritativeInputSlice {
+  input: NetworkInputState;
+  completedSequence: number | null;
+}
 
 export function queueAuthoritativeInput(
   pending: NetworkInputState[],
@@ -18,29 +22,33 @@ export function queueAuthoritativeInput(
 }
 
 /**
- * Movement input is state, not elapsed simulation time. The host consumes the
- * newest state once per authoritative frame instead of fast-forwarding a
- * packet backlog in one render frame.
+ * Advances queued client commands by at most the host frame's simulation
+ * budget. Each command duration is consumed exactly once, and its sequence is
+ * acknowledged only after that duration has actually been simulated.
  */
-export function consumeLatestAuthoritativeInput(pending: NetworkInputState[]): NetworkInputState | null {
-  const latest = pending.at(-1) ?? null;
-  pending.length = 0;
-  return latest;
-}
-
-export function inputForAuthoritativeFrame(
-  input: NetworkInputState,
-  lastInputAt: number,
-  now: number,
-  staleAfter = NETWORK_INPUT_STALE_SECONDS
-): NetworkInputState {
-  if (now - lastInputAt <= staleAfter) return input;
-  return {
-    ...input,
-    moveX: 0,
-    moveZ: 0,
-    sprint: false,
-    crouch: false,
-    aim: false
-  };
+export function consumeAuthoritativeInputBudget(
+  pending: NetworkInputState[],
+  budget: number
+): AuthoritativeInputSlice[] {
+  const slices: AuthoritativeInputSlice[] = [];
+  let remaining = Math.max(0, budget);
+  while (pending.length > 0 && remaining > 0.000001) {
+    const command = pending[0]!;
+    const commandDuration = Math.max(0, command.duration);
+    if (commandDuration <= 0.000001) {
+      pending.shift();
+      slices.push({ input: { ...command, duration: 0 }, completedSequence: command.sequence });
+      continue;
+    }
+    const duration = Math.min(commandDuration, remaining);
+    command.duration = Math.max(0, commandDuration - duration);
+    remaining = Math.max(0, remaining - duration);
+    const completed = command.duration <= 0.000001;
+    slices.push({
+      input: { ...command, duration },
+      completedSequence: completed ? command.sequence : null
+    });
+    if (completed) pending.shift();
+  }
+  return slices;
 }

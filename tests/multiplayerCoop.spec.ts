@@ -52,6 +52,26 @@ test("clients render and fire weapons while sustained movement stays smooth", as
         && snapshot.visibleWeaponDrops === snapshot.weaponDrops
         && snapshot.weaponDropMeshes >= snapshot.weaponDrops;
     });
+    const weaponDropPersistence = await client.evaluate(() => new Promise<{
+      frames: number;
+      minDrops: number;
+      minVisibleDrops: number;
+    }>((resolve) => {
+      let frames = 0;
+      let minDrops = Number.POSITIVE_INFINITY;
+      let minVisibleDrops = Number.POSITIVE_INFINITY;
+      const sample = () => {
+        const snapshot = window.__EGAME__!.snapshot();
+        minDrops = Math.min(minDrops, snapshot.weaponDrops);
+        minVisibleDrops = Math.min(minVisibleDrops, snapshot.visibleWeaponDrops);
+        frames += 1;
+        if (frames >= 30) resolve({ frames, minDrops, minVisibleDrops });
+        else requestAnimationFrame(sample);
+      };
+      requestAnimationFrame(sample);
+    }));
+    expect(weaponDropPersistence.minDrops).toBeGreaterThan(0);
+    expect(weaponDropPersistence.minVisibleDrops).toBe(weaponDropPersistence.minDrops);
 
     expect(await host.evaluate(() => window.__EGAME__!.testScope("carbine"))).toBe(true);
     await client.waitForFunction(() => {

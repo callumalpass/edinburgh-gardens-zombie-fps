@@ -123,7 +123,8 @@ export interface NetworkWeaponDropSnapshot {
   x: number;
   y: number;
   z: number;
-  ttl: number;
+  /** Null represents a permanent world cache; JSON cannot preserve Infinity. */
+  ttl: number | null;
   source: WeaponDrop["source"];
 }
 

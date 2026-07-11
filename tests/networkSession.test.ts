@@ -157,8 +157,10 @@ describe("NetworkSession", () => {
 
     expect(session.sendInputFrame(1, "playing", inputFrame)?.sequence).toBe(1);
     expect(session.sendInputFrame(0.1, "playing", inputFrame)).toBeNull();
+    expect(session.pendingPredictionFrame(inputFrame)).toMatchObject({ sequence: 2, duration: 0.1 });
     expect(session.sendInputFrame(0.4, "playing", inputFrame)?.sequence).toBe(2);
     expect(session.sendInputFrame(1, "ready", inputFrame)).toBeNull();
+    expect(session.pendingPredictionFrame(inputFrame)).toBeNull();
     expect(transport.inputs.map((input) => input.sequence)).toEqual([1, 2]);
     expect(transport.inputs.map((input) => input.duration)).toEqual([0.25, 0.25]);
   });

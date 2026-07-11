@@ -121,9 +121,9 @@ import { RemotePlayerRoster } from "./multiplayer/RemotePlayerRoster";
 import { ClientPositionReconciler } from "./multiplayer/ClientPositionReconciler";
 import { ClientCameraSmoother } from "./multiplayer/ClientCameraSmoother";
 import { ClientZombieInterpolator } from "./multiplayer/ClientZombieInterpolator";
+import { hydrateNetworkTtl, serializeNetworkTtl } from "./multiplayer/snapshotValues";
 import {
-  consumeLatestAuthoritativeInput,
-  inputForAuthoritativeFrame,
+  consumeAuthoritativeInputBudget,
   queueAuthoritativeInput
 } from "./multiplayer/authoritativeInput";
 import type {
@@ -1212,12 +1212,17 @@ export class GameApp {
   }
 
   private updateNetworkClientFrame(dt: number, now: number, playerDt = dt): void {
-    const input = this.sendNetworkInputFrame(playerDt);
+    const frameInput = this.currentNetworkInput();
+    const sentInput = this.sendNetworkInputFrame(playerDt, frameInput);
     this.loadout = finishReloadIfReady(this.loadout, now);
-    if (input) {
-      this.simulateLocalNetworkInput(input);
-      this.clientPositionReconciler.record(input);
+    if (this.hasInitialNetworkSnapshot) {
+      this.simulateLocalNetworkInput({
+        sequence: sentInput?.sequence ?? 0,
+        duration: playerDt,
+        ...frameInput
+      });
     }
+    if (sentInput) this.clientPositionReconciler.record(sentInput);
     this.clientZombieInterpolator.update(this.zombies, dt);
     for (const zombie of this.zombies) this.syncZombieMeshPosition(zombie, now);
     this.syncNetworkPlayerBikeMeshes();
@@ -1258,9 +1263,9 @@ export class GameApp {
       .sort((a, b) => a.position.distanceTo(this.player.position) - b.position.distanceTo(this.player.position))[0] ?? null;
   }
 
-  private sendNetworkInputFrame(dt: number): NetworkInputState | null {
+  private sendNetworkInputFrame(dt: number, frame = this.currentNetworkInput()): NetworkInputState | null {
     if (!this.hasInitialNetworkSnapshot) return null;
-    return this.network.sendInputFrame(dt, this.state, this.currentNetworkInput());
+    return this.network.sendInputFrame(dt, this.state, frame);
   }
 
   private simulateLocalNetworkInput(input: NetworkInputState): void {
@@ -1355,7 +1360,7 @@ export class GameApp {
         x: drop.position.x,
         y: drop.position.y,
         z: drop.position.z,
-        ttl: drop.ttl,
+        ttl: serializeNetworkTtl(drop.ttl),
         source: drop.source
       })),
       worldItems: this.droppedItems.map((item) => ({
@@ -1535,29 +1540,36 @@ export class GameApp {
     }
     for (const player of this.remotePlayers.values()) {
       player.loadout = finishReloadIfReady(player.loadout, now);
-      const latestInput = consumeLatestAuthoritativeInput(player.pendingInputs);
-      if (latestInput && latestInput.sequence > player.lastProcessedInputSequence) {
-        player.input = latestInput;
-        player.yaw = latestInput.yaw;
-        player.pitch = latestInput.pitch;
-        player.lastProcessedInputSequence = latestInput.sequence;
-      }
+      const inputSlices = consumeAuthoritativeInputBudget(player.pendingInputs, dt);
       if (player.health <= 0) {
+        for (const slice of inputSlices) {
+          player.input = slice.input;
+          if (slice.completedSequence !== null) player.lastProcessedInputSequence = slice.completedSequence;
+        }
         this.releaseNetworkPlayerBike(player.id);
         player.mountedBikeId = null;
         player.velocity.multiplyScalar(0.72);
         this.remotePlayers.updateMesh(player);
         continue;
       }
-      this.updateNetworkPlayerMovement(player, dt, now);
-      this.updateNetworkPlayerCondition(player, dt);
+      for (const slice of inputSlices) {
+        player.input = slice.input;
+        player.yaw = slice.input.yaw;
+        player.pitch = slice.input.pitch;
+        this.updateNetworkPlayerMovement(player, slice.input, slice.input.duration);
+        this.updateNetworkPlayerCondition(player, slice.input.duration);
+        if (slice.completedSequence !== null) player.lastProcessedInputSequence = slice.completedSequence;
+      }
+      if (inputSlices.length === 0) {
+        player.velocity.x = 0;
+        player.velocity.z = 0;
+        player.isSprinting = false;
+      }
       this.remotePlayers.updateMesh(player);
     }
   }
 
-  private updateNetworkPlayerMovement(player: NetworkRemotePlayer, dt: number, now: number): void {
-    const input = inputForAuthoritativeFrame(player.input, player.lastInputAt, now);
-    if (input !== player.input) player.input = input;
+  private updateNetworkPlayerMovement(player: NetworkRemotePlayer, input: NetworkInputState, dt: number): void {
     const mountedBike = player.mountedBikeId
       ? this.bikes.find((bike) => bike.id === player.mountedBikeId && bike.mountedByPlayerId === player.id) ?? null
       : null;
@@ -2214,6 +2226,7 @@ export class GameApp {
     const cameraBefore = this.clientCameraSmoother.presentedAnchor(this.localPlayerCameraAnchor());
     const localYaw = this.player.yaw;
     const localPitch = this.player.pitch;
+    const predictionTail = this.network.pendingPredictionFrame(this.currentNetworkInput());
     const unacknowledgedInputs = this.clientPositionReconciler.acknowledge(snapshot.lastProcessedInputSequence ?? 0);
     this.player.position.set(snapshot.x, snapshot.y, snapshot.z);
     this.player.velocity.set(snapshot.velocityX, snapshot.velocityY, snapshot.velocityZ);
@@ -2240,6 +2253,7 @@ export class GameApp {
     this.carriedItem = snapshot.carriedItem ?? null;
     this.isSprinting = snapshot.sprinting ?? false;
     for (const input of unacknowledgedInputs) this.simulateLocalNetworkInput(input);
+    if (predictionTail) this.simulateLocalNetworkInput(predictionTail);
     this.player.yaw = localYaw;
     this.player.pitch = localPitch;
     this.compensateNetworkCamera(cameraBefore);
@@ -2435,14 +2449,14 @@ export class GameApp {
           label: snapshot.label,
           mesh,
           position: mesh.position,
-          ttl: snapshot.ttl,
+          ttl: hydrateNetworkTtl(snapshot.ttl),
           source: snapshot.source
         };
         this.weaponDrops.push(drop);
       }
       drop.weaponId = snapshot.weaponId;
       drop.label = snapshot.label;
-      drop.ttl = snapshot.ttl;
+      drop.ttl = hydrateNetworkTtl(snapshot.ttl);
       drop.position.set(snapshot.x, snapshot.y, snapshot.z);
       drop.mesh.position.copy(drop.position);
       drop.mesh.visible = true;
