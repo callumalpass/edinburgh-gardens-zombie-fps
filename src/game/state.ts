@@ -223,6 +223,7 @@ export interface GameTestApi {
   testAddTeammate: (name?: string, avatarId?: AvatarId) => boolean;
   testAvatarStates: () => Array<{ id: string; avatarId: AvatarId; assetLoaded: boolean; animation: string; weaponAttachedToSocket: boolean }>;
   testToggleBike: () => boolean;
+  testPositionNetworkPeerAtWeapon: (weaponId?: WeaponId) => boolean;
   testEquipNetworkPeer: (weaponId?: WeaponId) => boolean;
   testStartRescueScenario: () => Snapshot;
   testDefeatCaretaker: () => Snapshot;

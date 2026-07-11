@@ -73,6 +73,25 @@ test("clients render and fire weapons while sustained movement stays smooth", as
     expect(weaponDropPersistence.minDrops).toBeGreaterThan(0);
     expect(weaponDropPersistence.minVisibleDrops).toBe(weaponDropPersistence.minDrops);
 
+    const dropsBeforePickup = (await host.evaluate(() => window.__EGAME__!.snapshot())).weaponDrops;
+    expect(await host.evaluate(() => window.__EGAME__!.testPositionNetworkPeerAtWeapon("shotgun"))).toBe(true);
+    await client.waitForFunction(() => {
+      const local = window.__EGAME__!.snapshot();
+      return local.weaponDrops > 0;
+    });
+    await client.keyboard.press("x");
+    await host.waitForFunction(() => {
+      const player = window.__EGAME__!.snapshot().networkPlayers[0];
+      return player?.weapon === "shotgun" && player.lastProcessedActionSequence > 0;
+    });
+    await client.waitForFunction((expectedDrops) => {
+      const snapshot = window.__EGAME__!.snapshot();
+      return snapshot.weapon === "shotgun"
+        && snapshot.viewWeaponVisible
+        && snapshot.viewWeaponMeshes > 0
+        && snapshot.weaponDrops === expectedDrops;
+    }, dropsBeforePickup - 1);
+
     expect(await host.evaluate(() => window.__EGAME__!.testScope("carbine"))).toBe(true);
     await client.waitForFunction(() => {
       const hostPlayer = window.__EGAME__!.snapshot().networkPlayers[0];
@@ -106,6 +125,20 @@ test("clients render and fire weapons while sustained movement stays smooth", as
       const sampleState = await client.evaluate(() => ({ time: performance.now(), snapshot: window.__EGAME__!.snapshot() }));
       movementSamples.push({ time: sampleState.time, x: sampleState.snapshot.cameraX, z: sampleState.snapshot.cameraZ });
     }
+    const renderSamples = await client.evaluate(() => new Promise<Array<{ time: number; x: number; z: number; correction: number }>>((resolve) => {
+      const samples: Array<{ time: number; x: number; z: number; correction: number }> = [];
+      const startedAt = performance.now();
+      const sample = (time: number) => {
+        const snapshot = window.__EGAME__!.snapshot();
+        samples.push({ time, x: snapshot.cameraX, z: snapshot.cameraZ, correction: snapshot.networkCorrection });
+        if (samples.length >= 60 || time - startedAt >= 2_500) {
+          resolve(samples);
+          return;
+        }
+        requestAnimationFrame(sample);
+      };
+      requestAnimationFrame(sample);
+    }));
     await host.waitForFunction((startingStamina) => {
       const player = window.__EGAME__!.snapshot().networkPlayers[0];
       return Boolean(player?.sprinting && player.stamina < startingStamina - 25);
@@ -150,6 +183,13 @@ test("clients render and fire weapons while sustained movement stays smooth", as
     }));
     expect(Math.max(...movementSteps.map((step) => Math.hypot(step.x, step.z) / step.duration))).toBeLessThan(20);
     expect(Math.min(...movementSteps.map((step) => step.x * directionX + step.z * directionZ))).toBeGreaterThan(-0.3);
+    expect(renderSamples.length).toBeGreaterThan(4);
+    const renderSteps = renderSamples.slice(1).map((sample, index) => ({
+      duration: Math.max(0.001, (sample.time - renderSamples[index]!.time) / 1000),
+      forward: (sample.x - renderSamples[index]!.x) * directionX + (sample.z - renderSamples[index]!.z) * directionZ
+    }));
+    expect(Math.min(...renderSteps.map((step) => step.forward / step.duration))).toBeGreaterThan(-1.5);
+    expect(Math.max(...renderSamples.map((sample) => sample.correction))).toBeLessThan(0.8);
     const stoppedSteps = stoppedCameraSamples.slice(1).map((sample, index) =>
       Math.hypot(sample.x - stoppedCameraSamples[index]!.x, sample.z - stoppedCameraSamples[index]!.z)
     );

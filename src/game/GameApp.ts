@@ -312,7 +312,11 @@ export class GameApp {
   private paused = false;
   private testApi: GameTestApi | null = null;
   private readonly events = new AbortController();
-  private readonly frameLoop = new FrameLoop((tick) => this.tick(tick.dt, tick.elapsedSeconds));
+  private readonly frameLoop = new FrameLoop((tick) => this.tick(
+    tick.dt,
+    tick.elapsedSeconds,
+    Math.min(0.25, tick.rawDt)
+  ));
   private disposed = false;
   private frame = 0;
   private readonly localPlayerState = createInitialAuthoritativePlayerState();
@@ -676,6 +680,7 @@ export class GameApp {
         weaponAttachedToSocket: player.mesh.getObjectByName("remote-weapon")?.parent?.name === "WeaponSocket"
       })),
       testToggleBike: () => this.testToggleBike(),
+      testPositionNetworkPeerAtWeapon: (weaponId) => this.testPositionNetworkPeerAtWeapon(weaponId),
       testEquipNetworkPeer: (weaponId) => this.testEquipNetworkPeer(weaponId),
       testStartRescueScenario: () => {
         this.startRescueScenarioIfNeeded(true);
@@ -1086,7 +1091,7 @@ export class GameApp {
     this.sendNetworkSnapshotNow();
   }
 
-  private tick(dt: number, now: number): void {
+  private tick(dt: number, now: number, playerDt = dt): void {
     if (this.disposed) {
       return;
     }
@@ -1097,7 +1102,7 @@ export class GameApp {
       // Keep all authoritative actors on the same bounded frame step. Letting
       // every moving player independently catch up a long renderer stall
       // multiplies collision substeps by player count and can prolong the stall.
-      this.update(dt, now, dt);
+      this.update(dt, now, playerDt);
     } else if (this.smokeMode) {
       this.camera.position.set(42, 42, 82);
       this.camera.lookAt(0, 0, 0);
@@ -5969,6 +5974,20 @@ export class GameApp {
       this.updateBikes(0);
     }
     return this.toggleBike(bike);
+  }
+
+  private testPositionNetworkPeerAtWeapon(weaponId?: WeaponId): boolean {
+    const player = this.remotePlayers.values().next().value as NetworkRemotePlayer | undefined;
+    const drop = weaponId
+      ? this.weaponDrops.find((candidate) => candidate.weaponId === weaponId) ?? null
+      : this.weaponDrops[0] ?? null;
+    if (!this.isNetworkHost || !player || !drop) return false;
+    player.position.set(drop.position.x, this.groundY(drop.position), drop.position.z);
+    player.velocity.set(0, 0, 0);
+    player.input = { ...player.input, moveX: 0, moveZ: 0, sprint: false };
+    this.remotePlayers.updateMesh(player);
+    this.sendNetworkSnapshotNow();
+    return true;
   }
 
   private testEquipNetworkPeer(weaponId: WeaponId = "carbine"): boolean {
