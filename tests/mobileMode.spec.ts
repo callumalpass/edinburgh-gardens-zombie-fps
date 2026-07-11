@@ -5,6 +5,32 @@ test.afterEach(async ({ page }) => {
   if (!page.isClosed()) await page.evaluate(() => window.__EGAME__?.dispose()).catch(() => {});
 });
 
+test("the main menu toggles and persists mobile mode", async ({ page }) => {
+  await page.goto("/");
+  const mobileMode = page.getByRole("checkbox", { name: /mobile mode/i });
+  await expect(mobileMode).not.toBeChecked();
+
+  await mobileMode.check();
+  expect(await page.evaluate(() => localStorage.getItem("egll.mobileMode"))).toBe("true");
+  await page.reload();
+  await expect(mobileMode).toBeChecked();
+
+  await page.getByRole("button", { name: /play solo/i }).click();
+  await page.waitForFunction(() => window.__EGAME__?.ready === true);
+  expect(new URL(page.url()).searchParams.get("touch")).toBe("1");
+  await expect(page.locator(".touch-controls")).toBeVisible();
+  expect((await page.evaluate(() => window.__EGAME__!.snapshot())).renderQuality).toBe("low");
+
+  await page.goto("/");
+  await expect(mobileMode).toBeChecked();
+  await mobileMode.uncheck();
+  expect(await page.evaluate(() => localStorage.getItem("egll.mobileMode"))).toBe("false");
+  await page.getByRole("button", { name: /play solo/i }).click();
+  await page.waitForFunction(() => window.__EGAME__?.ready === true);
+  expect(new URL(page.url()).searchParams.get("touch")).toBe("0");
+  await expect(page.locator(".touch-controls")).toBeHidden();
+});
+
 test("touch layouts support movement, free look, combat controls and the field bag", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 915, height: 412 });
   await page.goto("/?smoke=1&touch=1");

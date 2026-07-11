@@ -5,6 +5,7 @@ import {
   type InputAction,
   type InputBindings
 } from "./inputBindings";
+import { shouldUseTouchControls } from "./mobileMode";
 
 export interface MovementInput {
   x: number;
@@ -295,14 +296,6 @@ export class InputController {
     shell?.querySelector<HTMLElement>('[data-touch-action="crouch"]')?.classList.toggle("active", this.virtualCrouch);
     shell?.querySelector<HTMLElement>('[data-touch-action="sprint"]')?.classList.toggle("active", this.virtualSprint);
   }
-}
-
-export function shouldUseTouchControls(): boolean {
-  if (typeof window === "undefined") return false;
-  const params = new URLSearchParams(window.location.search);
-  return params.has("touch")
-    || navigator.maxTouchPoints > 0
-    || window.matchMedia?.("(pointer: coarse)").matches === true;
 }
 
 export function movementInputFromKeys(

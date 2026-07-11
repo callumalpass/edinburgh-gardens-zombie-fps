@@ -8,6 +8,7 @@ import {
   saveSelectedAvatar,
   type AvatarId
 } from "./game/characters";
+import { saveMobileModePreference, shouldUseTouchControls } from "./game/input/mobileMode";
 import "./styles/main.css";
 
 interface ElectronLanRuntime {
@@ -244,6 +245,7 @@ async function renderLaunchMenu(container: HTMLElement): Promise<void> {
   const defaultAvatar = normalizeAvatarId(params.get("avatar") ?? loadSelectedAvatar());
   const defaultRoom = params.get("room") || "edinburgh-gardens";
   const defaultServer = params.get("server") || runtime?.relay?.lanUrls[0] || defaultLanServer();
+  const defaultMobileMode = shouldUseTouchControls();
 
   container.innerHTML = launchMenuMarkup({
     runtime,
@@ -251,7 +253,8 @@ async function renderLaunchMenu(container: HTMLElement): Promise<void> {
     playerName: defaultName,
     avatarId: defaultAvatar,
     roomId: defaultRoom,
-    serverUrl: defaultServer
+    serverUrl: defaultServer,
+    mobileMode: defaultMobileMode
   });
 
   const form = container.querySelector<HTMLFormElement>("[data-launch-form]");
@@ -264,9 +267,11 @@ async function renderLaunchMenu(container: HTMLElement): Promise<void> {
   const avatarField = container.querySelector<HTMLInputElement>('[name="avatarId"]');
   const submitButton = container.querySelector<HTMLButtonElement>("[data-launch-submit]");
   const discoveryList = container.querySelector<HTMLElement>("[data-discovery-list]");
-  if (!form || !modeInput || !status || !hostDetails || !serverField || !roomField || !nameField || !avatarField || !submitButton || !discoveryList) {
+  const mobileModeInput = container.querySelector<HTMLInputElement>("[data-mobile-mode]");
+  if (!form || !modeInput || !status || !hostDetails || !serverField || !roomField || !nameField || !avatarField || !submitButton || !discoveryList || !mobileModeInput) {
     throw new Error("Launch menu failed to render required controls");
   }
+  mobileModeInput.addEventListener("change", () => saveMobileModePreference(mobileModeInput.checked));
   container.querySelector<HTMLButtonElement>("[data-open-updater]")?.addEventListener("click", () => {
     window.dispatchEvent(new Event("edinburgh:open-updater"));
   });
@@ -334,6 +339,7 @@ async function renderLaunchMenu(container: HTMLElement): Promise<void> {
     }
     if (target.dataset.enterHost) {
       const hostUrl = new URL(target.dataset.enterHost);
+      setMobileModeParam(hostUrl.searchParams, mobileModeInput.checked);
       launchGame(hostUrl.searchParams);
       return;
     }
@@ -344,7 +350,7 @@ async function renderLaunchMenu(container: HTMLElement): Promise<void> {
     if (target.dataset.joinDiscovered) {
       const serverUrl = target.dataset.serverUrl || "";
       const roomId = target.dataset.roomId || roomField.value;
-      launchJoin(serverUrl, roomId, nameField.value, avatarField.value, status);
+      launchJoin(serverUrl, roomId, nameField.value, avatarField.value, mobileModeInput.checked, status);
     }
   });
 
@@ -372,7 +378,9 @@ async function renderLaunchMenu(container: HTMLElement): Promise<void> {
     localStorageSet("egll.playerName", playerName);
 
     if (mode === "single") {
-      launchGame(new URLSearchParams({ play: "1", avatar: avatarId }));
+      const gameParams = new URLSearchParams({ play: "1", avatar: avatarId });
+      setMobileModeParam(gameParams, mobileModeInput.checked);
+      launchGame(gameParams);
       return;
     }
 
@@ -397,12 +405,13 @@ async function renderLaunchMenu(container: HTMLElement): Promise<void> {
       });
       const browserServer = normalizeServerUrl(String(formData.get("serverUrl") || defaultLanServer()));
       hostParams.set("server", browserServer);
+      setMobileModeParam(hostParams, mobileModeInput.checked);
       launchGame(hostParams);
       return;
     }
 
     try {
-      launchJoin(String(formData.get("serverUrl") || serverField.value || defaultLanServer()), roomId, playerName, avatarId, status);
+      launchJoin(String(formData.get("serverUrl") || serverField.value || defaultLanServer()), roomId, playerName, avatarId, mobileModeInput.checked, status);
     } catch (error) {
       setStatus(status, error instanceof Error ? error.message : "Enter the host IP shown on the host machine.", true);
     }
@@ -416,6 +425,7 @@ function launchMenuMarkup(options: {
   avatarId: AvatarId;
   roomId: string;
   serverUrl: string;
+  mobileMode: boolean;
 }): string {
   const desktop = Boolean(options.runtime);
   const lanUrl = options.runtime?.webServer.lanUrls[0] ?? "";
@@ -459,6 +469,10 @@ function launchMenuMarkup(options: {
             </div>
             <div class="avatar-options" role="radiogroup" aria-label="Survivors">${avatarOptions}</div>
           </section>
+          <label class="launch-mobile-setting">
+            <span><strong>Mobile mode</strong><small>Show touch controls and use mobile rendering</small></span>
+            <input type="checkbox" data-mobile-mode${options.mobileMode ? " checked" : ""}>
+          </label>
           <div class="play-mode-list" aria-label="Play mode">
             <button class="solo-launch" type="button" data-mode="single" data-launch-single>
               <span>Play solo</span><small>Start immediately</small>
@@ -560,25 +574,36 @@ async function refreshDiscoveredHosts(list: HTMLElement, status: HTMLElement): P
   }
 }
 
-function launchJoin(serverInput: string, roomId: string, playerName: string, avatarValue: unknown, status: HTMLElement): void {
+function launchJoin(
+  serverInput: string,
+  roomId: string,
+  playerName: string,
+  avatarValue: unknown,
+  mobileMode: boolean,
+  status: HTMLElement
+): void {
   try {
     const serverUrl = normalizeServerUrl(serverInput);
     if (isBlockedMixedWebSocket(serverUrl)) {
       setStatus(status, "This HTTPS page cannot connect to a LAN host. Use the desktop app or open the host HTTP URL.", true);
       return;
     }
-    launchGame(
-      new URLSearchParams({
-        lan: "join",
-        server: serverUrl,
-        room: cleanInput(roomId || "edinburgh-gardens", 48),
-        name: cleanInput(playerName || "Player", 32),
-        avatar: normalizeAvatarId(avatarValue)
-      })
-    );
+    const gameParams = new URLSearchParams({
+      lan: "join",
+      server: serverUrl,
+      room: cleanInput(roomId || "edinburgh-gardens", 48),
+      name: cleanInput(playerName || "Player", 32),
+      avatar: normalizeAvatarId(avatarValue)
+    });
+    setMobileModeParam(gameParams, mobileMode);
+    launchGame(gameParams);
   } catch (error) {
     setStatus(status, error instanceof Error ? error.message : "Enter the host IP shown on the host machine.", true);
   }
+}
+
+function setMobileModeParam(params: URLSearchParams, enabled: boolean): void {
+  params.set("touch", enabled ? "1" : "0");
 }
 
 function defaultLanServer(): string {

@@ -78,7 +78,7 @@ import {
 import { ZombieRenderLod, zombieRenderTier, zombieSimulationInterval } from "./rendering/ZombieRenderLod";
 import type { GameStateName, GameTestApi, HitZone, Pickup, ShellCasing, SmokePuff, Snapshot, Tracer, WavePhase, WeaponDrop, Zombie } from "./state";
 import { installGameTestDriver, uninstallGameTestDriver } from "./testing/GameTestDriver";
-import { InputController, shouldUseTouchControls } from "./input/InputController";
+import { InputController } from "./input/InputController";
 import {
   DEFAULT_INPUT_BINDINGS,
   loadInputBindings,
@@ -87,6 +87,7 @@ import {
   type InputAction,
   type InputBindings
 } from "./input/inputBindings";
+import { shouldUseTouchControls } from "./input/mobileMode";
 import { TerrainSampler } from "./terrain";
 import { MovementSurfaceSampler } from "./movement";
 import {

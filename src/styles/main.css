@@ -106,6 +106,56 @@ button {
   margin-bottom: 16px;
 }
 
+.launch-mobile-setting {
+  display: grid;
+  width: min(620px, 100%);
+  min-height: 54px;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding: 9px 12px;
+  border: 1px solid oklch(72% 0.057 181 / 0.3);
+  border-radius: 3px;
+  background: oklch(15% 0.034 214 / 0.72);
+  cursor: pointer;
+}
+
+.launch-mobile-setting span,
+.launch-mobile-setting strong,
+.launch-mobile-setting small {
+  display: block;
+}
+
+.launch-mobile-setting strong {
+  color: var(--paper);
+  font-size: 0.82rem;
+}
+
+.launch-mobile-setting small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.launch-mobile-setting input {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--bluegum);
+}
+
+.launch-mobile-setting:hover,
+.launch-mobile-setting:focus-within {
+  border-color: var(--rain);
+  background: oklch(19% 0.044 202 / 0.78);
+}
+
+.launch-mobile-setting:focus-within {
+  outline: 2px solid var(--rain);
+  outline-offset: 2px;
+}
+
 .play-mode-list button {
   min-height: 54px;
   border: 1px solid oklch(72% 0.057 181 / 0.3);
