@@ -58,11 +58,21 @@ npm run package
 
 This runs one Vite build, stages the static web artifact in `release/web`, and packages the Electron desktop artifact under `release/desktop`.
 
+Pushes to `main` also build and deploy the browser version to [GitHub Pages](https://callumalpass.github.io/edinburgh-gardens-zombie-fps/). The same workflow produces unsigned Electron installers for Linux, macOS and Windows as downloadable workflow artifacts.
+
+### Mobile browser mode
+
+Phones and tablets automatically receive touch controls and the low-cost rendering preset. Use the left stick to move, drag the right side of the scene to look, and use the right-hand action cluster for combat and contextual actions. Landscape orientation is recommended. The field bag remains fully interactive by touch.
+
+Electron packages desktop operating systems. It cannot produce an Android APK; an APK would require a separate Android wrapper and signing pipeline.
+
 ## Controls
 
 - `WASD`: move
 - Mouse: look
 - Click: fire
+- Right click: hold aim or scope
+- `Z`: toggle aim or scope for trackpad play
 - `R`: reload
 - `E`: interact, buy nearby upgrades, climb/drop from fixtures
 - `Shift`: sprint
@@ -74,7 +84,7 @@ This runs one Vite build, stages the static web artifact in `release/web`, and p
 - `1-3` during intermission: choose one free field modification
 - `Esc`: pause solo play or release local controls during a LAN session
 
-The pause menu includes mouse sensitivity, field of view, volume and high-contrast HUD settings. In LAN play the world continues while an individual player has the menu open.
+The pause menu includes mouse sensitivity, field of view, volume, high-contrast HUD settings and remappable keyboard controls. In LAN play the world continues while an individual player has the menu open. Bikes remain contextual `E` interactions; carrying a skateboard does not prevent riding a bike.
 
 ## CLI Game Automation
 

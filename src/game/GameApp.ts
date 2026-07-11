@@ -503,7 +503,8 @@ export class GameApp {
       changeSettings: (settings) => this.updateSettings(settings),
       equipWeaponSlot: (index) => this.handleEquipSlotInput(index),
       changeBinding: (action, code) => this.changeInputBinding(action, code),
-      resetBindings: () => this.resetInputBindings()
+      resetBindings: () => this.resetInputBindings(),
+      closeInventory: () => { this.closeInventoryMenu(); }
     }, this.events.signal);
     this.hud.setSettings(this.settings);
     this.hud.setBindings(this.inputBindings);
@@ -513,7 +514,7 @@ export class GameApp {
       canvas: this.canvas,
       antialias: !this.smokeMode && !this.touchMode,
       powerPreference: "high-performance",
-      preserveDrawingBuffer: true
+      preserveDrawingBuffer: !this.touchMode
     });
     if (this.rendererUsesSoftwareWebGL()) {
       this.adaptiveQuality.set("low");
@@ -3189,7 +3190,7 @@ export class GameApp {
   }
 
   private updateCamera(): void {
-    if (this.smokeMode && !this.testCameraOverride && document.pointerLockElement !== this.canvas) {
+    if (this.smokeMode && !this.touchMode && !this.testCameraOverride && document.pointerLockElement !== this.canvas) {
       const t = this.frame * 0.005;
       this.player.yaw = -2.2 + Math.sin(t) * 0.18;
       this.player.pitch = -0.1 + Math.sin(t * 0.7) * 0.04;

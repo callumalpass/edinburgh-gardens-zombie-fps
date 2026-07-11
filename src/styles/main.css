@@ -1835,6 +1835,269 @@ h1 {
   }
 }
 
+/* Touch-first gameplay mode */
+
+.touch-controls {
+  display: none;
+}
+
+.touch-mode .touch-controls {
+  position: absolute;
+  z-index: 18;
+  inset: 0;
+  display: block;
+  pointer-events: none;
+}
+
+.touch-mode .touch-look-zone {
+  position: absolute;
+  z-index: 1;
+  inset: 0 0 0 42%;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.touch-mode .touch-movement,
+.touch-mode .touch-actions {
+  position: absolute;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.touch-mode .touch-movement {
+  left: max(16px, env(safe-area-inset-left));
+  bottom: max(18px, env(safe-area-inset-bottom));
+  display: grid;
+  grid-template-columns: 64px 64px;
+  gap: 8px;
+  width: 150px;
+}
+
+.touch-mode .touch-stick {
+  position: relative;
+  grid-column: 1 / -1;
+  width: 132px;
+  height: 132px;
+  border: 1px solid oklch(79% 0.075 211 / 0.45);
+  border-radius: 50%;
+  background: oklch(8% 0.026 226 / 0.42);
+  pointer-events: auto;
+  touch-action: none;
+  box-shadow: inset 0 0 0 24px oklch(69% 0.105 153 / 0.05);
+}
+
+.touch-mode .touch-stick::before,
+.touch-mode .touch-stick::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  background: oklch(79% 0.075 211 / 0.22);
+  transform: translate(-50%, -50%);
+}
+
+.touch-mode .touch-stick::before {
+  width: 1px;
+  height: 72%;
+}
+
+.touch-mode .touch-stick::after {
+  width: 72%;
+  height: 1px;
+}
+
+.touch-mode .touch-stick span {
+  position: absolute;
+  z-index: 1;
+  left: 50%;
+  top: 50%;
+  width: 54px;
+  height: 54px;
+  border: 1px solid oklch(88% 0.05 117 / 0.5);
+  border-radius: 50%;
+  background: oklch(69% 0.105 153 / 0.74);
+  transform: translate(calc(-50% + var(--stick-x, 0px)), calc(-50% + var(--stick-y, 0px)));
+  box-shadow: 3px 4px 0 oklch(5% 0.021 226 / 0.28);
+}
+
+.touch-mode [data-touch-action] {
+  min-width: 52px;
+  min-height: 44px;
+  padding: 5px 7px;
+  border: 1px solid oklch(79% 0.075 211 / 0.42);
+  border-radius: 50%;
+  background: oklch(10% 0.032 221 / 0.74);
+  color: var(--paper);
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+  font: inherit;
+  font-size: 0.65rem;
+  font-weight: 900;
+  box-shadow: 2px 3px 0 oklch(5% 0.021 226 / 0.28);
+}
+
+.touch-mode [data-touch-action].active {
+  border-color: oklch(80% 0.09 153 / 0.72);
+  background: oklch(35% 0.08 157 / 0.9);
+  color: var(--paper);
+}
+
+.touch-mode .touch-actions-primary {
+  right: max(14px, env(safe-area-inset-right));
+  bottom: max(18px, env(safe-area-inset-bottom));
+  display: grid;
+  grid-template-columns: repeat(3, 58px);
+  gap: 8px;
+}
+
+.touch-mode .touch-actions-primary .touch-fire {
+  grid-row: span 2;
+  min-height: 96px;
+  border-radius: 28px;
+  border-color: oklch(70% 0.15 30 / 0.66);
+  background: oklch(42% 0.13 28 / 0.78);
+}
+
+.touch-mode .touch-actions-primary .touch-context {
+  border-color: oklch(80% 0.09 153 / 0.68);
+  background: oklch(31% 0.074 158 / 0.84);
+}
+
+.touch-mode .touch-actions-utility {
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(184px, calc(env(safe-area-inset-bottom) + 184px));
+  display: flex;
+  gap: 7px;
+}
+
+.touch-mode .touch-actions-utility [data-touch-action] {
+  min-width: 46px;
+  min-height: 38px;
+  border-radius: 4px;
+  color: var(--rain);
+}
+
+.touch-mode:has(.inventory-menu:not([hidden])) .touch-controls,
+.touch-mode:has(.start-overlay:not(.hidden)) .touch-controls,
+#app.is-paused .touch-controls,
+#app.is-downed .touch-controls,
+#app.is-gameover .touch-controls {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.touch-mode:has(.inventory-menu:not([hidden])) .touch-controls * {
+  pointer-events: none;
+}
+
+.touch-mode .starter-controls {
+  display: none;
+}
+
+.touch-mode .start-tip {
+  font-size: 0;
+}
+
+.touch-mode .start-tip::before {
+  content: "Use both thumbs to move and look. Landscape gives the clearest view.";
+  font-size: 0.78rem;
+}
+
+@media (orientation: landscape) and (max-height: 600px) {
+  .touch-mode .survival-hud {
+    top: 8px;
+    left: 8px;
+    width: 180px;
+  }
+
+  .touch-mode .mini-map-shell {
+    top: 8px;
+    right: 8px;
+    width: 118px;
+  }
+
+  .touch-mode .mini-map {
+    width: 116px;
+    height: 116px;
+  }
+
+  .touch-mode .wave-hud {
+    top: 8px;
+    width: min(310px, calc(100% - 420px));
+  }
+
+  .touch-mode .team-hud {
+    top: 112px;
+    left: 8px;
+    width: 180px;
+  }
+
+  .touch-mode .weapon-hud {
+    left: 50%;
+    bottom: 8px;
+    width: 270px;
+    min-width: 0;
+    transform: translateX(-50%);
+  }
+
+  .touch-mode .stealth-hud {
+    bottom: 68px;
+    width: 270px;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .touch-mode .stealth-hud > strong {
+    display: none;
+  }
+
+  .touch-mode .interaction-prompt {
+    bottom: 118px;
+  }
+
+  .touch-mode .inventory-menu {
+    inset: 10px;
+    width: auto;
+    max-height: calc(100% - 20px);
+  }
+}
+
+@media (orientation: portrait) and (max-width: 680px) {
+  .touch-mode .touch-stick {
+    width: 116px;
+    height: 116px;
+  }
+
+  .touch-mode .touch-movement {
+    width: 132px;
+    grid-template-columns: 56px 56px;
+  }
+
+  .touch-mode .touch-actions-primary {
+    grid-template-columns: repeat(2, 56px);
+  }
+
+  .touch-mode .touch-actions-primary .touch-fire {
+    grid-row: auto;
+    min-height: 54px;
+  }
+
+  .touch-mode .touch-actions-utility {
+    right: 10px;
+    bottom: 200px;
+    display: grid;
+    grid-template-columns: repeat(2, 48px);
+  }
+
+  .touch-mode .weapon-hud {
+    bottom: 144px;
+  }
+
+  .touch-mode .stealth-hud {
+    display: none;
+  }
+}
+
 /* Focused survival HUD */
 
 .shell:has(.start-overlay:not(.hidden)) .mini-map-shell,
@@ -2901,6 +3164,33 @@ h1 {
     0 18px 42px oklch(5% 0.021 226 / 0.38);
 }
 
+.inventory-close {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 30px;
+  padding: 3px 5px 3px 9px;
+  border: 1px solid oklch(77% 0.075 211 / 0.34);
+  border-radius: 3px;
+  background: oklch(18% 0.045 207 / 0.72);
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 900;
+}
+
+.inventory-close:hover,
+.inventory-close:focus-visible {
+  border-color: var(--bluegum);
+  color: var(--paper);
+  outline: none;
+}
+
+.inventory-close kbd {
+  min-width: 24px;
+}
+
 .inventory-header {
   padding: 2px 2px 10px;
   border-bottom-color: oklch(73% 0.06 196 / 0.24);
@@ -3077,5 +3367,11 @@ h1 {
   .stealth-hud span i::after,
   .team-member i::after {
     transition: none;
+  }
+}
+
+@media (min-width: 901px) {
+  .inventory-menu {
+    width: min(680px, calc(100% - 32px));
   }
 }

@@ -156,6 +156,7 @@ export interface HudActions {
   equipWeaponSlot: (index: number) => void;
   changeBinding: (action: InputAction, code: string) => void;
   resetBindings: () => void;
+  closeInventory: () => void;
 }
 
 export class HudController {
@@ -167,6 +168,7 @@ export class HudController {
   private readonly refs: HudRefs;
   private teamSignature = "";
   private intermissionSignature = "";
+  private inventorySignature = "";
   private outcomeMode: "downed" | "gameover" | null = null;
   private hitMarkerTimer = 0;
   private rebindingAction: InputAction | null = null;
@@ -186,6 +188,7 @@ export class HudController {
       if (target.dataset.action === "pause-restart") actions.restart();
       if (target.dataset.action === "exit-menu") actions.exitToMenu();
       if (target.dataset.action === "reset-bindings") actions.resetBindings();
+      if (target.dataset.action === "close-inventory") actions.closeInventory();
       if (target.dataset.weaponSlot) actions.equipWeaponSlot(Number(target.dataset.weaponSlot));
       if (target.dataset.bindingAction) {
         this.rebindingAction = target.dataset.bindingAction as InputAction;
@@ -335,7 +338,27 @@ export class HudController {
 
     this.refs.inventory.hidden = !view.inventoryOpen;
     this.refs.inventory.setAttribute("aria-hidden", view.inventoryOpen ? "false" : "true");
-    if (view.inventoryOpen) this.refs.inventory.innerHTML = renderInventoryMenu(view);
+    if (view.inventoryOpen) {
+      const inventorySignature = JSON.stringify({
+        weapon: view.loadout.weaponId,
+        weapons: view.loadout.inventory,
+        magazines: view.loadout.magazines,
+        upgrades: view.loadout.upgrades,
+        tools: view.inventory,
+        carried: view.carriedItem,
+        bike: view.bikeMounted,
+        skateboard: view.skateboardMounted,
+        lures: view.throwables,
+        light: view.flashlightOn,
+        bindings: view.bindings
+      });
+      if (inventorySignature !== this.inventorySignature) {
+        this.inventorySignature = inventorySignature;
+        this.refs.inventory.innerHTML = renderInventoryMenu(view);
+      }
+    } else {
+      this.inventorySignature = "";
+    }
     this.renderTeam(view.teammates);
     this.renderIntermissionChoices(view);
     this.renderOutcome(view);
@@ -513,7 +536,7 @@ function renderInventoryMenu(view: HudUpdate): string {
     return `<li><span><b>${escapeHtml(upgrade.label)}</b><small>${escapeHtml(upgrade.description)}</small></span><strong>${level}/${upgrade.maxLevel}</strong></li>`;
   }).join("");
   return `
-    <header class="inventory-header"><div><span>Field bag</span><strong>${WEAPON_DEFINITIONS[view.loadout.weaponId].name}</strong></div><kbd>${bindingLabel(view.bindings, "inventory")}</kbd></header>
+    <header class="inventory-header"><div><span>Field bag</span><strong>${WEAPON_DEFINITIONS[view.loadout.weaponId].name}</strong></div><button class="inventory-close" type="button" data-action="close-inventory">Close <kbd>${bindingLabel(view.bindings, "inventory")}</kbd></button></header>
     <div class="inventory-workbench">
       <div class="inventory-rail">
         ${renderWeaponInventory(view.loadout)}

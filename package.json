@@ -1,7 +1,15 @@
 {
   "name": "edinburgh-gardens-zombie-fps",
   "version": "0.1.0",
+  "description": "A painterly survival FPS set in Edinburgh Gardens, Fitzroy North.",
+  "author": "Callum Alpass",
+  "desktopName": "edinburgh-gardens-2030.desktop",
   "private": true,
+  "homepage": "https://callumalpass.github.io/edinburgh-gardens-zombie-fps/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/callumalpass/edinburgh-gardens-zombie-fps.git"
+  },
   "type": "module",
   "main": "electron/main.mjs",
   "scripts": {
@@ -55,6 +63,7 @@
       "package.json"
     ],
     "linux": {
+      "syncDesktopName": true,
       "target": [
         "AppImage",
         "dir"

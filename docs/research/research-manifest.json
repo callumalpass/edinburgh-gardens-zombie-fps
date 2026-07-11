@@ -396,6 +396,21 @@
       "id": "blender-4-5-10-linux",
       "label": "Blender 4.5.10 LTS Linux x64 release",
       "url": "https://download.blender.org/release/Blender4.5/blender-4.5.10-linux-x64.tar.xz"
+    },
+    {
+      "id": "github-pages-custom-workflows",
+      "label": "GitHub Docs custom workflows with GitHub Pages",
+      "url": "https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages"
+    },
+    {
+      "id": "electron-builder-github-actions",
+      "label": "electron-builder GitHub Actions CI/CD",
+      "url": "https://www.electron.build/docs/features/github-actions/"
+    },
+    {
+      "id": "electron-supported-platforms",
+      "label": "Electron advanced installation and supported platforms",
+      "url": "https://www.electronjs.org/docs/latest/tutorial/installation"
     }
   ],
   "documents": [
@@ -1009,6 +1024,17 @@
         "vicmap-elevation-feature-server",
         "vicmap-elevation-1m-dem",
         "vicmap-vegetation-tree-urban-feature-server"
+      ]
+    },
+    {
+      "id": "deployment-and-packaging",
+      "path": "docs/research/deployment-and-packaging-2026-07-11.md",
+      "requireIndexReference": false,
+      "requiredHeadings": ["## Sources", "## Findings", "## Implementation Translation", "## Uncertainty", "## Validation"],
+      "sourceIds": [
+        "github-pages-custom-workflows",
+        "electron-builder-github-actions",
+        "electron-supported-platforms"
       ]
     }
   ],

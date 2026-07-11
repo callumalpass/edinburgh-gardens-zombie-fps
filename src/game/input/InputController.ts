@@ -1,3 +1,11 @@
+import {
+  DEFAULT_INPUT_BINDINGS,
+  actionUsesCode,
+  normalizeInputBindings,
+  type InputAction,
+  type InputBindings
+} from "./inputBindings";
+
 export interface MovementInput {
   x: number;
   z: number;
@@ -330,10 +338,3 @@ export function crouchInputFromKeys(
 ): boolean {
   return bindings.crouch.some(isDown);
 }
-import {
-  DEFAULT_INPUT_BINDINGS,
-  actionUsesCode,
-  normalizeInputBindings,
-  type InputAction,
-  type InputBindings
-} from "./inputBindings";
