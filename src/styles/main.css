@@ -1597,6 +1597,244 @@ h1 {
   }
 }
 
+/* Field bag and remappable controls */
+
+.inventory-menu {
+  width: min(680px, calc(100% - 32px));
+  pointer-events: auto;
+}
+
+.inventory-workbench {
+  display: grid;
+  grid-template-columns: minmax(190px, 0.78fr) minmax(300px, 1.22fr);
+  gap: 18px;
+  padding-block: 11px 13px;
+}
+
+.inventory-rail {
+  min-width: 0;
+  padding-right: 16px;
+  border-right: 1px solid oklch(73% 0.06 196 / 0.2);
+}
+
+.inventory-weapons {
+  margin-top: 0;
+}
+
+.inventory-weapons ul {
+  grid-template-columns: 1fr;
+}
+
+.inventory-weapons li {
+  min-width: 0;
+}
+
+.inventory-weapon {
+  width: 100%;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.inventory-weapon:hover,
+.inventory-weapon:focus-visible {
+  background: oklch(23% 0.058 165 / 0.58);
+  outline: 1px solid oklch(76% 0.095 153 / 0.58);
+  outline-offset: -1px;
+}
+
+.inventory-detail {
+  min-width: 0;
+}
+
+.inventory-eyebrow {
+  color: var(--bluegum);
+  font-size: 0.68rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.inventory-detail h3 {
+  margin: 3px 0 2px;
+  color: var(--paper);
+  font-size: 1.35rem;
+  line-height: 1.05;
+}
+
+.inventory-detail > p {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 0.77rem;
+}
+
+.inventory-detail dl {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  margin: 0 0 14px;
+  border-block: 1px solid oklch(73% 0.06 196 / 0.2);
+}
+
+.inventory-detail dl div {
+  padding: 8px 5px;
+}
+
+.inventory-detail dt {
+  color: var(--muted);
+  font-size: 0.62rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.inventory-detail dd {
+  margin: 3px 0 0;
+  color: var(--rain);
+  font-size: 0.86rem;
+  font-weight: 900;
+}
+
+.inventory-modifications {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.inventory-modifications li {
+  display: flex;
+  min-width: 0;
+  align-items: start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 2px;
+  border-bottom: 1px solid oklch(73% 0.06 196 / 0.16);
+}
+
+.inventory-modifications span,
+.inventory-modifications small {
+  display: block;
+  min-width: 0;
+}
+
+.inventory-modifications b {
+  color: var(--paper);
+  font-size: 0.75rem;
+}
+
+.inventory-modifications small {
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.65rem;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inventory-modifications strong {
+  flex: none;
+  color: var(--bluegum);
+  font-size: 0.74rem;
+}
+
+.inventory-object-grid {
+  grid-template-columns: 1.25fr 1fr 0.65fr 0.65fr;
+}
+
+.pause-panel {
+  max-height: min(760px, calc(100% - 32px));
+  overflow: auto;
+}
+
+.control-reference[open] {
+  padding-bottom: 12px;
+}
+
+.binding-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px 22px;
+  padding-top: 14px;
+}
+
+.binding-group h3 {
+  margin: 0 0 5px;
+  color: var(--bluegum);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+}
+
+.binding-group > div {
+  display: grid;
+  grid-template-columns: 1fr minmax(74px, auto);
+  gap: 10px;
+  align-items: center;
+  min-height: 34px;
+  border-bottom: 1px solid oklch(73% 0.06 196 / 0.14);
+}
+
+.binding-group span {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.binding-group button {
+  min-width: 74px;
+  min-height: 26px;
+  padding: 3px 7px;
+  border: 1px solid oklch(77% 0.075 211 / 0.38);
+  border-radius: 3px;
+  background: oklch(20% 0.05 208 / 0.68);
+  color: var(--rain);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 900;
+}
+
+.binding-group button:hover,
+.binding-group button:focus-visible,
+.binding-group button.is-capturing {
+  border-color: var(--bluegum);
+  background: oklch(26% 0.067 157 / 0.82);
+  color: var(--paper);
+  outline: none;
+}
+
+.binding-note {
+  margin-bottom: 0;
+}
+
+.reset-bindings {
+  margin-top: 8px;
+}
+
+@media (max-width: 900px) {
+  .inventory-workbench {
+    grid-template-columns: 1fr;
+  }
+
+  .inventory-rail {
+    padding-right: 0;
+    border-right: 0;
+  }
+
+  .inventory-detail dl {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .inventory-modifications {
+    grid-template-columns: 1fr;
+  }
+
+  .binding-list {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Focused survival HUD */
 
 .shell:has(.start-overlay:not(.hidden)) .mini-map-shell,

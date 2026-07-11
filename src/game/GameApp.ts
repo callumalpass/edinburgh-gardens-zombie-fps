@@ -78,7 +78,7 @@ import {
 import { ZombieRenderLod, zombieRenderTier, zombieSimulationInterval } from "./rendering/ZombieRenderLod";
 import type { GameStateName, GameTestApi, HitZone, Pickup, ShellCasing, SmokePuff, Snapshot, Tracer, WavePhase, WeaponDrop, Zombie } from "./state";
 import { installGameTestDriver, uninstallGameTestDriver } from "./testing/GameTestDriver";
-import { InputController } from "./input/InputController";
+import { InputController, shouldUseTouchControls } from "./input/InputController";
 import {
   DEFAULT_INPUT_BINDINGS,
   loadInputBindings,
@@ -264,7 +264,8 @@ export class GameApp {
   private hasInitialNetworkSnapshot = false;
   private readonly smokeMode = new URLSearchParams(window.location.search).has("smoke");
   private readonly networkTestMode = new URLSearchParams(window.location.search).has("network-test");
-  private readonly adaptiveQuality = new AdaptiveRenderQuality(this.smokeMode ? "low" : "high");
+  private readonly touchMode = shouldUseTouchControls();
+  private readonly adaptiveQuality = new AdaptiveRenderQuality(this.smokeMode || this.touchMode ? "low" : "high");
   private settings: GameSettings = loadGameSettings();
   private inputBindings: InputBindings = loadInputBindings();
   private readonly audio = new GameAudio({ enabled: !this.smokeMode, masterVolume: this.settings.masterVolume });
@@ -510,7 +511,7 @@ export class GameApp {
     this.canvas = this.root.querySelector<HTMLCanvasElement>(".game-canvas")!;
     this.renderer = new THREE.WebGLRenderer({
       canvas: this.canvas,
-      antialias: !this.smokeMode,
+      antialias: !this.smokeMode && !this.touchMode,
       powerPreference: "high-performance",
       preserveDrawingBuffer: true
     });
@@ -523,7 +524,7 @@ export class GameApp {
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.18;
     this.renderer.info.autoReset = false;
-    this.renderer.shadowMap.enabled = !this.smokeMode;
+    this.renderer.shadowMap.enabled = !this.smokeMode && !this.touchMode;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.shadowMap.autoUpdate = false;
     this.renderer.shadowMap.needsUpdate = !this.smokeMode;
@@ -537,7 +538,7 @@ export class GameApp {
     this.contactShadows = new PainterlyContactShadows();
     this.scene.add(this.contactShadows.root);
     this.atmosphere = new AtmosphereSystem(this.scene, this.rng, this.smokeMode, this.weatherAnchors());
-    this.postProcessing = new PostProcessingPipeline(this.renderer, this.scene, this.camera, this.smokeMode);
+    this.postProcessing = new PostProcessingPipeline(this.renderer, this.scene, this.camera, this.smokeMode || this.touchMode);
     this.materials = createGameMaterials(this.rng);
     this.meshFactory = new MeshFactory(this.materials);
     this.remotePlayers = new RemotePlayerRoster({
@@ -677,6 +678,7 @@ export class GameApp {
         jump: () => this.handleJumpInput(),
         toggleSkateboard: () => this.handleToggleSkateboardInput(),
         equipSlot: (index) => this.handleEquipSlotInput(index),
+        cycleWeapon: () => this.cycleWeapon(),
         look: (movementX, movementY) => this.handleLook(movementX, movementY),
         cancel: () => {
           if (this.closeInventoryMenu()) {
@@ -694,7 +696,7 @@ export class GameApp {
     this.input.install();
     this.hud.startButton.addEventListener("click", () => {
       this.start();
-      this.canvas.requestPointerLock?.();
+      if (!this.input?.touchEnabled) this.canvas.requestPointerLock?.();
     }, { signal });
     this.hud.restartButton.addEventListener("click", () => this.restart(), { signal });
     document.addEventListener("pointerlockchange", () => {
@@ -711,7 +713,7 @@ export class GameApp {
     if (paused) {
       document.exitPointerLock?.();
     } else {
-      this.canvas.requestPointerLock?.();
+      if (!this.input?.touchEnabled) this.canvas.requestPointerLock?.();
       void this.audio.unlock();
     }
   }
@@ -895,6 +897,12 @@ export class GameApp {
     if (weaponId) {
       this.equipWeapon(weaponId);
     }
+  }
+
+  private cycleWeapon(): void {
+    const current = this.loadout.inventory.indexOf(this.loadout.weaponId);
+    const next = this.loadout.inventory[(current + 1) % this.loadout.inventory.length];
+    if (next) this.equipWeapon(next);
   }
 
   private restart(): void {
@@ -4724,6 +4732,12 @@ export class GameApp {
       return false;
     }
     this.inventoryMenuOpen = !this.inventoryMenuOpen;
+    this.input?.clear();
+    if (this.inventoryMenuOpen) {
+      document.exitPointerLock?.();
+    } else if (!this.input?.touchEnabled) {
+      this.canvas.requestPointerLock?.();
+    }
     this.flashStatus(this.inventoryMenuOpen ? "Inventory open" : "Inventory closed");
     return true;
   }
@@ -4733,6 +4747,7 @@ export class GameApp {
       return false;
     }
     this.inventoryMenuOpen = false;
+    if (!this.input?.touchEnabled) this.canvas.requestPointerLock?.();
     this.flashStatus("Inventory closed");
     return true;
   }
