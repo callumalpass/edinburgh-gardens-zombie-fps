@@ -56,9 +56,32 @@ interface ElectronLanApi {
   openExternal: (url: string) => Promise<void>;
 }
 
+type ElectronUpdatePhase = "disabled" | "idle" | "checking" | "available" | "downloading" | "downloaded" | "installing" | "up-to-date" | "error";
+
+interface ElectronUpdateState {
+  phase: ElectronUpdatePhase;
+  currentVersion: string;
+  version: string | null;
+  releaseName: string | null;
+  releaseNotes: string | null;
+  message: string;
+  progress: { percent: number; transferred: number; total: number; bytesPerSecond: number } | null;
+  error: string | null;
+  checkedAt: number | null;
+}
+
+interface ElectronUpdateApi {
+  state: () => Promise<ElectronUpdateState>;
+  check: () => Promise<ElectronUpdateState>;
+  download: () => Promise<ElectronUpdateState>;
+  install: () => Promise<boolean>;
+  onStatus: (callback: (state: ElectronUpdateState) => void) => () => void;
+}
+
 declare global {
   interface Window {
     edinburghLan?: ElectronLanApi;
+    edinburghUpdates?: ElectronUpdateApi;
   }
 }
 
@@ -70,6 +93,7 @@ if (!rootElement) {
 
 const root = rootElement;
 let game: GameApp | null = null;
+const disposeUpdaterUi = mountDesktopUpdater();
 
 if (shouldLaunchImmediately()) {
   launchGame();
@@ -91,7 +115,126 @@ function launchGame(params?: URLSearchParams): void {
   game.init();
 }
 
-window.addEventListener("beforeunload", () => game?.dispose(), { once: true });
+window.addEventListener("beforeunload", () => {
+  disposeUpdaterUi?.();
+  game?.dispose();
+}, { once: true });
+
+function mountDesktopUpdater(): (() => void) | null {
+  const api = window.edinburghUpdates;
+  if (!api) return null;
+
+  const panel = document.createElement("aside");
+  panel.className = "desktop-updater";
+  panel.hidden = true;
+  panel.setAttribute("aria-live", "polite");
+  panel.innerHTML = `
+    <button class="desktop-updater-close" type="button" aria-label="Dismiss update message" data-update-dismiss>×</button>
+    <span class="desktop-updater-kicker">Desktop update</span>
+    <strong data-update-title>Checking releases</strong>
+    <p data-update-message></p>
+    <div class="desktop-updater-progress" data-update-progress hidden><i></i></div>
+    <small data-update-detail></small>
+    <details data-update-notes hidden><summary>Release notes</summary><p></p></details>
+    <button class="desktop-updater-action" type="button" data-update-action>Check for updates</button>`;
+  document.body.append(panel);
+
+  const title = panel.querySelector<HTMLElement>("[data-update-title]")!;
+  const message = panel.querySelector<HTMLElement>("[data-update-message]")!;
+  const detail = panel.querySelector<HTMLElement>("[data-update-detail]")!;
+  const progress = panel.querySelector<HTMLElement>("[data-update-progress]")!;
+  const progressFill = progress.querySelector<HTMLElement>("i")!;
+  const notes = panel.querySelector<HTMLDetailsElement>("[data-update-notes]")!;
+  const notesText = notes.querySelector<HTMLElement>("p")!;
+  const action = panel.querySelector<HTMLButtonElement>("[data-update-action]")!;
+  let currentState: ElectronUpdateState | null = null;
+  let manuallyOpened = false;
+
+  const render = (state: ElectronUpdateState) => {
+    currentState = state;
+    const needsAttention = ["available", "downloading", "downloaded", "installing"].includes(state.phase);
+    panel.hidden = state.phase === "disabled" || (!manuallyOpened && !needsAttention);
+    panel.dataset.phase = state.phase;
+    title.textContent = updateTitle(state);
+    message.textContent = state.message;
+    detail.textContent = state.error
+      ? state.error
+      : state.progress?.total
+        ? `${formatBytes(state.progress.transferred)} of ${formatBytes(state.progress.total)} · ${formatBytes(state.progress.bytesPerSecond)}/s`
+        : `Installed version ${state.currentVersion}`;
+    progress.hidden = state.phase !== "downloading";
+    progressFill.style.width = `${state.progress?.percent ?? 0}%`;
+    notes.hidden = !state.releaseNotes;
+    notesText.textContent = state.releaseNotes ?? "";
+    action.hidden = state.phase === "disabled" || state.phase === "checking" || state.phase === "downloading" || state.phase === "installing";
+    action.disabled = action.hidden;
+    action.textContent = state.phase === "available"
+      ? `Download ${state.version ?? "update"}`
+      : state.phase === "downloaded"
+        ? "Restart and install"
+        : state.phase === "error"
+          ? "Try again"
+          : "Check for updates";
+  };
+
+  const unsubscribe = api.onStatus(render);
+  void api.state().then(render).catch(() => { panel.hidden = true; });
+  const openUpdater = () => {
+    manuallyOpened = true;
+    if (currentState) render(currentState);
+    if (!currentState || currentState.phase === "idle" || currentState.phase === "up-to-date" || currentState.phase === "error") {
+      void api.check().then(render);
+    }
+  };
+  window.addEventListener("edinburgh:open-updater", openUpdater);
+  panel.addEventListener("click", (event) => {
+    const target = event.target instanceof Element ? event.target.closest<HTMLElement>("[data-update-dismiss],[data-update-action]") : null;
+    if (!target) return;
+    if (target.dataset.updateDismiss !== undefined) {
+      manuallyOpened = false;
+      panel.hidden = true;
+      return;
+    }
+    if (!currentState) return;
+    action.disabled = true;
+    const request = currentState.phase === "available"
+      ? api.download()
+      : currentState.phase === "downloaded"
+        ? api.install().then(() => currentState!)
+        : api.check();
+    void request.then(render).catch((error) => render({
+      ...currentState!,
+      phase: "error",
+      message: "The update request failed.",
+      error: error instanceof Error ? error.message : String(error)
+    }));
+  });
+
+  return () => {
+    unsubscribe();
+    window.removeEventListener("edinburgh:open-updater", openUpdater);
+    panel.remove();
+  };
+}
+
+function updateTitle(state: ElectronUpdateState): string {
+  if (state.phase === "available") return state.releaseName
+    ? `${state.releaseName} · ${state.version ?? "new release"}`
+    : `Update ${state.version ?? "available"}`;
+  if (state.phase === "downloaded") return "Update ready";
+  if (state.phase === "downloading") return "Downloading update";
+  if (state.phase === "checking") return "Checking for updates";
+  if (state.phase === "installing") return "Installing update";
+  if (state.phase === "error") return "Update problem";
+  return "Edinburgh Gardens 2030";
+}
+
+function formatBytes(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  const unit = Math.min(units.length - 1, Math.floor(Math.log(value) / Math.log(1024)));
+  return `${(value / 1024 ** unit).toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`;
+}
 
 async function renderLaunchMenu(container: HTMLElement): Promise<void> {
   const runtime = await window.edinburghLan?.runtime().catch(() => null);
@@ -124,6 +267,9 @@ async function renderLaunchMenu(container: HTMLElement): Promise<void> {
   if (!form || !modeInput || !status || !hostDetails || !serverField || !roomField || !nameField || !avatarField || !submitButton || !discoveryList) {
     throw new Error("Launch menu failed to render required controls");
   }
+  container.querySelector<HTMLButtonElement>("[data-open-updater]")?.addEventListener("click", () => {
+    window.dispatchEvent(new Event("edinburgh:open-updater"));
+  });
 
   const setMode = (mode: string) => {
     modeInput.value = mode;
@@ -292,7 +438,10 @@ function launchMenuMarkup(options: {
   return `
     <main class="launch-screen">
       <section class="launch-panel" aria-label="Launch game">
-        <p class="kicker">${desktop ? "Desktop edition" : "Web edition"} · Fitzroy North</p>
+        <div class="launch-edition-row">
+          <p class="kicker">${desktop ? `Desktop edition ${escapeHtml(options.runtime?.appVersion ?? "")}` : "Web edition"} · Fitzroy North</p>
+          ${desktop ? `<button class="desktop-update-link" type="button" data-open-updater>Check for updates</button>` : ""}
+        </div>
         <h1>Edinburgh Gardens 2030</h1>
         <p class="launch-deck">A survival FPS across a rain-soaked, research-built Edinburgh Gardens. Stay quiet, scavenge the park, and outlast the horde alone or over LAN.</p>
         <form class="launch-form" data-launch-form data-mode="${escapeAttr(options.mode)}">

@@ -1,4 +1,5 @@
 import { app, BrowserWindow, ipcMain, shell } from "electron";
+import electronUpdater from "electron-updater";
 import { createSocket } from "node:dgram";
 import { createReadStream, existsSync, statSync } from "node:fs";
 import { createServer } from "node:http";
@@ -6,6 +7,9 @@ import { networkInterfaces } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { startMultiplayerRelay } from "../server/multiplayer-server.mjs";
+import { createUpdateController } from "./update-controller.mjs";
+
+const { autoUpdater } = electronUpdater;
 
 const DEFAULT_WEB_PORT = Number.parseInt(process.env.EGLL_WEB_PORT ?? "5480", 10);
 const DEFAULT_RELAY_PORT = Number.parseInt(process.env.MULTIPLAYER_PORT ?? "5488", 10);
@@ -23,6 +27,9 @@ let relayInfo = null;
 let beaconSocket = null;
 let beaconTimer = null;
 let hostSession = null;
+let updateController = null;
+let updateCheckTimer = null;
+let updateInitialCheckTimer = null;
 
 const mimeTypes = new Map([
   [".html", "text/html; charset=utf-8"],
@@ -46,6 +53,7 @@ async function boot() {
   }
   webServerInfo = await startStaticWebServer(distDir, DEFAULT_WEB_PORT);
   createWindow();
+  initializeUpdater();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -70,6 +78,15 @@ function createWindow() {
   });
 
   mainWindow.loadURL(`${webServerInfo.localUrl}?desktop=1`);
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//i.test(url)) void shell.openExternal(url);
+    return { action: "deny" };
+  });
+  mainWindow.webContents.on("will-navigate", (event, url) => {
+    if (isTrustedRendererUrl(url)) return;
+    event.preventDefault();
+    if (/^https?:\/\//i.test(url)) void shell.openExternal(url);
+  });
   mainWindow.on("closed", () => {
     mainWindow = null;
   });
@@ -266,6 +283,11 @@ ipcMain.handle("lan:open-external", async (_event, url) => {
   }
 });
 
+ipcMain.handle("update:state", (event) => trustedUpdateRequest(event, () => updateController?.getState() ?? fallbackUpdateState()));
+ipcMain.handle("update:check", (event) => trustedUpdateRequest(event, () => updateController?.check() ?? fallbackUpdateState()));
+ipcMain.handle("update:download", (event) => trustedUpdateRequest(event, () => updateController?.download() ?? fallbackUpdateState()));
+ipcMain.handle("update:install", (event) => trustedUpdateRequest(event, () => updateController?.install() ?? false));
+
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
     app.quit();
@@ -273,10 +295,69 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", () => {
+  if (updateInitialCheckTimer) clearTimeout(updateInitialCheckTimer);
+  if (updateCheckTimer) clearInterval(updateCheckTimer);
+  updateController?.dispose();
   stopHostBeacon();
   relay?.close().catch(() => {});
   webServer?.close();
 });
+
+function initializeUpdater() {
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.allowPrerelease = false;
+  autoUpdater.logger = console;
+  updateController = createUpdateController({
+    updater: autoUpdater,
+    isPackaged: app.isPackaged,
+    currentVersion: app.getVersion(),
+    onState: broadcastUpdateState
+  });
+  broadcastUpdateState(updateController.getState());
+  if (!app.isPackaged) return;
+  updateInitialCheckTimer = setTimeout(() => void updateController?.check(), 5000);
+  updateInitialCheckTimer.unref?.();
+  updateCheckTimer = setInterval(() => void updateController?.check(), 4 * 60 * 60 * 1000);
+  updateCheckTimer.unref?.();
+}
+
+function trustedUpdateRequest(event, request) {
+  if (!isTrustedRendererUrl(event.senderFrame?.url ?? event.sender.getURL())) {
+    throw new Error("Update requests are only accepted from the local desktop application.");
+  }
+  return request();
+}
+
+function isTrustedRendererUrl(url) {
+  try {
+    return new URL(url).origin === new URL(webServerInfo.localUrl).origin;
+  } catch {
+    return false;
+  }
+}
+
+function broadcastUpdateState(state) {
+  const progress = state.phase === "downloading" ? (state.progress?.percent ?? 0) / 100 : -1;
+  for (const window of BrowserWindow.getAllWindows()) {
+    window.setProgressBar(progress);
+    window.webContents.send("update:status", state);
+  }
+}
+
+function fallbackUpdateState() {
+  return {
+    phase: "disabled",
+    currentVersion: app.getVersion(),
+    version: null,
+    releaseName: null,
+    releaseNotes: null,
+    message: "The desktop updater is not ready.",
+    progress: null,
+    error: null,
+    checkedAt: null
+  };
+}
 
 boot().catch((error) => {
   console.error(error);

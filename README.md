@@ -1,6 +1,6 @@
 # Edinburgh Gardens 2030
 
-A browser-based Three.js first-person zombie shooter set in an expanded playable version of Edinburgh Gardens, Fitzroy North.
+An experimental browser-based Three.js first-person zombie shooter set in an expanded playable version of Edinburgh Gardens, Fitzroy North.
 
 ## Run
 
@@ -59,6 +59,12 @@ npm run package
 This runs one Vite build, stages the static web artifact in `release/web`, and packages the Electron desktop artifact under `release/desktop`.
 
 Pushes to `main` also build and deploy the browser version to [GitHub Pages](https://callumalpass.github.io/edinburgh-gardens-zombie-fps/). The same workflow produces unsigned Electron installers for Linux, macOS and Windows as downloadable workflow artifacts.
+
+Packaged desktop apps check GitHub Releases shortly after launch and every four hours. A new release is announced in-app; the player chooses when to download it, sees download progress, and chooses when to restart and install. The launch screen also has a **Check for updates** control. Development builds do not contact the release service.
+
+To publish an update, bump `package.json` and push the matching `v*` tag (for example, package version `0.2.0` must use tag `v0.2.0`). CI stages Linux AppImage, macOS DMG/ZIP and Windows NSIS/ZIP artifacts plus their update metadata in a draft GitHub Release. The release becomes visible to installed apps only after every native build succeeds. A local maintainer can run `npm run release:desktop` with `GH_TOKEN` set, but the tagged CI path is the complete cross-platform release route.
+
+Linux self-update applies to the AppImage installation, and Windows self-update applies to NSIS installations. Production macOS self-update requires a signed and notarized application; the current unsigned macOS build remains a downloadable test artifact until signing credentials are configured. Unsigned Windows installers may also show operating-system trust warnings.
 
 ### Mobile browser mode
 

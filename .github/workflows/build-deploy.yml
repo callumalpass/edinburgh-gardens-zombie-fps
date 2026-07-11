@@ -3,6 +3,7 @@ name: Build, package and deploy
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -15,6 +16,32 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  prepare-desktop-release:
+    name: Prepare desktop release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Validate and stage tagged release
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          expected_tag="v$(node -p "require('./package.json').version")"
+          if [ "$GITHUB_REF_NAME" != "$expected_tag" ]; then
+            echo "Release tag $GITHUB_REF_NAME must match package version $expected_tag."
+            exit 1
+          fi
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release edit "$GITHUB_REF_NAME" --draft=true
+          else
+            gh release create "$GITHUB_REF_NAME" --verify-tag --draft --title "Edinburgh Gardens 2030 $GITHUB_REF_NAME"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+
   web:
     name: Verify and build web app
     runs-on: ubuntu-latest
@@ -49,7 +76,7 @@ jobs:
 
   deploy:
     name: Deploy GitHub Pages
-    if: github.event_name != 'pull_request'
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
     needs: web
     runs-on: ubuntu-latest
     permissions:
@@ -65,7 +92,10 @@ jobs:
 
   electron:
     name: Electron installer (${{ matrix.platform }})
+    needs: prepare-desktop-release
     runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -93,9 +123,10 @@ jobs:
         run: npm run build
 
       - name: Package Electron application
-        run: npm run package:desktop:nobuild -- --publish never
+        run: npm run package:desktop:nobuild -- --publish ${{ startsWith(github.ref, 'refs/tags/v') && 'always' || 'never' }}
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload installer
         uses: actions/upload-artifact@v4
@@ -106,5 +137,21 @@ jobs:
             release/desktop/*.dmg
             release/desktop/*.exe
             release/desktop/*.zip
+            release/desktop/*.blockmap
+            release/desktop/latest*.yml
           if-no-files-found: error
           retention-days: 14
+
+  publish-desktop-release:
+    name: Publish complete desktop release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: electron
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Publish staged release
+        run: gh release edit "$GITHUB_REF_NAME" --draft=false --latest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}

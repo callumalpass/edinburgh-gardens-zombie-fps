@@ -24,6 +24,7 @@
     "package:web": "node scripts/package-web.mjs",
     "package:desktop": "npm run build && npm run package:desktop:nobuild",
     "package:desktop:nobuild": "electron-builder",
+    "release:desktop": "npm run build && electron-builder --publish always",
     "test": "vitest",
     "test:run": "vitest run --reporter=dot",
     "research:check": "node scripts/validate-research-assets.mjs",
@@ -37,6 +38,7 @@
     "perf:check": "node scripts/performance-report.mjs --include-tests"
   },
   "dependencies": {
+    "electron-updater": "^6.8.9",
     "three": "^0.185.1",
     "ws": "^8.21.0"
   },
@@ -61,6 +63,14 @@
       "electron/**/*",
       "server/**/*",
       "package.json"
+    ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "callumalpass",
+        "repo": "edinburgh-gardens-zombie-fps",
+        "releaseType": "draft"
+      }
     ],
     "linux": {
       "syncDesktopName": true,
