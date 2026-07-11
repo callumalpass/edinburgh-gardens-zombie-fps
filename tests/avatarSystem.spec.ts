@@ -28,25 +28,30 @@ test("avatar selection layouts expose, navigate and persist the survivor roster"
   await page.screenshot({ path: testInfo.outputPath("avatar-selection.png"), fullPage: true });
 });
 
-test("selected Blender avatar loads, animates and holds the equipped weapon", async ({ page }, testInfo) => {
+test("every Blender avatar loads, animates and holds the equipped weapon", async ({ page }, testInfo) => {
   await page.goto("/?smoke=1&avatar=milo");
   await page.waitForFunction(() => window.__EGAME__?.ready === true);
   expect(new URL(page.url()).searchParams.get("avatar")).toBe("milo");
 
   await page.evaluate(() => {
     window.__EGAME__!.testAddTeammate("Milo", "milo");
+    window.__EGAME__!.testAddTeammate("Asha", "asha");
+    window.__EGAME__!.testAddTeammate("Jules", "jules");
+    window.__EGAME__!.testAddTeammate("Maeve", "maeve");
     window.__EGAME__!.testTeleport({ x: 38.2, z: 48.2, yaw: 0, pitch: 0 });
   });
-  await page.waitForFunction(() => window.__EGAME__!.testAvatarStates()[0]?.assetLoaded === true);
+  await page.waitForFunction(() => {
+    const states = window.__EGAME__!.testAvatarStates();
+    return states.length === 4 && states.every((state) => state.assetLoaded && state.weaponAttachedToSocket);
+  });
   await page.waitForTimeout(500);
   const states = await page.evaluate(() => window.__EGAME__!.testAvatarStates());
-  expect(states).toEqual([
-    expect.objectContaining({
-      avatarId: "milo",
-      assetLoaded: true,
-      animation: "Idle",
-      weaponAttachedToSocket: true
-    })
-  ]);
-  await page.screenshot({ path: testInfo.outputPath("milo-runtime.png"), fullPage: false });
+  expect(states.map((state) => state.avatarId)).toEqual(["milo", "asha", "jules", "maeve"]);
+  expect(states).toEqual(states.map((state) => expect.objectContaining({
+    avatarId: state.avatarId,
+    assetLoaded: true,
+    animation: "Idle",
+    weaponAttachedToSocket: true
+  })));
+  await page.screenshot({ path: testInfo.outputPath("survivor-roster-runtime.png"), fullPage: false });
 });
