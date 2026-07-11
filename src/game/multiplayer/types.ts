@@ -3,6 +3,7 @@ import type { WeaponDrop } from "../state";
 import type { Loadout, UpgradeId, WeaponId } from "../weapons";
 import type { ZombieType } from "../waves";
 import type { AvatarId } from "../characters";
+import type { InventoryItemId, LargeCarryItemId, WorldItemId } from "../items";
 
 export type MultiplayerRole = "single" | "host" | "client";
 
@@ -17,6 +18,7 @@ export interface MultiplayerConfig {
 
 export interface NetworkInputState {
   sequence: number;
+  duration: number;
   moveX: number;
   moveZ: number;
   sprint: boolean;
@@ -33,7 +35,9 @@ export type NetworkActionType =
   | "take"
   | "toggleFlashlight"
   | "throwDistraction"
+  | "dropItem"
   | "jump"
+  | "toggleSkateboard"
   | "equipSlot"
   | "chooseIntermissionUpgrade";
 
@@ -73,8 +77,11 @@ export interface NetworkPlayerSnapshot {
   activeFixtureId: string | null;
   flashlightOn: boolean;
   throwables: number;
+  inventory: InventoryItemId[];
+  carriedItem: LargeCarryItemId | null;
   loadout: Loadout;
   bikeMounted: boolean;
+  skateboardMounted: boolean;
   alive: boolean;
   intermissionUpgradeWave: number;
   reviveProtectionTimer: number;
@@ -115,11 +122,44 @@ export interface NetworkWeaponDropSnapshot {
 }
 
 export interface NetworkBikeSnapshot {
+  id: string;
   x: number;
   y: number;
   z: number;
   angle: number;
   mounted: boolean;
+  mountedByPlayerId: string | null;
+  state: "available" | "flat-tyres" | "locked";
+  requiredItem?: WorldItemId;
+}
+
+export interface NetworkWorldItemSnapshot {
+  id: number;
+  itemId: WorldItemId;
+  label: string;
+  x: number;
+  y: number;
+  z: number;
+  angle: number;
+  ttl: number | null;
+}
+
+export interface NetworkPlacedLadderSnapshot {
+  id: string;
+  fixtureId: string;
+  accessX: number;
+  accessZ: number;
+  landingX: number;
+  landingZ: number;
+  angle: number;
+}
+
+export interface NetworkDistractionSnapshot {
+  id: number;
+  x: number;
+  z: number;
+  ttl: number;
+  fuseTimer: number;
 }
 
 export interface NetworkGameSnapshot {
@@ -136,7 +176,13 @@ export interface NetworkGameSnapshot {
   zombies: NetworkZombieSnapshot[];
   pickups: NetworkPickupSnapshot[];
   weaponDrops: NetworkWeaponDropSnapshot[];
+  worldItems: NetworkWorldItemSnapshot[];
+  placedLadders: NetworkPlacedLadderSnapshot[];
+  distractions: NetworkDistractionSnapshot[];
+  searchedAmenityIds: string[];
+  repairedBrokenBikeIds: string[];
   bike: NetworkBikeSnapshot | null;
+  bikes?: NetworkBikeSnapshot[];
 }
 
 export interface ClientHelloMessage {

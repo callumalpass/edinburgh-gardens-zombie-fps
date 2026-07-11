@@ -7,6 +7,11 @@ export interface RenderQualitySettings {
   shadowMapSize: number;
   shadowRadius: number;
   inkStrength: number;
+  zombieFullDetailDistance: number;
+  zombieRenderDistance: number;
+  zombieShadowDistance: number;
+  treeFullDetailDistance: number;
+  treeRenderDistance: number;
 }
 
 export const RENDER_QUALITY_SETTINGS: Record<RenderQualityLevel, RenderQualitySettings> = {
@@ -16,7 +21,12 @@ export const RENDER_QUALITY_SETTINGS: Record<RenderQualityLevel, RenderQualitySe
     mistFraction: 0.42,
     shadowMapSize: 768,
     shadowRadius: 88,
-    inkStrength: 0.72
+    inkStrength: 0.72,
+    zombieFullDetailDistance: 90,
+    zombieRenderDistance: 210,
+    zombieShadowDistance: 42,
+    treeFullDetailDistance: 105,
+    treeRenderDistance: 340
   },
   medium: {
     maxPixelRatio: 1.25,
@@ -24,7 +34,12 @@ export const RENDER_QUALITY_SETTINGS: Record<RenderQualityLevel, RenderQualitySe
     mistFraction: 0.68,
     shadowMapSize: 1024,
     shadowRadius: 98,
-    inkStrength: 0.86
+    inkStrength: 0.86,
+    zombieFullDetailDistance: 120,
+    zombieRenderDistance: 255,
+    zombieShadowDistance: 56,
+    treeFullDetailDistance: 145,
+    treeRenderDistance: 470
   },
   high: {
     maxPixelRatio: 1.5,
@@ -32,7 +47,12 @@ export const RENDER_QUALITY_SETTINGS: Record<RenderQualityLevel, RenderQualitySe
     mistFraction: 1,
     shadowMapSize: 1536,
     shadowRadius: 108,
-    inkStrength: 1
+    inkStrength: 1,
+    zombieFullDetailDistance: 155,
+    zombieRenderDistance: 320,
+    zombieShadowDistance: 72,
+    treeFullDetailDistance: 185,
+    treeRenderDistance: 620
   }
 };
 

@@ -17,6 +17,7 @@ export class GameEntityStore {
   private nextZombieIdValue = 1;
   private nextPickupIdValue = 1;
   private nextWorldItemIdValue = 1;
+  private nextDistractionIdValue = 1;
 
   nextZombieId(): number {
     const id = this.nextZombieIdValue;
@@ -33,6 +34,12 @@ export class GameEntityStore {
   nextWorldItemId(): number {
     const id = this.nextWorldItemIdValue;
     this.nextWorldItemIdValue += 1;
+    return id;
+  }
+
+  nextDistractionId(): number {
+    const id = this.nextDistractionIdValue;
+    this.nextDistractionIdValue += 1;
     return id;
   }
 

@@ -4,6 +4,7 @@ import { clone as cloneSkeleton } from "three/addons/utils/SkeletonUtils.js";
 import type { ZombieAiState } from "../state";
 import type { ZombieType } from "../waves";
 import { tuneAnimeMaterial } from "./animeStyle";
+import { disposeThreeResources } from "./disposeThreeResources";
 
 export interface ZombieAssetInstance {
   root: THREE.Group;
@@ -40,10 +41,7 @@ export async function instantiateZombieAsset(type: ZombieType): Promise<ZombieAs
   let loading = templates.get(type);
   if (!loading) {
     const baseUrl = import.meta.env.BASE_URL.endsWith("/") ? import.meta.env.BASE_URL : `${import.meta.env.BASE_URL}/`;
-    loading = new GLTFLoader().loadAsync(`${baseUrl}${ASSET_PATHS[type]}`).then((gltf) => ({
-      root: gltf.scene,
-      animations: gltf.animations
-    }));
+    loading = new GLTFLoader().loadAsync(`${baseUrl}${ASSET_PATHS[type]}`).then((gltf) => prepareZombieTemplate(gltf.scene, gltf.animations));
     templates.set(type, loading);
   }
   const template = await loading;
@@ -54,26 +52,19 @@ export async function instantiateZombieAsset(type: ZombieType): Promise<ZombieAs
   root.userData.zombieType = type;
   const orphanHelper = root.children.find((child) => child.name === "Icosphere" && Object.keys(child.userData).length === 0);
   if (orphanHelper) root.remove(orphanHelper);
-  root.traverse((object) => {
-    if (!(object instanceof THREE.Mesh)) return;
-    object.geometry = object.geometry.clone();
-    object.material = Array.isArray(object.material)
-      ? object.material.map((material) => material.clone())
-      : object.material.clone();
-    object.castShadow = true;
-    object.receiveShadow = false;
-    object.frustumCulled = false;
-    const materials = Array.isArray(object.material) ? object.material : [object.material];
-    for (const material of materials) tuneAnimeMaterial(material);
-  });
   return {
     root,
-    animations: template.animations.map((source) => {
-      const clip = source.clone();
-      clip.name = source.name.replace(/^(Zombie|Crawler|shambler|sprinter|bloater|screamer)_/, "");
-      return clip;
-    })
+    animations: template.animations
   };
+}
+
+export function disposeZombieAssetTemplates(): void {
+  for (const loading of templates.values()) {
+    void loading
+      .then((template) => disposeThreeResources(template.root, { includeShared: true }))
+      .catch(() => undefined);
+  }
+  templates.clear();
 }
 
 export function attachZombieAnimation(mesh: THREE.Group, asset: ZombieAssetInstance): void {
@@ -91,10 +82,18 @@ export function attachZombieAnimation(mesh: THREE.Group, asset: ZombieAssetInsta
 
 export function updateZombieAssetAnimation(
   mesh: THREE.Group,
-  options: { dt: number; type: ZombieType; aiState: ZombieAiState; staggered: boolean; distanceToPlayer: number }
+  options: { dt: number; type: ZombieType; aiState: ZombieAiState; staggered: boolean; distanceToPlayer: number; renderFullDetail?: boolean }
 ): boolean {
   const state = mesh.userData.zombieAnimation as ZombieAnimationState | undefined;
   if (!state) return false;
+  if (options.renderFullDetail === false) {
+    if (state.override) {
+      state.override.remaining -= options.dt;
+      if (state.override.remaining <= 0) state.override = null;
+    }
+    state.accumulatedDt = Math.min(0.25, state.accumulatedDt + options.dt);
+    return true;
+  }
   state.accumulatedDt += options.dt;
   const minimumStep = options.distanceToPlayer > 100 ? 1 / 6 : options.distanceToPlayer > 55 ? 1 / 15 : 0;
   if (state.accumulatedDt < minimumStep) return true;
@@ -118,6 +117,31 @@ export function updateZombieAssetAnimation(
   state.mixer.timeScale = pace;
   state.mixer.update(dt);
   return true;
+}
+
+function prepareZombieTemplate(root: THREE.Group, sourceAnimations: THREE.AnimationClip[]): ZombieAssetInstance {
+  root.traverse((object) => {
+    if (!(object instanceof THREE.Mesh)) return;
+    object.castShadow = true;
+    object.receiveShadow = false;
+    object.frustumCulled = true;
+    object.geometry.computeBoundingSphere();
+    if (object.geometry.boundingSphere) object.geometry.boundingSphere.radius *= 1.35;
+    object.geometry.userData.sharedZombieAsset = true;
+    const materials = Array.isArray(object.material) ? object.material : [object.material];
+    for (const material of materials) {
+      tuneAnimeMaterial(material);
+      material.userData.sharedZombieAsset = true;
+    }
+  });
+  return {
+    root,
+    animations: sourceAnimations.map((source) => {
+      const clip = source.clone();
+      clip.name = source.name.replace(/^(Zombie|Crawler|shambler|sprinter|bloater|screamer)_/, "");
+      return clip;
+    })
+  };
 }
 
 export function triggerZombieAssetAnimation(mesh: THREE.Group, name: "Attack" | "Scream"): void {

@@ -75,6 +75,11 @@ function createSnapshot(roomId = "test-room"): NetworkGameSnapshot {
     zombies: [],
     pickups: [],
     weaponDrops: [],
+    worldItems: [],
+    placedLadders: [],
+    distractions: [],
+    searchedAmenityIds: [],
+    repairedBrokenBikeIds: [],
     bike: null
   };
 }
@@ -150,11 +155,12 @@ describe("NetworkSession", () => {
       ["chooseIntermissionUpgrade", 4, undefined, "damage"]
     ]);
 
-    expect(session.sendInputFrame(1, "playing", inputFrame)).toBe(true);
-    expect(session.sendInputFrame(0.1, "playing", inputFrame)).toBe(false);
-    expect(session.sendInputFrame(0.4, "playing", inputFrame)).toBe(true);
-    expect(session.sendInputFrame(1, "ready", inputFrame)).toBe(false);
+    expect(session.sendInputFrame(1, "playing", inputFrame)?.sequence).toBe(1);
+    expect(session.sendInputFrame(0.1, "playing", inputFrame)).toBeNull();
+    expect(session.sendInputFrame(0.4, "playing", inputFrame)?.sequence).toBe(2);
+    expect(session.sendInputFrame(1, "ready", inputFrame)).toBeNull();
     expect(transport.inputs.map((input) => input.sequence)).toEqual([1, 2]);
+    expect(transport.inputs.map((input) => input.duration)).toEqual([0.1, 0.1]);
   });
 
   it("routes host events and sends authoritative snapshots on cadence", () => {
@@ -198,5 +204,22 @@ describe("NetworkSession", () => {
     expect(session.wavePhase).toBe("intermission");
     expect(session.intermissionTimer).toBe(8);
     expect(session.remainingSpawns).toBe(3);
+  });
+
+  it("preserves cadence overshoot at common render frame rates", () => {
+    const transport = new FakeTransport();
+    const session = new NetworkSession(
+      { ...clientConfig, role: "host", playerName: "Host" },
+      { createClient: () => transport as unknown as NetworkTransport, snapshotHz: 18 }
+    );
+    session.connect(handlers().callbacks);
+    session.sendSnapshotFrame(0, () => createSnapshot());
+    transport.snapshots.length = 0;
+
+    for (let frame = 0; frame < 60; frame += 1) {
+      session.sendSnapshotFrame(1 / 60, () => createSnapshot());
+    }
+
+    expect(transport.snapshots).toHaveLength(18);
   });
 });

@@ -68,15 +68,25 @@ import { disposeThreeResources } from "./rendering/disposeThreeResources";
 import { AdaptiveRenderQuality, RENDER_QUALITY_SETTINGS, type RenderQualityLevel } from "./rendering/renderQuality";
 import {
   attachZombieAnimation,
+  disposeZombieAssetTemplates,
   disposeZombieAssetAnimation,
   instantiateZombieAsset,
   triggerZombieAssetAnimation,
   updateZombieAssetAnimation,
   zombieAssetState
 } from "./rendering/ZombieAsset";
+import { ZombieRenderLod, zombieRenderTier, zombieSimulationInterval } from "./rendering/ZombieRenderLod";
 import type { GameStateName, GameTestApi, HitZone, Pickup, ShellCasing, SmokePuff, Snapshot, Tracer, WavePhase, WeaponDrop, Zombie } from "./state";
 import { installGameTestDriver, uninstallGameTestDriver } from "./testing/GameTestDriver";
 import { InputController } from "./input/InputController";
+import {
+  DEFAULT_INPUT_BINDINGS,
+  loadInputBindings,
+  rebindInputAction,
+  saveInputBindings,
+  type InputAction,
+  type InputBindings
+} from "./input/inputBindings";
 import { TerrainSampler } from "./terrain";
 import { MovementSurfaceSampler } from "./movement";
 import {
@@ -106,12 +116,17 @@ import {
 } from "./flareGun";
 import { NetworkSession, type NetworkInputFrame } from "./multiplayer/NetworkSession";
 import { RemotePlayerRoster } from "./multiplayer/RemotePlayerRoster";
+import { ClientPositionReconciler } from "./multiplayer/ClientPositionReconciler";
 import type {
   NetworkAction,
+  NetworkDistractionSnapshot,
   NetworkGameSnapshot,
+  NetworkInputState,
+  NetworkPlacedLadderSnapshot,
   NetworkPickupSnapshot,
   NetworkPlayerSnapshot,
   NetworkWeaponDropSnapshot,
+  NetworkWorldItemSnapshot,
   NetworkZombieSnapshot
 } from "./multiplayer/types";
 import {
@@ -126,6 +141,7 @@ import {
   MELEE_STAMINA_COST,
   PLAYER_HEIGHT,
   PLAYER_RADIUS,
+  RAISED_SURFACE_EDGE_TOLERANCE,
   REST_SECONDS,
   SKATEBOARD_CAMERA_HEIGHT_BONUS,
   START_POSITION,
@@ -243,9 +259,14 @@ export class GameApp {
   private readonly rng = new SeededRandom(0xed1b97);
   private readonly waveDirector: WaveDirector;
   private readonly network = new NetworkSession();
+  private readonly clientPositionReconciler = new ClientPositionReconciler();
+  private readonly networkCameraCorrection = new THREE.Vector3();
+  private hasInitialNetworkSnapshot = false;
   private readonly smokeMode = new URLSearchParams(window.location.search).has("smoke");
+  private readonly networkTestMode = new URLSearchParams(window.location.search).has("network-test");
   private readonly adaptiveQuality = new AdaptiveRenderQuality(this.smokeMode ? "low" : "high");
   private settings: GameSettings = loadGameSettings();
+  private inputBindings: InputBindings = loadInputBindings();
   private readonly audio = new GameAudio({ enabled: !this.smokeMode, masterVolume: this.settings.masterVolume });
   private renderer!: THREE.WebGLRenderer;
   private scene!: THREE.Scene;
@@ -259,6 +280,7 @@ export class GameApp {
   private atmosphere!: AtmosphereSystem;
   private postProcessing!: PostProcessingPipeline;
   private contactShadows!: PainterlyContactShadows;
+  private zombieRenderLod!: ZombieRenderLod;
   private currentWeather: WeatherState = weatherFromElapsed(0);
   private currentTimeOfDay: TimeOfDayState = timeOfDayFromElapsed(0);
   private state: GameStateName = "ready";
@@ -323,6 +345,7 @@ export class GameApp {
   private readonly plinthClockMaterials: THREE.MeshBasicMaterial[] = [];
   private readonly plinthClockLights: THREE.PointLight[] = [];
   private readonly contactShadowAnchors: ContactShadowAnchor[] = [];
+  private zombieCrowdingAccumulator = 0;
   private materials!: GameMaterials;
   private bike: RideableBike | null = null;
   private bikes: RideableBike[] = [];
@@ -476,9 +499,13 @@ export class GameApp {
       },
       exitToMenu: () => this.exitToMainMenu(),
       chooseIntermissionUpgrade: (upgradeId) => this.chooseIntermissionUpgrade(upgradeId),
-      changeSettings: (settings) => this.updateSettings(settings)
+      changeSettings: (settings) => this.updateSettings(settings),
+      equipWeaponSlot: (index) => this.handleEquipSlotInput(index),
+      changeBinding: (action, code) => this.changeInputBinding(action, code),
+      resetBindings: () => this.resetInputBindings()
     }, this.events.signal);
     this.hud.setSettings(this.settings);
+    this.hud.setBindings(this.inputBindings);
     this.root.classList.toggle("high-contrast-hud", this.settings.highContrastHud);
     this.canvas = this.root.querySelector<HTMLCanvasElement>(".game-canvas")!;
     this.renderer = new THREE.WebGLRenderer({
@@ -505,6 +532,8 @@ export class GameApp {
     this.camera.userData.dynamic = true;
     this.weaponModel.userData.dynamic = true;
     this.scene = new THREE.Scene();
+    this.zombieRenderLod = new ZombieRenderLod();
+    this.scene.add(this.zombieRenderLod.root);
     this.contactShadows = new PainterlyContactShadows();
     this.scene.add(this.contactShadows.root);
     this.atmosphere = new AtmosphereSystem(this.scene, this.rng, this.smokeMode, this.weatherAnchors());
@@ -576,6 +605,11 @@ export class GameApp {
       })),
       testZombieFacing: () => this.testZombieFacing(),
       testSetCrouching: (crouching: boolean) => this.testSetCrouching(crouching),
+      testSetHealth: (health: number) => {
+        this.player.health = THREE.MathUtils.clamp(health, 0, 100);
+        this.updateHud();
+        return this.snapshot();
+      },
       testStartIntermission: () => this.testStartIntermission(),
       testChooseIntermissionUpgrade: (upgradeId?: UpgradeId) => this.chooseIntermissionUpgrade(upgradeId ?? this.currentIntermissionChoices()[0]?.id ?? "damage"),
       testAddTeammate: (name, avatarId) => {
@@ -618,6 +652,7 @@ export class GameApp {
     this.clearActiveFlareBeacons();
 
     disposeThreeResources(this.scene);
+    disposeZombieAssetTemplates();
     this.postProcessing.dispose();
     this.renderer.dispose();
     this.root.innerHTML = "";
@@ -638,9 +673,9 @@ export class GameApp {
         throwDistraction: () => this.handleThrowDistractionInput(),
         takeItem: () => this.handleTakeInput(),
         toggleInventory: () => this.toggleInventoryMenu(),
-        dropItem: () => this.dropItem(),
+        dropItem: () => this.handleDropItemInput(),
         jump: () => this.handleJumpInput(),
-        toggleSkateboard: () => this.toggleSkateboard(),
+        toggleSkateboard: () => this.handleToggleSkateboardInput(),
         equipSlot: (index) => this.handleEquipSlotInput(index),
         look: (movementX, movementY) => this.handleLook(movementX, movementY),
         cancel: () => {
@@ -654,7 +689,7 @@ export class GameApp {
       },
       signal,
       window,
-      { allowUnlockedLook: this.smokeMode }
+      { allowUnlockedLook: this.smokeMode, bindings: this.inputBindings }
     );
     this.input.install();
     this.hud.startButton.addEventListener("click", () => {
@@ -695,20 +730,45 @@ export class GameApp {
     }
   }
 
+  private changeInputBinding(action: InputAction, code: string): void {
+    this.inputBindings = rebindInputAction(this.inputBindings, action, code);
+    saveInputBindings(this.inputBindings);
+    this.input?.setBindings(this.inputBindings);
+    this.hud.setBindings(this.inputBindings);
+  }
+
+  private resetInputBindings(): void {
+    this.inputBindings = structuredClone(DEFAULT_INPUT_BINDINGS);
+    saveInputBindings(this.inputBindings);
+    this.input?.setBindings(this.inputBindings);
+    this.hud.setBindings(this.inputBindings);
+  }
+
   private exitToMainMenu(): void {
     this.dispose();
     window.location.assign(window.location.pathname);
   }
 
   private setupMultiplayer(): void {
-    const connected = this.network.connect(
+    this.network.connect(
       {
         status: (message) => this.flashStatus(message),
-        peerLeft: (playerId) => this.remotePlayers.remove(playerId),
         peerJoined: (playerId, name, avatarId) => this.remotePlayers.add(playerId, name, avatarId),
+        peerLeft: (playerId) => {
+          this.releaseNetworkPlayerBike(playerId);
+          this.remotePlayers.remove(playerId);
+        },
         input: (playerId, input) => {
           const player = this.remotePlayers.get(playerId) ?? this.remotePlayers.add(playerId, `Player ${playerId}`);
-          player.input = input;
+          if (
+            input.sequence <= player.lastProcessedInputSequence
+            || player.pendingInputs.some((candidate) => candidate.sequence === input.sequence)
+          ) return;
+          player.pendingInputs.push({
+            ...input,
+            duration: THREE.MathUtils.clamp(input.duration || 0, 0, 0.1)
+          });
+          player.pendingInputs.sort((a, b) => a.sequence - b.sequence);
           player.yaw = input.yaw;
           player.pitch = input.pitch;
           player.lastInputAt = performance.now() / 1000;
@@ -716,16 +776,12 @@ export class GameApp {
         action: (playerId, action) => this.handleNetworkPlayerAction(playerId, action),
         snapshot: (snapshot) => this.applyNetworkSnapshot(snapshot)
       },
-      { disabled: this.smokeMode }
+      { disabled: this.smokeMode && !this.networkTestMode }
     );
-
-    if (connected && this.isNetworkClient) {
-      this.clearNetworkAuthoritativeEntities();
-    }
   }
 
   private handleShootInput(now: number): void {
-    if (this.paused) return;
+    if (this.paused || this.player.health <= 0) return;
     if (this.sendNetworkAction("shoot")) {
       this.hudNoiseLevel = Math.max(this.hudNoiseLevel, 0.9);
       return;
@@ -734,7 +790,7 @@ export class GameApp {
   }
 
   private handleReloadInput(now: number): void {
-    if (this.paused) return;
+    if (this.paused || this.player.health <= 0) return;
     if (this.sendNetworkAction("reload")) {
       return;
     }
@@ -742,7 +798,7 @@ export class GameApp {
   }
 
   private handleInteractInput(): boolean {
-    if (this.paused) return false;
+    if (this.paused || this.player.health <= 0) return false;
     if (this.sendNetworkAction("interact")) {
       return true;
     }
@@ -750,7 +806,7 @@ export class GameApp {
   }
 
   private handleToggleFlashlightInput(): boolean {
-    if (this.paused) return false;
+    if (this.paused || this.player.health <= 0) return false;
     if (this.sendNetworkAction("toggleFlashlight")) {
       return true;
     }
@@ -758,7 +814,7 @@ export class GameApp {
   }
 
   private handleThrowDistractionInput(): boolean {
-    if (this.paused) return false;
+    if (this.paused || this.player.health <= 0) return false;
     if (this.sendNetworkAction("throwDistraction")) {
       return true;
     }
@@ -766,23 +822,35 @@ export class GameApp {
   }
 
   private handleTakeInput(): boolean {
-    if (this.paused) return false;
-    if (this.nearestWeaponDrop && !this.nearestWorldItem && this.sendNetworkAction("take")) {
+    if (this.paused || this.player.health <= 0) return false;
+    if (this.sendNetworkAction("take")) {
       return true;
     }
     return this.handleTakeOrRemove();
   }
 
+  private handleDropItemInput(): boolean {
+    if (this.paused || this.player.health <= 0) return false;
+    if (this.sendNetworkAction("dropItem")) return true;
+    return this.dropItem();
+  }
+
   private handleJumpInput(): boolean {
-    if (this.paused) return false;
+    if (this.paused || this.player.health <= 0) return false;
     if (this.sendNetworkAction("jump")) {
       return true;
     }
     return this.jump();
   }
 
+  private handleToggleSkateboardInput(): boolean {
+    if (this.paused || this.player.health <= 0) return false;
+    if (this.sendNetworkAction("toggleSkateboard")) return true;
+    return this.toggleSkateboard();
+  }
+
   private handleEquipSlotInput(index: number): void {
-    if (this.paused) return;
+    if (this.paused || this.player.health <= 0) return;
     const choice = this.currentIntermissionChoices()[index];
     if (choice && this.wavePhase === "intermission" && this.player.intermissionUpgradeWave !== this.wave) {
       this.chooseIntermissionUpgrade(choice.id);
@@ -882,7 +950,7 @@ export class GameApp {
     if (this.isNetworkHost) {
       this.remotePlayers.reset();
     }
-    this.hud.setRestartVisible(false);
+    this.hud.clearOutcome();
     this.state = "playing";
     this.paused = false;
     this.hud.setPaused(false, this.network.enabled);
@@ -912,16 +980,23 @@ export class GameApp {
 
     const simulationDt = this.paused && !this.network.enabled ? 0 : dt;
     this.remotePlayers?.updateAnimations(simulationDt);
+    this.syncNetworkPlayerBikeMeshes();
     if (this.isNetworkClient) {
       for (const zombie of this.zombies) {
         this.animateZombie(zombie, now, zombie.position.distanceTo(this.player.position), simulationDt);
       }
+    }
+    if (this.zombieRenderLod.update(this.zombies, this.player.position, RENDER_QUALITY_SETTINGS[this.adaptiveQuality.current])) {
+      this.renderer.shadowMap.needsUpdate = !this.smokeMode;
     }
     const atmosphere = this.atmosphere.update(simulationDt, this.camera.position, now);
     const { timeOfDay, weather } = atmosphere;
     this.currentWeather = weather;
     this.currentTimeOfDay = timeOfDay;
     this.world.updateTimeOfDay(timeOfDay, weather);
+    if (this.world.updateTreeLod({ x: this.player.position.x, z: this.player.position.z })) {
+      this.renderer.shadowMap.needsUpdate = !this.smokeMode;
+    }
     if (this.world.updateShadowFocus({ x: this.player.position.x, z: this.player.position.z }, now)) {
       this.renderer.shadowMap.needsUpdate = !this.smokeMode;
     }
@@ -941,17 +1016,19 @@ export class GameApp {
   }
 
   private updatePainterlyContactShadows(): void {
-    this.contactShadowAnchors.length = this.zombies.length;
-    for (let index = 0; index < this.zombies.length; index += 1) {
-      const zombie = this.zombies[index];
-      const anchor = this.contactShadowAnchors[index] ?? { x: 0, y: 0, z: 0, radius: 1 };
+    let visibleCount = 0;
+    for (const zombie of this.zombies) {
+      if (zombie.mesh.userData.zombieRenderTier === "hidden") continue;
+      const anchor = this.contactShadowAnchors[visibleCount] ?? { x: 0, y: 0, z: 0, radius: 1 };
       anchor.x = zombie.position.x;
       anchor.y = this.groundY(zombie.position);
       anchor.z = zombie.position.z;
       anchor.radius = zombie.radius * (zombie.type === "bloater" ? 1.42 : 1.18);
       anchor.stretch = zombie.type === "crawler" ? 1.9 : zombie.type === "sprinter" ? 1.34 : 1.12;
-      this.contactShadowAnchors[index] = anchor;
+      this.contactShadowAnchors[visibleCount] = anchor;
+      visibleCount += 1;
     }
+    this.contactShadowAnchors.length = visibleCount;
     this.contactShadows.update(this.contactShadowAnchors);
   }
 
@@ -1011,12 +1088,13 @@ export class GameApp {
   }
 
   private updateNetworkClientFrame(dt: number, now: number): void {
-    this.sendNetworkInputFrame(dt);
+    const input = this.sendNetworkInputFrame(dt);
     this.loadout = finishReloadIfReady(this.loadout, now);
-    this.updateCrouch(dt);
-    this.updateJumpState(dt);
-    this.updateMovement(dt);
-    this.updateVerticalState(dt);
+    if (input) {
+      this.simulateLocalNetworkInput(input);
+      this.clientPositionReconciler.record(input);
+    }
+    this.syncNetworkPlayerBikeMeshes();
     this.updateWeaponDrops(dt);
     this.updateNetworkClientBikeTarget();
     this.updateWorldItems(dt);
@@ -1036,6 +1114,7 @@ export class GameApp {
     this.updateScope(dt, now);
     this.updateWeaponModel(dt);
     this.updateCamera();
+    this.decayNetworkCameraCorrection(dt);
     this.updateAudio(dt);
     this.updateHud();
     this.updateMiniMap(now);
@@ -1051,8 +1130,56 @@ export class GameApp {
       .sort((a, b) => a.position.distanceTo(this.player.position) - b.position.distanceTo(this.player.position))[0] ?? null;
   }
 
-  private sendNetworkInputFrame(dt: number): void {
-    this.network.sendInputFrame(dt, this.state, this.currentNetworkInput());
+  private sendNetworkInputFrame(dt: number): NetworkInputState | null {
+    if (!this.hasInitialNetworkSnapshot) return null;
+    return this.network.sendInputFrame(dt, this.state, this.currentNetworkInput());
+  }
+
+  private simulateLocalNetworkInput(input: NetworkInputState): void {
+    const previousYaw = this.player.yaw;
+    const previousPitch = this.player.pitch;
+    this.player.yaw = input.yaw;
+    this.player.pitch = input.pitch;
+    this.locomotion.updateCrouch(this.player, input.duration, input.crouch && !this.mountedBike() && !this.skateboardMounted);
+    this.locomotion.updateJumpState(this.player, input.duration, {
+      disabled: this.mountedBike() !== null || this.skateboardMounted
+    });
+    const movement = {
+      x: input.moveX,
+      z: input.moveZ,
+      length: Math.hypot(input.moveX, input.moveZ)
+    };
+    const bike = this.mountedBike();
+    if (bike) {
+      const result = this.locomotion.moveOnBike(this.player, input.duration, movement, {
+        wantsSprint: input.sprint,
+        condition: this.condition,
+        pumpSpeedMultiplier: bikePumpSpeedMultiplier(this.condition)
+      });
+      this.isSprinting = result.sprinting;
+      bike.position.set(this.player.position.x, this.groundY(this.player.position), this.player.position.z);
+      bike.angle = input.yaw;
+    } else if (this.skateboardMounted) {
+      const result = this.locomotion.moveOnSkateboard(this.player, input.duration, movement, {
+        wantsSprint: input.sprint,
+        condition: this.condition
+      });
+      this.isSprinting = result.sprinting;
+      if (!result.usable) {
+        this.skateboardMounted = false;
+        this.carriedItem = "skateboard";
+      }
+    } else {
+      this.isSprinting = this.locomotion.moveOnFoot(this.player, input.duration, movement, {
+        wantsSprint: input.sprint,
+        condition: this.condition
+      }).sprinting;
+    }
+    this.locomotion.updateFixtureElevation(this.player, input.duration, {
+      forceGrounded: this.mountedBike() !== null || this.skateboardMounted
+    });
+    this.player.yaw = previousYaw;
+    this.player.pitch = previousPitch;
   }
 
   private currentNetworkInput(): NetworkInputFrame {
@@ -1110,15 +1237,58 @@ export class GameApp {
         ttl: drop.ttl,
         source: drop.source
       })),
+      worldItems: this.droppedItems.map((item) => ({
+        id: item.id,
+        itemId: item.itemId,
+        label: item.label,
+        x: item.position.x,
+        y: item.position.y,
+        z: item.position.z,
+        angle: item.angle,
+        ttl: Number.isFinite(item.ttl) ? item.ttl : null
+      })),
+      placedLadders: this.placedLadders.map((ladder) => ({
+        id: ladder.id,
+        fixtureId: ladder.fixtureId,
+        accessX: ladder.accessPosition.x,
+        accessZ: ladder.accessPosition.z,
+        landingX: ladder.landingPosition.x,
+        landingZ: ladder.landingPosition.z,
+        angle: ladder.angle
+      })),
+      distractions: this.distractions.map((distraction) => ({
+        id: distraction.id,
+        x: distraction.position.x,
+        z: distraction.position.z,
+        ttl: distraction.ttl,
+        fuseTimer: distraction.fuseTimer
+      })),
+      searchedAmenityIds: [...this.searchedAmenityIds],
+      repairedBrokenBikeIds: [...this.repairedBrokenBikeIds],
       bike: this.bike
         ? {
+            id: this.bike.id,
             x: this.bike.position.x,
             y: this.bike.position.y,
             z: this.bike.position.z,
             angle: this.bike.angle,
-            mounted: this.bike.mounted
+            mounted: this.bike.mounted,
+            mountedByPlayerId: this.bike.mountedByPlayerId,
+            state: this.bike.state,
+            requiredItem: this.bike.requiredItem
           }
-        : null
+        : null,
+      bikes: this.bikes.map((bike) => ({
+        id: bike.id,
+        x: bike.position.x,
+        y: bike.position.y,
+        z: bike.position.z,
+        angle: bike.angle,
+        mounted: bike.mounted,
+        mountedByPlayerId: bike.mountedByPlayerId,
+        state: bike.state,
+        requiredItem: bike.requiredItem
+      }))
     };
   }
 
@@ -1150,8 +1320,11 @@ export class GameApp {
       activeFixtureId: this.player.activeFixtureId,
       flashlightOn: this.condition.flashlightOn,
       throwables: this.condition.throwables,
+      inventory: [...this.inventory],
+      carriedItem: this.carriedItem,
       loadout: this.loadout,
       bikeMounted: this.mountedBike() !== null,
+      skateboardMounted: this.skateboardMounted,
       alive: this.player.health > 0,
       intermissionUpgradeWave: this.player.intermissionUpgradeWave,
       reviveProtectionTimer: this.player.reviveProtectionTimer
@@ -1163,7 +1336,7 @@ export class GameApp {
       id: player.id,
       name: player.name,
       avatarId: player.avatarId,
-      lastProcessedInputSequence: player.input.sequence,
+      lastProcessedInputSequence: player.lastProcessedInputSequence,
       x: player.position.x,
       y: player.position.y,
       z: player.position.z,
@@ -1186,8 +1359,11 @@ export class GameApp {
       activeFixtureId: player.activeFixtureId,
       flashlightOn: player.condition.flashlightOn,
       throwables: player.condition.throwables,
+      inventory: [...player.inventory],
+      carriedItem: player.carriedItem,
       loadout: player.loadout,
-      bikeMounted: false,
+      bikeMounted: player.mountedBikeId !== null,
+      skateboardMounted: player.skateboardMounted,
       alive: player.health > 0,
       intermissionUpgradeWave: player.intermissionUpgradeWave,
       reviveProtectionTimer: player.reviveProtectionTimer
@@ -1209,22 +1385,32 @@ export class GameApp {
     };
   }
 
-  private updateNetworkHostPlayers(dt: number, now: number): void {
+  private updateNetworkHostPlayers(_dt: number, now: number): void {
     if (!this.isNetworkHost) {
       return;
     }
     for (const player of this.remotePlayers.values()) {
       player.loadout = finishReloadIfReady(player.loadout, now);
       if (player.health <= 0) {
+        player.pendingInputs = [];
+        this.releaseNetworkPlayerBike(player.id);
+        player.mountedBikeId = null;
         player.velocity.multiplyScalar(0.72);
         this.remotePlayers.updateMesh(player);
         continue;
       }
-      this.updateNetworkPlayerCrouch(player, dt);
-      this.updateNetworkPlayerJumpState(player, dt);
-      this.updateNetworkPlayerMovement(player, dt, now);
-      this.updateNetworkPlayerVerticalState(player, dt);
-      this.updateNetworkPlayerCondition(player, dt);
+      for (const input of player.pendingInputs.splice(0)) {
+        if (input.sequence <= player.lastProcessedInputSequence) continue;
+        player.input = input;
+        player.yaw = input.yaw;
+        player.pitch = input.pitch;
+        this.updateNetworkPlayerCrouch(player, input.duration);
+        this.updateNetworkPlayerJumpState(player, input.duration);
+        this.updateNetworkPlayerMovement(player, input.duration, now);
+        this.updateNetworkPlayerVerticalState(player, input.duration);
+        this.updateNetworkPlayerCondition(player, input.duration);
+        player.lastProcessedInputSequence = input.sequence;
+      }
       this.remotePlayers.updateMesh(player);
     }
   }
@@ -1240,10 +1426,33 @@ export class GameApp {
       z: stale ? 0 : player.input.moveZ,
       length: stale ? 0 : Math.hypot(player.input.moveX, player.input.moveZ)
     };
-    const movement = this.locomotion.moveOnFoot(player, dt, input, {
-      wantsSprint: !stale && player.input.sprint,
-      condition: player.condition
-    });
+    const mountedBike = player.mountedBikeId
+      ? this.bikes.find((bike) => bike.id === player.mountedBikeId && bike.mountedByPlayerId === player.id) ?? null
+      : null;
+    const movement = mountedBike
+      ? this.locomotion.moveOnBike(player, dt, input, {
+          wantsSprint: !stale && player.input.sprint,
+          condition: player.condition,
+          pumpSpeedMultiplier: bikePumpSpeedMultiplier(player.condition)
+        })
+      : player.skateboardMounted
+        ? this.locomotion.moveOnSkateboard(player, dt, input, {
+            wantsSprint: !stale && player.input.sprint,
+            condition: player.condition
+          })
+        : this.locomotion.moveOnFoot(player, dt, input, {
+          wantsSprint: !stale && player.input.sprint,
+          condition: player.condition
+        });
+    if (mountedBike) {
+      mountedBike.position.set(player.position.x, this.groundY(player.position), player.position.z);
+      mountedBike.angle = player.yaw;
+      this.bike = mountedBike;
+      this.syncBikeMesh(mountedBike);
+    }
+    if (player.skateboardMounted && "usable" in movement && !movement.usable) {
+      player.skateboardMounted = false;
+    }
     player.isSprinting = movement.sprinting;
     if (movement.moved) {
       this.emitNetworkPlayerMovementNoise(player, dt, movement.sprinting);
@@ -1281,11 +1490,11 @@ export class GameApp {
   }
 
   private updateNetworkPlayerJumpState(player: NetworkRemotePlayer, dt: number): void {
-    this.locomotion.updateJumpState(player, dt);
+    this.locomotion.updateJumpState(player, dt, { disabled: player.mountedBikeId !== null || player.skateboardMounted });
   }
 
   private updateNetworkPlayerVerticalState(player: NetworkRemotePlayer, dt: number): void {
-    this.locomotion.updateFixtureElevation(player, dt);
+    this.locomotion.updateFixtureElevation(player, dt, { forceGrounded: player.mountedBikeId !== null || player.skateboardMounted });
   }
 
   private emitNetworkPlayerMovementNoise(player: NetworkRemotePlayer, dt: number, sprinting: boolean): void {
@@ -1321,9 +1530,11 @@ export class GameApp {
     if (action.type === "reload") this.reloadNetworkPlayer(player, now);
     if (action.type === "interact") this.interactNetworkPlayer(player);
     if (action.type === "take") this.takeNetworkPlayer(player);
+    if (action.type === "dropItem") this.dropNetworkPlayerItem(player);
     if (action.type === "toggleFlashlight") this.toggleNetworkPlayerFlashlight(player);
     if (action.type === "throwDistraction") this.throwNetworkPlayerDistraction(player);
     if (action.type === "jump") this.jumpNetworkPlayer(player);
+    if (action.type === "toggleSkateboard") this.toggleNetworkPlayerSkateboard(player);
     if (action.type === "equipSlot" && typeof action.slot === "number") this.equipNetworkPlayerSlot(player, action.slot);
     if (action.type === "chooseIntermissionUpgrade" && action.upgradeId) {
       this.chooseIntermissionUpgradeForNetworkPlayer(player, action.upgradeId);
@@ -1434,7 +1645,7 @@ export class GameApp {
   }
 
   private jumpNetworkPlayer(player: NetworkRemotePlayer): boolean {
-    if (!this.locomotion.canStartJump(player)) {
+    if (!this.locomotion.canStartJump(player, { disabled: player.mountedBikeId !== null || player.skateboardMounted })) {
       return false;
     }
     const stamina = spendStamina(player.condition.stamina, JUMP_STAMINA_COST);
@@ -1461,7 +1672,8 @@ export class GameApp {
   }
 
   private throwNetworkPlayerDistraction(player: NetworkRemotePlayer): boolean {
-    if (player.condition.throwables <= 0) {
+    const inventoryNoiseItem = player.inventory.find((itemId) => isNoiseItem(itemId)) ?? null;
+    if (!inventoryNoiseItem && player.condition.throwables <= 0) {
       return false;
     }
     const stamina = spendStamina(player.condition.stamina, DISTRACTION_STAMINA_COST);
@@ -1469,7 +1681,11 @@ export class GameApp {
       return false;
     }
     player.condition.stamina = stamina.stamina;
-    player.condition.throwables -= 1;
+    if (inventoryNoiseItem) {
+      player.inventory.splice(player.inventory.indexOf(inventoryNoiseItem), 1);
+    } else {
+      player.condition.throwables -= 1;
+    }
     const forward = this.directionFromYawPitch(player.yaw, player.pitch);
     forward.y = 0;
     if (forward.lengthSq() < 0.001) {
@@ -1492,6 +1708,28 @@ export class GameApp {
   }
 
   private interactNetworkPlayer(player: NetworkRemotePlayer): boolean {
+    const mountedBike = player.mountedBikeId
+      ? this.bikes.find((bike) => bike.id === player.mountedBikeId) ?? null
+      : null;
+    if (mountedBike) {
+      return this.toggleNetworkPlayerBike(player, mountedBike);
+    }
+    const nearestBike = this.bikes
+      .filter((bike) => bike.mountedByPlayerId === null)
+      .sort((a, b) => a.position.distanceTo(player.position) - b.position.distanceTo(player.position))[0] ?? null;
+    if (nearestBike && nearestBike.position.distanceTo(player.position) < BIKE_INTERACTION_RADIUS) {
+      if (nearestBike.state !== "available") return this.repairOrUnlockBikeForNetworkPlayer(player, nearestBike);
+      return this.toggleNetworkPlayerBike(player, nearestBike);
+    }
+
+    const fixture = this.nearestFixtureForNetworkPlayer(player);
+    if (fixture) {
+      if (fixture.accessKind === "ladder" && !this.placedLadderForFixture(fixture.id) && player.carriedItem === "ladder") {
+        return this.placeLadderForNetworkPlayer(player, fixture);
+      }
+      return this.toggleFixtureForNetworkPlayer(player, fixture);
+    }
+
     const station = this.nearestStationForPoint(player.position, 10);
     if (station) {
       return this.buyUpgradeForNetworkPlayer(player, station);
@@ -1504,14 +1742,192 @@ export class GameApp {
     return false;
   }
 
-  private takeNetworkPlayer(player: NetworkRemotePlayer): boolean {
-    const drop = this.nearestWeaponDropForPoint(player.position, 8.2);
-    if (!drop) {
+  private nearestFixtureForNetworkPlayer(player: NetworkRemotePlayer): InteractableFixture | null {
+    if (player.mountedBikeId || player.skateboardMounted) return null;
+    const playerPoint = { x: player.position.x, z: player.position.z };
+    let nearest: InteractableFixture | null = null;
+    let nearestDistance = Number.POSITIVE_INFINITY;
+    for (const fixture of this.toggleInteractables) {
+      if (player.activeFixtureId === fixture.id) {
+        if (pointInInteractableRaisedFootprint(playerPoint, fixture, RAISED_SURFACE_EDGE_TOLERANCE)) return fixture;
+        continue;
+      }
+      const placedLadder = fixture.accessKind === "ladder" ? this.placedLadderForFixture(fixture.id) : null;
+      if (fixture.accessKind === "ladder" && !placedLadder && player.carriedItem !== "ladder") continue;
+      const interactionPoint = placedLadder?.accessPosition ?? fixture.accessPosition ?? fixture.position;
+      const fixtureDistance = distance(playerPoint, interactionPoint);
+      const reach = fixture.accessRadius ?? fixture.radius + 3;
+      if (fixtureDistance < nearestDistance && fixtureDistance < reach) {
+        nearest = fixture;
+        nearestDistance = fixtureDistance;
+      }
+    }
+    return nearest;
+  }
+
+  private toggleFixtureForNetworkPlayer(player: NetworkRemotePlayer, fixture: InteractableFixture): boolean {
+    const placedLadder = fixture.accessKind === "ladder" ? this.placedLadderForFixture(fixture.id) : null;
+    if (fixture.accessKind === "ladder" && !placedLadder) return false;
+    if (player.activeFixtureId === fixture.id) {
+      player.activeFixtureId = null;
+      player.heightTarget = 0;
+      const exit = placedLadder?.accessPosition ?? fixture.exitPosition ?? fixture.accessPosition;
+      if (exit) player.position.set(exit.x, this.groundY(exit), exit.z);
+      return true;
+    }
+    const stamina = spendStamina(player.condition.stamina, CLIMB_STAMINA_COST);
+    if (!stamina.spent) return false;
+    player.condition.stamina = stamina.stamina;
+    player.activeFixtureId = fixture.id;
+    const landing = placedLadder?.landingPosition ?? fixture.landingPosition ?? fixture.position;
+    const access = placedLadder?.accessPosition ?? fixture.accessPosition;
+    player.position.set(landing.x, this.groundY(landing), landing.z);
+    if (access) player.yaw = Math.atan2(access.x - landing.x, access.z - landing.z);
+    player.heightTarget = this.locomotion.fixtureElevationAt(fixture, landing);
+    return true;
+  }
+
+  private toggleNetworkPlayerBike(player: NetworkRemotePlayer, bike: RideableBike): boolean {
+    if (bike.mountedByPlayerId === player.id) {
+      bike.mounted = false;
+      bike.mountedByPlayerId = null;
+      player.mountedBikeId = null;
+      player.velocity.multiplyScalar(0.35);
+      this.syncBikeMesh(bike);
+      return true;
+    }
+    if (
+      bike.mountedByPlayerId !== null
+      || bike.state !== "available"
+      || player.height > 0.4
+      || player.activeFixtureId
+      || player.carriedItem === "ladder"
+    ) {
       return false;
     }
-    player.loadout = addWeapon(player.loadout, drop.weaponId);
-    this.scene.remove(drop.mesh);
-    this.weaponDrops = this.weaponDrops.filter((candidate) => candidate !== drop);
+    if (player.skateboardMounted) {
+      player.skateboardMounted = false;
+      player.carriedItem = "skateboard";
+    }
+    bike.mounted = true;
+    bike.mountedByPlayerId = player.id;
+    player.mountedBikeId = bike.id;
+    player.crouching = false;
+    player.crouchAmount = 0;
+    player.height = 0;
+    player.heightTarget = 0;
+    player.jumpHeight = 0;
+    player.jumpVelocity = 0;
+    player.activeFixtureId = null;
+    this.bike = bike;
+    return true;
+  }
+
+  private repairOrUnlockBikeForNetworkPlayer(player: NetworkRemotePlayer, bike: RideableBike): boolean {
+    const requiredItem = bike.state === "flat-tyres" ? "tyre-kit" : "bolt-cutters";
+    const itemIndex = player.inventory.indexOf(requiredItem);
+    if (itemIndex < 0 && !(bike.state === "flat-tyres" && player.condition.bikePumpTimer > 0)) return false;
+    if (itemIndex >= 0) player.inventory.splice(itemIndex, 1);
+    bike.state = "available";
+    bike.requiredItem = undefined;
+    if (bike.linkedDetailId) this.repairedBrokenBikeIds.add(bike.linkedDetailId);
+    this.rebuildBikeMesh(bike);
+    return true;
+  }
+
+  private toggleNetworkPlayerSkateboard(player: NetworkRemotePlayer): boolean {
+    if (player.mountedBikeId || player.height > 0.4 || player.activeFixtureId) return false;
+    if (player.skateboardMounted) {
+      player.skateboardMounted = false;
+      player.carriedItem = "skateboard";
+    } else {
+      if (player.carriedItem !== "skateboard" || this.movementSurfaceAt(player.position) === "grass") return false;
+      player.carriedItem = null;
+      player.skateboardMounted = true;
+    }
+    player.crouching = false;
+    player.crouchAmount = 0;
+    player.height = 0;
+    player.heightTarget = 0;
+    player.jumpHeight = 0;
+    player.jumpVelocity = 0;
+    return true;
+  }
+
+  private placeLadderForNetworkPlayer(player: NetworkRemotePlayer, fixture: InteractableFixture): boolean {
+    if (player.carriedItem !== "ladder" || this.placedLadderForFixture(fixture.id)) return false;
+    const placement = this.ladderPlacementForFixture(fixture, player.position);
+    const mesh = this.meshFactory.createPlacedLadderMesh();
+    mesh.userData.dynamic = true;
+    mesh.position.set(placement.accessPosition.x, this.groundY(placement.accessPosition), placement.accessPosition.z);
+    mesh.rotation.set(0, placement.angle, 0);
+    this.scene.add(mesh);
+    this.placedLadders.push({
+      id: `placed-ladder-${fixture.id}`,
+      fixtureId: fixture.id,
+      mesh,
+      accessPosition: placement.accessPosition,
+      landingPosition: placement.landingPosition,
+      angle: placement.angle
+    });
+    player.carriedItem = null;
+    return true;
+  }
+
+  private releaseNetworkPlayerBike(playerId: string): void {
+    for (const bike of this.bikes) {
+      if (bike.mountedByPlayerId !== playerId) continue;
+      bike.mounted = false;
+      bike.mountedByPlayerId = null;
+      this.syncBikeMesh(bike);
+    }
+  }
+
+  private takeNetworkPlayer(player: NetworkRemotePlayer): boolean {
+    const worldItem = [...this.droppedItems]
+      .filter((item) => item.position.distanceTo(player.position) < (item.itemId === "ladder" ? 5.2 : 4.4))
+      .sort((a, b) => a.position.distanceTo(player.position) - b.position.distanceTo(player.position))[0] ?? null;
+    if (worldItem) {
+      if (isInventoryItem(worldItem.itemId)) {
+        if (player.inventory.length >= INVENTORY_CAPACITY) return false;
+        player.inventory.push(worldItem.itemId);
+      } else {
+        if (player.carriedItem || player.skateboardMounted) return false;
+        player.carriedItem = worldItem.itemId;
+      }
+      this.scene.remove(worldItem.mesh);
+      this.droppedItems = this.droppedItems.filter((candidate) => candidate !== worldItem);
+      return true;
+    }
+    const drop = this.nearestWeaponDropForPoint(player.position, 8.2);
+    if (drop) {
+      player.loadout = addWeapon(player.loadout, drop.weaponId);
+      this.scene.remove(drop.mesh);
+      this.weaponDrops = this.weaponDrops.filter((candidate) => candidate !== drop);
+      return true;
+    }
+    const ladder = [...this.placedLadders]
+      .filter((candidate) => distance(candidate.accessPosition, player.position) < PLACED_LADDER_PICKUP_RADIUS)
+      .sort((a, b) => distance(a.accessPosition, player.position) - distance(b.accessPosition, player.position))[0] ?? null;
+    if (!ladder || player.carriedItem || player.activeFixtureId === ladder.fixtureId || player.height > 0.4) return false;
+    this.scene.remove(ladder.mesh);
+    disposeThreeResources(ladder.mesh);
+    this.placedLadders = this.placedLadders.filter((candidate) => candidate !== ladder);
+    player.carriedItem = "ladder";
+    return true;
+  }
+
+  private dropNetworkPlayerItem(player: NetworkRemotePlayer): boolean {
+    const itemId = player.carriedItem ?? player.inventory.at(-1) ?? null;
+    if (!itemId) return false;
+    if (player.carriedItem) player.carriedItem = null;
+    else player.inventory.pop();
+    const forward = this.directionFromYawPitch(player.yaw, 0);
+    const target = this.resolveNearbyObstacles(clampToPolygon({
+      x: player.position.x + forward.x * 3.2,
+      z: player.position.z + forward.z * 3.2
+    }, this.level.boundary, 4), 0.5);
+    this.addDroppedWorldItem(itemId, target, { angle: player.yaw, ttl: Number.POSITIVE_INFINITY });
     return true;
   }
 
@@ -1598,17 +2014,26 @@ export class GameApp {
     }
     this.state = snapshot.state;
 
+    const bikeSnapshots = snapshot.bikes ?? (snapshot.bike ? [snapshot.bike] : []);
+    for (const bikeSnapshot of bikeSnapshots) this.applyBikeSnapshot(bikeSnapshot);
+    this.syncNetworkBikeOwnership(bikeSnapshots);
+
     const self = snapshot.players.find((player) => player.id === this.network.localId);
     if (self) {
       this.applyLocalPlayerSnapshot(self);
+      this.hasInitialNetworkSnapshot = true;
     }
     this.applyRemotePlayerSnapshots(snapshot.players.filter((player) => player.id !== this.network.localId));
     this.applyZombieSnapshots(snapshot.zombies);
     this.applyPickupSnapshots(snapshot.pickups);
     this.applyWeaponDropSnapshots(snapshot.weaponDrops);
-    this.applyBikeSnapshot(snapshot.bike);
+    this.applyWorldItemSnapshots(snapshot.worldItems ?? []);
+    this.applyPlacedLadderSnapshots(snapshot.placedLadders ?? []);
+    this.applyDistractionSnapshots(snapshot.distractions ?? []);
+    this.replaceSet(this.searchedAmenityIds, snapshot.searchedAmenityIds ?? []);
+    this.replaceSet(this.repairedBrokenBikeIds, snapshot.repairedBrokenBikeIds ?? []);
     if (snapshot.state === "gameover") {
-      this.hud.setRestartVisible(true);
+      this.hud.showGameOver(snapshot.wave);
       this.hud.setStatus(`Overrun at wave ${snapshot.wave}`);
     }
   }
@@ -1616,9 +2041,11 @@ export class GameApp {
   private applyLocalPlayerSnapshot(snapshot: NetworkPlayerSnapshot): void {
     const previousWeapon = this.loadout.weaponId;
     const previousHealth = this.player.health;
+    const cameraBefore = this.localPlayerCameraAnchor();
+    const localYaw = this.player.yaw;
+    const localPitch = this.player.pitch;
+    const unacknowledgedInputs = this.clientPositionReconciler.acknowledge(snapshot.lastProcessedInputSequence ?? 0);
     this.player.position.set(snapshot.x, snapshot.y, snapshot.z);
-    this.player.yaw = snapshot.yaw;
-    this.player.pitch = snapshot.pitch;
     this.player.health = snapshot.health;
     this.player.scrap = snapshot.scrap;
     this.player.crouching = snapshot.crouching;
@@ -1626,6 +2053,7 @@ export class GameApp {
     this.player.height = snapshot.height;
     this.player.jumpHeight = snapshot.jumpHeight;
     this.player.activeFixtureId = snapshot.activeFixtureId;
+    this.skateboardMounted = snapshot.skateboardMounted ?? false;
     this.player.intermissionUpgradeWave = snapshot.intermissionUpgradeWave ?? 0;
     this.player.reviveProtectionTimer = snapshot.reviveProtectionTimer ?? 0;
     this.loadout = snapshot.loadout;
@@ -1637,6 +2065,12 @@ export class GameApp {
     this.condition.bikePumpTimer = snapshot.bikePumpTimer;
     this.condition.throwables = snapshot.throwables;
     this.condition.flashlightOn = snapshot.flashlightOn;
+    this.inventory = [...(snapshot.inventory ?? [])];
+    this.carriedItem = snapshot.carriedItem ?? null;
+    for (const input of unacknowledgedInputs) this.simulateLocalNetworkInput(input);
+    this.player.yaw = localYaw;
+    this.player.pitch = localPitch;
+    this.compensateNetworkCamera(cameraBefore);
     if (previousHealth <= 0 && snapshot.health > 0) {
       this.clearHitFlash();
       this.flashStatus(`Revived — regroup for wave ${this.wave + 1}`);
@@ -1657,9 +2091,14 @@ export class GameApp {
       seen.add(snapshot.id);
       const player = this.remotePlayers.get(snapshot.id) ?? this.remotePlayers.add(snapshot.id, snapshot.name, snapshot.avatarId);
       player.name = snapshot.name;
-      player.position.set(snapshot.x, snapshot.y, snapshot.z);
-      player.yaw = snapshot.yaw;
       this.remotePlayers.setAvatar(player, snapshot.avatarId);
+      this.remotePlayers.applyNetworkTransform(player, {
+        position: new THREE.Vector3(snapshot.x, snapshot.y, snapshot.z),
+        yaw: snapshot.yaw,
+        height: snapshot.height,
+        jumpHeight: snapshot.jumpHeight,
+        crouching: snapshot.crouching
+      });
       player.pitch = snapshot.pitch;
       player.health = snapshot.health;
       player.scrap = snapshot.scrap;
@@ -1672,16 +2111,16 @@ export class GameApp {
       player.condition.bikePumpTimer = snapshot.bikePumpTimer;
       player.condition.throwables = snapshot.throwables;
       player.condition.flashlightOn = snapshot.flashlightOn;
-      player.crouching = snapshot.crouching;
-      player.crouchAmount = snapshot.crouching ? 1 : 0;
-      player.height = snapshot.height;
-      player.jumpHeight = snapshot.jumpHeight;
+      player.inventory = [...(snapshot.inventory ?? [])];
+      player.carriedItem = snapshot.carriedItem ?? null;
+      player.lastProcessedInputSequence = snapshot.lastProcessedInputSequence ?? 0;
       player.activeFixtureId = snapshot.activeFixtureId;
       player.intermissionUpgradeWave = snapshot.intermissionUpgradeWave ?? 0;
       player.reviveProtectionTimer = snapshot.reviveProtectionTimer ?? 0;
       player.input.aim = snapshot.aim;
-      this.remotePlayers.updateMesh(player);
       player.isSprinting = snapshot.sprinting ?? false;
+      player.mountedBikeId = snapshot.bikeMounted ? player.mountedBikeId : null;
+      player.skateboardMounted = snapshot.skateboardMounted ?? false;
     }
     for (const id of [...this.remotePlayers.keys()]) {
       if (!seen.has(id)) {
@@ -1699,6 +2138,7 @@ export class GameApp {
       if (!zombie) {
         const mesh = this.meshFactory.createZombieMesh(snapshot.type);
         mesh.userData.dynamic = true;
+        mesh.userData.zombieSimulationAccumulator = this.rng.range(0, 1 / 15);
         this.scene.add(mesh);
         zombie = {
           id: snapshot.id,
@@ -1811,18 +2251,141 @@ export class GameApp {
     this.nearestWeaponDrop = this.nearestWeaponDropForPoint(this.player.position, 8.2);
   }
 
-  private applyBikeSnapshot(snapshot: NetworkGameSnapshot["bike"]): void {
-    if (!snapshot || !this.bike) {
-      return;
+  private applyWorldItemSnapshots(snapshots: NetworkWorldItemSnapshot[]): void {
+    const seen = new Set<number>();
+    const byId = new Map(this.droppedItems.map((item) => [item.id, item]));
+    for (const snapshot of snapshots) {
+      seen.add(snapshot.id);
+      let item = byId.get(snapshot.id);
+      if (item && item.itemId !== snapshot.itemId) {
+        this.scene.remove(item.mesh);
+        this.droppedItems = this.droppedItems.filter((candidate) => candidate !== item);
+        item = undefined;
+      }
+      if (!item) {
+        const mesh = this.meshFactory.createWorldItemMesh(snapshot.itemId);
+        mesh.userData.dynamic = true;
+        this.scene.add(mesh);
+        item = {
+          id: snapshot.id,
+          itemId: snapshot.itemId,
+          label: snapshot.label,
+          mesh,
+          position: new THREE.Vector3(),
+          angle: snapshot.angle,
+          ttl: snapshot.ttl ?? Number.POSITIVE_INFINITY
+        };
+        this.droppedItems.push(item);
+      }
+      item.label = snapshot.label;
+      item.angle = snapshot.angle;
+      item.ttl = snapshot.ttl ?? Number.POSITIVE_INFINITY;
+      item.position.set(snapshot.x, snapshot.y, snapshot.z);
+      item.mesh.position.copy(item.position);
+      item.mesh.rotation.set(snapshot.itemId === "ladder" ? -0.42 : 0, snapshot.angle, 0);
+      if (snapshot.itemId === "ladder") item.mesh.position.y += 0.18;
     }
-    this.bike.position.set(snapshot.x, snapshot.y, snapshot.z);
-    this.bike.angle = snapshot.angle;
-    this.bike.mounted = snapshot.mounted;
-    this.syncBikeMesh(this.bike);
+    for (const item of [...this.droppedItems]) {
+      if (seen.has(item.id)) continue;
+      this.scene.remove(item.mesh);
+      this.droppedItems = this.droppedItems.filter((candidate) => candidate !== item);
+    }
   }
 
-  private clearNetworkAuthoritativeEntities(): void {
-    this.entities.clearSceneEntities(this.scene);
+  private applyPlacedLadderSnapshots(snapshots: NetworkPlacedLadderSnapshot[]): void {
+    const seen = new Set<string>();
+    const byId = new Map(this.placedLadders.map((ladder) => [ladder.id, ladder]));
+    for (const snapshot of snapshots) {
+      seen.add(snapshot.id);
+      let ladder = byId.get(snapshot.id);
+      if (!ladder) {
+        const mesh = this.meshFactory.createPlacedLadderMesh();
+        mesh.userData.dynamic = true;
+        this.scene.add(mesh);
+        ladder = {
+          id: snapshot.id,
+          fixtureId: snapshot.fixtureId,
+          mesh,
+          accessPosition: { x: snapshot.accessX, z: snapshot.accessZ },
+          landingPosition: { x: snapshot.landingX, z: snapshot.landingZ },
+          angle: snapshot.angle
+        };
+        this.placedLadders.push(ladder);
+      }
+      ladder.fixtureId = snapshot.fixtureId;
+      ladder.accessPosition = { x: snapshot.accessX, z: snapshot.accessZ };
+      ladder.landingPosition = { x: snapshot.landingX, z: snapshot.landingZ };
+      ladder.angle = snapshot.angle;
+      ladder.mesh.position.set(snapshot.accessX, this.groundY(ladder.accessPosition), snapshot.accessZ);
+      ladder.mesh.rotation.set(0, snapshot.angle, 0);
+    }
+    for (const ladder of [...this.placedLadders]) {
+      if (seen.has(ladder.id)) continue;
+      this.scene.remove(ladder.mesh);
+      disposeThreeResources(ladder.mesh);
+      this.placedLadders = this.placedLadders.filter((candidate) => candidate !== ladder);
+    }
+  }
+
+  private applyDistractionSnapshots(snapshots: NetworkDistractionSnapshot[]): void {
+    const seen = new Set<number>();
+    const byId = new Map(this.distractions.map((distraction) => [distraction.id, distraction]));
+    for (const snapshot of snapshots) {
+      seen.add(snapshot.id);
+      let distraction = byId.get(snapshot.id);
+      if (!distraction) {
+        distraction = this.createThrownCharge({ x: snapshot.x, z: snapshot.z });
+        distraction.id = snapshot.id;
+        this.distractions.push(distraction);
+      }
+      distraction.position = { x: snapshot.x, z: snapshot.z };
+      distraction.ttl = snapshot.ttl;
+      distraction.fuseTimer = snapshot.fuseTimer;
+      distraction.mesh.position.set(snapshot.x, this.groundY(distraction.position) + 0.21, snapshot.z);
+      const progress = THREE.MathUtils.clamp(1 - snapshot.fuseTimer / BOTTLE_BOMB_FUSE_SECONDS, 0, 1);
+      distraction.mesh.scale.setScalar(1 + progress * 0.22);
+    }
+    for (const distraction of [...this.distractions]) {
+      if (!seen.has(distraction.id)) this.removeDistraction(distraction);
+    }
+  }
+
+  private replaceSet(target: Set<string>, values: readonly string[]): void {
+    target.clear();
+    for (const value of values) target.add(value);
+  }
+
+  private applyBikeSnapshot(snapshot: NetworkGameSnapshot["bike"]): void {
+    if (!snapshot) {
+      return;
+    }
+    const bike = this.bikes.find((candidate) => candidate.id === snapshot.id) ?? this.bike;
+    if (!bike) return;
+    const stateChanged = bike.state !== snapshot.state;
+    for (const candidate of this.bikes) {
+      if (candidate !== bike && candidate.mountedByPlayerId === snapshot.mountedByPlayerId) {
+        candidate.mounted = false;
+        candidate.mountedByPlayerId = null;
+      }
+    }
+    bike.position.set(snapshot.x, snapshot.y, snapshot.z);
+    bike.angle = snapshot.angle;
+    bike.mounted = snapshot.mounted;
+    bike.mountedByPlayerId = snapshot.mountedByPlayerId;
+    bike.state = snapshot.state;
+    bike.requiredItem = snapshot.requiredItem;
+    this.bike = bike;
+    if (stateChanged) this.rebuildBikeMesh(bike);
+    else this.syncBikeMesh(bike);
+  }
+
+  private syncNetworkBikeOwnership(snapshots: NonNullable<NetworkGameSnapshot["bike"]>[]): void {
+    const bikeByOwner = new Map(
+      snapshots.flatMap((snapshot) => snapshot.mountedByPlayerId ? [[snapshot.mountedByPlayerId, snapshot.id] as const] : [])
+    );
+    for (const player of this.remotePlayers.values()) {
+      player.mountedBikeId = bikeByOwner.get(player.id) ?? null;
+    }
   }
 
   private updateCrouch(dt: number): void {
@@ -1970,6 +2533,11 @@ export class GameApp {
   }
 
   private updateMovement(dt: number): void {
+    if (this.player.health <= 0) {
+      this.player.velocity.multiplyScalar(0.72);
+      this.isSprinting = false;
+      return;
+    }
     if (this.activeAmenityRest) {
       this.player.velocity.set(0, 0, 0);
       this.isSprinting = false;
@@ -2115,7 +2683,9 @@ export class GameApp {
     }
     this.skateboardMesh.visible = true;
     this.skateboardMesh.position.set(this.player.position.x, this.groundY({ x: this.player.position.x, z: this.player.position.z }) + 0.04, this.player.position.z);
-    this.skateboardMesh.rotation.y = this.player.yaw;
+    // The generated deck's long axis is local X; rotate it onto player-forward
+    // (-Z at zero yaw) so the rider no longer travels sideways on the board.
+    this.skateboardMesh.rotation.y = this.player.yaw + Math.PI / 2;
   }
 
   private emitSkateboardNoise(dt: number, sprinting: boolean, surface: MovementSurface): void {
@@ -2265,6 +2835,7 @@ export class GameApp {
     mesh.userData.dynamic = true;
     this.scene.add(mesh);
     return {
+      id: this.entities.nextDistractionId(),
       mesh,
       position: { ...position },
       ttl: BOTTLE_BOMB_FUSE_SECONDS + 0.45,
@@ -2619,10 +3190,27 @@ export class GameApp {
       this.player.position.x,
       this.player.position.y + PLAYER_HEIGHT + this.playerElevation() + (this.mountedBike() ? BIKE_CAMERA_HEIGHT_BONUS : this.skateboardMounted ? SKATEBOARD_CAMERA_HEIGHT_BONUS : 0) - this.player.crouchAmount * 0.58,
       this.player.position.z
-    );
+    ).add(this.networkCameraCorrection);
     this.camera.rotation.order = "YXZ";
     this.camera.rotation.y = this.player.yaw + this.recoilYaw * 0.006;
     this.camera.rotation.x = this.player.pitch - this.recoil * 0.012;
+  }
+
+  private localPlayerCameraAnchor(): THREE.Vector3 {
+    return new THREE.Vector3(
+      this.player.position.x,
+      this.player.position.y + PLAYER_HEIGHT + this.playerElevation() + (this.mountedBike() ? BIKE_CAMERA_HEIGHT_BONUS : this.skateboardMounted ? SKATEBOARD_CAMERA_HEIGHT_BONUS : 0) - this.player.crouchAmount * 0.58,
+      this.player.position.z
+    );
+  }
+
+  private compensateNetworkCamera(previousAnchor: THREE.Vector3): void {
+    this.networkCameraCorrection.add(previousAnchor.sub(this.localPlayerCameraAnchor()));
+  }
+
+  private decayNetworkCameraCorrection(dt: number): void {
+    this.networkCameraCorrection.multiplyScalar(Math.exp(-dt * 12));
+    if (this.networkCameraCorrection.lengthSq() < 0.000001) this.networkCameraCorrection.set(0, 0, 0);
   }
 
   private forceSpawnZombie(type?: ZombieType): void {
@@ -2643,6 +3231,8 @@ export class GameApp {
 
   private addZombie(spawn: ZombieSpawn): void {
     const mesh = this.meshFactory.createZombieMesh(spawn.type);
+    mesh.userData.dynamic = true;
+    mesh.userData.zombieSimulationAccumulator = this.rng.range(0, 1 / 15);
     const groundY = this.groundY(spawn.position);
     const position = new THREE.Vector3(spawn.position.x, groundY, spawn.position.z);
     mesh.position.copy(position);
@@ -2682,12 +3272,17 @@ export class GameApp {
     for (const zombie of this.zombies) {
       const profile = zombieProfile(zombie.type);
       const zombiePoint = { x: zombie.position.x, z: zombie.position.z };
-      const zombieSurface = this.movementSurfaceAt(zombiePoint);
       const localPlayerPoint = { x: this.player.position.x, z: this.player.position.z };
       const localDistance = distance(zombiePoint, localPlayerPoint);
       const nearestCombatant = this.nearestCombatant(zombiePoint, combatants);
-      const visibleCombatant = this.visibleCombatantForZombie(zombie, zombiePoint, combatants);
       const distanceToPlayer = nearestCombatant ? distance(zombiePoint, nearestCombatant.position) : localDistance;
+      const stepDt = this.consumeZombieSimulationStep(zombie, dt, distanceToPlayer);
+      if (stepDt === 0) {
+        this.animateZombie(zombie, now, localDistance, dt);
+        continue;
+      }
+      const zombieSurface = this.movementSurfaceAt(zombiePoint);
+      const visibleCombatant = this.visibleCombatantForZombie(zombie, zombiePoint, combatants);
       const heardNoise = this.noise.strongestAt(
         zombiePoint,
         zombieEnvironmentalHearingMultiplier(profile, {
@@ -2698,15 +3293,15 @@ export class GameApp {
       );
       const previousAiState = zombie.aiState;
 
-      zombie.attackCooldown -= dt;
-      zombie.staggerTimer = Math.max(0, zombie.staggerTimer - dt);
-      zombie.screamCooldown = Math.max(0, zombie.screamCooldown - dt);
-      zombie.wanderTimer = Math.max(0, zombie.wanderTimer - dt);
-      zombie.memoryTimer = Math.max(0, zombie.memoryTimer - dt);
-      zombie.vocalCooldown = Math.max(0, zombie.vocalCooldown - dt);
-      zombie.stepCooldown = Math.max(0, zombie.stepCooldown - dt);
+      zombie.attackCooldown -= stepDt;
+      zombie.staggerTimer = Math.max(0, zombie.staggerTimer - stepDt);
+      zombie.screamCooldown = Math.max(0, zombie.screamCooldown - stepDt);
+      zombie.wanderTimer = Math.max(0, zombie.wanderTimer - stepDt);
+      zombie.memoryTimer = Math.max(0, zombie.memoryTimer - stepDt);
+      zombie.vocalCooldown = Math.max(0, zombie.vocalCooldown - stepDt);
+      zombie.stepCooldown = Math.max(0, zombie.stepCooldown - stepDt);
       if (zombie.aiState === "search") {
-        zombie.searchTimer = Math.max(0, zombie.searchTimer - dt);
+        zombie.searchTimer = Math.max(0, zombie.searchTimer - stepDt);
       }
       const targetReached = zombie.target ? distance(zombiePoint, zombie.target) < (zombie.aiState === "wander" ? 3.8 : 2.8) : true;
 
@@ -2788,7 +3383,7 @@ export class GameApp {
           surface: zombieSurface
         });
       let next = clampToPolygon(
-        { x: zombie.position.x + toTarget.x * speed * dt, z: zombie.position.z + toTarget.z * speed * dt },
+        { x: zombie.position.x + toTarget.x * speed * stepDt, z: zombie.position.z + toTarget.z * speed * stepDt },
         this.level.boundary,
         2.5
       );
@@ -2799,8 +3394,8 @@ export class GameApp {
         zombie.mesh.rotation.y = Math.atan2(toTarget.x, toTarget.z) + Math.PI;
       }
       this.syncZombieMeshPosition(zombie, now);
-      this.animateZombie(zombie, now, localDistance, dt);
-      this.updateZombieAudio(zombie, dt, localDistance, distanceToTarget);
+      this.animateZombie(zombie, now, localDistance, stepDt);
+      this.updateZombieAudio(zombie, stepDt, localDistance, distanceToTarget);
       const attackTarget = this.attackableCombatantForZombie(zombie, zombiePoint, combatants);
       if (attackTarget && zombie.attackCooldown <= 0) {
         triggerZombieAssetAnimation(zombie.mesh, "Attack");
@@ -2812,7 +3407,30 @@ export class GameApp {
         }
       }
     }
-    this.resolveZombieCrowding(now);
+    this.zombieCrowdingAccumulator += dt;
+    if (this.zombieCrowdingAccumulator >= 1 / 30) {
+      this.zombieCrowdingAccumulator %= 1 / 30;
+      this.resolveZombieCrowding(now, combatants);
+    }
+  }
+
+  private consumeZombieSimulationStep(zombie: Zombie, dt: number, distanceToPlayer: number): number {
+    const settings = RENDER_QUALITY_SETTINGS[this.adaptiveQuality.current];
+    const interval = zombieSimulationInterval(distanceToPlayer, settings);
+    if (interval === 0) {
+      zombie.mesh.userData.zombieSimulationAccumulator = 0;
+      return dt;
+    }
+    const accumulated = Math.min(
+      0.25,
+      ((zombie.mesh.userData.zombieSimulationAccumulator as number | undefined) ?? 0) + dt
+    );
+    if (accumulated < interval) {
+      zombie.mesh.userData.zombieSimulationAccumulator = accumulated;
+      return 0;
+    }
+    zombie.mesh.userData.zombieSimulationAccumulator = accumulated % interval;
+    return accumulated;
   }
 
   private triggerScreamerCall(zombie: Zombie, zombiePoint: Vec2): void {
@@ -2889,8 +3507,14 @@ export class GameApp {
     });
   }
 
-  private resolveZombieCrowding(now: number): void {
-    const largestOverlap = separateCircularAgents(this.zombies, {
+  private resolveZombieCrowding(now: number, combatants: readonly CombatantRef[]): void {
+    const crowdingRadius = RENDER_QUALITY_SETTINGS[this.adaptiveQuality.current].zombieRenderDistance + 20;
+    const crowdingZombies = this.zombies.filter(
+      (zombie) => combatants.some(
+        (combatant) => combatant.health > 0 && Math.hypot(zombie.position.x - combatant.position.x, zombie.position.z - combatant.position.z) <= crowdingRadius
+      )
+    );
+    const largestOverlap = separateCircularAgents(crowdingZombies, {
       gap: ZOMBIE_SEPARATION_GAP,
       gridSize: ZOMBIE_SEPARATION_GRID_SIZE,
       iterations: ZOMBIE_SEPARATION_ITERATIONS,
@@ -2905,7 +3529,7 @@ export class GameApp {
       return;
     }
 
-    for (const zombie of this.zombies) {
+    for (const zombie of crowdingZombies) {
       this.syncZombieMeshPosition(zombie, now);
     }
   }
@@ -3655,6 +4279,7 @@ export class GameApp {
         position: new THREE.Vector3(spawn.position.x, this.groundY(spawn.position), spawn.position.z),
         angle: spawn.angle,
         mounted: false,
+        mountedByPlayerId: null,
         state: spawn.state ?? "available",
         requiredItem: spawn.requiredItem,
         linkedDetailId: spawn.linkedDetailId,
@@ -3683,6 +4308,7 @@ export class GameApp {
       const spawn = this.level.rideableBikes.find((candidate) => candidate.id === bike.id);
       if (!spawn) continue;
       bike.mounted = false;
+      bike.mountedByPlayerId = null;
       bike.state = spawn.state ?? "available";
       bike.requiredItem = spawn.requiredItem;
       bike.position.set(spawn.position.x, this.groundY(spawn.position), spawn.position.z);
@@ -3732,7 +4358,7 @@ export class GameApp {
   }
 
   private mountedBike(): RideableBike | null {
-    return this.bikes.find((candidate) => candidate.mounted) ?? null;
+    return this.bikes.find((candidate) => candidate.mountedByPlayerId === this.network.localId) ?? null;
   }
 
   private syncBikeMesh(bike: RideableBike): void {
@@ -3740,6 +4366,25 @@ export class GameApp {
     bike.mesh.rotation.y = bike.angle;
     bike.mesh.rotation.z = bike.mounted ? Math.sin(this.bikePedalPhase * 0.65) * 0.035 : 0;
     bike.mesh.visible = true;
+  }
+
+  private syncNetworkPlayerBikeMeshes(): void {
+    if (!this.network.enabled) return;
+    const localBike = this.mountedBike();
+    if (localBike) {
+      localBike.position.set(this.player.position.x, this.groundY(this.player.position), this.player.position.z);
+      localBike.angle = this.player.yaw;
+      this.syncBikeMesh(localBike);
+    }
+    if (!this.isNetworkClient) return;
+    for (const player of this.remotePlayers.values()) {
+      if (!player.mountedBikeId) continue;
+      const bike = this.bikes.find((candidate) => candidate.id === player.mountedBikeId);
+      if (!bike) continue;
+      bike.position.set(player.position.x, this.groundY(player.position), player.position.z);
+      bike.angle = player.yaw;
+      this.syncBikeMesh(bike);
+    }
   }
 
   private rebuildBikeMesh(bike: RideableBike): void {
@@ -3758,8 +4403,9 @@ export class GameApp {
       return false;
     }
 
-    if (bike.mounted) {
+    if (bike.mountedByPlayerId === this.network.localId) {
       bike.mounted = false;
+      bike.mountedByPlayerId = null;
       bike.position.set(this.player.position.x, this.groundY({ x: this.player.position.x, z: this.player.position.z }), this.player.position.z);
       bike.angle = this.player.yaw;
       this.player.velocity.multiplyScalar(0.35);
@@ -3788,10 +4434,9 @@ export class GameApp {
     if (this.skateboardMounted) {
       this.toggleSkateboard();
     }
-    for (const other of this.bikes) {
-      other.mounted = false;
-    }
+    if (bike.mountedByPlayerId !== null) return false;
     bike.mounted = true;
+    bike.mountedByPlayerId = this.network.localId;
     this.bike = bike;
     this.bikePedalPhase = 0;
     this.player.crouching = false;
@@ -4519,7 +5164,7 @@ export class GameApp {
     for (const fixture of this.toggleInteractables) {
       const active = this.player.activeFixtureId === fixture.id;
       if (active) {
-        if (pointInInteractableRaisedFootprint(playerPoint, fixture, 2.2)) {
+        if (pointInInteractableRaisedFootprint(playerPoint, fixture, RAISED_SURFACE_EDGE_TOLERANCE)) {
           nearest = fixture;
           nearestDistance = 0;
         }
@@ -4531,11 +5176,14 @@ export class GameApp {
         continue;
       }
       const interactionPoint = placedLadder?.accessPosition ?? fixture.accessPosition ?? fixture.position;
-      const reach =
-        canPlaceLadder && fixture.raisedFootprint && pointInInteractableRaisedFootprint(playerPoint, fixture, 3.2)
-          ? Number.POSITIVE_INFINITY
-          : fixture.accessRadius ?? fixture.radius + 3;
-      const fixtureDistance = canPlaceLadder && reach === Number.POSITIVE_INFINITY ? 0 : distance(playerPoint, interactionPoint);
+      const canPlaceAtNearbyEdge = canPlaceLadder && fixture.raisedFootprint && pointInInteractableRaisedFootprint(playerPoint, fixture, 3.2);
+      const reach = canPlaceAtNearbyEdge ? Number.POSITIVE_INFINITY : fixture.accessRadius ?? fixture.radius + 3;
+      // Adjacent bowling sheds can have overlapping placement bands. Compare
+      // their actual candidate ladder feet so the wall in front of the player
+      // wins instead of whichever roof happened to be registered first.
+      const fixtureDistance = canPlaceAtNearbyEdge
+        ? distance(playerPoint, this.ladderPlacementForFixture(fixture).accessPosition)
+        : distance(playerPoint, interactionPoint);
       if (fixtureDistance < nearestDistance && fixtureDistance < reach) {
         nearest = fixture;
         nearestDistance = fixtureDistance;
@@ -4601,8 +5249,11 @@ export class GameApp {
     return true;
   }
 
-  private ladderPlacementForFixture(fixture: InteractableFixture): { accessPosition: Vec2; landingPosition: Vec2; angle: number } {
-    const playerPoint = { x: this.player.position.x, z: this.player.position.z };
+  private ladderPlacementForFixture(
+    fixture: InteractableFixture,
+    actorPosition: Vec2 = this.player.position
+  ): { accessPosition: Vec2; landingPosition: Vec2; angle: number } {
+    const playerPoint = { x: actorPosition.x, z: actorPosition.z };
     if (fixture.raisedFootprint?.shape === "polygon") {
       return this.polygonFootprintLadderPlacement(fixture, fixture.raisedFootprint, playerPoint);
     }
@@ -4790,9 +5441,11 @@ export class GameApp {
       }
       this.condition.stamina = stamina.stamina;
       this.player.activeFixtureId = fixture.id;
-      this.player.heightTarget = fixture.height;
       const landing = placedLadder?.landingPosition ?? fixture.landingPosition ?? fixture.position;
+      const access = placedLadder?.accessPosition ?? fixture.accessPosition;
       this.player.position.set(landing.x, this.groundY(landing), landing.z);
+      if (access) this.player.yaw = Math.atan2(access.x - landing.x, access.z - landing.z);
+      this.player.heightTarget = this.locomotion.fixtureElevationAt(fixture, landing);
       this.flashStatus(`${this.climbStatusVerb(fixture)} ${fixture.label}`);
       this.emitNoise("climb", placedLadder?.accessPosition ?? fixture.accessPosition ?? fixture.position);
     }
@@ -4898,8 +5551,12 @@ export class GameApp {
     }
     const toggled = this.toggleFixture(fixture);
     if (toggled && this.player.activeFixtureId === fixture.id) {
-      this.player.heightTarget = fixture.height;
-      this.player.height = fixture.height;
+      const elevation = this.locomotion.fixtureElevationAt(fixture, {
+        x: this.player.position.x,
+        z: this.player.position.z
+      });
+      this.player.heightTarget = elevation;
+      this.player.height = elevation;
     }
     return toggled;
   }
@@ -5176,7 +5833,7 @@ export class GameApp {
     this.state = "gameover";
     this.paused = false;
     this.hud.setPaused(false, this.network.enabled);
-    this.hud.setRestartVisible(true);
+    this.hud.showGameOver(this.wave);
     this.hud.setStatus(`Overrun at wave ${this.wave}`);
     document.exitPointerLock?.();
     this.sendNetworkSnapshotNow();
@@ -5256,7 +5913,14 @@ export class GameApp {
       flatBikes: this.bikes.filter((bike) => bike.state === "flat-tyres").length,
       placedLadders: this.placedLadders.length,
       bikePumpBoostRemaining: Number(this.condition.bikePumpTimer.toFixed(1)),
-      repairedBrokenBikes: this.repairedBrokenBikeIds.size
+      repairedBrokenBikes: this.repairedBrokenBikeIds.size,
+      networkReady: !this.isNetworkClient || this.hasInitialNetworkSnapshot,
+      networkPlayers: [...this.remotePlayers.values()].map((player) => ({
+        id: player.id,
+        x: Number(player.position.x.toFixed(3)),
+        z: Number(player.position.z.toFixed(3)),
+        lastProcessedInputSequence: player.lastProcessedInputSequence
+      }))
     };
   }
 
@@ -5364,7 +6028,12 @@ export class GameApp {
         alive: player.health > 0,
         weaponName: WEAPON_DEFINITIONS[player.loadout.weaponId].name
       })),
-      amenityPrompt: (amenity) => this.amenityPrompt(amenity)
+      amenityPrompt: (amenity) => this.amenityPrompt(amenity),
+      waitingForRevive: this.network.enabled
+        && this.state === "playing"
+        && this.player.health <= 0
+        && [...this.remotePlayers.values()].some((player) => player.health > 0),
+      bindings: this.inputBindings
     });
   }
 
@@ -5732,6 +6401,10 @@ export class GameApp {
       delete zombie.mesh.userData.arms;
       delete zombie.mesh.userData.head;
       zombie.mesh.add(asset.root);
+      const castsShadow = zombie.mesh.userData.zombieCastsShadow === true;
+      asset.root.traverse((object) => {
+        if (object instanceof THREE.Mesh) object.castShadow = castsShadow;
+      });
       zombie.mesh.userData.kind = "blender-zombie-wrapper";
       zombie.mesh.userData.zombieType = zombie.type;
       attachZombieAnimation(zombie.mesh, asset);
@@ -5748,15 +6421,21 @@ export class GameApp {
   }
 
   private animateZombie(zombie: Zombie, now: number, distanceToPlayer: number, dt: number): void {
+    const renderFullDetail = zombieRenderTier(
+      distanceToPlayer,
+      RENDER_QUALITY_SETTINGS[this.adaptiveQuality.current]
+    ) === "full";
     if (updateZombieAssetAnimation(zombie.mesh, {
       dt,
       type: zombie.type,
       aiState: zombie.aiState,
       staggered: zombie.staggerTimer > 0,
-      distanceToPlayer
+      distanceToPlayer,
+      renderFullDetail
     })) {
       return;
     }
+    if (!renderFullDetail) return;
     const arms = zombie.mesh.userData.arms as THREE.Mesh[] | undefined;
     const head = zombie.mesh.userData.head as THREE.Mesh | undefined;
     const basePace = zombie.type === "sprinter" ? 10 : zombie.type === "bloater" ? 4.2 : zombie.type === "crawler" ? 5.4 : zombie.type === "screamer" ? 7.6 : 6.8;

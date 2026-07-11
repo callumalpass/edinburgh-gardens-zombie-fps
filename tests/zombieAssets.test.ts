@@ -82,6 +82,16 @@ describe("Blender zombie assets", () => {
     expect(zombieAssetState(wrapper).animation).toBe("Move");
 
     updateZombieAssetAnimation(wrapper, {
+      dt: 0.2,
+      type: "shambler",
+      aiState: "chase",
+      staggered: false,
+      distanceToPlayer: 180,
+      renderFullDetail: false
+    });
+    expect(zombieAssetState(wrapper).animation).toBe("Move");
+
+    updateZombieAssetAnimation(wrapper, {
       dt: 1 / 30,
       type: "sprinter",
       aiState: "chase",

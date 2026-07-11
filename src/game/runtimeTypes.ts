@@ -4,7 +4,7 @@ import type { PlayerCondition } from "./playerCondition";
 import type { NetworkInputState } from "./multiplayer/types";
 import type { AvatarId } from "./characters";
 import type { AmenityPoint, InteractableFixture, ParkLifeDetail, UpgradeStation, Vec2 } from "./types";
-import type { WorldItemId } from "./items";
+import type { InventoryItemId, LargeCarryItemId, WorldItemId } from "./items";
 
 export interface PlayerRuntimeState {
   position: THREE.Vector3;
@@ -41,6 +41,7 @@ export interface AmenityRest {
 }
 
 export interface ThrownDistraction {
+  id: number;
   mesh: THREE.Mesh;
   position: Vec2;
   ttl: number;
@@ -56,6 +57,7 @@ export interface RideableBike {
   position: THREE.Vector3;
   angle: number;
   mounted: boolean;
+  mountedByPlayerId: string | null;
   state: "available" | "flat-tyres" | "locked";
   requiredItem?: WorldItemId;
   linkedDetailId?: string;
@@ -101,6 +103,8 @@ export interface NetworkRemotePlayer {
   loadout: Loadout;
   condition: PlayerCondition;
   input: NetworkInputState;
+  pendingInputs: NetworkInputState[];
+  lastProcessedInputSequence: number;
   lastInputAt: number;
   lastShotAt: number;
   shotBloom: number;
@@ -115,6 +119,10 @@ export interface NetworkRemotePlayer {
   activeFixtureId: string | null;
   intermissionUpgradeWave: number;
   reviveProtectionTimer: number;
+  mountedBikeId: string | null;
+  skateboardMounted: boolean;
+  inventory: InventoryItemId[];
+  carriedItem: LargeCarryItemId | null;
 }
 
 export interface CombatantRef {

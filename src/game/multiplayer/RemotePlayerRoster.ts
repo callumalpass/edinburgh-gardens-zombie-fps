@@ -29,8 +29,33 @@ export interface RemotePlayerRosterOptions {
 const REMOTE_PLAYER_OFFSET_X = 3.2;
 const REMOTE_PLAYER_OFFSET_Z = 2.2;
 
+export interface RemotePlayerNetworkTransform {
+  position: THREE.Vector3;
+  yaw: number;
+  height: number;
+  jumpHeight: number;
+  crouching: boolean;
+}
+
+interface RemoteInterpolationState {
+  fromPosition: THREE.Vector3;
+  targetPosition: THREE.Vector3;
+  fromYaw: number;
+  targetYaw: number;
+  fromHeight: number;
+  targetHeight: number;
+  fromJumpHeight: number;
+  targetJumpHeight: number;
+  fromCrouchAmount: number;
+  targetCrouchAmount: number;
+  elapsed: number;
+  duration: number;
+  lastSnapshotAt: number;
+}
+
 export class RemotePlayerRoster {
   private readonly playersById = new Map<string, NetworkRemotePlayer>();
+  private readonly interpolationById = new Map<string, RemoteInterpolationState>();
   private readonly scene: THREE.Scene;
   private readonly meshFactory: RemotePlayerMeshFactory;
   private readonly groundY: (point: Vec2) => number;
@@ -96,6 +121,7 @@ export class RemotePlayerRoster {
       condition: createInitialPlayerCondition(),
       input: {
         sequence: 0,
+        duration: 0,
         moveX: 0,
         moveZ: 0,
         sprint: false,
@@ -104,6 +130,8 @@ export class RemotePlayerRoster {
         yaw: START_YAW,
         pitch: START_PITCH
       },
+      pendingInputs: [],
+      lastProcessedInputSequence: 0,
       lastInputAt: this.now(),
       lastShotAt: 0,
       shotBloom: 0,
@@ -115,7 +143,11 @@ export class RemotePlayerRoster {
       heightTarget: 0,
       jumpHeight: 0,
       jumpVelocity: 0,
-      activeFixtureId: null
+      activeFixtureId: null,
+      mountedBikeId: null,
+      skateboardMounted: false,
+      inventory: [],
+      carriedItem: null
     };
     this.scene.add(player.mesh);
     this.updateMesh(player);
@@ -163,6 +195,7 @@ export class RemotePlayerRoster {
     this.scene.remove(player.mesh);
     disposeThreeResources(player.mesh);
     this.playersById.delete(id);
+    this.interpolationById.delete(id);
   }
 
   clear(): void {
@@ -196,6 +229,9 @@ export class RemotePlayerRoster {
       player.jumpHeight = 0;
       player.jumpVelocity = 0;
       player.activeFixtureId = null;
+      player.mountedBikeId = null;
+      player.skateboardMounted = false;
+      player.animationOverride = null;
       player.input = {
         ...player.input,
         moveX: 0,
@@ -206,7 +242,12 @@ export class RemotePlayerRoster {
         yaw: player.yaw,
         pitch: player.pitch
       };
+      player.pendingInputs = [];
+      player.lastProcessedInputSequence = player.input.sequence;
+      player.inventory = [];
+      player.carriedItem = null;
       this.updateMesh(player);
+      this.interpolationById.delete(player.id);
       offsetIndex += 1;
     }
   }
@@ -223,6 +264,7 @@ export class RemotePlayerRoster {
   }
 
   updateAnimations(dt: number): void {
+    this.updateNetworkTransforms(dt);
     for (const player of this.playersById.values()) {
       const mixer = player.animationMixer;
       if (!mixer) continue;
@@ -239,15 +281,81 @@ export class RemotePlayerRoster {
         ? "Downed"
         : player.jumpHeight > 0.04
           ? "Jump"
-          : player.crouchAmount > 0.45
-            ? horizontalSpeed > 0.3 ? "CrouchWalk" : "Crouch"
-            : player.input.aim
-              ? "Aim"
-              : horizontalSpeed > 0.3
-                ? player.isSprinting ? "Run" : "Walk"
-                : "Idle";
+          : player.mountedBikeId
+            ? horizontalSpeed > 0.3 ? "BikeRide" : "BikeIdle"
+            : player.skateboardMounted
+              ? "Skateboard"
+              : player.crouchAmount > 0.45
+                ? horizontalSpeed > 0.3 ? "CrouchWalk" : "Crouch"
+                : player.input.aim
+                  ? aimAnimationForWeapon(player.loadout.weaponId)
+                  : horizontalSpeed > 0.3
+                    ? player.isSprinting ? "Run" : "Walk"
+                    : "Idle";
       this.transitionAnimation(player, desired);
       mixer.update(dt);
+    }
+  }
+
+  applyNetworkTransform(player: NetworkRemotePlayer, transform: RemotePlayerNetworkTransform, receivedAt = this.now()): void {
+    const existing = this.interpolationById.get(player.id);
+    if (!existing) {
+      player.position.copy(transform.position);
+      player.yaw = transform.yaw;
+      player.height = transform.height;
+      player.jumpHeight = transform.jumpHeight;
+      player.crouching = transform.crouching;
+      player.crouchAmount = transform.crouching ? 1 : 0;
+      player.velocity.set(0, 0, 0);
+      this.interpolationById.set(player.id, {
+        fromPosition: transform.position.clone(),
+        targetPosition: transform.position.clone(),
+        fromYaw: transform.yaw,
+        targetYaw: transform.yaw,
+        fromHeight: transform.height,
+        targetHeight: transform.height,
+        fromJumpHeight: transform.jumpHeight,
+        targetJumpHeight: transform.jumpHeight,
+        fromCrouchAmount: player.crouchAmount,
+        targetCrouchAmount: player.crouchAmount,
+        elapsed: 1,
+        duration: 1,
+        lastSnapshotAt: receivedAt
+      });
+      this.updateMesh(player);
+      return;
+    }
+
+    const snapshotInterval = THREE.MathUtils.clamp(receivedAt - existing.lastSnapshotAt, 1 / 120, 0.15);
+    player.velocity.copy(transform.position).sub(existing.targetPosition).divideScalar(snapshotInterval);
+    existing.fromPosition.copy(player.position);
+    existing.targetPosition.copy(transform.position);
+    existing.fromYaw = player.yaw;
+    existing.targetYaw = transform.yaw;
+    existing.fromHeight = player.height;
+    existing.targetHeight = transform.height;
+    existing.fromJumpHeight = player.jumpHeight;
+    existing.targetJumpHeight = transform.jumpHeight;
+    existing.fromCrouchAmount = player.crouchAmount;
+    existing.targetCrouchAmount = transform.crouching ? 1 : 0;
+    existing.elapsed = 0;
+    existing.duration = THREE.MathUtils.clamp(snapshotInterval, 0.045, 0.12);
+    existing.lastSnapshotAt = receivedAt;
+    player.crouching = transform.crouching;
+  }
+
+  private updateNetworkTransforms(dt: number): void {
+    for (const [id, interpolation] of this.interpolationById) {
+      const player = this.playersById.get(id);
+      if (!player) continue;
+      interpolation.elapsed = Math.min(interpolation.duration, interpolation.elapsed + dt);
+      const alpha = interpolation.duration <= 0 ? 1 : interpolation.elapsed / interpolation.duration;
+      player.position.lerpVectors(interpolation.fromPosition, interpolation.targetPosition, alpha);
+      player.yaw = lerpAngle(interpolation.fromYaw, interpolation.targetYaw, alpha);
+      player.height = THREE.MathUtils.lerp(interpolation.fromHeight, interpolation.targetHeight, alpha);
+      player.jumpHeight = THREE.MathUtils.lerp(interpolation.fromJumpHeight, interpolation.targetJumpHeight, alpha);
+      player.crouchAmount = THREE.MathUtils.lerp(interpolation.fromCrouchAmount, interpolation.targetCrouchAmount, alpha);
+      this.updateMesh(player);
     }
   }
 
@@ -322,7 +430,8 @@ export class RemotePlayerRoster {
     socket.add(weapon);
     weapon.position.set(0, 0, 0);
     weapon.rotation.set(0, 0, 0);
-    weapon.scale.setScalar(0.58);
+    weapon.scale.setScalar(weaponScale(player.loadout.weaponId));
+    weapon.userData.mountProfile = weaponMountProfile(player.loadout.weaponId);
   }
 
   private async loadAvatar(player: NetworkRemotePlayer, avatarId: AvatarId): Promise<void> {
@@ -381,4 +490,27 @@ function remoteSpawnPosition(offsetIndex: number, groundY: (point: Vec2) => numb
   const x = START_POSITION.x + offsetIndex * REMOTE_PLAYER_OFFSET_X;
   const z = START_POSITION.z + offsetIndex * REMOTE_PLAYER_OFFSET_Z;
   return new THREE.Vector3(x, groundY({ x, z }), z);
+}
+
+function lerpAngle(from: number, to: number, alpha: number): number {
+  const delta = Math.atan2(Math.sin(to - from), Math.cos(to - from));
+  return from + delta * alpha;
+}
+
+function aimAnimationForWeapon(weaponId: WeaponId): "AimLongGun" | "AimSidearm" | "MeleeReady" {
+  if (weaponId === "flareGun") return "AimSidearm";
+  if (weaponId === "knife" || weaponId === "machete") return "MeleeReady";
+  return "AimLongGun";
+}
+
+function weaponMountProfile(weaponId: WeaponId): "long-gun" | "sidearm" | "melee" {
+  if (weaponId === "flareGun") return "sidearm";
+  if (weaponId === "knife" || weaponId === "machete") return "melee";
+  return "long-gun";
+}
+
+function weaponScale(weaponId: WeaponId): number {
+  if (weaponId === "knife") return 0.72;
+  if (weaponId === "machete") return 0.64;
+  return 0.58;
 }

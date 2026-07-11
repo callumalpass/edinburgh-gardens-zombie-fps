@@ -15,7 +15,7 @@ import type {
   RelayWelcomeMessage
 } from "./types";
 
-export type NetworkInputFrame = Omit<NetworkInputState, "sequence">;
+export type NetworkInputFrame = Omit<NetworkInputState, "sequence" | "duration">;
 
 type NetworkTransportHandlers = {
   welcome: (message: RelayWelcomeMessage) => void;
@@ -61,6 +61,7 @@ export class NetworkSession {
   private inputSequence = 0;
   private actionSequence = 0;
   private inputTimer = 0;
+  private inputDuration = 0;
   private snapshotTimer = 0;
   private networkRemainingSpawns = 0;
   private networkWaveValue = 1;
@@ -156,7 +157,7 @@ export class NetworkSession {
     type: NetworkAction["type"],
     frame: { yaw: number; pitch: number; slot?: number; upgradeId?: NetworkAction["upgradeId"] }
   ): boolean {
-    if (!this.isClient || !this.client) {
+    if (!this.isClient || !this.client?.connected) {
       return false;
     }
     this.client.sendAction({
@@ -170,20 +171,25 @@ export class NetworkSession {
     return true;
   }
 
-  sendInputFrame(dt: number, state: GameStateName, frame: NetworkInputFrame): boolean {
-    if (!this.isClient || !this.client || state !== "playing") {
-      return false;
+  sendInputFrame(dt: number, state: GameStateName, frame: NetworkInputFrame): NetworkInputState | null {
+    if (!this.isClient || !this.client?.connected || state !== "playing") {
+      this.inputDuration = 0;
+      return null;
     }
     this.inputTimer -= dt;
+    this.inputDuration += dt;
     if (this.inputTimer > 0) {
-      return false;
+      return null;
     }
-    this.client.sendInput({
+    const input: NetworkInputState = {
       sequence: ++this.inputSequence,
+      duration: Math.min(0.1, Math.max(0, this.inputDuration)),
       ...frame
-    });
-    this.inputTimer = 1 / this.inputHz;
-    return true;
+    };
+    this.inputDuration = 0;
+    this.client.sendInput(input);
+    this.inputTimer = nextCadenceTimer(this.inputTimer, 1 / this.inputHz);
+    return input;
   }
 
   sendSnapshotFrame(dt: number, buildSnapshot: () => NetworkGameSnapshot): boolean {
@@ -195,7 +201,7 @@ export class NetworkSession {
       return false;
     }
     this.client.sendSnapshot(buildSnapshot());
-    this.snapshotTimer = 1 / this.snapshotHz;
+    this.snapshotTimer = nextCadenceTimer(this.snapshotTimer, 1 / this.snapshotHz);
     return true;
   }
 
@@ -217,4 +223,10 @@ export class NetworkSession {
     this.networkRemainingSpawns = snapshot.remainingSpawns;
     return true;
   }
+}
+
+function nextCadenceTimer(timer: number, interval: number): number {
+  const overshoot = Math.max(0, -timer);
+  const remainder = overshoot % interval;
+  return remainder <= Number.EPSILON ? interval : interval - remainder;
 }

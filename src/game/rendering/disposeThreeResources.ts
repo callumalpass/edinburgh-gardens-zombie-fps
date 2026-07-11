@@ -1,19 +1,25 @@
 import * as THREE from "three";
 
-export function disposeThreeResources(root: THREE.Object3D): void {
+export interface DisposeThreeResourcesOptions {
+  includeShared?: boolean;
+}
+
+export function disposeThreeResources(root: THREE.Object3D, options: DisposeThreeResourcesOptions = {}): void {
   const geometries = new Set<THREE.BufferGeometry>();
   const materials = new Set<THREE.Material>();
   const textures = new Set<THREE.Texture>();
 
   root.traverse((object) => {
     const mesh = object as THREE.Mesh;
-    if (mesh.geometry) {
+    if (mesh.geometry && (options.includeShared || mesh.geometry.userData.sharedZombieAsset !== true)) {
       geometries.add(mesh.geometry);
     }
     const material = mesh.material;
     if (Array.isArray(material)) {
-      material.forEach((entry) => materials.add(entry));
-    } else if (material) {
+      material.forEach((entry) => {
+        if (options.includeShared || entry.userData.sharedZombieAsset !== true) materials.add(entry);
+      });
+    } else if (material && (options.includeShared || material.userData.sharedZombieAsset !== true)) {
       materials.add(material);
     }
   });

@@ -19,6 +19,7 @@ class FakeMeshFactory implements RemotePlayerMeshFactory {
 
 function createRoster(
   loadCharacterAsset?: (avatarId: AvatarId) => Promise<{ root: THREE.Group; animations: THREE.AnimationClip[] }>,
+  now: () => number = () => 123
 ) {
   const scene = new THREE.Scene();
   const meshFactory = new FakeMeshFactory();
@@ -26,7 +27,7 @@ function createRoster(
     scene,
     meshFactory,
     groundY: (point) => point.x * 0.1 + point.z * 0.01,
-    now: () => 123,
+    now,
     loadCharacterAsset
   });
   return { scene, meshFactory, roster };
@@ -119,7 +120,7 @@ describe("RemotePlayerRoster", () => {
       root.add(socket);
       return {
         root,
-        animations: ["Idle", "Walk", "Run", "Crouch", "CrouchWalk", "Aim", "Melee", "Reload", "Jump", "Downed"]
+        animations: ["Idle", "Walk", "Run", "Crouch", "CrouchWalk", "Aim", "AimLongGun", "AimSidearm", "MeleeReady", "Melee", "Reload", "Jump", "BikeIdle", "BikeRide", "Skateboard", "Downed"]
           .map((name) => new THREE.AnimationClip(name, 0.5, []))
       };
     });
@@ -140,6 +141,29 @@ describe("RemotePlayerRoster", () => {
     player.crouchAmount = 1;
     roster.updateAnimations(0.1);
     expect(player.activeAnimation).toBe("CrouchWalk");
+    player.crouchAmount = 0;
+    player.velocity.set(0, 0, 0);
+    player.input.aim = true;
+    player.loadout = switchWeapon(addWeapon(player.loadout, "carbine"), "carbine");
+    roster.updateMesh(player);
+    roster.updateAnimations(0.1);
+    expect(player.activeAnimation).toBe("AimLongGun");
+    expect(player.mesh.getObjectByName("remote-weapon")?.userData.mountProfile).toBe("long-gun");
+    player.loadout = switchWeapon(addWeapon(player.loadout, "flareGun"), "flareGun");
+    roster.updateMesh(player);
+    roster.updateAnimations(0.1);
+    expect(player.activeAnimation).toBe("AimSidearm");
+    player.input.aim = false;
+    player.mountedBikeId = "bike-1";
+    roster.updateAnimations(0.1);
+    expect(player.activeAnimation).toBe("BikeIdle");
+    player.velocity.set(2, 0, 0);
+    roster.updateAnimations(0.1);
+    expect(player.activeAnimation).toBe("BikeRide");
+    player.mountedBikeId = null;
+    player.skateboardMounted = true;
+    roster.updateAnimations(0.1);
+    expect(player.activeAnimation).toBe("Skateboard");
     roster.triggerAnimation(player, "Melee");
     expect(player.activeAnimation).toBe("Melee");
     expect(player.animationOverride?.name).toBe("Melee");
@@ -164,4 +188,37 @@ describe("RemotePlayerRoster", () => {
     expect(loadCharacterAsset).toHaveBeenLastCalledWith("maeve");
   });
 
+  it("interpolates network transforms instead of teleporting between snapshots", () => {
+    let now = 0;
+    const { roster } = createRoster(undefined, () => now);
+    const player = roster.add("peer-1", "One");
+    roster.applyNetworkTransform(player, {
+      position: new THREE.Vector3(0, 1, 0),
+      yaw: 3.1,
+      height: 0,
+      jumpHeight: 0,
+      crouching: false
+    });
+
+    now = 0.06;
+    roster.applyNetworkTransform(player, {
+      position: new THREE.Vector3(6, 2, -3),
+      yaw: -3.1,
+      height: 1,
+      jumpHeight: 0.6,
+      crouching: true
+    });
+
+    expect(player.position.x).toBe(0);
+    roster.updateAnimations(0.03);
+    expect(player.position.x).toBeCloseTo(3);
+    expect(player.position.y).toBeCloseTo(1.5);
+    expect(player.height).toBeCloseTo(0.5);
+    expect(player.jumpHeight).toBeCloseTo(0.3);
+    expect(Math.abs(player.yaw)).toBeGreaterThan(3);
+    roster.updateAnimations(0.03);
+    expect(player.position.x).toBeCloseTo(6);
+    expect(player.position.z).toBeCloseTo(-3);
+    expect(player.crouchAmount).toBeCloseTo(1);
+  });
 });

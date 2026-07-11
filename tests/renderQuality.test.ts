@@ -29,5 +29,9 @@ describe("AdaptiveRenderQuality", () => {
     expect(RENDER_QUALITY_SETTINGS.medium.maxPixelRatio).toBeLessThan(RENDER_QUALITY_SETTINGS.high.maxPixelRatio);
     expect(RENDER_QUALITY_SETTINGS.low.grassFraction).toBeLessThan(RENDER_QUALITY_SETTINGS.high.grassFraction);
     expect(RENDER_QUALITY_SETTINGS.low.shadowMapSize).toBeLessThan(RENDER_QUALITY_SETTINGS.high.shadowMapSize);
+    expect(RENDER_QUALITY_SETTINGS.low.zombieFullDetailDistance).toBeLessThan(RENDER_QUALITY_SETTINGS.high.zombieFullDetailDistance);
+    expect(RENDER_QUALITY_SETTINGS.low.zombieRenderDistance).toBeLessThan(RENDER_QUALITY_SETTINGS.high.zombieRenderDistance);
+    expect(RENDER_QUALITY_SETTINGS.low.treeFullDetailDistance).toBeLessThan(RENDER_QUALITY_SETTINGS.high.treeFullDetailDistance);
+    expect(RENDER_QUALITY_SETTINGS.low.treeRenderDistance).toBeLessThan(RENDER_QUALITY_SETTINGS.high.treeRenderDistance);
   });
 });

@@ -1,4 +1,10 @@
 import type { GameSettings } from "../gameSettings";
+import {
+  INPUT_ACTION_DEFINITIONS,
+  bindingLabel,
+  type InputAction,
+  type InputBindings
+} from "../input/inputBindings";
 import type { IntermissionUpgradeChoice } from "../intermissionChoices";
 import { ITEM_DEFINITIONS, type InventoryItemId, type LargeCarryItemId, type WorldItemId } from "../items";
 import type { WavePhase } from "../state";
@@ -44,6 +50,13 @@ interface HudRefs {
   hitMarker: HTMLElement;
   start: HTMLButtonElement;
   restart: HTMLButtonElement;
+  outcome: HTMLElement;
+  outcomeKicker: HTMLElement;
+  outcomeTitle: HTMLElement;
+  outcomeCopy: HTMLElement;
+  outcomeWave: HTMLElement;
+  outcomeCount: HTMLElement;
+  outcomeTeam: HTMLElement;
   overlay: HTMLElement;
   pause: HTMLElement;
   pauseMode: HTMLElement;
@@ -130,6 +143,8 @@ export interface HudUpdate {
   damageActive: boolean;
   teammates: readonly HudTeammate[];
   amenityPrompt: (amenity: AmenityPoint) => string;
+  waitingForRevive: boolean;
+  bindings: InputBindings;
 }
 
 export interface HudActions {
@@ -138,6 +153,9 @@ export interface HudActions {
   exitToMenu: () => void;
   chooseIntermissionUpgrade: (upgradeId: UpgradeId) => void;
   changeSettings: (settings: Partial<GameSettings>) => void;
+  equipWeaponSlot: (index: number) => void;
+  changeBinding: (action: InputAction, code: string) => void;
+  resetBindings: () => void;
 }
 
 export class HudController {
@@ -149,7 +167,9 @@ export class HudController {
   private readonly refs: HudRefs;
   private teamSignature = "";
   private intermissionSignature = "";
+  private outcomeMode: "downed" | "gameover" | null = null;
   private hitMarkerTimer = 0;
+  private rebindingAction: InputAction | null = null;
 
   private constructor(
     private readonly root: HTMLElement,
@@ -158,13 +178,34 @@ export class HudController {
   ) {
     this.refs = findHudRefs(root);
     root.addEventListener("click", (event) => {
-      const target = event.target instanceof Element ? event.target.closest<HTMLElement>("[data-action],[data-upgrade-id]") : null;
+      const target = event.target instanceof Element
+        ? event.target.closest<HTMLElement>("[data-action],[data-upgrade-id],[data-weapon-slot],[data-binding-action]")
+        : null;
       if (!target) return;
       if (target.dataset.action === "resume") actions.resume();
       if (target.dataset.action === "pause-restart") actions.restart();
       if (target.dataset.action === "exit-menu") actions.exitToMenu();
+      if (target.dataset.action === "reset-bindings") actions.resetBindings();
+      if (target.dataset.weaponSlot) actions.equipWeaponSlot(Number(target.dataset.weaponSlot));
+      if (target.dataset.bindingAction) {
+        this.rebindingAction = target.dataset.bindingAction as InputAction;
+        this.renderBindingCaptureState();
+      }
       if (target.dataset.upgradeId) actions.chooseIntermissionUpgrade(target.dataset.upgradeId as UpgradeId);
     }, { signal });
+    root.addEventListener("keydown", (event) => {
+      if (!this.rebindingAction) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.code === "Escape") {
+        this.rebindingAction = null;
+        this.renderBindingCaptureState();
+        return;
+      }
+      const action = this.rebindingAction;
+      this.rebindingAction = null;
+      actions.changeBinding(action, event.code);
+    }, { signal, capture: true });
     root.addEventListener("input", (event) => {
       const input = event.target;
       if (!(input instanceof HTMLInputElement) || !input.dataset.setting) return;
@@ -195,8 +236,28 @@ export class HudController {
     this.refs.overlay.classList.add("hidden");
   }
 
-  setRestartVisible(visible: boolean): void {
-    this.refs.restart.hidden = !visible;
+  clearOutcome(): void {
+    this.outcomeMode = null;
+    this.refs.outcome.hidden = true;
+    this.refs.outcome.setAttribute("aria-hidden", "true");
+    this.refs.restart.hidden = true;
+    this.root.classList.remove("is-downed", "is-gameover");
+  }
+
+  showGameOver(wave: number): void {
+    this.outcomeMode = "gameover";
+    this.refs.outcome.hidden = false;
+    this.refs.outcome.setAttribute("aria-hidden", "false");
+    this.refs.outcome.dataset.mode = "gameover";
+    this.refs.outcomeKicker.textContent = "Squad wiped";
+    this.refs.outcomeTitle.textContent = "The gardens are overrun";
+    this.refs.outcomeCopy.textContent = "No survivors made it to the regroup. Start a new run and try another route through the park.";
+    this.refs.outcomeWave.textContent = `Wave ${wave}`;
+    this.refs.outcomeCount.textContent = "Run ended";
+    this.refs.outcomeTeam.textContent = "No revival available";
+    this.refs.restart.hidden = false;
+    this.root.classList.remove("is-downed");
+    this.root.classList.add("is-gameover");
   }
 
   setStatus(message: string): void {
@@ -223,6 +284,14 @@ export class HudController {
     setInput("fieldOfView", settings.fieldOfView);
     setInput("masterVolume", settings.masterVolume);
     setInput("highContrastHud", settings.highContrastHud);
+  }
+
+  setBindings(bindings: InputBindings): void {
+    for (const definition of INPUT_ACTION_DEFINITIONS) {
+      const button = this.root.querySelector<HTMLButtonElement>(`[data-binding-action="${definition.action}"]`);
+      if (button) button.textContent = bindingLabel(bindings, definition.action);
+    }
+    this.renderBindingCaptureState();
   }
 
   update(view: HudUpdate): void {
@@ -269,7 +338,9 @@ export class HudController {
     if (view.inventoryOpen) this.refs.inventory.innerHTML = renderInventoryMenu(view);
     this.renderTeam(view.teammates);
     this.renderIntermissionChoices(view);
+    this.renderOutcome(view);
     this.updateContextStatus(view, stats.name);
+    this.setBindings(view.bindings);
   }
 
   flashStatus(message: string): void {
@@ -286,6 +357,7 @@ export class HudController {
   }
 
   private updateContextStatus(view: HudUpdate, weaponName: string): void {
+    const key = (action: InputAction) => bindingLabel(view.bindings, action);
     if (view.loadout.reloadingUntil > performance.now() / 1000) {
       const percent = Math.round(view.reloadProgress * 100);
       this.refs.status.textContent = view.loadout.weaponId === "shotgun"
@@ -294,23 +366,23 @@ export class HudController {
           ? `Loading flare ${percent}%`
           : `Reloading ${percent}%`;
     } else if (view.bikeMounted) {
-      this.refs.prompt.textContent = "E  Dismount bike";
+      this.refs.prompt.textContent = `${key("interact")}  Dismount bike`;
       this.refs.status.textContent = view.bikePumpBoostRemaining > 0 ? "Tuned bike" : "Bike";
     } else if (view.nearestWorldItem) {
-      this.refs.prompt.textContent = `X  Take ${ITEM_DEFINITIONS[view.nearestWorldItem.itemId].label}`;
+      this.refs.prompt.textContent = `${key("take")}  Take ${ITEM_DEFINITIONS[view.nearestWorldItem.itemId].label}`;
       this.refs.status.textContent = view.nearestWorldItem.label;
     } else if (view.nearestWeaponDrop) {
-      this.refs.prompt.textContent = `X  Take ${WEAPON_DEFINITIONS[view.nearestWeaponDrop.weaponId].name}`;
+      this.refs.prompt.textContent = `${key("take")}  Take ${WEAPON_DEFINITIONS[view.nearestWeaponDrop.weaponId].name}`;
       this.refs.status.textContent = view.nearestWeaponDrop.label;
     } else if (view.nearestBike) {
       this.refs.prompt.textContent = view.nearestBike.state === "flat-tyres"
-        ? "E  Repair flat tyre"
+        ? `${key("interact")}  Repair flat tyre`
         : view.nearestBike.state === "locked"
-          ? "E  Cut bike chain"
-          : "E  Ride bike";
+          ? `${key("interact")}  Cut bike chain`
+          : `${key("interact")}  Ride bike`;
       this.refs.status.textContent = view.nearestBike.label;
     } else if (view.nearestBrokenBike) {
-      this.refs.prompt.textContent = "E  Inspect bike";
+      this.refs.prompt.textContent = `${key("interact")}  Inspect bike`;
       this.refs.status.textContent = view.nearestBrokenBike.label;
     } else if (view.nearestFixture) {
       const active = view.activeFixtureId === view.nearestFixture.id;
@@ -318,15 +390,15 @@ export class HudController {
       const needsLadder = ladderFixture && view.carriedItem === "ladder" && !active;
       const placedLadder = ladderFixture && view.nearestPlacedLadder;
       this.refs.prompt.textContent = active
-        ? `E  Climb down from ${view.nearestFixture.label}`
+        ? `${key("interact")}  Climb down from ${view.nearestFixture.label}`
         : needsLadder
-          ? `E  Place ladder at ${view.nearestFixture.label}`
+          ? `${key("interact")}  Place ladder at ${view.nearestFixture.label}`
           : placedLadder
-            ? `E  Climb ${view.nearestFixture.label} · X  Remove ladder`
+            ? `${key("interact")}  Climb ${view.nearestFixture.label} · ${key("take")}  Remove ladder`
             : view.nearestFixture.prompt.replace(":", " ");
       this.refs.status.textContent = view.nearestFixture.label;
     } else if (view.nearestPlacedLadder) {
-      this.refs.prompt.textContent = "X  Remove ladder";
+      this.refs.prompt.textContent = `${key("take")}  Remove ladder`;
       this.refs.status.textContent = view.nearestPlacedLadder.label;
     } else if (view.nearestAmenity) {
       this.refs.prompt.textContent = view.amenityPrompt(view.nearestAmenity).replace(":", " ");
@@ -336,13 +408,13 @@ export class HudController {
       const current = view.loadout.upgrades[view.nearestStation.upgradeId];
       this.refs.prompt.textContent = current >= upgrade.maxLevel
         ? `${upgrade.label} maxed`
-        : `E  ${upgrade.label} · ${upgradeCost(view.nearestStation.upgradeId, current)} scrap`;
+        : `${key("interact")}  ${upgrade.label} · ${upgradeCost(view.nearestStation.upgradeId, current)} scrap`;
       this.refs.status.textContent = view.nearestStation.label;
     } else if (view.skateboardMounted) {
-      this.refs.prompt.textContent = "V  Step off skateboard";
+      this.refs.prompt.textContent = `${key("skateboard")}  Step off skateboard`;
       this.refs.status.textContent = "Skateboard · loud";
     } else if (view.carriedItem === "skateboard") {
-      this.refs.prompt.textContent = "V  Ride skateboard";
+      this.refs.prompt.textContent = `${key("skateboard")}  Ride skateboard`;
       this.refs.status.textContent = "Carrying skateboard";
     } else {
       this.refs.prompt.textContent = "";
@@ -353,6 +425,18 @@ export class HudController {
         view.flashlightOn ? "light on" : "light off"
       ].filter(Boolean);
       this.refs.status.textContent = `${weaponName}${conditions.length ? ` · ${conditions.join(" · ")}` : ""}`;
+    }
+  }
+
+  private renderBindingCaptureState(): void {
+    for (const button of this.root.querySelectorAll<HTMLButtonElement>("[data-binding-action]")) {
+      const capturing = button.dataset.bindingAction === this.rebindingAction;
+      button.classList.toggle("is-capturing", capturing);
+      button.setAttribute("aria-pressed", capturing ? "true" : "false");
+      if (capturing) {
+        button.textContent = "Press a key";
+        button.focus();
+      }
     }
   }
 
@@ -393,6 +477,28 @@ export class HudController {
       </div>
     ` : "";
   }
+
+  private renderOutcome(view: HudUpdate): void {
+    if (!view.waitingForRevive) {
+      if (this.outcomeMode === "downed") this.clearOutcome();
+      return;
+    }
+    const standing = view.teammates.filter((teammate) => teammate.alive).length;
+    const remaining = view.activeZombies + view.remainingSpawns;
+    this.outcomeMode = "downed";
+    this.refs.outcome.hidden = false;
+    this.refs.outcome.setAttribute("aria-hidden", "false");
+    this.refs.outcome.dataset.mode = "downed";
+    this.refs.outcomeKicker.textContent = "Down, not out";
+    this.refs.outcomeTitle.textContent = "Waiting for the wave to end";
+    this.refs.outcomeCopy.textContent = "You will return for the regroup if one teammate survives.";
+    this.refs.outcomeWave.textContent = `Wave ${view.wave}`;
+    this.refs.outcomeCount.textContent = remaining === 1 ? "1 infected remaining" : `${remaining} infected remaining`;
+    this.refs.outcomeTeam.textContent = standing === 1 ? "1 teammate still standing" : `${standing} teammates still standing`;
+    this.refs.restart.hidden = true;
+    this.root.classList.add("is-downed");
+    this.root.classList.remove("is-gameover");
+  }
 }
 
 function renderInventoryMenu(view: HudUpdate): string {
@@ -400,16 +506,37 @@ function renderInventoryMenu(view: HudUpdate): string {
     ? view.inventory.map((itemId, index) => `<li class="inventory-slot"><b>T${index + 1}</b><span>${ITEM_DEFINITIONS[itemId].label}</span></li>`).join("")
     : `<li class="inventory-slot empty"><b>T</b><span>No tools carried</span></li>`;
   const carried = view.carriedItem ? ITEM_DEFINITIONS[view.carriedItem] : null;
+  const stats = getWeaponStats(view.loadout);
+  const transport = view.bikeMounted ? "Bicycle" : view.skateboardMounted ? "Skateboard" : "On foot";
+  const modifications = Object.values(UPGRADE_DEFINITIONS).map((upgrade) => {
+    const level = view.loadout.upgrades[upgrade.id];
+    return `<li><span><b>${escapeHtml(upgrade.label)}</b><small>${escapeHtml(upgrade.description)}</small></span><strong>${level}/${upgrade.maxLevel}</strong></li>`;
+  }).join("");
   return `
-    <header class="inventory-header"><div><span>Inventory</span><strong>${view.inventory.length}/${view.inventoryCapacity} tools</strong></div><kbd>I</kbd></header>
-    ${renderWeaponInventory(view.loadout)}
-    <ul class="inventory-slots">${slots}</ul>
-    <section class="inventory-upgrades">
-      <div class="inventory-section-title"><span>Field modifications</span><strong>${Object.values(view.loadout.upgrades).reduce((sum, level) => sum + level, 0)}</strong></div>
-      <p>${Object.values(UPGRADE_DEFINITIONS).map((upgrade) => `${upgrade.label} ${view.loadout.upgrades[upgrade.id]}/${upgrade.maxLevel}`).join(" · ")}</p>
-    </section>
+    <header class="inventory-header"><div><span>Field bag</span><strong>${WEAPON_DEFINITIONS[view.loadout.weaponId].name}</strong></div><kbd>${bindingLabel(view.bindings, "inventory")}</kbd></header>
+    <div class="inventory-workbench">
+      <div class="inventory-rail">
+        ${renderWeaponInventory(view.loadout)}
+        <div class="inventory-section-title"><span>Tools</span><strong>${view.inventory.length}/${view.inventoryCapacity}</strong></div>
+        <ul class="inventory-slots">${slots}</ul>
+      </div>
+      <section class="inventory-detail" aria-label="Equipped weapon details">
+        <span class="inventory-eyebrow">Equipped</span>
+        <h3>${escapeHtml(stats.name)}</h3>
+        <p>${stats.kind === "melee" ? "Quiet close-range fallback" : `${stats.magazineSize}-round ${stats.reloadStyle === "single" ? "single-load" : "magazine"} firearm`}</p>
+        <dl>
+          <div><dt>Damage</dt><dd>${Math.round(stats.damage * stats.pellets)}</dd></div>
+          <div><dt>Range</dt><dd>${Math.round(stats.range)}m</dd></div>
+          <div><dt>Cycle</dt><dd>${stats.fireDelay.toFixed(2)}s</dd></div>
+          <div><dt>Noise</dt><dd>${stats.noiseMultiplier < 0.4 ? "Low" : stats.noiseMultiplier < 1.15 ? "Medium" : "High"}</dd></div>
+        </dl>
+        <div class="inventory-section-title"><span>Field modifications</span><strong>${Object.values(view.loadout.upgrades).reduce((sum, level) => sum + level, 0)}</strong></div>
+        <ul class="inventory-modifications">${modifications}</ul>
+      </section>
+    </div>
     <div class="inventory-object-grid">
-      <span><b>Hands</b><strong>${carried ? carried.label : view.skateboardMounted ? "Skateboard" : "Free"}</strong></span>
+      <span><b>Carried gear</b><strong>${carried ? carried.label : "None"}</strong></span>
+      <span><b>Transport</b><strong>${transport}</strong></span>
       <span><b>Lures</b><strong>${view.throwables}</strong></span>
       <span><b>Light</b><strong>${view.flashlightOn ? "On" : "Off"}</strong></span>
     </div>
@@ -421,9 +548,20 @@ function renderWeaponInventory(loadout: Loadout): string {
     const stats = getWeaponStats({ ...loadout, weaponId });
     const active = loadout.weaponId === weaponId;
     const ammo = stats.kind === "melee" ? "MELEE" : `${Math.min(loadout.magazines[weaponId] ?? 0, stats.magazineSize)}/${stats.magazineSize}`;
-    return `<li class="inventory-weapon${active ? " active" : ""}"><b>${index + 1}</b><span>${WEAPON_DEFINITIONS[weaponId].name}</span><strong>${ammo}</strong></li>`;
+    return `<li><button type="button" data-weapon-slot="${index}" class="inventory-weapon${active ? " active" : ""}" aria-pressed="${active}"><b>${index + 1}</b><span>${WEAPON_DEFINITIONS[weaponId].name}</span><strong>${ammo}</strong></button></li>`;
   }).join("");
   return `<section class="inventory-weapons"><div class="inventory-section-title"><span>Weapons</span><strong>${loadout.inventory.length}</strong></div><ul>${weapons}</ul></section>`;
+}
+
+function renderBindingSettings(): string {
+  return ["Movement", "Combat", "Field actions", "Weapons"].map((group) => `
+    <section class="binding-group">
+      <h3>${group}</h3>
+      ${INPUT_ACTION_DEFINITIONS.filter((definition) => definition.group === group).map((definition) => `
+        <div><span>${definition.label}</span><button type="button" data-binding-action="${definition.action}" aria-pressed="false"></button></div>
+      `).join("")}
+    </section>
+  `).join("");
 }
 
 function createMarkup(): string {
@@ -471,6 +609,20 @@ function createMarkup(): string {
       <div class="interaction-prompt" data-hud="prompt"></div>
       <section class="intermission-panel" data-hud="intermission" aria-live="polite" hidden></section>
 
+      <section class="outcome-overlay" data-hud="outcome" data-mode="downed" role="status" aria-live="polite" aria-hidden="true" hidden>
+        <div class="outcome-panel">
+          <p class="kicker" data-hud="outcome-kicker">Down, not out</p>
+          <h2 data-hud="outcome-title">Waiting for the wave to end</h2>
+          <p class="outcome-copy" data-hud="outcome-copy">You will return for the regroup if one teammate survives.</p>
+          <div class="outcome-progress" aria-label="Current wave status">
+            <span data-hud="outcome-wave">Wave 1</span>
+            <strong data-hud="outcome-count">Infected remaining</strong>
+          </div>
+          <p class="outcome-team" data-hud="outcome-team">Teammates still standing</p>
+          <button class="restart-button" data-action="restart" hidden>Restart run</button>
+        </div>
+      </section>
+
       <section class="start-overlay" data-hud="overlay">
         <div class="start-panel">
           <p class="kicker">Fitzroy North · Predawn</p>
@@ -494,11 +646,10 @@ function createMarkup(): string {
             <label><span>Volume</span><input type="range" min="0" max="1" step="0.05" data-setting="masterVolume"></label>
             <label class="toggle-setting"><span>High-contrast HUD</span><input type="checkbox" data-setting="highContrastHud"></label>
           </section>
-          <details class="control-reference"><summary>Controls</summary><p><b>WASD</b> move · <b>Shift</b> sprint · <b>C</b> crouch · <b>Space</b> jump · <b>Click</b> attack · <b>Right click</b> aim · <b>R</b> reload · <b>E</b> use · <b>X</b> take · <b>Q</b> drop · <b>F</b> light · <b>G</b> throw · <b>I</b> inventory · <b>V</b> skateboard · <b>1–6</b> weapons</p></details>
+          <details class="control-reference"><summary>Controls & keybindings</summary><div class="binding-list">${renderBindingSettings()}</div><p class="binding-note"><b>Mouse</b> look · <b>Left click</b> attack · <b>Right click</b> hold aim. Keyboard aim is a toggle for trackpad play.</p><button class="text-action reset-bindings" type="button" data-action="reset-bindings">Reset default bindings</button></details>
           <button class="text-action" type="button" data-action="exit-menu">Exit to main menu</button>
         </div>
       </section>
-      <button class="restart-button" data-action="restart" hidden>Restart run</button>
     </main>
   `;
 }
@@ -518,7 +669,9 @@ function findHudRefs(root: HTMLElement): HudRefs {
     visibility: find('[data-hud="visibility"]'), visibilityFill: find('[data-hud="visibility-fill"]'), noise: find('[data-hud="noise"]'), noiseFill: find('[data-hud="noise-fill"]'), threat: find('[data-hud="threat"]'),
     weather: find('[data-hud="weather"]'), area: find('[data-hud="area"]'), prompt: find('[data-hud="prompt"]'), status: find('[data-hud="status"]'),
     inventory: find('[data-hud="inventory"]'), team: find('[data-hud="team"]'), intermission: find('[data-hud="intermission"]'), damage: find('[data-hud="damage"]'), hitMarker: find('[data-hud="hit-marker"]'),
-    start: find('[data-action="start"]'), restart: find('[data-action="restart"]'), overlay: find('[data-hud="overlay"]'), pause: find('[data-hud="pause"]'), pauseMode: find('[data-hud="pause-mode"]'), miniMap: find('.mini-map')
+    start: find('[data-action="start"]'), restart: find('[data-action="restart"]'), overlay: find('[data-hud="overlay"]'),
+    outcome: find('[data-hud="outcome"]'), outcomeKicker: find('[data-hud="outcome-kicker"]'), outcomeTitle: find('[data-hud="outcome-title"]'), outcomeCopy: find('[data-hud="outcome-copy"]'), outcomeWave: find('[data-hud="outcome-wave"]'), outcomeCount: find('[data-hud="outcome-count"]'), outcomeTeam: find('[data-hud="outcome-team"]'),
+    pause: find('[data-hud="pause"]'), pauseMode: find('[data-hud="pause-mode"]'), miniMap: find('.mini-map')
   };
 }
 

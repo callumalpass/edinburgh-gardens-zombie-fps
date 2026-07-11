@@ -146,6 +146,13 @@ export interface Snapshot {
   placedLadders: number;
   bikePumpBoostRemaining: number;
   repairedBrokenBikes: number;
+  networkReady: boolean;
+  networkPlayers: Array<{
+    id: string;
+    x: number;
+    z: number;
+    lastProcessedInputSequence: number;
+  }>;
 }
 
 export interface GameTestApi {
@@ -182,6 +189,7 @@ export interface GameTestApi {
   testZombieAssetStates: () => Array<{ id: number; type: ZombieType; assetLoaded: boolean; animation: string }>;
   testZombieFacing: () => Array<{ id: number; faceAlignment: number; targetDistance: number }>;
   testSetCrouching: (crouching: boolean) => boolean;
+  testSetHealth: (health: number) => Snapshot;
   testStartIntermission: () => boolean;
   testChooseIntermissionUpgrade: (upgradeId?: UpgradeId) => boolean;
   testAddTeammate: (name?: string, avatarId?: AvatarId) => boolean;

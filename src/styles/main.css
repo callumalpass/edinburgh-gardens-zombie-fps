@@ -1151,6 +1151,146 @@ body.hit .vignette {
   display: none;
 }
 
+.outcome-overlay {
+  position: absolute;
+  z-index: 30;
+  inset: 0;
+  display: grid;
+  align-items: center;
+  justify-items: center;
+  padding: 28px;
+  background:
+    radial-gradient(circle at 50% 42%, oklch(22% 0.045 203 / 0.44), transparent 38%),
+    linear-gradient(180deg, oklch(9% 0.025 224 / 0.76), oklch(8% 0.024 219 / 0.93));
+  transition: opacity 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.outcome-overlay[hidden] {
+  display: none;
+}
+
+.outcome-overlay[data-mode="downed"] {
+  pointer-events: none;
+}
+
+.outcome-overlay[data-mode="gameover"] {
+  pointer-events: auto;
+  background:
+    radial-gradient(circle at 50% 42%, oklch(28% 0.075 31 / 0.34), transparent 40%),
+    linear-gradient(180deg, oklch(10% 0.03 223 / 0.78), oklch(9% 0.04 28 / 0.94));
+}
+
+.outcome-panel {
+  width: min(560px, 100%);
+  color: var(--paper);
+  text-align: center;
+}
+
+.outcome-panel::before {
+  content: "";
+  display: block;
+  width: 86px;
+  height: 2px;
+  margin: 0 auto 18px;
+  background: var(--bluegum);
+}
+
+.outcome-overlay[data-mode="gameover"] .outcome-panel::before {
+  background: var(--brick);
+}
+
+.outcome-panel .kicker {
+  margin-bottom: 10px;
+  color: var(--rain);
+}
+
+.outcome-overlay[data-mode="gameover"] .outcome-panel .kicker {
+  color: oklch(73% 0.12 34);
+}
+
+.outcome-panel h2 {
+  max-width: 16ch;
+  margin: 0 auto;
+  color: oklch(92% 0.036 88);
+  font-size: 2.35rem;
+  font-weight: 900;
+  line-height: 1;
+  text-wrap: balance;
+}
+
+.outcome-copy {
+  max-width: 52ch;
+  margin: 17px auto 0;
+  color: oklch(77% 0.04 188);
+  font-size: 1rem;
+  line-height: 1.55;
+}
+
+.outcome-progress {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: baseline;
+  gap: 12px;
+  width: min(430px, 100%);
+  margin: 24px auto 0;
+  padding: 12px 0;
+  border-block: 1px solid oklch(77% 0.058 199 / 0.28);
+  text-align: left;
+}
+
+.outcome-progress span {
+  color: var(--rain);
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.outcome-progress strong {
+  color: oklch(89% 0.044 89);
+  font-size: 1rem;
+  text-align: right;
+}
+
+.outcome-team {
+  margin: 11px 0 0;
+  color: oklch(69% 0.06 151);
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.outcome-overlay[data-mode="gameover"] .outcome-team {
+  color: oklch(68% 0.068 37);
+}
+
+.outcome-panel .restart-button {
+  position: static;
+  margin-top: 24px;
+  padding: 0 20px;
+  transform: none;
+}
+
+.outcome-panel .restart-button:active {
+  transform: translateY(2px);
+}
+
+.shell.is-downed .hud,
+.shell.is-downed .mini-map-shell,
+.shell.is-downed .interaction-prompt,
+.shell.is-downed .intermission-panel,
+.shell.is-gameover .hud,
+.shell.is-gameover .mini-map-shell,
+.shell.is-gameover .interaction-prompt,
+.shell.is-gameover .intermission-panel {
+  opacity: 0.12;
+}
+
+.shell.is-downed .crosshair,
+.shell.is-downed .scope-overlay,
+.shell.is-gameover .crosshair,
+.shell.is-gameover .scope-overlay {
+  opacity: 0;
+}
+
 .start-overlay {
   position: absolute;
   inset: 0;
@@ -1299,18 +1439,6 @@ h1 {
   outline-offset: 3px;
 }
 
-.restart-button {
-  position: absolute;
-  left: 50%;
-  top: 58%;
-  transform: translate(-50%, -50%);
-  padding: 0 20px;
-}
-
-.restart-button:active {
-  transform: translate(-50%, calc(-50% + 2px));
-}
-
 @media (max-width: 760px) {
   .launch-screen {
     align-items: start;
@@ -1412,6 +1540,15 @@ h1 {
     padding: 26px;
   }
 
+  .outcome-overlay {
+    align-items: end;
+    padding: 34px 22px;
+  }
+
+  .outcome-panel h2 {
+    font-size: 2rem;
+  }
+
   .start-overlay::before {
     inset: 8% -35% 30% 10%;
     opacity: 0.52;
@@ -1454,7 +1591,8 @@ h1 {
 @media (prefers-reduced-motion: reduce) {
   .scope-overlay,
   .crosshair,
-  .start-overlay {
+  .start-overlay,
+  .outcome-overlay {
     transition: none;
   }
 }
@@ -2305,5 +2443,401 @@ h1 {
 
   .settings-panel {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Winter Ink interface system */
+
+:root {
+  --night: oklch(13% 0.033 221);
+  --night-deep: oklch(8% 0.026 226);
+  --ink: oklch(16% 0.038 211);
+  --ink-soft: oklch(23% 0.047 202);
+  --paper: oklch(92% 0.028 102);
+  --muted: oklch(75% 0.046 186);
+  --bluegum: oklch(69% 0.105 153);
+  --bluegum-dark: oklch(42% 0.078 158);
+  --bluestone: oklch(53% 0.054 218);
+  --rain: oklch(79% 0.075 211);
+  --tram: var(--rain);
+  --heritage: oklch(79% 0.105 83);
+  --brick: oklch(62% 0.155 30);
+  --blood: oklch(48% 0.17 27);
+  --panel: oklch(12% 0.034 220 / 0.84);
+  --panel-strong: oklch(16% 0.041 211 / 0.92);
+  --panel-warm: oklch(26% 0.057 58 / 0.28);
+  --line: oklch(76% 0.058 196 / 0.2);
+  --paint-edge: oklch(91% 0.04 113 / 0.12);
+  --ink-shadow: oklch(6% 0.022 226 / 0.48);
+}
+
+.launch-screen {
+  background:
+    radial-gradient(ellipse at 74% 18%, oklch(38% 0.082 155 / 0.3), transparent 34%),
+    linear-gradient(102deg, oklch(8% 0.027 226 / 0.98), oklch(14% 0.04 213 / 0.92) 52%, oklch(20% 0.055 175 / 0.58)),
+    var(--night-deep);
+}
+
+.launch-panel::before,
+.start-panel::before {
+  width: min(190px, 58vw);
+  height: 5px;
+  background: var(--bluegum);
+  clip-path: polygon(0 28%, 9% 8%, 30% 24%, 54% 0, 76% 20%, 100% 9%, 98% 78%, 73% 70%, 50% 100%, 24% 76%, 0 92%);
+  opacity: 0.92;
+}
+
+.launch-deck,
+.brief {
+  color: oklch(80% 0.042 190);
+}
+
+.avatar-selector {
+  border-color: oklch(74% 0.066 193 / 0.26);
+  background: oklch(10% 0.03 224 / 0.7);
+  box-shadow: 5px 6px 0 oklch(5% 0.02 226 / 0.3);
+}
+
+.avatar-focus b {
+  color: var(--bluegum);
+}
+
+.avatar-option {
+  background: oklch(13% 0.034 218);
+}
+
+.avatar-option:hover {
+  background: oklch(19% 0.05 190);
+}
+
+.avatar-option.active {
+  position: relative;
+  background: oklch(27% 0.068 159);
+  color: var(--paper);
+}
+
+.avatar-option.active::after,
+.inventory-weapon.active::after {
+  content: "";
+  position: absolute;
+  inset: auto 8px 3px;
+  height: 3px;
+  background: var(--bluegum);
+  clip-path: polygon(0 22%, 12% 0, 31% 28%, 54% 6%, 78% 30%, 100% 8%, 98% 88%, 72% 72%, 48% 100%, 21% 74%, 0 94%);
+}
+
+.avatar-option.active small {
+  color: oklch(86% 0.05 167);
+}
+
+.play-mode-list .solo-launch,
+.mode-segments button.active,
+.primary-action,
+.restart-button {
+  border-color: oklch(78% 0.08 157 / 0.72);
+  background: var(--bluegum);
+  color: oklch(14% 0.038 218);
+  box-shadow:
+    inset 0 1px 0 oklch(91% 0.04 124 / 0.32),
+    4px 5px 0 var(--bluegum-dark),
+    0 14px 28px var(--ink-shadow);
+}
+
+.play-mode-list .solo-launch small {
+  color: oklch(25% 0.055 165);
+}
+
+.primary-action:hover,
+.restart-button:hover,
+.play-mode-list .solo-launch:hover {
+  background: oklch(74% 0.105 153);
+}
+
+.primary-action:active,
+.restart-button:active {
+  box-shadow:
+    inset 0 1px 0 oklch(91% 0.04 124 / 0.28),
+    0 3px 0 var(--bluegum-dark),
+    0 12px 26px var(--ink-shadow);
+}
+
+.play-mode-list button.active:not(.solo-launch),
+.mode-segments button.active {
+  border-color: oklch(80% 0.075 211 / 0.62);
+  background: oklch(27% 0.06 205);
+  color: var(--paper);
+}
+
+.launch-fields input:focus {
+  border-color: var(--rain);
+  box-shadow: 0 0 0 2px oklch(79% 0.075 211 / 0.16);
+}
+
+.host-ready {
+  border-color: oklch(72% 0.095 153 / 0.44);
+  background: oklch(22% 0.061 163 / 0.62);
+}
+
+.host-ready strong,
+.discovered-host span {
+  color: var(--bluegum);
+}
+
+.primary-vital,
+.compact-vitals,
+.resource-line,
+.wave-hud,
+.stealth-hud,
+.team-member,
+.weapon-hud,
+.mini-map-shell {
+  border-color: oklch(74% 0.064 197 / 0.24);
+  background: oklch(10% 0.031 222 / 0.84);
+  box-shadow:
+    inset 0 1px 0 oklch(91% 0.04 113 / 0.08),
+    3px 4px 0 oklch(5% 0.021 226 / 0.28),
+    0 10px 24px oklch(5% 0.021 226 / 0.16);
+}
+
+.resource-line span:first-child b,
+.wave-hud header strong b,
+.mini-map-shell footer .legend-supply {
+  color: var(--heritage);
+}
+
+.resource-line span:last-child b,
+.weapon-hud .ammo strong,
+.status-line.flash,
+.interaction-prompt {
+  color: var(--rain);
+}
+
+.wave-hud > i {
+  --meter-color: var(--brick);
+}
+
+.stealth-hud > strong[data-threat="searching"] {
+  color: var(--heritage);
+}
+
+.stealth-hud span:last-child i {
+  --meter-color: var(--brick);
+}
+
+.team-initial {
+  border-color: oklch(76% 0.095 153 / 0.5);
+  color: var(--bluegum);
+}
+
+.mini-map-shell {
+  border-color: oklch(75% 0.07 208 / 0.32);
+}
+
+.mini-map-shell header b {
+  color: var(--rain);
+}
+
+.mini-map-shell footer .legend-supply::before {
+  background: var(--heritage);
+}
+
+.interaction-prompt {
+  border-color: oklch(79% 0.075 211 / 0.52);
+  background: oklch(11% 0.035 220 / 0.92);
+  box-shadow: 3px 4px 0 oklch(5% 0.021 226 / 0.32);
+}
+
+.inventory-menu {
+  z-index: 12;
+  top: 276px;
+  right: 16px;
+  width: min(390px, calc(100% - 32px));
+  max-height: calc(100% - 292px);
+  overflow: auto;
+  padding: 13px;
+  border-color: oklch(74% 0.075 155 / 0.34);
+  background: oklch(10% 0.032 221 / 0.96);
+  box-shadow:
+    inset 0 1px 0 oklch(90% 0.04 120 / 0.09),
+    5px 6px 0 oklch(5% 0.021 226 / 0.34),
+    0 18px 42px oklch(5% 0.021 226 / 0.38);
+}
+
+.inventory-header {
+  padding: 2px 2px 10px;
+  border-bottom-color: oklch(73% 0.06 196 / 0.24);
+}
+
+.inventory-header strong {
+  color: var(--paper);
+  font-size: 1.08rem;
+}
+
+.inventory-header kbd,
+.inventory-weapon b,
+.inventory-slot b,
+.intermission-choices kbd {
+  border-color: oklch(77% 0.075 211 / 0.4);
+  background: oklch(20% 0.05 208 / 0.8);
+  color: var(--rain);
+}
+
+.inventory-section-title {
+  margin-top: 11px;
+  padding-inline: 2px;
+}
+
+.inventory-section-title strong,
+.inventory-weapon strong {
+  color: var(--rain);
+}
+
+.inventory-weapons ul {
+  gap: 2px 10px;
+}
+
+.inventory-weapon,
+.inventory-slot,
+.inventory-object-grid span {
+  position: relative;
+  border: 0;
+  border-bottom: 1px solid oklch(73% 0.06 196 / 0.18);
+  border-radius: 0;
+  background: transparent;
+}
+
+.inventory-weapon {
+  min-height: 44px;
+  padding: 7px 5px 9px;
+}
+
+.inventory-weapon.active {
+  border-color: oklch(76% 0.095 153 / 0.46);
+  background: oklch(25% 0.064 159 / 0.62);
+}
+
+.inventory-weapon.active::after {
+  background: var(--bluegum);
+}
+
+.inventory-slot {
+  min-height: 36px;
+  padding: 6px 5px;
+}
+
+.inventory-slot:not(.empty) {
+  color: var(--bluegum);
+}
+
+.inventory-slot.empty {
+  background: transparent;
+}
+
+.inventory-object-grid {
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.inventory-object-grid span {
+  padding: 6px 3px 8px;
+}
+
+.inventory-upgrades {
+  border-color: oklch(73% 0.06 196 / 0.18);
+  background: oklch(15% 0.04 212 / 0.56);
+}
+
+.intermission-panel {
+  border-color: oklch(74% 0.09 153 / 0.46);
+  background: oklch(10% 0.032 221 / 0.96);
+  box-shadow: 5px 6px 0 oklch(5% 0.021 226 / 0.34);
+}
+
+.intermission-panel header strong,
+.intermission-choices button > b {
+  color: var(--heritage);
+}
+
+.intermission-choices button {
+  border-color: oklch(72% 0.072 155 / 0.3);
+  background: oklch(18% 0.047 188 / 0.78);
+}
+
+.intermission-choices button:hover,
+.intermission-choices button:focus-visible {
+  border-color: var(--bluegum);
+  background: oklch(26% 0.067 157 / 0.82);
+}
+
+.pause-menu {
+  background:
+    radial-gradient(circle at 67% 20%, oklch(34% 0.075 154 / 0.2), transparent 32%),
+    oklch(8% 0.027 226 / 0.94);
+}
+
+.pause-panel {
+  border-color: oklch(74% 0.068 196 / 0.3);
+  background: oklch(12% 0.034 219);
+  box-shadow:
+    6px 7px 0 oklch(5% 0.021 226 / 0.34),
+    0 24px 80px oklch(5% 0.021 226 / 0.5);
+}
+
+.settings-panel input[type="range"],
+.toggle-setting input {
+  accent-color: var(--bluegum);
+}
+
+.control-reference summary {
+  color: var(--rain);
+}
+
+@media (max-width: 900px) {
+  .inventory-menu {
+    top: 106px;
+    right: 12px;
+    bottom: auto;
+    width: min(420px, calc(100% - 24px));
+    max-height: calc(100% - 198px);
+  }
+
+  .shell:has(.inventory-menu:not([hidden])) .mini-map-shell {
+    visibility: hidden;
+    opacity: 0;
+  }
+}
+
+@media (max-width: 680px) {
+  .inventory-menu {
+    top: 94px;
+    right: 10px;
+    bottom: auto;
+    width: calc(100% - 20px);
+    max-height: calc(100% - 190px);
+    padding: 11px;
+  }
+
+  .inventory-weapons ul {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .shell:has(.inventory-menu:not([hidden])) .wave-hud,
+  .shell:has(.inventory-menu:not([hidden])) .team-hud,
+  .shell:has(.inventory-menu:not([hidden])) .stealth-hud,
+  .shell:has(.inventory-menu:not([hidden])) .interaction-prompt {
+    opacity: 0.08;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .avatar-option,
+  .primary-action,
+  .restart-button,
+  .primary-vital i::after,
+  .compact-vitals i::after,
+  .wave-hud > i::after,
+  .stealth-hud span i::after,
+  .team-member i::after {
+    transition: none;
   }
 }
