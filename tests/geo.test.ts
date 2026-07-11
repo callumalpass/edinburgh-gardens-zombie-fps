@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { clampToPolygon, distance, distanceToSegment, geoToWorld, nearestPointOnSegment, pointInPolygon, polygonArea, polygonCentroid, WORLD_SCALE } from "../src/game/geo";
 import { pointInRaisedFootprint } from "../src/game/interactables";
+import { PLAYER_RADIUS } from "../src/game/gameConfig";
 import { createLevelData, PARK_BOUNDARY_GEO } from "../src/game/levelData";
 import {
   AUSTRALIAN_RULES_CENTRE_SQUARE_METRES,
@@ -446,6 +447,11 @@ describe("map geometry", () => {
     expect(oval?.jumpBypassMinHeight).toBeGreaterThan(0.4);
     expect(level.landmarks.find((landmark) => landmark.id === "north-playground")?.source).toContain("no current public fence source");
 
+    const fitzyAccess = fitzy?.gates?.[0];
+    if (!fitzy || !fitzyAccess) throw new Error("Missing Fitzy Bowl access gap");
+    expect(distanceToPolygonEdge(fitzyAccess.position, fitzy.points)).toBeLessThan(0.08);
+    expect(fitzyAccess.radius).toBeGreaterThan(PLAYER_RADIUS * 4);
+
     const fenceObstacles = level.obstacles.filter((obstacle) => obstacle.sourceObjectKind === "mapped-fence");
     expect(fenceObstacles.length).toBeGreaterThanOrEqual(10);
     expect(fenceObstacles.every((obstacle) => obstacle.blocksSight === false)).toBe(true);
@@ -461,6 +467,32 @@ describe("map geometry", () => {
         const blocked = segments.some((segment) => pointInsideObstacle(gate.position, segment, 0.35));
         expect(blocked, `${gate.id} is blocked by ${fence.id}`).toBe(false);
       }
+    }
+
+    const fitzySegments = fenceObstacles.filter((obstacle) => obstacle.sourceObjectId === fitzy.id);
+    let accessStart = fitzy.points[0];
+    let accessEnd = fitzy.points[1];
+    let accessDistance = Number.POSITIVE_INFINITY;
+    for (let index = 0; index < fitzy.points.length - 1; index += 1) {
+      const nearest = nearestPointOnSegment(fitzyAccess.position, fitzy.points[index], fitzy.points[index + 1]);
+      const candidateDistance = distance(fitzyAccess.position, nearest);
+      if (candidateDistance < accessDistance) {
+        accessDistance = candidateDistance;
+        accessStart = fitzy.points[index];
+        accessEnd = fitzy.points[index + 1];
+      }
+    }
+    const accessLength = distance(accessStart, accessEnd) || 1;
+    const tangent = { x: (accessEnd.x - accessStart.x) / accessLength, z: (accessEnd.z - accessStart.z) / accessLength };
+    for (const offset of [-1.2, 0, 1.2]) {
+      const sample = {
+        x: fitzyAccess.position.x + tangent.x * offset,
+        z: fitzyAccess.position.z + tangent.z * offset
+      };
+      expect(
+        fitzySegments.some((segment) => pointInsideObstacle(sample, segment, PLAYER_RADIUS)),
+        `Fitzy Bowl access blocked at tangent offset ${offset}`
+      ).toBe(false);
     }
   });
 

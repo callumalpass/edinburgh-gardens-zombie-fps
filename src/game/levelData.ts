@@ -2820,9 +2820,12 @@ const OSM_FENCES_GEO: Array<{
       {
         id: "fitzy-bowl-south-west-access",
         label: "Fitzy Bowl south-west access beside retained drinking fountain",
-        point: g(-37.7866200, 144.9829957),
-        radius: 2.8,
-        source: "Playce tender site plan 19321_003: public footpath entry beside the retained drinking fountain and relocated bin; OSM node 8464870016 fixes the fountain point"
+        // Keep the opening on the mapped D-E perimeter segment. The earlier
+        // fountain-adjacent point sat outside the fence by more than its gap
+        // radius, so render/collision clipping could leave the loop closed.
+        point: g(-37.7866602, 144.9829640),
+        radius: 3.2,
+        source: "Playce tender site plan 19321_003: public footpath entry beside the retained drinking fountain and relocated bin; OSM node 8464870016 fixes the fountain context; entrance snapped to the OSM way 231049925 perimeter segment for a traversable opening"
       }
     ],
     points: SKATE_GEO
