@@ -41,6 +41,7 @@ export interface Landmark {
   polygon?: Vec2[];
   position?: Vec2;
   radius?: number;
+  angle?: number;
   courtStatus?: "active-clay" | "under-construction";
   gardenStyle?: "stormwater-filtration" | "stormwater-storage" | "ornamental-floral" | "ornamental-shrub" | "agapanthus";
   cover?: "dense-shrub";
@@ -176,6 +177,7 @@ export type TerrainModifier = TerrainLineModifier | TerrainRadialModifier | Terr
 export interface SkateBowlFeature {
   id: string;
   label: string;
+  groupId?: string;
   center: Vec2;
   radiusX: number;
   radiusZ: number;
@@ -322,7 +324,7 @@ export type InteractableRaisedFootprint =
 export interface InteractableFixture {
   id: string;
   label: string;
-  kind: "rotunda" | "grandstand" | "playground" | "skate" | "basketball" | "toilets" | "tennis" | "cricket-nets" | "gate";
+  kind: "building" | "rotunda" | "grandstand" | "playground" | "skate" | "basketball" | "toilets" | "tennis" | "cricket-nets" | "gate";
   position: Vec2;
   accessPosition?: Vec2;
   landingPosition?: Vec2;
@@ -333,6 +335,8 @@ export interface InteractableFixture {
   radius: number;
   height: number;
   raisedFootprint?: InteractableRaisedFootprint;
+  /** Terrain samples supporting a rigid Blender-authored deck or roof. */
+  surfaceGroundPoints?: Vec2[];
   prompt: string;
   mode: "toggle" | "auto";
   bypassObstacleIds?: string[];

@@ -9,6 +9,7 @@ import {
   JUMP_GRAVITY,
   JUMP_INITIAL_VELOCITY,
   PLAYER_RADIUS,
+  RAISED_SURFACE_EDGE_TOLERANCE,
   SKATEBOARD_FORWARD_SPEED,
   SKATEBOARD_REVERSE_SPEED,
   SKATEBOARD_SPRINT_SPEED,
@@ -231,16 +232,16 @@ export class PlayerLocomotion {
     } else {
       const active = actor.activeFixtureId ? this.interactableById.get(actor.activeFixtureId) : undefined;
       if (active) {
-        if (pointInInteractableRaisedFootprint(actorPoint, active, 1.2)) {
-          target = Math.max(target, active.height);
+        if (pointInInteractableRaisedFootprint(actorPoint, active, RAISED_SURFACE_EDGE_TOLERANCE)) {
+          target = Math.max(target, this.fixtureElevationAt(active, actorPoint));
         } else {
           actor.activeFixtureId = null;
         }
       }
 
       for (const fixture of this.autoInteractables) {
-        if (pointInInteractableRaisedFootprint(actorPoint, fixture, 0.8)) {
-          target = Math.max(target, fixture.height);
+        if (pointInInteractableRaisedFootprint(actorPoint, fixture, RAISED_SURFACE_EDGE_TOLERANCE)) {
+          target = Math.max(target, this.fixtureElevationAt(fixture, actorPoint));
         }
       }
     }
@@ -251,6 +252,16 @@ export class PlayerLocomotion {
     if (Math.abs(actor.height) < 0.01) {
       actor.height = 0;
     }
+  }
+
+  fixtureElevationAt(fixture: InteractableFixture, point: Vec2): number {
+    if (!fixture.raisedFootprint) return fixture.height;
+    // Rendered decks and roofs are rigid scene geometry. Counteract the
+    // underlying terrain delta so actor ground Y + fixture elevation remains
+    // a flat world-space surface instead of following the lawn underneath.
+    const supportPoints = fixture.surfaceGroundPoints?.length ? fixture.surfaceGroundPoints : [fixture.position];
+    const supportGround = supportPoints.reduce((total, sample) => total + this.world.groundY(sample), 0) / supportPoints.length;
+    return Math.max(0, fixture.height + supportGround - this.world.groundY(point));
   }
 
   resolveNearbyObstacles(
@@ -290,10 +301,13 @@ export class PlayerLocomotion {
 
   private constrainActiveFixtureMovement(point: Vec2, actor: Pick<LocomotionActor, "activeFixtureId">, radius: number): Vec2 {
     const active = actor.activeFixtureId ? this.interactableById.get(actor.activeFixtureId) : undefined;
-    if (active?.kind !== "tennis" || !active.raisedFootprint) {
+    if (!active?.raisedFootprint || active.mode !== "toggle" || active.height <= 0) {
       return point;
     }
-    const inset = radius + 0.12;
+    // Toggle climbs have an explicit exit interaction. Keep the full movement
+    // capsule on the authored deck/roof instead of allowing its centre to drift
+    // beyond the visible floor and remain suspended in mid-air.
+    const inset = radius + RAISED_SURFACE_EDGE_TOLERANCE;
     if (active.raisedFootprint.shape === "circle") {
       const dx = point.x - active.raisedFootprint.center.x;
       const dz = point.z - active.raisedFootprint.center.z;
@@ -370,7 +384,12 @@ export class PlayerLocomotion {
       const nextLocal = this.skateBowlLocalPoint(bowl, next);
       const currentNorm = this.skateBowlNorm(bowl, currentLocal);
       const nextNorm = this.skateBowlNorm(bowl, nextLocal);
-      if (currentNorm < 0.96 && nextNorm >= 1 && !this.isSkateBowlExitGap(bowl, nextLocal)) {
+      const enteringConnectedLobe = bowl.groupId !== undefined && this.world.skateBowls.some((candidate) =>
+        candidate !== bowl &&
+        candidate.groupId === bowl.groupId &&
+        this.skateBowlNorm(candidate, this.skateBowlLocalPoint(candidate, next)) < 0.98
+      );
+      if (currentNorm < 0.96 && nextNorm >= 1 && !enteringConnectedLobe && !this.isSkateBowlExitGap(bowl, nextLocal)) {
         const scale = 0.94 / Math.max(nextNorm, 0.001);
         next = this.skateBowlWorldPoint(bowl, { x: nextLocal.x * scale, z: nextLocal.z * scale });
         velocity.multiplyScalar(0.28);

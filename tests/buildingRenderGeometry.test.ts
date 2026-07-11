@@ -181,6 +181,33 @@ describe("mapped-building render geometry", () => {
     expect(closestStairDistance).toBeLessThan(1.5);
   });
 
+  it("matches playground blockers and raised floors to the rendered tower decks", () => {
+    for (const [landmarkId, fixtureId] of [
+      ["north-playground", "north-playground-tower"],
+      ["south-playground", "south-playground-tower"]
+    ] as const) {
+      const fixture = level.interactables.find((candidate) => candidate.id === fixtureId);
+      const blocker = level.obstacles.find((candidate) => candidate.id === landmarkId);
+      if (!fixture || fixture.raisedFootprint?.shape !== "box" || blocker?.shape !== "box") {
+        throw new Error(`Missing aligned playground geometry for ${landmarkId}`);
+      }
+      const scene = buildPreview(`landmark:${landmarkId}`);
+      const deck = scene.children
+        .flatMap(flattenMeshes)
+        .find((mesh) => mesh.userData.kind === "playground-tower-deck");
+      expect(deck, `${landmarkId} has no tagged tower deck`).toBeTruthy();
+      const bounds = meshBounds(deck!);
+      const center = bounds.getCenter(new THREE.Vector3());
+
+      expect(distance({ x: center.x, z: center.z }, fixture.position)).toBeLessThan(0.01);
+      expect(bounds.max.y).toBeCloseTo(fixture.height, 2);
+      expect(blocker.center).toEqual(fixture.raisedFootprint.center);
+      expect(blocker.halfX).toBeCloseTo(fixture.raisedFootprint.halfX, 3);
+      expect(blocker.halfZ).toBeCloseTo(fixture.raisedFootprint.halfZ, 3);
+      expect(blocker.angle).toBeCloseTo(fixture.raisedFootprint.angle, 5);
+    }
+  });
+
   it("renders the Hannah memorial entrance as an open architectural gate, not an empty fence gap", () => {
     const fence = level.mappedFences.find((candidate) => candidate.id === "bowling-precinct-perimeter-fence");
     const gate = fence?.gates?.find((candidate) => candidate.id === "bowling-hannah-memorial-gate");
@@ -201,6 +228,8 @@ describe("mapped-building render geometry", () => {
     expect(meshes.filter((mesh) => mesh.userData.kind === "sportsmans-east-inscription")).toHaveLength(1);
     expect(meshes.filter((mesh) => mesh.userData.kind === "sportsmans-east-pediment")).toHaveLength(1);
     expect(meshes.filter((mesh) => mesh.userData.kind === "sportsmans-east-urn-finial")).toHaveLength(2);
+    const pediment = meshes.find((mesh) => mesh.userData.kind === "sportsmans-east-pediment");
+    expect(pediment && meshBounds(pediment).max.y - meshBounds(pediment).min.y).toBeGreaterThan(0.6);
   });
 
   it("keeps the Cook Memorial's arched bronze portrait and pyramidal granite cap", () => {

@@ -512,6 +512,8 @@ describe("map geometry", () => {
     expect(amenitiesById.get("north-toilets-south-west-stall-bank")?.kind).toBe("toilets");
     expect(amenitiesById.get("north-toilets-south-west-stall-bank")?.source).toContain("as-built photograph");
     expect(amenitiesById.get("north-toilets-north-east-stall-bank")?.linkedStructureId).toBe("north-toilets");
+    expect(amenitiesById.get("sportsmans-memorial-east-inscription")?.kind).toBe("memorial_plaque");
+    expect(amenitiesById.get("sportsmans-memorial-east-inscription")?.source).toContain("rectangular swag panel");
     for (const futureObjectId of [
       "grandstand-external-public-toilets",
       "grandstand-kiosk-hatch",
@@ -645,9 +647,8 @@ describe("map geometry", () => {
     expect(distance(grandstand!.position, grandstand!.accessPosition!)).toBeGreaterThan(5);
     expect(distance(grandstand!.accessPosition!, grandstand!.landingPosition!)).toBeGreaterThan(3);
 
-    const roofFixtures = level.interactables.filter((fixture) => fixture.kind === "toilets" && fixture.id.endsWith("-roof"));
-    expect(roofFixtures).toHaveLength(1);
-    expect(roofFixtures.every((fixture) => fixture.accessPosition && fixture.landingPosition && fixture.accessKind === "ladder" && fixture.prompt.includes("ladder"))).toBe(true);
+    const roofFixtures = level.interactables.filter((fixture) => fixture.accessKind === "ladder" && fixture.id.endsWith("-roof"));
+    expect(roofFixtures.every((fixture) => fixture.accessPosition && fixture.landingPosition && fixture.prompt.includes("ladder"))).toBe(true);
     const southRoof = roofFixtures.find((fixture) => fixture.id === "alfred-pavilion-roof");
     const southAmenitiesBuilding = level.mappedBuildings.find((building) => building.id === "osm-building-242003562");
     expect(southRoof).toBeTruthy();
@@ -657,7 +658,26 @@ describe("map geometry", () => {
     expect(distance(southRoof!.position, polygonCentroid(southAmenitiesBuilding!.polygon))).toBeLessThan(0.01);
     expect(distanceToPolygonEdge(southRoof!.accessPosition!, southAmenitiesBuilding!.polygon)).toBeLessThan(0.85);
 
-    expect(roofFixtures.some((fixture) => fixture.id === "north-toilets-roof")).toBe(false);
+    const excludedMappedRoofIds = new Set([
+      "osm-building-543505640", // Rotunda stairs already provide access.
+      "osm-man-made-715802679" // Storage tank is not a building.
+    ]);
+    for (const building of level.mappedBuildings.filter((candidate) => candidate.collision && !excludedMappedRoofIds.has(candidate.id))) {
+      const roof = roofFixtures.find((fixture) => fixture.bypassObstacleIds?.includes(building.id));
+      expect(roof, `${building.id} has no portable-ladder roof`).toBeTruthy();
+      expect(roof?.surfaceGroundPoints).toEqual(building.polygon);
+      expect(roof?.raisedFootprint?.shape).toBe("polygon");
+      if (roof?.raisedFootprint?.shape === "polygon") {
+        expect(roof.raisedFootprint.polygon).toEqual(building.polygon);
+      }
+    }
+
+    const northRoof = roofFixtures.find((fixture) => fixture.id === "north-toilets-roof");
+    expect(northRoof?.bypassObstacleIds).toEqual(["north-toilets"]);
+    expect(northRoof?.raisedFootprint?.shape).toBe("polygon");
+    if (northRoof?.raisedFootprint?.shape === "polygon") {
+      expect(northRoof.raisedFootprint.polygon).toEqual(level.landmarks.find((landmark) => landmark.id === "north-toilets")?.polygon);
+    }
 
     const basketballFrames = level.interactables.filter((fixture) => fixture.kind === "basketball" && fixture.id.endsWith("-frame"));
     const basketballHoops = level.sportsFixtures.filter((fixture) => fixture.kind === "basketball-hoop");
@@ -686,7 +706,7 @@ describe("map geometry", () => {
     if (rotunda?.raisedFootprint?.shape === "circle") {
       expect(rotunda.raisedFootprint.radius).toBeCloseTo(5.05, 2);
     }
-    expect(rotunda?.height).toBeCloseTo(1.86, 2);
+    expect(rotunda?.height).toBeCloseTo(2.0, 2);
 
     const grandstand = level.interactables.find((fixture) => fixture.id === "grandstand-seats");
     const grandstandPolygon = level.landmarks.find((landmark) => landmark.id === "grandstand")?.polygon;
@@ -699,27 +719,31 @@ describe("map geometry", () => {
     }
     expect(grandstand?.height).toBeCloseTo(2.55, 2);
 
-    for (const fixtureId of ["north-playground-tower", "south-playground-tower"]) {
+    const playgroundExpectations = {
+      "north-playground-tower": { halfX: 1.9, halfZ: 1.6, height: 1.57 },
+      "south-playground-tower": { halfX: 2.85, halfZ: 2.4, height: 2.46 }
+    };
+    for (const [fixtureId, expected] of Object.entries(playgroundExpectations)) {
       const fixture = level.interactables.find((candidate) => candidate.id === fixtureId);
       expect(fixture?.raisedFootprint?.shape).toBe("box");
       if (fixture?.raisedFootprint?.shape === "box") {
-        expect(fixture.raisedFootprint.halfX).toBeCloseTo(2.6, 2);
-        expect(fixture.raisedFootprint.halfZ).toBeCloseTo(2.3, 2);
+        expect(fixture.raisedFootprint.halfX).toBeCloseTo(expected.halfX, 2);
+        expect(fixture.raisedFootprint.halfZ).toBeCloseTo(expected.halfZ, 2);
+        expect(fixture.position).toEqual(fixture.raisedFootprint.center);
       }
+      expect(fixture?.height).toBeCloseTo(expected.height, 2);
       expect(fixture?.radius).toBeLessThan(4);
       expect(fixture?.accessPosition).toBeTruthy();
     }
 
     const southRoof = level.interactables.find((fixture) => fixture.id === "alfred-pavilion-roof");
     const southBuilding = level.mappedBuildings.find((building) => building.id === "osm-building-242003562");
-    expect(southRoof?.raisedFootprint?.shape).toBe("box");
+    expect(southRoof?.raisedFootprint?.shape).toBe("polygon");
     expect(southBuilding).toBeTruthy();
-    if (southRoof?.raisedFootprint?.shape === "box" && southBuilding) {
-      const visible = boxExtentsFromPolygon(southBuilding.polygon);
-      expect(southRoof.raisedFootprint.halfX).toBeCloseTo(visible.halfX + 0.18, 2);
-      expect(southRoof.raisedFootprint.halfZ).toBeCloseTo(visible.halfZ + 0.18, 2);
+    if (southRoof?.raisedFootprint?.shape === "polygon" && southBuilding) {
+      expect(southRoof.raisedFootprint.polygon).toEqual(southBuilding.polygon);
     }
-    expect(southRoof?.height).toBeCloseTo(3.58, 2);
+    expect(southRoof?.height).toBeCloseTo(4.65, 2);
 
     expect(level.interactables.some((fixture) => fixture.id === "tennis-court-ladder")).toBe(false);
 
@@ -1106,12 +1130,22 @@ describe("map geometry", () => {
 
   it("uses a fitted grandstand obstacle so nearby open lawn remains accessible", () => {
     const grandstand = level.obstacles.find((obstacle) => obstacle.id === "grandstand");
+    const grandstandPolygon = level.landmarks.find((landmark) => landmark.id === "grandstand")?.polygon;
     expect(grandstand?.shape).toBe("box");
-    if (grandstand?.shape !== "box") {
+    if (grandstand?.shape !== "box" || !grandstandPolygon) {
       throw new Error("Expected fitted grandstand box obstacle");
     }
-    expect(grandstand.halfZ).toBeLessThan(5.8 * WORLD_SCALE);
+    const visible = boxExtentsFromPolygon(grandstandPolygon);
+    expect(grandstand.halfX).toBeCloseTo(visible.halfX, 3);
+    expect(grandstand.halfZ).toBeCloseTo(visible.halfZ, 3);
     expect(grandstand.halfX).toBeGreaterThan(grandstand.halfZ * 3);
+
+    const northToilets = level.obstacles.find((obstacle) => obstacle.id === "north-toilets");
+    const northToiletsPolygon = level.landmarks.find((landmark) => landmark.id === "north-toilets")?.polygon;
+    expect(northToilets?.shape).toBe("polygon");
+    if (northToilets?.shape === "polygon") {
+      expect(northToilets.polygon).toEqual(northToiletsPolygon);
+    }
   });
 
   it("keeps collision intent aligned with real access", () => {
@@ -1325,16 +1359,23 @@ describe("map geometry", () => {
 
     level.interactables.forEach((fixture) => {
       const allowedIds = new Set([...(bypassByFixture.get(fixture.id) ?? []), ...(allowedById.get(fixture.id) ?? [])]);
+      if (fixture.kind === "building") {
+        // A roof fixture intentionally belongs to both its building shell and
+        // any larger sports-precinct landmark polygon containing that shell.
+        for (const zone of structuralZones) {
+          if (pointInPolygon(fixture.position, zone.polygon)) allowedIds.add(zone.id);
+        }
+      }
       assertClear(`interactable ${fixture.id}`, fixture.position, allowedIds);
       if (fixture.accessPosition) {
-        const accessAllowed = fixture.accessKind === "frame" ? allowedIds : new Set<string>();
+        const accessAllowed = fixture.accessKind === "frame" || fixture.kind === "building" ? allowedIds : new Set<string>();
         assertClear(`interactable ${fixture.id} access`, fixture.accessPosition, accessAllowed);
       }
       if (fixture.landingPosition) {
         assertClear(`interactable ${fixture.id} landing`, fixture.landingPosition, allowedIds);
       }
       if (fixture.exitPosition) {
-        const exitAllowed = fixture.accessKind === "frame" ? allowedIds : new Set<string>();
+        const exitAllowed = fixture.accessKind === "frame" || fixture.kind === "building" ? allowedIds : new Set<string>();
         assertClear(`interactable ${fixture.id} exit`, fixture.exitPosition, exitAllowed);
       }
     });

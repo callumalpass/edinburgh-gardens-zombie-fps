@@ -79,7 +79,7 @@ test("loads, walks and interacts with the Blender north public toilets", async (
   await page.waitForFunction((frame) => window.__EGAME__!.snapshot().frame > frame, approach.frame);
   await page.screenshot({ path: testInfo.outputPath("north-toilets-door-bank-walk-start.png") });
   const walked = await page.evaluate(async () => {
-    await window.__EGAME_TOOLS__!.runCommand("key", { code: "KeyW", durationMs: 2_800 });
+    await window.__EGAME_TOOLS__!.runCommand("key", { code: "KeyW", durationMs: 6_000 });
     return window.__EGAME__!.snapshot();
   });
   const progress =

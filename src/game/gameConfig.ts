@@ -1,8 +1,12 @@
 import * as THREE from "three";
 import type { WeaponId } from "./weapons";
 
-export const PLAYER_RADIUS = 2.2;
+// The survivor meshes are roughly human-scale. Keep the movement proxy close
+// to shoulder width so rendered walls and posts stop the player where they
+// visibly meet the body instead of several metres in front of the camera.
+export const PLAYER_RADIUS = 0.48;
 export const PLAYER_HEIGHT = 1.72;
+export const RAISED_SURFACE_EDGE_TOLERANCE = 0.08;
 export const BASE_CAMERA_FOV = 74;
 export const START_POSITION = new THREE.Vector3(35, 0, 42);
 export const START_YAW = -2.45;

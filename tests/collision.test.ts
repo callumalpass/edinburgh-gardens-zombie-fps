@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { resolveObstacle, shouldBypassObstacle } from "../src/game/collision";
 import { PLAYER_RADIUS } from "../src/game/gameConfig";
-import { distance, pointInPolygon, polygonCentroid } from "../src/game/geo";
+import { distance, geoToWorld, pointInPolygon, polygonCentroid } from "../src/game/geo";
 import { createLevelData } from "../src/game/levelData";
-import type { BoxObstacle } from "../src/game/types";
+import type { BoxObstacle, PolygonObstacle } from "../src/game/types";
 
 const level = createLevelData();
 
@@ -23,6 +23,47 @@ describe("collision system", () => {
 
     const resolved = resolveObstacle({ x: 0.5, z: 0.5 }, 1, obstacle);
     expect(Math.abs(resolved.x) === 3 || Math.abs(resolved.z) === 4).toBe(true);
+  });
+
+  it("shrinks doorway clearance by the player radius instead of widening it", () => {
+    const obstacle: BoxObstacle = {
+      id: "door-wall",
+      label: "Door wall",
+      sourceObjectId: "door-wall",
+      sourceObjectKind: "landmark",
+      shape: "box",
+      center: { x: 0, z: 0 },
+      halfX: 3,
+      halfZ: 0.3,
+      angle: 0,
+      accessGaps: [{ id: "door", localCenterX: 0, localCenterZ: 0, halfX: 1, halfZ: 0.5 }]
+    };
+
+    expect(resolveObstacle({ x: 0.4, z: 0 }, PLAYER_RADIUS, obstacle)).toEqual({ x: 0.4, z: 0 });
+    expect(distance(resolveObstacle({ x: 0.6, z: 0 }, PLAYER_RADIUS, obstacle), { x: 0.6, z: 0 })).toBeGreaterThan(0.1);
+  });
+
+  it("pushes out of concave building footprints through the nearest wall", () => {
+    const obstacle: PolygonObstacle = {
+      id: "concave-building",
+      label: "Concave building",
+      sourceObjectId: "concave-building",
+      sourceObjectKind: "mapped-building",
+      shape: "polygon",
+      center: { x: 1.36, z: 1.36 },
+      polygon: [
+        { x: 0, z: 0 },
+        { x: 4, z: 0 },
+        { x: 4, z: 1 },
+        { x: 1, z: 1 },
+        { x: 1, z: 4 },
+        { x: 0, z: 4 }
+      ]
+    };
+
+    const resolved = resolveObstacle({ x: 0.9, z: 2 }, PLAYER_RADIUS, obstacle);
+    expect(resolved.x).toBeCloseTo(1 + PLAYER_RADIUS, 5);
+    expect(resolved.z).toBeCloseTo(2, 5);
   });
 
   it("uses fixture metadata to bypass active obstacles", () => {
@@ -162,7 +203,8 @@ describe("collision system", () => {
       "emely-baker-exterior-service-cabinet",
       "alfred-pavilion-main-entrance",
       "alfred-pavilion-kiosk",
-      "rotunda-memorial-plaque"
+      "rotunda-memorial-plaque",
+      "sportsmans-memorial-east-inscription"
     ];
     const accessPoints = level.amenities.filter((amenity) => structureKinds.has(amenity.kind));
     const landmarks = new Set(level.landmarks.map((landmark) => landmark.id));
@@ -247,13 +289,13 @@ describe("collision system", () => {
     expect(piers.every((pier) => distance(resolveObstacle(pier.center, 0, pier), pier.center) > 0.1)).toBe(true);
     expect(piers.some((pier) => distance(resolveObstacle(gate.position, 0.58, pier), gate.position) > 0.01)).toBe(false);
     expect(
-      piers.every((pier) =>
+      piers.some((pier) =>
         shouldBypassObstacle(pier.id, gate.position, {
           activeFixtureId: null,
           interactables: level.interactables
         })
       )
-    ).toBe(true);
+    ).toBe(false);
     expect(
       piers.some((pier) =>
         shouldBypassObstacle(pier.id, pier.center, {
@@ -263,11 +305,18 @@ describe("collision system", () => {
       )
     ).toBe(false);
 
-    const inwardLength = distance(gate.position, access!.position);
-    const inward = {
-      x: (access!.position.x - gate.position.x) / inwardLength,
-      z: (access!.position.z - gate.position.z) / inwardLength
+    if (passage?.raisedFootprint?.shape !== "box") throw new Error("Missing Hannah gate corridor footprint");
+    let inward = {
+      x: -Math.sin(passage.raisedFootprint.angle),
+      z: Math.cos(passage.raisedFootprint.angle)
     };
+    const towardAccess = {
+      x: access!.position.x - gate.position.x,
+      z: access!.position.z - gate.position.z
+    };
+    if (inward.x * towardAccess.x + inward.z * towardAccess.z < 0) {
+      inward = { x: -inward.x, z: -inward.z };
+    }
     const blockedSamples = Array.from({ length: 23 }, (_, index) => {
       const progress = index * 0.5;
       const point = {
@@ -316,6 +365,50 @@ describe("collision system", () => {
       }
     }
     expect(blockedSamples).toEqual([]);
+  });
+
+  it("uses the aerial-fitted Sportsman's Memorial site and keeps its south processional bay walkable", () => {
+    const memorial = level.landmarks.find((candidate) => candidate.id === "sportsmans-war-memorial");
+    const bowlingClub = level.mappedBuildings.find((candidate) => candidate.id === "osm-building-543505639");
+    if (!memorial?.position || memorial.angle === undefined || !bowlingClub) {
+      throw new Error("Missing Sportsman's Memorial or bowling-club geometry");
+    }
+
+    const placesOfPridePin = geoToWorld({ lat: -37.7880136, lon: 144.9805024 });
+    expect(pointInPolygon(placesOfPridePin, bowlingClub.polygon)).toBe(true);
+    expect(pointInPolygon(memorial.position, bowlingClub.polygon)).toBe(false);
+    expect(memorial.source).toContain("pixel fit");
+    expect(memorial.source).toContain("pin visibly falls on the club roof");
+
+    const columns = level.obstacles.filter((obstacle) => obstacle.id.startsWith("sportsmans-memorial-column-"));
+    expect(columns).toHaveLength(6);
+    const passage = level.interactables.find((fixture) => fixture.id === "sportsmans-memorial-processional-bay");
+    expect(passage?.mode).toBe("auto");
+    expect(passage?.bypassObstacleIds).toEqual(["osm-building-543505639"]);
+    expect(
+      columns
+        .filter((column) => column.shape === "box")
+        .flatMap((column) => column.accessGaps ?? [])
+        .filter((gap) => gap.fixtureId === passage?.id)
+    ).toHaveLength(0);
+    const localPoint = (localX: number, localZ: number) => ({
+      x: memorial.position!.x + localX * Math.cos(memorial.angle!) - localZ * Math.sin(memorial.angle!),
+      z: memorial.position!.z + localX * Math.sin(memorial.angle!) + localZ * Math.cos(memorial.angle!)
+    });
+    const blockedSamples: string[] = [];
+    for (let step = 0; step <= 24; step += 1) {
+      const point = localPoint(1.25, 6 - (step / 24) * 6);
+      for (const obstacle of level.obstacles) {
+        if (shouldBypassObstacle(obstacle.id, point, { activeFixtureId: null, interactables: level.interactables })) continue;
+        if (distance(resolveObstacle(point, PLAYER_RADIUS, obstacle), point) > 0.01) {
+          blockedSamples.push(`${step}:${obstacle.id}`);
+        }
+      }
+    }
+    expect(blockedSamples).toEqual([]);
+    const inscription = level.amenities.find((amenity) => amenity.id === "sportsmans-memorial-east-inscription");
+    expect(inscription).toBeTruthy();
+    expect(level.obstacles.some((obstacle) => distance(resolveObstacle(inscription!.position, 0.05, obstacle), inscription!.position) > 0.01)).toBe(false);
   });
 
   it("pushes the player out of solid tree trunk obstacles", () => {

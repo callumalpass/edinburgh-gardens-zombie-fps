@@ -73,6 +73,7 @@ import {
   NORTH_TOILETS_ASSET_LENGTH,
   instantiateNorthToiletsAsset
 } from "./NorthToiletsAsset";
+import { instantiateSportsmansMemorialAsset } from "./SportsmansMemorialAsset";
 import {
   createTerrainOverlayDiscGeometry,
   createTerrainOverlayEllipseGeometry,
@@ -108,6 +109,43 @@ const GRASS_CLUSTER_LIMIT = 5600;
 const GRASS_PATH_CLEARANCE = 1.25;
 const FLOATING_WORLD_LABELS_ENABLED = false;
 const WORLD_TOON_RAMP = createAnimeToonRamp();
+const TREE_RENDER_CHUNK_SIZE = 72;
+
+export interface TreeVisualMassing {
+  height: number;
+  canopyWidth: number;
+  canopyHeight: number;
+}
+
+export function treeVisualMassing(tree: Pick<MappedTree, "id" | "source" | "canopyGroup">): TreeVisualMassing {
+  if (isYoungReplacementTreeRecord(tree)) {
+    return { height: 1, canopyWidth: 1, canopyHeight: 1 };
+  }
+  if (tree.canopyGroup === "specimen") {
+    return { height: 1.24, canopyWidth: 1.12, canopyHeight: 1.06 };
+  }
+  if (tree.canopyGroup === "avenue") {
+    return { height: 1.1, canopyWidth: 1.1, canopyHeight: 1.04 };
+  }
+  return { height: 1, canopyWidth: 1, canopyHeight: 1 };
+}
+
+export function resolveTreeTrunkHeight(tree: Pick<MappedTree, "id" | "source" | "canopyGroup" | "height">, proceduralHeight: number): number {
+  const massing = treeVisualMassing(tree);
+  if (isYoungReplacementTreeRecord(tree)) return proceduralHeight;
+  if (tree.canopyGroup === "specimen" && tree.height) {
+    // The crown sits above this point, so four-fifths of recorded total height
+    // is a useful trunk/crown-base target. Cap the correction to preserve park
+    // sightlines and avoid one dataset value dominating the combat space.
+    const measuredCrownBase = tree.height * 0.8;
+    return THREE.MathUtils.clamp(measuredCrownBase, proceduralHeight, proceduralHeight * massing.height);
+  }
+  return proceduralHeight * massing.height;
+}
+
+function isYoungReplacementTreeRecord(tree: Pick<MappedTree, "id" | "source">): boolean {
+  return tree.id.startsWith("yarra-replacement-tree-") || (tree.source?.includes("35 semi-mature shade trees") ?? false);
+}
 
 type StyledSurfaceMaterial = THREE.MeshStandardMaterial | THREE.MeshToonMaterial;
 
@@ -119,13 +157,32 @@ interface TreeMaterialSet {
   paleBark: THREE.Material;
 }
 
+interface TreeInstanceColors {
+  trunk: THREE.Color;
+  leaf: THREE.Color;
+  leafHighlight: THREE.Color;
+  leafShadow: THREE.Color;
+  paleBark: THREE.Color;
+}
+
 interface TreeInstanceBucket {
   geometry: THREE.BufferGeometry;
   material: THREE.Material;
   matrices: THREE.Matrix4[];
+  colors: THREE.Color[];
   castShadow: boolean;
   receiveShadow: boolean;
   kind: string;
+  chunkKey: string;
+  lod: "full" | "far";
+}
+
+interface TreeRenderChunk {
+  center: THREE.Vector2;
+  fullMeshes: THREE.InstancedMesh[];
+  farMeshes: THREE.InstancedMesh[];
+  fullVisible: boolean;
+  farVisible: boolean;
 }
 
 interface ParkEntrance {
@@ -185,6 +242,11 @@ export class WorldBuilder {
   private readonly treeCanopyGeometry = new THREE.IcosahedronGeometry(1, 2);
   private readonly treeCanopyCoreGeometry = new THREE.IcosahedronGeometry(1, 1);
   private readonly treePaleBarkGeometry = new THREE.CylinderGeometry(0.74, 0.88, 1, 8);
+  private readonly treeLodTrunkGeometry = new THREE.CylinderGeometry(0.72, 1, 1, 5);
+  private readonly treeLodCanopyGeometry = new THREE.IcosahedronGeometry(1, 0);
+  private readonly treeInstanceMaterials = createInstancedTreeMaterials();
+  private readonly treeLodMaterials = createInstancedTreeLodMaterials();
+  private readonly treeRenderChunks = new Map<string, TreeRenderChunk>();
   private readonly lightPoolGeometry = new THREE.CircleGeometry(1, 26);
   private grassClumpMesh: THREE.InstancedMesh | null = null;
   private ambientLight: THREE.HemisphereLight | null = null;
@@ -708,6 +770,27 @@ export class WorldBuilder {
       const settings = RENDER_QUALITY_SETTINGS[level];
       this.grassClumpMesh.count = Math.max(1, Math.round(this.renderedGrassClumpCount * settings.grassFraction));
     }
+  }
+
+  updateTreeLod(position: Vec2): boolean {
+    const settings = RENDER_QUALITY_SETTINGS[this.shadowQuality];
+    const chunkPadding = TREE_RENDER_CHUNK_SIZE * Math.SQRT1_2;
+    let shadowStateChanged = false;
+    for (const chunk of this.treeRenderChunks.values()) {
+      const distanceToChunk = Math.hypot(position.x - chunk.center.x, position.z - chunk.center.y);
+      const fullVisible = distanceToChunk <= settings.treeFullDetailDistance + chunkPadding;
+      const farVisible = !fullVisible && distanceToChunk <= settings.treeRenderDistance + chunkPadding;
+      if (chunk.fullVisible !== fullVisible) {
+        chunk.fullVisible = fullVisible;
+        for (const mesh of chunk.fullMeshes) mesh.visible = fullVisible;
+        shadowStateChanged = true;
+      }
+      if (chunk.farVisible !== farVisible) {
+        chunk.farVisible = farVisible;
+        for (const mesh of chunk.farMeshes) mesh.visible = farVisible;
+      }
+    }
+    return shadowStateChanged;
   }
 
   private configureShadowCamera(level: RenderQualityLevel): void {
@@ -2846,7 +2929,7 @@ export class WorldBuilder {
   }
 
   private isUnderCanopy(point: Vec2): boolean {
-    return this.level.trees.some((tree) => distance(point, tree.position) < tree.canopyRadius * 0.72);
+    return this.level.trees.some((tree) => distance(point, tree.position) < tree.canopyRadius * treeVisualMassing(tree).canopyWidth * 0.72);
   }
 
   private pointInRotatedRect(point: Vec2, center: Vec2, angle: number, halfX: number, halfZ: number): boolean {
@@ -4348,6 +4431,8 @@ export class WorldBuilder {
       this.painterlyGeometry(new THREE.BoxGeometry(width, 0.22, depth), this.materials.timber),
       this.materials.timber
     );
+    deck.userData.kind = "playground-tower-deck";
+    deck.userData.playgroundKey = key;
     deck.position.y = platformY;
     deck.castShadow = true;
     group.add(deck);
@@ -6474,6 +6559,37 @@ export class WorldBuilder {
     this.pendingAssetLoads.push(load);
   }
 
+  private replaceSportsmansMemorialFallbackWithAsset(landmark: Landmark, fallbackObjects: THREE.Object3D[]): void {
+    if (typeof window === "undefined" || !landmark.position) return;
+    const position = landmark.position;
+    const rotation = -(landmark.angle ?? -0.106);
+    const load = instantiateSportsmansMemorialAsset()
+      .then((asset) => {
+        asset.position.set(
+          position.x,
+          this.boxSupportY(position, rotation, 3.35, 1.67) - 0.035,
+          position.z
+        );
+        asset.rotation.y = rotation;
+        asset.userData.sourceId = landmark.id;
+        asset.userData.memorialInteractionId = "sportsmans-memorial-east-inscription";
+        asset.userData.navigationObstacleIds = [
+          "sportsmans-memorial-column-west-south",
+          "sportsmans-memorial-column-west-north",
+          "sportsmans-memorial-column-centre-south",
+          "sportsmans-memorial-column-centre-north",
+          "sportsmans-memorial-column-east-south",
+          "sportsmans-memorial-column-east-north"
+        ];
+        for (const fallback of fallbackObjects) fallback.visible = false;
+        this.scene.add(asset);
+      })
+      .catch((error: unknown) => {
+        console.warn("Sportsman's War Memorial GLB asset failed to load; retaining procedural fallback", error);
+      });
+    this.pendingAssetLoads.push(load);
+  }
+
   private replaceGrandstandFallbackWithAsset(landmark: Landmark, fallbackObjects: THREE.Object3D[]): void {
     if (typeof window === "undefined" || !landmark.polygon) return;
     const footprint = this.fitBoxFromPolygon(landmark.polygon, 0, 0);
@@ -6508,7 +6624,12 @@ export class WorldBuilder {
       return;
     }
     if (landmark.id === "sportsmans-war-memorial") {
-      this.addSportsmansMemorial(position);
+      const fallbackStart = new Set(this.scene.children);
+      this.addSportsmansMemorial(position, landmark.angle ?? -0.106);
+      this.replaceSportsmansMemorialFallbackWithAsset(
+        landmark,
+        this.scene.children.filter((child) => !fallbackStart.has(child))
+      );
       return;
     }
     this.addCookMemorialSite(position);
@@ -6580,8 +6701,8 @@ export class WorldBuilder {
     this.addLabel("Queen Victoria plinth", position, 5.2);
   }
 
-  private addSportsmansMemorial(position: Vec2): void {
-    const rotation = -0.18;
+  private addSportsmansMemorial(position: Vec2, angle: number): void {
+    const rotation = -angle;
     const groundY = this.boxSupportY(position, rotation, 3.2, 1.55);
     const stone = new THREE.MeshStandardMaterial({ color: 0xd0c2a2, roughness: 0.68 });
     const bronze = new THREE.MeshStandardMaterial({ color: 0x8a5d2d, metalness: 0.35, roughness: 0.5 });
@@ -6634,17 +6755,10 @@ export class WorldBuilder {
     inscription.userData.kind = "sportsmans-east-inscription";
     group.add(inscription);
 
-    const pedimentGeometry = new THREE.BufferGeometry();
-    pedimentGeometry.setAttribute(
-      "position",
-      new THREE.Float32BufferAttribute([0, 0, -1.08, 0, 0, 1.08, 0, 0.68, 0], 3)
-    );
-    pedimentGeometry.setIndex([0, 1, 2]);
-    pedimentGeometry.computeVertexNormals();
-    const pedimentMaterial = stone.clone();
-    pedimentMaterial.side = THREE.DoubleSide;
-    const pediment = new THREE.Mesh(pedimentGeometry, pedimentMaterial);
-    pediment.position.set(2.83, 3.83, 0);
+    // Current and 1932 photographs show a raised rectangular swag panel, not
+    // the triangular proxy used by the first memorial pass.
+    const pediment = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.68, 2.16), stone);
+    pediment.position.set(2.83, 4.17, 0);
     pediment.castShadow = true;
     pediment.userData.kind = "sportsmans-east-pediment";
     group.add(pediment);
@@ -6968,33 +7082,43 @@ export class WorldBuilder {
       if (!pointInPolygon(tree.position, this.level.boundary)) {
         return;
       }
-      this.addBatchedTree(tree, index, buckets);
+      this.addBatchedTree(tree, index, this.treeChunkKey(tree.position), buckets);
       this.renderedTreeCount += 1;
     });
 
     for (const bucket of buckets.values()) {
       if (bucket.matrices.length === 0) continue;
       const mesh = new THREE.InstancedMesh(bucket.geometry, bucket.material, bucket.matrices.length);
-      bucket.matrices.forEach((matrix, index) => mesh.setMatrixAt(index, matrix));
+      bucket.matrices.forEach((matrix, index) => {
+        mesh.setMatrixAt(index, matrix);
+        mesh.setColorAt(index, bucket.colors[index]);
+      });
       mesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
       mesh.instanceMatrix.needsUpdate = true;
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
       mesh.castShadow = bucket.castShadow;
       mesh.receiveShadow = bucket.receiveShadow;
       mesh.userData.kind = bucket.kind;
       mesh.userData.count = bucket.matrices.length;
+      mesh.userData.treeChunk = bucket.chunkKey;
+      mesh.userData.treeLod = bucket.lod;
+      mesh.visible = bucket.lod === "full";
       mesh.computeBoundingSphere();
       this.scene.add(mesh);
+      const chunk = this.ensureTreeRenderChunk(bucket.chunkKey);
+      (bucket.lod === "full" ? chunk.fullMeshes : chunk.farMeshes).push(mesh);
     }
   }
 
-  private addBatchedTree(tree: MappedTree, index: number, buckets: Map<string, TreeInstanceBucket>): void {
+  private addBatchedTree(tree: MappedTree, index: number, chunkKey: string, buckets: Map<string, TreeInstanceBucket>): void {
     const profile = tree.profile;
     const isAvenueTree = tree.canopyGroup === "avenue" || (tree.source?.includes("avenue") ?? false);
     const isReplacementTree = this.isYoungReplacementTree(tree);
     const winterRetention = this.winterCanopyRetention(profile);
+    const massing = treeVisualMassing(tree);
     const heritageScale = tree.height ? THREE.MathUtils.clamp(tree.height / 20, 0.72, 1.45) : isAvenueTree ? 1.08 : 1;
     const scale = this.rng.range(0.9, 1.35) * heritageScale * TREE_SCALE_MULTIPLIER * (isReplacementTree ? 0.68 : 1);
-    const trunkHeight =
+    const proceduralTrunkHeight =
       profile === "gum"
         ? this.rng.range(6.8, 9.8) * scale
         : profile === "oak"
@@ -7004,8 +7128,10 @@ export class WorldBuilder {
             : profile === "kurrajong"
               ? this.rng.range(4.4, 6.2) * scale
               : this.rng.range(5.2, 8.4) * scale;
+    const trunkHeight = resolveTreeTrunkHeight(tree, proceduralTrunkHeight);
     const trunkRadius = this.rng.range(0.3, 0.54) * scale * (tree.dbh ? THREE.MathUtils.clamp(tree.dbh / 95, 0.8, 1.45) : isAvenueTree ? 1.08 : 1);
-    const materials = this.getTreeMaterials(profile, index);
+    const materials = this.treeInstanceMaterials;
+    const colors = this.treeInstanceColors(profile, index);
     const parentQuaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, this.rng.range(0, Math.PI * 2), 0));
     const parentMatrix = new THREE.Matrix4().compose(
       new THREE.Vector3(tree.position.x, this.groundY(tree.position), tree.position.z),
@@ -7013,17 +7139,20 @@ export class WorldBuilder {
       new THREE.Vector3(1, 1, 1)
     );
 
+    const trunkMatrix = this.treeWorldMatrix(
+      parentMatrix,
+      new THREE.Vector3(0, trunkHeight * 0.5, 0),
+      new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, this.rng.range(-0.05, 0.05))),
+      new THREE.Vector3(trunkRadius, trunkHeight, trunkRadius)
+    );
     this.addTreeInstance(
       buckets,
+      chunkKey,
       "tree-trunks",
       this.treeTrunkGeometry,
       materials.trunk,
-      this.treeWorldMatrix(
-        parentMatrix,
-        new THREE.Vector3(0, trunkHeight * 0.5, 0),
-        new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, this.rng.range(-0.05, 0.05))),
-        new THREE.Vector3(trunkRadius, trunkHeight, trunkRadius)
-      ),
+      trunkMatrix,
+      colors.trunk,
       true,
       true
     );
@@ -7031,7 +7160,7 @@ export class WorldBuilder {
     const branchCount = profile === "gum" || profile === "kurrajong" ? 3 : 4;
     for (let branchIndex = 0; branchIndex < branchCount; branchIndex += 1) {
       const angle = (branchIndex / branchCount) * Math.PI * 2 + this.rng.range(-0.28, 0.28);
-      const reach = this.rng.range(profile === "gum" ? 1 : 1.3, profile === "oak" || profile === "jacaranda" ? 2.9 : 2.35) * scale;
+      const reach = this.rng.range(profile === "gum" ? 1 : 1.3, profile === "oak" || profile === "jacaranda" ? 2.9 : 2.35) * scale * massing.canopyWidth;
       const start = new THREE.Vector3(0, trunkHeight * this.rng.range(0.58, 0.76), 0);
       const end = new THREE.Vector3(
         Math.cos(angle) * reach,
@@ -7040,10 +7169,12 @@ export class WorldBuilder {
       );
       this.addTreeInstance(
         buckets,
+        chunkKey,
         "tree-branches",
         this.treeBranchGeometry,
         materials.trunk,
         this.treeBranchWorldMatrix(parentMatrix, start, end, trunkRadius * this.rng.range(0.28, 0.4)),
+        colors.trunk,
         false,
         true
       );
@@ -7052,30 +7183,33 @@ export class WorldBuilder {
     const twigCount = Math.min(1, this.winterTwigCount(tree, index));
     for (let twigIndex = 0; twigIndex < twigCount; twigIndex += 1) {
       const angle = this.rng.range(0, Math.PI * 2);
-      const reach = tree.canopyRadius * this.rng.range(0.44, 0.66);
+      const reach = tree.canopyRadius * massing.canopyWidth * this.rng.range(0.44, 0.66);
       const start = new THREE.Vector3(Math.cos(angle) * reach * 0.22, trunkHeight * 0.78, Math.sin(angle) * reach * 0.22);
       const end = new THREE.Vector3(Math.cos(angle) * reach, trunkHeight + scale * 1.35, Math.sin(angle) * reach);
       this.addTreeInstance(
         buckets,
+        chunkKey,
         "tree-winter-twigs",
         this.treeBranchGeometry,
         materials.trunk,
         this.treeBranchWorldMatrix(parentMatrix, start, end, trunkRadius * 0.1),
+        colors.trunk,
         false,
         true
       );
     }
 
-    this.addBatchedCanopyCore(tree, profile, trunkHeight, scale, winterRetention, materials, parentMatrix, buckets);
+    this.addBatchedCanopyCore(tree, profile, trunkHeight, scale, winterRetention, materials, colors, parentMatrix, chunkKey, buckets);
     const baseLobeCount = profile === "gum" || profile === "kurrajong" ? 3 : 4;
     const lobeCount = Math.max(2, Math.min(4, Math.round(baseLobeCount * (0.72 + tree.canopyDensity * winterRetention * 0.46))));
     for (let lobeIndex = 0; lobeIndex < lobeCount; lobeIndex += 1) {
       const angle = (lobeIndex / lobeCount) * Math.PI * 2 + this.rng.range(-0.32, 0.32);
       const canopyRadius =
         tree.canopyRadius *
+        massing.canopyWidth *
         this.rng.range(profile === "gum" ? 0.24 : profile === "jacaranda" ? 0.22 : 0.27, profile === "oak" ? 0.44 : profile === "kurrajong" ? 0.36 : 0.39) *
         (profile === "gum" || profile === "kurrajong" ? 1 : 0.84 + winterRetention * 0.22);
-      const spread = tree.canopyRadius * (profile === "gum" ? 0.28 : profile === "oak" || profile === "jacaranda" ? 0.48 : profile === "kurrajong" ? 0.36 : 0.42);
+      const spread = tree.canopyRadius * massing.canopyWidth * (profile === "gum" ? 0.28 : profile === "oak" || profile === "jacaranda" ? 0.48 : profile === "kurrajong" ? 0.36 : 0.42);
       const position = new THREE.Vector3(
         Math.cos(angle) * this.rng.range(spread * 0.42, spread),
         trunkHeight + this.rng.range(profile === "gum" ? -0.42 : 0.02, profile === "oak" ? 0.9 : 1.35) * scale,
@@ -7086,15 +7220,17 @@ export class WorldBuilder {
       );
       const lobeScale = new THREE.Vector3(
         canopyRadius * this.rng.range(1, profile === "oak" || profile === "jacaranda" ? 1.68 : 1.48),
-        canopyRadius * this.rng.range(profile === "gum" || profile === "kurrajong" ? 1.02 : 0.68, profile === "oak" ? 0.9 : 1.04),
+        canopyRadius * this.rng.range(profile === "gum" || profile === "kurrajong" ? 1.02 : 0.68, profile === "oak" ? 0.9 : 1.04) * (massing.canopyHeight / massing.canopyWidth),
         canopyRadius * this.rng.range(1, profile === "oak" || profile === "jacaranda" ? 1.68 : 1.48)
       );
       this.addTreeInstance(
         buckets,
+        chunkKey,
         lobeIndex === 0 ? "tree-highlight-masses" : "tree-canopy-masses",
         this.treeCanopyGeometry,
         lobeIndex === 0 ? materials.leafHighlight : materials.leaf,
         this.treeWorldMatrix(parentMatrix, position, rotation, lobeScale),
+        lobeIndex === 0 ? colors.leafHighlight : colors.leaf,
         false,
         true
       );
@@ -7103,6 +7239,7 @@ export class WorldBuilder {
     if (profile === "gum") {
       this.addTreeInstance(
         buckets,
+        chunkKey,
         "tree-pale-bark",
         this.treePaleBarkGeometry,
         materials.paleBark,
@@ -7112,10 +7249,46 @@ export class WorldBuilder {
           new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, this.rng.range(-0.05, 0.05))),
           new THREE.Vector3(trunkRadius, trunkHeight * 0.38, trunkRadius)
         ),
+        colors.paleBark,
         false,
         true
       );
     }
+
+    this.addTreeInstance(
+      buckets,
+      chunkKey,
+      "tree-lod-trunks",
+      this.treeLodTrunkGeometry,
+      this.treeLodMaterials.trunk,
+      trunkMatrix,
+      colors.trunk,
+      false,
+      false,
+      "far"
+    );
+    const lodCanopyScale = tree.canopyRadius * (isReplacementTree ? 0.68 : 1);
+    this.addTreeInstance(
+      buckets,
+      chunkKey,
+      "tree-lod-canopies",
+      this.treeLodCanopyGeometry,
+      this.treeLodMaterials.leaf,
+      this.treeWorldMatrix(
+        parentMatrix,
+        new THREE.Vector3(0, trunkHeight + scale * 0.45, 0),
+        new THREE.Quaternion().setFromEuler(new THREE.Euler(0, this.rng.range(0, Math.PI), 0)),
+        new THREE.Vector3(
+          lodCanopyScale * massing.canopyWidth * 0.72,
+          lodCanopyScale * massing.canopyHeight * 0.48,
+          lodCanopyScale * massing.canopyWidth * 0.72
+        )
+      ),
+      colors.leaf,
+      false,
+      false,
+      "far"
+    );
 
     if (isReplacementTree) {
       const detailGroup = new THREE.Group();
@@ -7134,10 +7307,13 @@ export class WorldBuilder {
     scale: number,
     winterRetention: number,
     materials: TreeMaterialSet,
+    colors: TreeInstanceColors,
     parentMatrix: THREE.Matrix4,
+    chunkKey: string,
     buckets: Map<string, TreeInstanceBucket>
   ): void {
     const replacementScale = this.isYoungReplacementTree(tree) ? 0.68 : 1;
+    const massing = treeVisualMassing(tree);
     const retentionScale = THREE.MathUtils.lerp(0.5, 1, winterRetention);
     const avenueScale = tree.canopyGroup === "avenue" ? 0.86 : tree.canopyGroup === "specimen" ? 1.06 : 1;
     const width = profile === "gum" ? 0.62 : profile === "oak" ? 0.98 : profile === "jacaranda" ? 0.84 : profile === "kurrajong" ? 0.72 : 0.86;
@@ -7145,6 +7321,7 @@ export class WorldBuilder {
     const depth = profile === "gum" || profile === "kurrajong" ? width * 0.82 : width * 1.14;
     this.addTreeInstance(
       buckets,
+      chunkKey,
       "tree-canopy-cores",
       this.treeCanopyCoreGeometry,
       materials.leafShadow,
@@ -7153,11 +7330,12 @@ export class WorldBuilder {
         new THREE.Vector3(0, trunkHeight + (profile === "gum" ? 0.18 : profile === "oak" ? 0.56 : 0.42) * scale, 0),
         new THREE.Quaternion().setFromEuler(new THREE.Euler(this.rng.range(-0.08, 0.08), this.rng.range(0, Math.PI), this.rng.range(-0.08, 0.08))),
         new THREE.Vector3(
-          tree.canopyRadius * width * retentionScale * avenueScale * replacementScale,
-          tree.canopyRadius * height * retentionScale * replacementScale,
-          tree.canopyRadius * depth * retentionScale * avenueScale * replacementScale
+          tree.canopyRadius * width * massing.canopyWidth * retentionScale * avenueScale * replacementScale,
+          tree.canopyRadius * height * massing.canopyHeight * retentionScale * replacementScale,
+          tree.canopyRadius * depth * massing.canopyWidth * retentionScale * avenueScale * replacementScale
         )
       ),
+      colors.leafShadow,
       true,
       false
     );
@@ -7165,20 +7343,64 @@ export class WorldBuilder {
 
   private addTreeInstance(
     buckets: Map<string, TreeInstanceBucket>,
+    chunkKey: string,
     kind: string,
     geometry: THREE.BufferGeometry,
     material: THREE.Material,
     matrix: THREE.Matrix4,
+    color: THREE.Color,
     castShadow: boolean,
-    receiveShadow: boolean
+    receiveShadow: boolean,
+    lod: "full" | "far" = "full"
   ): void {
-    const key = `${kind}:${geometry.uuid}:${material.uuid}`;
+    const key = `${chunkKey}:${lod}:${kind}:${geometry.uuid}:${material.uuid}`;
     let bucket = buckets.get(key);
     if (!bucket) {
-      bucket = { geometry, material, matrices: [], castShadow, receiveShadow, kind };
+      bucket = { geometry, material, matrices: [], colors: [], castShadow, receiveShadow, kind, chunkKey, lod };
       buckets.set(key, bucket);
     }
     bucket.matrices.push(matrix);
+    bucket.colors.push(color);
+  }
+
+  private treeChunkKey(point: Vec2): string {
+    return `${Math.floor(point.x / TREE_RENDER_CHUNK_SIZE)},${Math.floor(point.z / TREE_RENDER_CHUNK_SIZE)}`;
+  }
+
+  private ensureTreeRenderChunk(key: string): TreeRenderChunk {
+    const existing = this.treeRenderChunks.get(key);
+    if (existing) return existing;
+    const [cellX, cellZ] = key.split(",").map(Number);
+    const chunk: TreeRenderChunk = {
+      center: new THREE.Vector2(
+        (cellX + 0.5) * TREE_RENDER_CHUNK_SIZE,
+        (cellZ + 0.5) * TREE_RENDER_CHUNK_SIZE
+      ),
+      fullMeshes: [],
+      farMeshes: [],
+      fullVisible: true,
+      farVisible: false
+    };
+    this.treeRenderChunks.set(key, chunk);
+    return chunk;
+  }
+
+  private treeInstanceColors(profile: TreeProfile, index: number): TreeInstanceColors {
+    const trunk = profile === "gum" ? 0x8b806b : profile === "oak" ? 0x56402e : profile === "jacaranda" ? 0x6f6454 : profile === "kurrajong" ? 0x6d664d : 0x684d34;
+    const leaf = profile === "gum" ? 0x748782 : profile === "oak" ? 0x5a5534 : profile === "elm" ? 0x62613b : profile === "jacaranda" ? 0x5b5b68 : profile === "kurrajong" ? 0x66775b : 0x597044;
+    const leafHighlight = profile === "gum" ? 0x9aaca3 : profile === "oak" ? 0x9a8547 : profile === "elm" ? 0x9b8d53 : profile === "jacaranda" ? 0x9483a8 : profile === "kurrajong" ? 0x9aa27b : 0x81925b;
+    const leafShadow = profile === "gum" ? 0x385653 : profile === "oak" ? 0x34321f : profile === "elm" ? 0x363923 : profile === "jacaranda" ? 0x343443 : profile === "kurrajong" ? 0x3b4c37 : 0x2f462e;
+    const variant = index % 4;
+    const hueOffset = (variant - 1.5) * 0.007;
+    const saturationOffset = ((variant % 3) - 1) * 0.02;
+    const lightOffset = ((variant % 5) - 2) * 0.018;
+    return {
+      trunk: new THREE.Color(trunk).offsetHSL(hueOffset, saturationOffset, lightOffset),
+      leaf: new THREE.Color(leaf).offsetHSL(hueOffset * 1.4, saturationOffset, lightOffset),
+      leafHighlight: new THREE.Color(leafHighlight).offsetHSL(hueOffset, saturationOffset * 0.5, lightOffset * 0.7),
+      leafShadow: new THREE.Color(leafShadow).offsetHSL(hueOffset * 0.8, saturationOffset * 0.45, lightOffset * 0.35),
+      paleBark: new THREE.Color(0xcdbf9f)
+    };
   }
 
   private treeWorldMatrix(
@@ -7221,7 +7443,7 @@ export class WorldBuilder {
     for (let index = 0; index < trees.length; index += 1) {
       const tree = trees[index];
       const angle = this.angleFromId(tree.id);
-      const canopyRadius = tree.canopyRadius * (tree.profile === "gum" ? 0.72 : tree.profile === "oak" ? 0.95 : 0.84);
+      const canopyRadius = tree.canopyRadius * treeVisualMassing(tree).canopyWidth * (tree.profile === "gum" ? 0.72 : tree.profile === "oak" ? 0.95 : 0.84);
       const y = this.groundY(tree.position);
       const litterScale = this.winterLeafLitterScale(tree);
       const wearScale = tree.profile === "gum" ? 0.92 : tree.profile === "oak" ? 1.08 : tree.profile === "elm" ? 1.04 : 1;
@@ -7250,9 +7472,10 @@ export class WorldBuilder {
     const isAvenueTree = tree.canopyGroup === "avenue" || (tree.source?.includes("avenue") ?? false);
     const isReplacementTree = this.isYoungReplacementTree(tree);
     const winterRetention = this.winterCanopyRetention(profile);
+    const massing = treeVisualMassing(tree);
     const heritageScale = tree.height ? THREE.MathUtils.clamp(tree.height / 20, 0.72, 1.45) : isAvenueTree ? 1.08 : 1;
     const scale = this.rng.range(0.9, 1.35) * heritageScale * TREE_SCALE_MULTIPLIER * (isReplacementTree ? 0.68 : 1);
-    const trunkHeight =
+    const proceduralTrunkHeight =
       profile === "gum"
         ? this.rng.range(6.8, 9.8) * scale
         : profile === "oak"
@@ -7260,8 +7483,9 @@ export class WorldBuilder {
           : profile === "jacaranda"
             ? this.rng.range(4.1, 5.8) * scale
             : profile === "kurrajong"
-              ? this.rng.range(4.4, 6.2) * scale
+            ? this.rng.range(4.4, 6.2) * scale
           : this.rng.range(5.2, 8.4) * scale;
+    const trunkHeight = resolveTreeTrunkHeight(tree, proceduralTrunkHeight);
     const trunkRadius = this.rng.range(0.3, 0.54) * scale * (tree.dbh ? THREE.MathUtils.clamp(tree.dbh / 95, 0.8, 1.45) : isAvenueTree ? 1.08 : 1);
     const materials = this.getTreeMaterials(profile, index);
 
@@ -7290,9 +7514,9 @@ export class WorldBuilder {
       const angle = (branchIndex / branchCount) * Math.PI * 2 + this.rng.range(-0.25, 0.25);
       const start = new THREE.Vector3(0, trunkHeight * this.rng.range(0.55, 0.78), 0);
       const end = new THREE.Vector3(
-        Math.cos(angle) * this.rng.range(profile === "gum" ? 1.0 : 1.35, profile === "oak" || profile === "jacaranda" ? 3.2 : profile === "kurrajong" ? 2.2 : 2.6) * scale,
+        Math.cos(angle) * this.rng.range(profile === "gum" ? 1.0 : 1.35, profile === "oak" || profile === "jacaranda" ? 3.2 : profile === "kurrajong" ? 2.2 : 2.6) * scale * massing.canopyWidth,
         trunkHeight * this.rng.range(profile === "gum" ? 0.72 : profile === "kurrajong" ? 0.76 : 0.68, 0.96),
-        Math.sin(angle) * this.rng.range(profile === "gum" ? 1.0 : 1.35, profile === "oak" || profile === "jacaranda" ? 3.2 : profile === "kurrajong" ? 2.2 : 2.6) * scale
+        Math.sin(angle) * this.rng.range(profile === "gum" ? 1.0 : 1.35, profile === "oak" || profile === "jacaranda" ? 3.2 : profile === "kurrajong" ? 2.2 : 2.6) * scale * massing.canopyWidth
       );
       group.add(this.createBranch(start, end, trunkRadius * this.rng.range(0.28, 0.42), materials.trunk));
     }
@@ -7300,7 +7524,7 @@ export class WorldBuilder {
     const twigCount = this.winterTwigCount(tree, index);
     for (let twigIndex = 0; twigIndex < twigCount; twigIndex += 1) {
       const angle = (twigIndex / Math.max(1, twigCount)) * Math.PI * 2 + this.rng.range(-0.26, 0.26);
-      const reach = tree.canopyRadius * this.rng.range(profile === "oak" ? 0.42 : 0.32, profile === "oak" ? 0.72 : 0.58);
+      const reach = tree.canopyRadius * massing.canopyWidth * this.rng.range(profile === "oak" ? 0.42 : 0.32, profile === "oak" ? 0.72 : 0.58);
       const start = new THREE.Vector3(
         Math.cos(angle) * reach * 0.28,
         trunkHeight * this.rng.range(0.7, 0.92),
@@ -7328,10 +7552,12 @@ export class WorldBuilder {
       const angle = (lobeIndex / lobeCount) * Math.PI * 2 + this.rng.range(-0.3, 0.3);
       const canopyRadius =
         tree.canopyRadius *
+        massing.canopyWidth *
         this.rng.range(profile === "gum" ? 0.22 : profile === "jacaranda" ? 0.2 : 0.25, profile === "oak" ? 0.42 : profile === "kurrajong" ? 0.34 : 0.36) *
         (profile === "gum" || profile === "kurrajong" ? 1 : 0.82 + winterRetention * 0.24);
       const spread =
         tree.canopyRadius *
+        massing.canopyWidth *
         (profile === "gum" ? 0.28 : profile === "oak" || profile === "jacaranda" ? 0.5 : profile === "kurrajong" ? 0.38 : tree.canopyGroup === "avenue" ? 0.42 : 0.46);
       const canopyMaterial = lobeIndex % (profile === "gum" ? 3 : 4) === 0 ? materials.leafHighlight : materials.leaf;
       const canopy = new THREE.Mesh(this.treeCanopyGeometry, canopyMaterial);
@@ -7342,7 +7568,7 @@ export class WorldBuilder {
       );
       canopy.scale.set(
         canopyRadius * this.rng.range(profile === "gum" ? 0.85 : profile === "kurrajong" ? 0.95 : 1.05, profile === "oak" || profile === "jacaranda" ? 1.75 : 1.55),
-        canopyRadius * this.rng.range(profile === "gum" || profile === "kurrajong" ? 1.05 : 0.68, profile === "oak" ? 0.9 : profile === "jacaranda" ? 0.82 : 1.08),
+        canopyRadius * this.rng.range(profile === "gum" || profile === "kurrajong" ? 1.05 : 0.68, profile === "oak" ? 0.9 : profile === "jacaranda" ? 0.82 : 1.08) * (massing.canopyHeight / massing.canopyWidth),
         canopyRadius * this.rng.range(profile === "gum" ? 0.85 : profile === "kurrajong" ? 0.95 : 1.05, profile === "oak" || profile === "jacaranda" ? 1.75 : 1.55)
       );
       canopy.rotation.set(this.rng.range(-0.2, 0.2), this.rng.range(0, Math.PI), this.rng.range(-0.2, 0.2));
@@ -7382,6 +7608,7 @@ export class WorldBuilder {
     materials: TreeMaterialSet
   ): void {
     const replacementScale = this.isYoungReplacementTree(tree) ? 0.68 : 1;
+    const massing = treeVisualMassing(tree);
     const retentionScale = THREE.MathUtils.lerp(0.5, 1, winterRetention);
     const avenueScale = tree.canopyGroup === "avenue" ? 0.86 : tree.canopyGroup === "specimen" ? 1.06 : 1;
     const width =
@@ -7408,9 +7635,9 @@ export class WorldBuilder {
     const core = new THREE.Mesh(this.treeCanopyCoreGeometry, materials.leafShadow);
     core.position.y = trunkHeight + (profile === "gum" ? 0.18 : profile === "oak" ? 0.56 : 0.42) * scale;
     core.scale.set(
-      tree.canopyRadius * width * retentionScale * avenueScale * replacementScale,
-      tree.canopyRadius * height * retentionScale * replacementScale,
-      tree.canopyRadius * depth * retentionScale * avenueScale * replacementScale
+      tree.canopyRadius * width * massing.canopyWidth * retentionScale * avenueScale * replacementScale,
+      tree.canopyRadius * height * massing.canopyHeight * retentionScale * replacementScale,
+      tree.canopyRadius * depth * massing.canopyWidth * retentionScale * avenueScale * replacementScale
     );
     core.rotation.set(this.rng.range(-0.08, 0.08), this.rng.range(0, Math.PI), this.rng.range(-0.08, 0.08));
     core.castShadow = true;
@@ -7420,7 +7647,7 @@ export class WorldBuilder {
   }
 
   private isYoungReplacementTree(tree: MappedTree): boolean {
-    return tree.id.startsWith("yarra-replacement-tree-") || (tree.source?.includes("35 semi-mature shade trees") ?? false);
+    return isYoungReplacementTreeRecord(tree);
   }
 
   private addYoungReplacementTreeDetails(group: THREE.Group, trunkRadius: number, trunkHeight: number): void {
@@ -7494,80 +7721,38 @@ export class WorldBuilder {
     return 0.82;
   }
 
-  private getTreeMaterials(profile: TreeProfile, index: number): TreeMaterialSet {
-    const variant = index % 4;
-    const key = `${profile}-${variant}`;
+  private getTreeMaterials(profile: TreeProfile, _index: number): TreeMaterialSet {
+    const key = profile;
     const cached = this.treeMaterialCache.get(key);
     if (cached) return cached;
-
-    const baseTrunkColor =
-      profile === "gum" ? 0x8b806b : profile === "oak" ? 0x56402e : profile === "jacaranda" ? 0x6f6454 : profile === "kurrajong" ? 0x6d664d : 0x684d34;
-    const baseLeafColor =
-      profile === "gum"
-        ? 0x748782
-        : profile === "oak"
-          ? 0x5a5534
-          : profile === "elm"
-            ? 0x62613b
-            : profile === "jacaranda"
-              ? 0x5b5b68
-              : profile === "kurrajong"
-                ? 0x66775b
-                : 0x597044;
-    const highlightLeafColor =
-      profile === "gum"
-        ? 0x9aaca3
-        : profile === "oak"
-          ? 0x9a8547
-          : profile === "elm"
-            ? 0x9b8d53
-            : profile === "jacaranda"
-              ? 0x9483a8
-              : profile === "kurrajong"
-                ? 0x9aa27b
-                : 0x81925b;
-    const shadowLeafColor =
-      profile === "gum"
-        ? 0x385653
-        : profile === "oak"
-          ? 0x34321f
-          : profile === "elm"
-            ? 0x363923
-            : profile === "jacaranda"
-              ? 0x343443
-              : profile === "kurrajong"
-                ? 0x3b4c37
-                : 0x2f462e;
-    const hueOffset = (variant - 1.5) * 0.007;
-    const saturationOffset = ((variant % 3) - 1) * 0.02;
-    const lightOffset = ((variant % 5) - 2) * 0.018;
+    const colors = this.treeInstanceColors(profile, 0);
     const materials = {
       trunk: new THREE.MeshToonMaterial({
-        color: new THREE.Color(baseTrunkColor).offsetHSL(hueOffset, saturationOffset, lightOffset),
+        color: colors.trunk,
         emissive: 0x160f0a,
         emissiveIntensity: 0.12,
         gradientMap: WORLD_TOON_RAMP
       }),
       leaf: new THREE.MeshToonMaterial({
-        color: new THREE.Color(baseLeafColor).offsetHSL(hueOffset * 1.4, saturationOffset, lightOffset),
+        color: colors.leaf,
         emissive: 0x0e2119,
         emissiveIntensity: 0.14,
         gradientMap: WORLD_TOON_RAMP
       }),
       leafHighlight: new THREE.MeshToonMaterial({
-        color: new THREE.Color(highlightLeafColor).offsetHSL(hueOffset, saturationOffset * 0.5, lightOffset * 0.7),
+        color: colors.leafHighlight,
         emissive: 0x17281c,
         emissiveIntensity: 0.1,
         gradientMap: WORLD_TOON_RAMP
       }),
       leafShadow: new THREE.MeshToonMaterial({
-        color: new THREE.Color(shadowLeafColor).offsetHSL(hueOffset * 0.8, saturationOffset * 0.45, lightOffset * 0.35),
+        color: colors.leafShadow,
         emissive: 0x07130f,
         emissiveIntensity: 0.16,
         gradientMap: WORLD_TOON_RAMP
       }),
       paleBark: new THREE.MeshToonMaterial({
-        color: 0xcdbf9f,
+        color: colors.paleBark,
         emissive: 0x21170e,
         emissiveIntensity: 0.1,
         gradientMap: WORLD_TOON_RAMP
@@ -7604,6 +7789,32 @@ export class WorldBuilder {
     sprite.scale.set(18, 4.5, 1);
     this.scene.add(sprite);
   }
+}
+
+function createInstancedTreeMaterials(): TreeMaterialSet {
+  return {
+    trunk: instancedTreeMaterial(0x160f0a, 0.12),
+    leaf: instancedTreeMaterial(0x0e2119, 0.14),
+    leafHighlight: instancedTreeMaterial(0x17281c, 0.1),
+    leafShadow: instancedTreeMaterial(0x07130f, 0.16),
+    paleBark: instancedTreeMaterial(0x21170e, 0.1)
+  };
+}
+
+function createInstancedTreeLodMaterials(): TreeMaterialSet {
+  const trunk = instancedTreeMaterial(0x160f0a, 0.15);
+  const leaf = instancedTreeMaterial(0x0a1a13, 0.18);
+  return { trunk, leaf, leafHighlight: leaf, leafShadow: leaf, paleBark: trunk };
+}
+
+function instancedTreeMaterial(emissive: THREE.ColorRepresentation, emissiveIntensity: number): THREE.MeshToonMaterial {
+  return new THREE.MeshToonMaterial({
+    color: 0xffffff,
+    emissive,
+    emissiveIntensity,
+    gradientMap: WORLD_TOON_RAMP,
+    vertexColors: true
+  });
 }
 
 function createGrassClumpGeometry(): THREE.BufferGeometry {

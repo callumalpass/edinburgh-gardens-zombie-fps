@@ -33,11 +33,11 @@ test("loads and navigates the Blender Rotunda and entrance-pavilion assets", asy
   await page.screenshot({ path: testInfo.outputPath("rotunda-deck.png") });
 
   const rotundaMoved = await page.evaluate(async () => {
-    await window.__EGAME_TOOLS__!.runCommand("key", { code: "KeyW", durationMs: 900 });
+    await window.__EGAME_TOOLS__!.runCommand("key", { code: "KeyW", durationMs: 1_200 });
     return window.__EGAME__!.snapshot();
   });
   expect(Math.hypot(rotundaMoved.playerX - rotundaLanding.playerX, rotundaMoved.playerZ - rotundaLanding.playerZ)).toBeGreaterThan(0.8);
-  expect(rotundaMoved.elevation).toBeCloseTo(1.86, 1);
+  expect(rotundaMoved.elevation).toBeCloseTo(2.0, 1);
   expect(rotundaMoved.sheltered).toBe(true);
 
   expect(await page.evaluate(() => window.__EGAME__!.testInteract("rotunda-deck"))).toBe(true);

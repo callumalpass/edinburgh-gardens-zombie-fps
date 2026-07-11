@@ -1,4 +1,5 @@
 import { distance, distanceToSegmentSquared, nearestPointOnSegment, pointInPolygon } from "./geo";
+import { RAISED_SURFACE_EDGE_TOLERANCE } from "./gameConfig";
 import { pointInInteractableRaisedFootprint } from "./interactables";
 import type { CollisionObstacle, InteractableFixture, Vec2 } from "./types";
 
@@ -52,8 +53,15 @@ export function resolveObstacle(point: Vec2, radius: number, obstacle: Collision
     }
 
     if (pointInPolygon(point, obstacle.polygon)) {
-      const dx = closest.x - obstacle.center.x;
-      const dz = closest.z - obstacle.center.z;
+      // Push through the nearest wall, not radially away from the polygon
+      // centroid. Centroid-based normals are visibly wrong for L/T-shaped
+      // Blender footprints and can move the player deeper into a concavity.
+      let dx = closest.x - point.x;
+      let dz = closest.z - point.z;
+      if (Math.hypot(dx, dz) < 0.0001) {
+        dx = closest.x - obstacle.center.x;
+        dz = closest.z - obstacle.center.z;
+      }
       const length = Math.hypot(dx, dz) || 1;
       return {
         x: closest.x + (dx / length) * radius,
@@ -96,22 +104,35 @@ export function resolveObstacle(point: Vec2, radius: number, obstacle: Collision
 function pointWithinBoxAccessGap(localX: number, localZ: number, radius: number, obstacle: Extract<CollisionObstacle, { shape: "box" }>): boolean {
   return (
     obstacle.accessGaps?.some(
-      (gap) =>
-        Math.abs(localX - gap.localCenterX) <= gap.halfX + radius &&
-        Math.abs(localZ - gap.localCenterZ) <= gap.halfZ + radius
+      (gap) => {
+        // Access gaps run through the box along local Z. The capsule centre
+        // must be radius-clear of both jambs, while the through-depth extends
+        // by the radius so the player can approach from either side.
+        const clearHalfWidth = Math.max(0, gap.halfX - radius);
+        return (
+          Math.abs(localX - gap.localCenterX) <= clearHalfWidth &&
+          Math.abs(localZ - gap.localCenterZ) <= gap.halfZ + radius
+        );
+      }
     ) ?? false
   );
 }
 
 export function shouldBypassObstacle(obstacleId: string, point: Vec2, context: ObstacleBypassContext): boolean {
   const active = context.interactables.find((fixture) => fixture.id === context.activeFixtureId);
-  const activePadding = active?.kind === "tennis" ? 0.05 : 1.2;
-  if (active && fixtureCanBypass(active, obstacleId) && pointInInteractableRaisedFootprint(point, active, activePadding)) {
+  if (
+    active &&
+    fixtureCanBypass(active, obstacleId) &&
+    pointInInteractableRaisedFootprint(point, active, RAISED_SURFACE_EDGE_TOLERANCE)
+  ) {
     return true;
   }
 
   return context.interactables.some(
-    (fixture) => fixture.mode === "auto" && fixtureCanBypass(fixture, obstacleId) && pointInInteractableRaisedFootprint(point, fixture, 0.8)
+    (fixture) =>
+      fixture.mode === "auto" &&
+      fixtureCanBypass(fixture, obstacleId) &&
+      pointInInteractableRaisedFootprint(point, fixture, RAISED_SURFACE_EDGE_TOLERANCE)
   );
 }
 

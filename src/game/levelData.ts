@@ -28,6 +28,7 @@ import type {
   GeoPoint,
   GroundSurfacePolygon,
   HardscapeLine,
+  InteractableFixture,
   InteractableRaisedFootprint,
   Landmark,
   LevelData,
@@ -596,11 +597,11 @@ const PLAYGROUND_FENCE_SOURCE =
 const SOUTH_PLAYGROUND_LAYOUT_SOURCE =
   "OSM way 24489879 current playground footprint; Melbourne Playgrounds and Busy City Guide describe the large fenced south playground, all-abilities paths, wooden fort, rope net, sandpits, swings, toddler area, chalk walls and central shelter";
 const NORTH_PLAYGROUND_LAYOUT_SOURCE =
-  "OSM way 543616019 current relocated playground footprint; Yarra 2018 northern precinct plan, Proludic 2018 toddler unit reference, Melbourne Playgrounds and Mama Knows North describe younger-age equipment, natural-play/log elements and nearby BBQ/activity precinct; exact current equipment positions are unavailable, and no current public fence source was found for the relocated footprint";
+  "OSM way 543616019 current relocated playground footprint; City of Yarra 2018 Playground Upgrade Final Concept Plan fixes the relative positions of two activity units, triple and basket swings, spinner, trampoline, nature-play margins, planted buffer, grass mound, seats and shade sails; no current public fence source was found for the relocated footprint";
 const OVAL_FENCE_SOURCE =
   "OSM way 14946934 W.T. Peterson Oval footprint; OSM connector ways 403753751 and 403753754 align with fence-gate gaps; low jumpable fence height and exact gate widths are inferred from existing in-game oval fence treatment because no public barrier=fence way was available";
 const FITZY_BOWL_SOURCE =
-  "Yarra Fitzy Bowl upgrade page: 2022 upgraded Fitzy Bowl doubled the facility, kept the original bowls and added beginner/accessibility features; GOSKATE lists two deep concrete bowls around 1.2m and 1.5m deep plus a shallow 0.3m beginners bowl, roll-over/spine/hip transfer and street section; Time Out and Skater Maps confirm multiple concrete bowls and a beginner double bowl";
+  "City of Yarra Fitzy Bowl upgrade page and Playce tender site plan 19321_003: the August 2022 build retained two connected southern bowl complexes and added the northern street extension, flat banks, quarter pipes, manual pad, curved rail, accessible transitions and timber spectator terrace";
 const STRUCTURE_ACCESS_SOURCE =
   "Yarra Edinburgh Gardens facility listing; OSM building footprints; Lovell Chen Edinburgh Gardens CMP 2021 built-feature inventory and facade photographs; existing changeroom and umpire-room access only—future sports-pavilion rooms are excluded from the 2026 baseline";
 const STRUCTURE_SHELTER_SOURCE =
@@ -1931,6 +1932,20 @@ const OSM_EXTRA_PATHS_GEO: Array<{
       g(-37.7879836, 144.9817409),
       g(-37.7879279, 144.9817435),
       g(-37.7878517, 144.9817474)
+    ]
+  },
+  {
+    id: "vicmap-bowling-grandstand-passage",
+    label: "Bowling Club to Kevin Murray Stand passage",
+    kind: "service",
+    width: 2.35,
+    surface: "asphalt",
+    source: "Vicmap AERIAL_WM_256 2026-07-10 visual fit: continuous worn service passage between OSM ways 210387722 and 22760906; intermediate centreline is aerial-fitted because no separate public path way is mapped",
+    points: [
+      g(-37.7880396, 144.9811556),
+      g(-37.7880730, 144.9811885),
+      g(-37.7881030, 144.9812240),
+      g(-37.7881334, 144.9812612)
     ]
   },
   {
@@ -3699,47 +3714,80 @@ export function createLevelData(): LevelData {
   const grandstandCenter = polygonCentroid(grandstand);
   const southPlaygroundCenter = polygonCentroid(southPlayground);
   const northPlaygroundCenter = polygonCentroid(northPlayground);
+  // WorldBuilder orients playground details from each polygon's longest edge;
+  // use that same fitted frame for blockers, access points and raised decks.
+  const southPlaygroundFootprint = fittedFootprintFromPolygon(southPlayground);
+  const northPlaygroundFootprint = fittedFootprintFromPolygon(northPlayground);
+  const southPlaygroundTowerCenter = offsetPoint(
+    southPlaygroundCenter,
+    southPlaygroundFootprint.angle,
+    -southPlaygroundFootprint.halfX * 0.18,
+    -southPlaygroundFootprint.halfZ * 0.12
+  );
+  const northPlaygroundTowerCenter = offsetPoint(
+    northPlaygroundCenter,
+    northPlaygroundFootprint.angle,
+    -northPlaygroundFootprint.halfX * 0.42,
+    northPlaygroundFootprint.halfZ * 0.06
+  );
   const skateCenter = polygonCentroid(skate);
   const skateFootprint = footprintFromPolygon(skate);
   const skateRotation = skateFootprint.angle;
   const skateBowls: SkateBowlFeature[] = [
     {
-      id: "fitzy-original-west-deep-bowl",
-      label: "Fitzy Bowl original west deep bowl",
-      center: offsetPoint(skateCenter, skateRotation, -5.3, -6.2),
-      radiusX: 5.8,
-      radiusZ: 7.1,
-      angle: skateRotation + 0.08,
-      depth: 1.5,
-      exitAngle: Math.PI * 0.46,
-      exitWidth: 0.28,
-      difficulty: "deep",
-      source: FITZY_BOWL_SOURCE
-    },
-    {
-      id: "fitzy-original-east-deep-bowl",
-      label: "Fitzy Bowl original east deep bowl",
-      center: offsetPoint(skateCenter, skateRotation, 5.5, -7.2),
-      radiusX: 5.1,
-      radiusZ: 6.3,
-      angle: skateRotation - 0.05,
-      depth: 1.2,
-      exitAngle: Math.PI * 0.38,
-      exitWidth: 0.3,
-      difficulty: "deep",
-      source: FITZY_BOWL_SOURCE
-    },
-    {
-      id: "fitzy-beginner-double-bowl",
-      label: "Fitzy Bowl shallow beginners double bowl",
-      center: offsetPoint(skateCenter, skateRotation, -3.8, 8.7),
-      radiusX: 4.4,
-      radiusZ: 3.2,
-      angle: skateRotation + 0.18,
-      depth: 0.35,
-      exitAngle: -Math.PI * 0.34,
-      exitWidth: 0.54,
+      id: "fitzy-west-double-bowl-north-lobe",
+      label: "Fitzy Bowl retained west double bowl north lobe",
+      groupId: "fitzy-west-double-bowl",
+      center: offsetPoint(skateCenter, skateRotation, -2.8, -6.1),
+      radiusX: 3.25,
+      radiusZ: 3.05,
+      angle: skateRotation + 0.04,
+      depth: 0.42,
+      exitAngle: Math.PI * 0.62,
+      exitWidth: 0.24,
       difficulty: "beginner",
+      source: FITZY_BOWL_SOURCE
+    },
+    {
+      id: "fitzy-west-double-bowl-south-lobe",
+      label: "Fitzy Bowl retained west double bowl south lobe",
+      groupId: "fitzy-west-double-bowl",
+      center: offsetPoint(skateCenter, skateRotation, -7.0, -5.7),
+      radiusX: 3.45,
+      radiusZ: 3.3,
+      angle: skateRotation - 0.04,
+      depth: 0.52,
+      exitAngle: -Math.PI * 0.58,
+      exitWidth: 0.22,
+      difficulty: "beginner",
+      source: FITZY_BOWL_SOURCE
+    },
+    {
+      id: "fitzy-east-deep-bowl-north-lobe",
+      label: "Fitzy Bowl retained east deep bowl north lobe",
+      groupId: "fitzy-east-deep-bowl",
+      center: offsetPoint(skateCenter, skateRotation, -2.9, 5.7),
+      radiusX: 4.75,
+      radiusZ: 5.0,
+      angle: skateRotation + 0.08,
+      depth: 1.2,
+      exitAngle: Math.PI * 0.18,
+      exitWidth: 0.22,
+      difficulty: "deep",
+      source: FITZY_BOWL_SOURCE
+    },
+    {
+      id: "fitzy-east-deep-bowl-south-lobe",
+      label: "Fitzy Bowl retained east deep bowl south lobe",
+      groupId: "fitzy-east-deep-bowl",
+      center: offsetPoint(skateCenter, skateRotation, -8.2, 6.3),
+      radiusX: 4.9,
+      radiusZ: 5.25,
+      angle: skateRotation - 0.07,
+      depth: 1.5,
+      exitAngle: -Math.PI * 0.14,
+      exitWidth: 0.22,
+      difficulty: "deep",
       source: FITZY_BOWL_SOURCE
     }
   ];
@@ -3754,7 +3802,46 @@ export function createLevelData(): LevelData {
   const queenVictoriaPlinth = geoToWorld(g(-37.7872762, 144.9837025));
   const chandlerFountain = geoToWorld(g(-37.789505, 144.980304));
   const cookMemorial = geoToWorld(g(-37.7873520, 144.9855420));
-  const sportsmansMemorial = geoToWorld(g(-37.7880136, 144.9805024));
+  // Vicmap AERIAL_WM_256 pixel fit (approximately 360, 1221) places the visible arbour
+  // immediately east of the square substation and just south of the exact OSM
+  // bowling-club shell. The AWM/Places of Pride point falls on the club roof,
+  // so it remains identity evidence rather than a survey-grade coordinate.
+  const sportsmansMemorial = geoToWorld(g(-37.788058, 144.980790));
+  const sportsmansMemorialAngle = -0.106;
+  const sportsmansMemorialColumnObstacles: BoxObstacle[] = [
+    ["west-south", -2.5, 1.1],
+    ["west-north", -2.5, -1.1],
+    ["centre-south", 0, 1.1],
+    ["centre-north", 0, -1.1],
+    ["east-south", 2.5, 1.1],
+    ["east-north", 2.5, -1.1]
+  ].map(([suffix, localX, localZ]) => {
+    const numericX = Number(localX);
+    const numericZ = Number(localZ);
+    return {
+      id: `sportsmans-memorial-column-${suffix}`,
+      label: `Sportsman's Memorial ${String(suffix).replace("-", " ")} column pedestal`,
+      sourceObjectId: "sportsmans-war-memorial",
+      sourceObjectKind: "landmark" as const,
+      shape: "box" as const,
+      center: offsetPoint(sportsmansMemorial, sportsmansMemorialAngle, numericX, numericZ),
+      halfX: 0.42,
+      halfZ: 0.42,
+      angle: sportsmansMemorialAngle,
+      blocksSight: false
+    };
+  });
+  const sportsmansSubstationWallObstacle: BoxObstacle = {
+    id: "sportsmans-memorial-substation-wall-return",
+    label: "Sportsman's Memorial photographed substation wall return",
+    sourceObjectId: "sportsmans-war-memorial",
+    sourceObjectKind: "landmark",
+    shape: "box",
+    center: offsetPoint(sportsmansMemorial, sportsmansMemorialAngle, -3.23, -0.26),
+    halfX: 0.125,
+    halfZ: 1.275,
+    angle: sportsmansMemorialAngle
+  };
   const northEastBluestonePlanter = geoToWorld(g(-37.7872483, 144.9852198));
   const roweStreetNorthPlanter = geoToWorld(g(-37.7872974, 144.9853708));
   const roweStreetSouthPlanter = geoToWorld(g(-37.7874553, 144.9853974));
@@ -3766,7 +3853,10 @@ export function createLevelData(): LevelData {
   const rotundaShrubBedSouth = geoToWorld(g(-37.78776, 144.98076));
   const tennisAgapanthusStrip = geoToWorld(g(-37.78778, 144.98209));
   const southToilets = southAmenitiesFootprint.center;
-  const southToiletsRoofFootprint = raisedBox(southToilets, southAmenitiesFootprint.halfX + 0.18, southAmenitiesFootprint.halfZ + 0.18, southAmenitiesFootprint.angle);
+  // The Blender pavilion follows the irregular 16-edge OSM shell. A fitted
+  // rectangle spans empty T-plan corners and creates invisible roof floor, so
+  // climbing uses the same polygon as the rendered building instead.
+  const southToiletsRoofFootprint = raisedPolygon(southAmenitiesBuilding, southToilets);
   const southToiletsRoofRadius = Math.hypot(southAmenitiesFootprint.halfX, southAmenitiesFootprint.halfZ) + 0.45;
   const rotundaMapAngle = 0.34;
   const rotundaStairAccess = offsetPoint(rotundaCenter, rotundaMapAngle, 0, -7.25);
@@ -3838,8 +3928,10 @@ export function createLevelData(): LevelData {
   };
   const grandstandDeckRadius = Math.max(12, boundingRadius(grandstand, grandstandCenter) + 1.2);
   const grandstandRaisedFootprint = raisedBox(grandstandCenter, grandstandFootprint.halfX + 0.8, grandstandFootprint.halfZ + 0.45, grandstandFootprint.angle);
-  const playgroundRaisedFootprint = (center: Vec2) => raisedBox(center, 2.6, 2.3, 0);
-  const playgroundAccess = (center: Vec2) => ({ x: center.x, z: center.z + 5.2 });
+  const southPlaygroundTowerFootprint = raisedBox(southPlaygroundTowerCenter, 5.7 * 0.5, 4.8 * 0.5, southPlaygroundFootprint.angle);
+  const northPlaygroundTowerFootprint = raisedBox(northPlaygroundTowerCenter, 3.8 * 0.5, 3.2 * 0.5, northPlaygroundFootprint.angle);
+  const playgroundAccess = (center: Vec2, angle: number, width: number, depth: number) =>
+    offsetPoint(center, angle, -width * 0.18, -depth * 0.55 - 0.7);
   const ovalMinZ = Math.min(...oval.map((point) => point.z));
   const ovalMaxZ = Math.max(...oval.map((point) => point.z));
   const sportsFixtures: SportsFixture[] = [
@@ -4107,6 +4199,14 @@ export function createLevelData(): LevelData {
       ),
       linkedStructureId: "north-toilets",
       source: "OpenStreetMap way 307404819; City of Yarra north-toilet upgrade plan shows the external gender-neutral, ambulant and urinal-side bank; positioned beyond the mapped wall on the documented continuous paved apron"
+    },
+    {
+      id: "sportsmans-memorial-east-inscription",
+      label: "Sportsman's Memorial east inscription",
+      kind: "memorial_plaque",
+      position: offsetPoint(sportsmansMemorial, sportsmansMemorialAngle, 3.72, 0),
+      linkedStructureId: "sportsmans-war-memorial",
+      source: "Australian War Memorial Places of Pride coordinate; Lovell Chen Edinburgh Gardens CMP 2021 Figures 62 and 64-65 place the recessed IN MEMORIAM inscription, rectangular swag panel and paired restored urns on the east elevation; City of Yarra's current Sportsman's Memorial page confirms the 2018 restoration and re-dedication"
     },
     {
       id: "rotunda-memorial-plaque",
@@ -4524,6 +4624,98 @@ export function createLevelData(): LevelData {
     source: building.source,
     collision: building.collision
   })).filter((building) => pointInPolygon(polygonCentroid(building.polygon), boundary));
+  const mappedBuildingRoofHeight = (building: MappedBuilding): number => {
+    switch (building.detailProfile) {
+      case "tennis-pavilion":
+        // The procedural gambrel/hipped roof ranges from 3.76 to 5.18 m.
+        // Its mid-slope height gives the single walk plane the closest visual
+        // fit while retaining the exact exterior outline for ladder placement.
+        return 4.47;
+      case "gatehouse":
+        // Blender gable: 2.78 m eaves to 3.58 m ridge.
+        return 3.18;
+      case "bowling-club":
+        // The broad 2025 zincalume lower roof is flat. The GLB is embedded
+        // 0.08 m into average terrain, so its authored 3.19 m top is 3.11 m.
+        return 3.11;
+      case "community-centre":
+        // Blender tray deck rises from 3.12 to 3.60 m and its root is embedded
+        // 0.04 m; this is the centre-line height of that shallow skillion.
+        return 3.32;
+      default:
+        // Generic mapped sheds render a 0.18 m roof prism from height + 0.08.
+        return building.height + 0.26;
+    }
+  };
+  const inBoundaryBuildingAccess = (buildingPolygon: readonly Vec2[], preferredPoint: Vec2): Vec2 => {
+    const center = polygonCentroid(buildingPolygon);
+    const candidates = buildingPolygon.map((start, index) => {
+      const end = buildingPolygon[(index + 1) % buildingPolygon.length];
+      const midpoint = { x: (start.x + end.x) * 0.5, z: (start.z + end.z) * 0.5 };
+      const dx = midpoint.x - center.x;
+      const dz = midpoint.z - center.z;
+      const length = Math.hypot(dx, dz) || 1;
+      return {
+        x: midpoint.x + (dx / length) * 0.78,
+        z: midpoint.z + (dz / length) * 0.78
+      };
+    });
+    return candidates
+      .filter((candidate) => pointInPolygon(candidate, boundary) && !pointInPolygon(candidate, buildingPolygon))
+      .sort((a, b) => distance(a, preferredPoint) - distance(b, preferredPoint))[0]
+      ?? exteriorPointFromPolygon(preferredPoint, buildingPolygon, center, 0.78);
+  };
+  const portableLadderRoofFixtures: InteractableFixture[] = mappedBuildings
+    .filter((building) =>
+      building.collision &&
+      building.id !== "osm-building-242003562" && // Existing Alfred Pavilion ladder fixture.
+      building.id !== "osm-building-543505640" && // Rotunda already has authored stairs.
+      building.id !== "osm-man-made-715802679" // A storage tank, not a building.
+    )
+    .map((building) => {
+      const center = polygonCentroid(building.polygon);
+      const accessPosition = inBoundaryBuildingAccess(building.polygon, building.facade?.frontagePoint ?? center);
+      return {
+        id: `${building.id}-roof`,
+        label: `${building.label} roof`,
+        kind: "building" as const,
+        position: center,
+        accessPosition,
+        landingPosition: center,
+        exitPosition: accessPosition,
+        accessRadius: 4.2,
+        accessKind: "ladder" as const,
+        radius: boundingRadius(building.polygon, center),
+        height: mappedBuildingRoofHeight(building),
+        // Keeping the actual mapped outline here is important: the placement
+        // system derives the nearest exterior ladder edge from this footprint.
+        raisedFootprint: raisedPolygon(building.polygon, center),
+        surfaceGroundPoints: building.polygon.map((point) => ({ ...point })),
+        prompt: "E: place portable ladder and climb",
+        mode: "toggle" as const,
+        bypassObstacleIds: [building.id]
+      };
+    });
+  const northToiletsRoofFixture: InteractableFixture = {
+    id: "north-toilets-roof",
+    label: "North toilets roof",
+    kind: "building",
+    position: northToiletsCenter,
+    accessPosition: inBoundaryBuildingAccess(northToilets, northToiletsCenter),
+    landingPosition: northToiletsCenter,
+    exitPosition: inBoundaryBuildingAccess(northToilets, northToiletsCenter),
+    accessRadius: 4.2,
+    accessKind: "ladder",
+    radius: boundingRadius(northToilets, northToiletsCenter),
+    // The two-stage Blender roof runs from 3.19 to 3.91 m and is embedded
+    // 0.035 m into the average terrain support plane.
+    height: 3.515,
+    raisedFootprint: raisedPolygon(northToilets, northToiletsCenter),
+    surfaceGroundPoints: northToilets.map((point) => ({ ...point })),
+    prompt: "E: place portable ladder and climb",
+    mode: "toggle",
+    bypassObstacleIds: ["north-toilets"]
+  };
   const emelyCourtyardWallObstacles: PolygonObstacle[] = (() => {
     const building = mappedBuildings.find((candidate) => candidate.id === "osm-building-543505702");
     if (!building) return [];
@@ -4972,7 +5164,7 @@ export function createLevelData(): LevelData {
     { id: "north-bbq", label: "North BBQ", kind: "bbq", position: northBbq, radius: 3.5, source: "OpenStreetMap amenity=bbq node 6280110896; Yarra Edinburgh Gardens facilities listing" },
     { id: "rotunda", label: "Fitzroy Memorial Rotunda", kind: "rotunda", position: rotundaCenter, radius: rotundaRadius, source: "OpenStreetMap way 543505640; Lovell Chen Edinburgh Gardens CMP 2021 section 3.10.1 and Figures 142-143" },
     { id: "queen-victoria-plinth", label: "Queen Victoria plinth / Plinth Program", kind: "memorial", position: queenVictoriaPlinth, radius: 5.8, source: "OpenStreetMap historic=memorial node 2987256133; Lovell Chen Edinburgh Gardens CMP 2021 section 3.10.5; Yarra Plinth Program" },
-    { id: "sportsmans-war-memorial", label: "Sportsman's War Memorial", kind: "memorial", position: sportsmansMemorial, radius: 4.5, source: "Australian War Memorial Places of Pride coordinate -37.7880136, 144.9805024; Yarra Sportsman's Memorial page; Lovell Chen Edinburgh Gardens CMP 2021 section 3.2.7 and Figures 64-65; no public survey resolves the surrounding rosemary-hedge geometry" },
+    { id: "sportsmans-war-memorial", label: "Sportsman's War Memorial", kind: "memorial", position: sportsmansMemorial, radius: 4.5, angle: sportsmansMemorialAngle, source: "Vicmap Basemap AERIAL_WM_256 orthophoto pixel fit approximately -37.788058, 144.980790 places the visible arbour immediately east of the square substation and south of the exact OSM bowling-club wall; Australian War Memorial Places of Pride identifies the place but its -37.7880136, 144.9805024 pin visibly falls on the club roof and is not used as survey geometry; Heritage Council Victoria determination 21 April 2026 confirms the two-storey club close to the north, substation abutting the west, six Tuscan columns and diminished processional passage; City of Yarra confirms the completed 2018 restoration, replica porcelain wreath/bronze names panel and large reproductive team photograph; Lovell Chen CMP 2021 section 3.2.7 and Figures 62, 64-65 resolve the moulded arbour, south dedication, east IN MEMORIAM panel/swags/urns and adjacent wall faces; no public survey resolves the surrounding rosemary-hedge geometry" },
     { id: "cook-memorial-site", label: "Captain James Cook memorial", kind: "memorial", position: cookMemorial, radius: 4, source: "OpenStreetMap historic=memorial node 2987201733; Lovell Chen Edinburgh Gardens CMP 2021 section 3.10.6 and Figure 148" }
   ];
   const structuralTreeExclusionKinds = new Set<Landmark["kind"]>(["basketball", "bowls", "court", "grandstand", "memorial", "oval", "playground", "rotunda", "skate", "tennis", "toilets"]);
@@ -5184,19 +5376,24 @@ export function createLevelData(): LevelData {
         "grandstand",
         "Kevin Murray Stand",
         grandstand,
-        1.0,
-        0.45,
+        0,
+        0,
         { sourceObjectId: "grandstand", sourceObjectKind: "landmark" },
         [grandstandStairGap]
       ),
-      boxObstacleFromPolygon("north-toilets", "North toilets", northToilets, 0.6, 0.6, { sourceObjectId: "north-toilets", sourceObjectKind: "landmark" }),
+      polygonObstacleFromPolygon("north-toilets", "North toilets", northToilets, { sourceObjectId: "north-toilets", sourceObjectKind: "landmark" }),
+      ...sportsmansMemorialColumnObstacles,
+      sportsmansSubstationWallObstacle,
       {
         id: "north-playground",
         label: "North playground tower",
         sourceObjectId: "north-playground",
         sourceObjectKind: "landmark",
-        center: northPlaygroundCenter,
-        radius: 3.6,
+        shape: "box",
+        center: northPlaygroundTowerCenter,
+        halfX: northPlaygroundTowerFootprint.halfX,
+        halfZ: northPlaygroundTowerFootprint.halfZ,
+        angle: northPlaygroundTowerFootprint.angle,
         blocksSight: false
       },
       {
@@ -5204,8 +5401,11 @@ export function createLevelData(): LevelData {
         label: "South playground tower",
         sourceObjectId: "south-playground",
         sourceObjectKind: "landmark",
-        center: southPlaygroundCenter,
-        radius: 3.6,
+        shape: "box",
+        center: southPlaygroundTowerCenter,
+        halfX: southPlaygroundTowerFootprint.halfX,
+        halfZ: southPlaygroundTowerFootprint.halfZ,
+        angle: southPlaygroundTowerFootprint.angle,
         blocksSight: false
       },
       ...mappedBuildings
@@ -5300,14 +5500,10 @@ export function createLevelData(): LevelData {
               raisedFootprint: raisedBox(bowlingHannahGate.position, 2.7, 3.4, bowlingHannahGateAngle),
               prompt: "Walk through the Hannah memorial gate",
               mode: "auto" as const,
-              // The source-accurate pedestrian gap is narrower than the game's
-              // 2.2m movement proxy. Only within this short gate corridor, let
-              // that proxy clear the photographed piers and their immediately
-              // adjoining mapped fence/outbuilding edges; their centres and
-              // visible geometry remain solid outside the corridor.
+              // Limit the short passage override to the adjoining mapped
+              // fence/outbuilding edges. The human-scale movement capsule now
+              // respects the two visible brick piers as solid geometry.
               bypassObstacleIds: [
-                "bowling-hannah-memorial-gate-pier-west",
-                "bowling-hannah-memorial-gate-pier-east",
                 "bowling-precinct-perimeter-fence-segment-2-1",
                 "bowling-precinct-perimeter-fence-segment-4-1",
                 "osm-building-1475006769"
@@ -5315,6 +5511,28 @@ export function createLevelData(): LevelData {
             }
           ]
         : []),
+      {
+        id: "sportsmans-memorial-processional-bay",
+        label: "Sportsman's Memorial processional bay",
+        kind: "gate",
+        position: offsetPoint(sportsmansMemorial, sportsmansMemorialAngle, 1.25, 1.6),
+        radius: 3.8,
+        height: 0,
+        raisedFootprint: raisedBox(
+          offsetPoint(sportsmansMemorial, sportsmansMemorialAngle, 1.25, 1.6),
+          0.7,
+          3.1,
+          sportsmansMemorialAngle
+        ),
+        prompt: "Walk into the Sportsman's Memorial",
+        mode: "auto",
+        // The photographed bay is genuinely open. The human-scale capsule fits
+        // between its now-solid columns; only the adjoining club shell needs a
+        // short footprint-scoped override where the two mapped envelopes meet.
+        bypassObstacleIds: [
+          "osm-building-543505639"
+        ]
+      },
       {
         id: "rotunda-deck",
         label: "Rotunda raised platform",
@@ -5327,7 +5545,7 @@ export function createLevelData(): LevelData {
         accessKind: "stairs",
         accessHeading: rotundaStairHeading,
         radius: 5.8,
-        height: 1.86,
+        height: 2.0,
         raisedFootprint: raisedCircle(rotundaCenter, 5.05),
         prompt: "E: climb rotunda stairs",
         mode: "toggle",
@@ -5355,15 +5573,15 @@ export function createLevelData(): LevelData {
         id: "north-playground-tower",
         label: "North playground tower",
         kind: "playground",
-        position: northPlaygroundCenter,
-        accessPosition: playgroundAccess(northPlaygroundCenter),
-        landingPosition: northPlaygroundCenter,
-        exitPosition: playgroundAccess(northPlaygroundCenter),
+        position: northPlaygroundTowerCenter,
+        accessPosition: playgroundAccess(northPlaygroundTowerCenter, northPlaygroundFootprint.angle, 3.8, 3.2),
+        landingPosition: northPlaygroundTowerCenter,
+        exitPosition: playgroundAccess(northPlaygroundTowerCenter, northPlaygroundFootprint.angle, 3.8, 3.2),
         accessRadius: 3.2,
         accessKind: "play-structure",
         radius: 3.5,
-        height: 2.35,
-        raisedFootprint: playgroundRaisedFootprint(northPlaygroundCenter),
+        height: 1.57,
+        raisedFootprint: northPlaygroundTowerFootprint,
         prompt: "E: climb the playground tower",
         mode: "toggle",
         bypassObstacleIds: ["north-playground"]
@@ -5372,15 +5590,15 @@ export function createLevelData(): LevelData {
         id: "south-playground-tower",
         label: "South playground tower",
         kind: "playground",
-        position: southPlaygroundCenter,
-        accessPosition: playgroundAccess(southPlaygroundCenter),
-        landingPosition: southPlaygroundCenter,
-        exitPosition: playgroundAccess(southPlaygroundCenter),
+        position: southPlaygroundTowerCenter,
+        accessPosition: playgroundAccess(southPlaygroundTowerCenter, southPlaygroundFootprint.angle, 5.7, 4.8),
+        landingPosition: southPlaygroundTowerCenter,
+        exitPosition: playgroundAccess(southPlaygroundTowerCenter, southPlaygroundFootprint.angle, 5.7, 4.8),
         accessRadius: 3.2,
         accessKind: "play-structure",
         radius: 3.5,
-        height: 2.35,
-        raisedFootprint: playgroundRaisedFootprint(southPlaygroundCenter),
+        height: 2.46,
+        raisedFootprint: southPlaygroundTowerFootprint,
         prompt: "E: climb the playground tower",
         mode: "toggle",
         bypassObstacleIds: ["south-playground"]
@@ -5396,12 +5614,15 @@ export function createLevelData(): LevelData {
         accessRadius: 4.2,
         accessKind: "ladder",
         radius: southToiletsRoofRadius,
-        height: 3.58,
+        height: 4.65,
         raisedFootprint: southToiletsRoofFootprint,
+        surfaceGroundPoints: southAmenitiesBuilding.map((point) => ({ ...point })),
         prompt: "E: place portable ladder and climb",
         mode: "toggle",
         bypassObstacleIds: ["osm-building-242003562"]
       },
+      northToiletsRoofFixture,
+      ...portableLadderRoofFixtures,
       ...sportsFixtures
         .filter((fixture) => fixture.kind === "basketball-hoop")
         .map((fixture) => {
