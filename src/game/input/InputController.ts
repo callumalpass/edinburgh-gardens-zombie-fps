@@ -156,9 +156,8 @@ export class InputController {
     if ((["moveForward", "moveBackward", "moveLeft", "moveRight"] as InputAction[]).some((action) => this.uses(action, event.code))) {
       event.preventDefault();
     }
-    this.actions.unlockAudio();
-
     const firstPress = !event.repeat;
+    if (firstPress) this.actions.unlockAudio();
     if (firstPress && this.uses("reload", event.code)) this.actions.reload();
     if (firstPress && this.uses("interact", event.code)) this.actions.interact();
     if (firstPress && this.uses("flashlight", event.code)) this.actions.toggleFlashlight();

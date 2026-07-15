@@ -253,9 +253,17 @@ describe("RemotePlayerRoster", () => {
       jumpHeight: 0.6,
       crouching: true
     });
+    now = 0.12;
+    roster.applyNetworkTransform(player, {
+      position: new THREE.Vector3(12, 3, -6),
+      yaw: -3,
+      height: 1,
+      jumpHeight: 0.6,
+      crouching: true
+    });
 
     expect(player.position.x).toBe(0);
-    roster.updateAnimations(0.03);
+    roster.updateAnimations(0.13);
     expect(player.position.x).toBeCloseTo(3);
     expect(player.position.y).toBeCloseTo(1.5);
     expect(player.height).toBeCloseTo(0.5);
@@ -265,5 +273,51 @@ describe("RemotePlayerRoster", () => {
     expect(player.position.x).toBeCloseTo(6);
     expect(player.position.z).toBeCloseTo(-3);
     expect(player.crouchAmount).toBeCloseTo(1);
+  });
+
+  it("keeps remote motion continuous across uneven snapshot arrivals", () => {
+    const { roster } = createRoster(undefined, () => 0);
+    const player = roster.add("peer-1", "One");
+    for (let sample = 0; sample < 5; sample += 1) {
+      const timestamp = sample * 0.05;
+      roster.applyNetworkTransform(player, {
+        position: new THREE.Vector3(sample * 2, 0, 0),
+        yaw: 0,
+        height: 0,
+        jumpHeight: 0,
+        crouching: false
+      }, timestamp);
+    }
+
+    const positions: number[] = [];
+    for (const dt of [0.035, 0.017, 0.041, 0.022, 0.049, 0.016, 0.038, 0.028]) {
+      roster.updateAnimations(dt);
+      positions.push(player.position.x);
+    }
+
+    const steps = positions.slice(1).map((position, index) => position - positions[index]!);
+    expect(Math.min(...steps)).toBeGreaterThanOrEqual(0);
+    expect(steps.filter((step) => step > 0.001).length).toBeGreaterThanOrEqual(5);
+    expect(player.position.x).toBeLessThanOrEqual(11.2);
+  });
+
+  it("advances replicated transforms by real time when rendering is capped", () => {
+    const { roster } = createRoster(undefined, () => 0);
+    const player = roster.add("peer-1", "One");
+    for (let sample = 0; sample <= 8; sample += 1) {
+      roster.applyNetworkTransform(player, {
+        position: new THREE.Vector3(sample, 0, 0),
+        yaw: 0,
+        height: 0,
+        jumpHeight: 0,
+        crouching: false
+      }, sample * 0.05);
+    }
+
+    roster.updateAnimations(0.1, 0.25);
+
+    // Playback starts 100 ms behind the host, so 250 ms of real time lands at
+    // host timestamp 150 ms even though the world/render step was capped.
+    expect(player.position.x).toBeCloseTo(3);
   });
 });

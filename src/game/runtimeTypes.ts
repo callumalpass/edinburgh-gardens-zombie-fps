@@ -1,7 +1,7 @@
 import type * as THREE from "three";
 import type { Loadout, WeaponId } from "./weapons";
 import type { PlayerCondition } from "./playerCondition";
-import type { NetworkInputState } from "./multiplayer/types";
+import type { NetworkAction, NetworkInputState } from "./multiplayer/types";
 import type { AvatarId } from "./characters";
 import type { AmenityPoint, InteractableFixture, ParkLifeDetail, UpgradeStation, Vec2 } from "./types";
 import type { InventoryItemId, LargeCarryItemId, WorldItemId } from "./items";
@@ -120,6 +120,7 @@ export interface NetworkRemotePlayer extends AuthoritativePlayerState {
   condition: PlayerCondition;
   input: NetworkInputState;
   pendingInputs: NetworkInputState[];
+  pendingActions: NetworkAction[];
   lastProcessedInputSequence: number;
   lastProcessedActionSequence: number;
   lastInputAt: number;

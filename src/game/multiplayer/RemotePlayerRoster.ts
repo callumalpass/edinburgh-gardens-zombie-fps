@@ -37,21 +37,23 @@ export interface RemotePlayerNetworkTransform {
   crouching: boolean;
 }
 
-interface RemoteInterpolationState {
-  fromPosition: THREE.Vector3;
-  targetPosition: THREE.Vector3;
-  fromYaw: number;
-  targetYaw: number;
-  fromHeight: number;
-  targetHeight: number;
-  fromJumpHeight: number;
-  targetJumpHeight: number;
-  fromCrouchAmount: number;
-  targetCrouchAmount: number;
-  elapsed: number;
-  duration: number;
-  lastSnapshotAt: number;
+interface RemoteTransformSample {
+  timestamp: number;
+  position: THREE.Vector3;
+  yaw: number;
+  height: number;
+  jumpHeight: number;
+  crouchAmount: number;
 }
+
+interface RemoteInterpolationState {
+  samples: RemoteTransformSample[];
+  playbackTime: number;
+}
+
+const REMOTE_INTERPOLATION_DELAY_SECONDS = 0.1;
+const REMOTE_MAX_EXTRAPOLATION_SECONDS = 0.08;
+const REMOTE_TRANSFORM_BUFFER_SIZE = 8;
 
 export class RemotePlayerRoster {
   private readonly playersById = new Map<string, NetworkRemotePlayer>();
@@ -132,6 +134,7 @@ export class RemotePlayerRoster {
         pitch: START_PITCH
       },
       pendingInputs: [],
+      pendingActions: [],
       lastProcessedInputSequence: 0,
       lastProcessedActionSequence: 0,
       lastInputAt: this.now(),
@@ -250,6 +253,7 @@ export class RemotePlayerRoster {
         pitch: player.pitch
       };
       player.pendingInputs = [];
+      player.pendingActions = [];
       player.lastProcessedInputSequence = player.input.sequence;
       player.lastProcessedActionSequence = 0;
       player.inventory = [];
@@ -279,8 +283,12 @@ export class RemotePlayerRoster {
     player.mesh.visible = true;
   }
 
-  updateAnimations(dt: number): void {
-    this.updateNetworkTransforms(dt);
+  updateAnimations(dt: number, networkTimelineDt = dt): void {
+    // Animation mixers need a bounded render step, but replicated transforms
+    // must follow real elapsed time. Advancing them with the capped world step
+    // makes a slow client drift behind the host until its snapshot buffer is
+    // exhausted, producing packet-by-packet jumps.
+    this.updateNetworkTransforms(networkTimelineDt);
     for (const player of this.playersById.values()) {
       player.shotFlashTimer = Math.max(0, player.shotFlashTimer - dt);
       const shotFlash = player.mesh.getObjectByName("remote-shot-flash");
@@ -316,7 +324,15 @@ export class RemotePlayerRoster {
     }
   }
 
-  applyNetworkTransform(player: NetworkRemotePlayer, transform: RemotePlayerNetworkTransform, receivedAt = this.now()): void {
+  applyNetworkTransform(player: NetworkRemotePlayer, transform: RemotePlayerNetworkTransform, snapshotAt = this.now()): void {
+    const sample: RemoteTransformSample = {
+      timestamp: snapshotAt,
+      position: transform.position.clone(),
+      yaw: transform.yaw,
+      height: transform.height,
+      jumpHeight: transform.jumpHeight,
+      crouchAmount: transform.crouching ? 1 : 0
+    };
     const existing = this.interpolationById.get(player.id);
     if (!existing) {
       player.position.copy(transform.position);
@@ -327,39 +343,18 @@ export class RemotePlayerRoster {
       player.crouchAmount = transform.crouching ? 1 : 0;
       player.velocity.set(0, 0, 0);
       this.interpolationById.set(player.id, {
-        fromPosition: transform.position.clone(),
-        targetPosition: transform.position.clone(),
-        fromYaw: transform.yaw,
-        targetYaw: transform.yaw,
-        fromHeight: transform.height,
-        targetHeight: transform.height,
-        fromJumpHeight: transform.jumpHeight,
-        targetJumpHeight: transform.jumpHeight,
-        fromCrouchAmount: player.crouchAmount,
-        targetCrouchAmount: player.crouchAmount,
-        elapsed: 1,
-        duration: 1,
-        lastSnapshotAt: receivedAt
+        samples: [sample],
+        playbackTime: snapshotAt - REMOTE_INTERPOLATION_DELAY_SECONDS
       });
       this.updateMesh(player);
       return;
     }
-
-    const snapshotInterval = THREE.MathUtils.clamp(receivedAt - existing.lastSnapshotAt, 1 / 120, 0.15);
-    player.velocity.copy(transform.position).sub(existing.targetPosition).divideScalar(snapshotInterval);
-    existing.fromPosition.copy(player.position);
-    existing.targetPosition.copy(transform.position);
-    existing.fromYaw = player.yaw;
-    existing.targetYaw = transform.yaw;
-    existing.fromHeight = player.height;
-    existing.targetHeight = transform.height;
-    existing.fromJumpHeight = player.jumpHeight;
-    existing.targetJumpHeight = transform.jumpHeight;
-    existing.fromCrouchAmount = player.crouchAmount;
-    existing.targetCrouchAmount = transform.crouching ? 1 : 0;
-    existing.elapsed = 0;
-    existing.duration = THREE.MathUtils.clamp(snapshotInterval, 0.045, 0.12);
-    existing.lastSnapshotAt = receivedAt;
+    const latest = existing.samples.at(-1)!;
+    if (snapshotAt <= latest.timestamp) return;
+    const snapshotInterval = Math.max(1 / 120, snapshotAt - latest.timestamp);
+    player.velocity.copy(sample.position).sub(latest.position).divideScalar(snapshotInterval);
+    existing.samples.push(sample);
+    if (existing.samples.length > REMOTE_TRANSFORM_BUFFER_SIZE) existing.samples.shift();
     player.crouching = transform.crouching;
   }
 
@@ -367,13 +362,17 @@ export class RemotePlayerRoster {
     for (const [id, interpolation] of this.interpolationById) {
       const player = this.playersById.get(id);
       if (!player) continue;
-      interpolation.elapsed = Math.min(interpolation.duration, interpolation.elapsed + dt);
-      const alpha = interpolation.duration <= 0 ? 1 : interpolation.elapsed / interpolation.duration;
-      player.position.lerpVectors(interpolation.fromPosition, interpolation.targetPosition, alpha);
-      player.yaw = lerpAngle(interpolation.fromYaw, interpolation.targetYaw, alpha);
-      player.height = THREE.MathUtils.lerp(interpolation.fromHeight, interpolation.targetHeight, alpha);
-      player.jumpHeight = THREE.MathUtils.lerp(interpolation.fromJumpHeight, interpolation.targetJumpHeight, alpha);
-      player.crouchAmount = THREE.MathUtils.lerp(interpolation.fromCrouchAmount, interpolation.targetCrouchAmount, alpha);
+      interpolation.playbackTime += Math.max(0, dt);
+      const sampled = sampleRemoteTransform(interpolation.samples, interpolation.playbackTime);
+      player.position.copy(sampled.position);
+      player.yaw = sampled.yaw;
+      player.height = sampled.height;
+      player.jumpHeight = sampled.jumpHeight;
+      player.crouchAmount = sampled.crouchAmount;
+      player.velocity.copy(sampled.velocity);
+      while (interpolation.samples.length > 2 && interpolation.samples[1]!.timestamp <= interpolation.playbackTime) {
+        interpolation.samples.shift();
+      }
       this.updateMesh(player);
     }
   }
@@ -551,6 +550,45 @@ function remoteSpawnPosition(offsetIndex: number, groundY: (point: Vec2) => numb
 function lerpAngle(from: number, to: number, alpha: number): number {
   const delta = Math.atan2(Math.sin(to - from), Math.cos(to - from));
   return from + delta * alpha;
+}
+
+function sampleRemoteTransform(samples: RemoteTransformSample[], playbackTime: number): RemoteTransformSample & { velocity: THREE.Vector3 } {
+  const first = samples[0]!;
+  if (samples.length === 1 || playbackTime <= first.timestamp) {
+    return { ...first, position: first.position.clone(), velocity: new THREE.Vector3() };
+  }
+
+  for (let index = 1; index < samples.length; index += 1) {
+    const right = samples[index]!;
+    if (playbackTime > right.timestamp) continue;
+    const left = samples[index - 1]!;
+    const duration = Math.max(1 / 240, right.timestamp - left.timestamp);
+    const alpha = THREE.MathUtils.clamp((playbackTime - left.timestamp) / duration, 0, 1);
+    return {
+      timestamp: playbackTime,
+      position: left.position.clone().lerp(right.position, alpha),
+      yaw: lerpAngle(left.yaw, right.yaw, alpha),
+      height: THREE.MathUtils.lerp(left.height, right.height, alpha),
+      jumpHeight: THREE.MathUtils.lerp(left.jumpHeight, right.jumpHeight, alpha),
+      crouchAmount: THREE.MathUtils.lerp(left.crouchAmount, right.crouchAmount, alpha),
+      velocity: right.position.clone().sub(left.position).divideScalar(duration)
+    };
+  }
+
+  const latest = samples.at(-1)!;
+  const previous = samples.at(-2)!;
+  const duration = Math.max(1 / 240, latest.timestamp - previous.timestamp);
+  const velocity = latest.position.clone().sub(previous.position).divideScalar(duration);
+  const extrapolation = Math.min(
+    REMOTE_MAX_EXTRAPOLATION_SECONDS,
+    Math.max(0, playbackTime - latest.timestamp)
+  );
+  const isExtrapolationCapped = playbackTime - latest.timestamp >= REMOTE_MAX_EXTRAPOLATION_SECONDS;
+  return {
+    ...latest,
+    position: latest.position.clone().addScaledVector(velocity, extrapolation),
+    velocity: isExtrapolationCapped ? new THREE.Vector3() : velocity
+  };
 }
 
 function aimAnimationForWeapon(weaponId: WeaponId): "AimLongGun" | "AimSidearm" | "MeleeReady" {

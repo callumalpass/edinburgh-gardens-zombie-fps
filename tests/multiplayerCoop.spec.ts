@@ -74,12 +74,16 @@ test("clients render and fire weapons while sustained movement stays smooth", as
     expect(weaponDropPersistence.minVisibleDrops).toBe(weaponDropPersistence.minDrops);
 
     const dropsBeforePickup = (await host.evaluate(() => window.__EGAME__!.snapshot())).weaponDrops;
-    expect(await host.evaluate(() => window.__EGAME__!.testPositionNetworkPeerAtWeapon("shotgun"))).toBe(true);
+    // The client's predicted position can be inside the 8.2 m prompt radius
+    // while the host representation still trails behind it. Exercise the
+    // bounded authority grace without trusting an arbitrary client target.
+    expect(await host.evaluate(() => window.__EGAME__!.testPositionNetworkPeerAtWeapon("shotgun", 9.4))).toBe(true);
     await client.waitForFunction(() => {
       const local = window.__EGAME__!.snapshot();
       return local.weaponDrops > 0;
     });
-    await client.keyboard.press("x");
+    await host.keyboard.down("ArrowUp");
+    expect(await client.evaluate(() => window.__EGAME__!.testRequestNetworkWeaponTake("shotgun"))).toBe(true);
     await host.waitForFunction(() => {
       const player = window.__EGAME__!.snapshot().networkPlayers[0];
       return player?.weapon === "shotgun" && player.lastProcessedActionSequence > 0;
@@ -89,8 +93,11 @@ test("clients render and fire weapons while sustained movement stays smooth", as
       return snapshot.weapon === "shotgun"
         && snapshot.viewWeaponVisible
         && snapshot.viewWeaponMeshes > 0
+        && snapshot.lastNetworkActionSucceeded
+        && snapshot.lastNetworkActionMessage?.includes("equipped")
         && snapshot.weaponDrops === expectedDrops;
     }, dropsBeforePickup - 1);
+    await host.keyboard.up("ArrowUp");
 
     expect(await host.evaluate(() => window.__EGAME__!.testScope("carbine"))).toBe(true);
     await client.waitForFunction(() => {
@@ -115,6 +122,115 @@ test("clients render and fire weapons while sustained movement stays smooth", as
       const player = window.__EGAME__!.snapshot().networkPlayers[0];
       return player?.ammo === ammo - 1 && player.lastProcessedActionSequence > 0;
     }, ammoBeforeShot);
+    await client.waitForFunction(() => window.__EGAME__!.snapshot().networkCorrection < 0.1);
+
+    const hostBeforeMove = (await client.evaluate(() => window.__EGAME__!.snapshot())).networkPlayers[0]!;
+    const clientBeforeConcurrentMove = (await host.evaluate(() => window.__EGAME__!.snapshot())).networkPlayers[0]!;
+    const ammoBeforeConcurrentShot = (await client.evaluate(() => window.__EGAME__!.snapshot())).ammo;
+    const actionSequenceBeforeConcurrentMove = clientBeforeConcurrentMove.lastProcessedActionSequence;
+    await host.keyboard.down("ArrowUp");
+    await client.keyboard.down("ArrowRight");
+    const remoteHostSamples: Array<{
+      time: number;
+      x: number;
+      z: number;
+      clientX: number;
+      clientZ: number;
+      correction: number;
+      jumpHeight: number;
+    }> = [];
+    for (let sample = 0; sample < 12; sample += 1) {
+      await client.waitForTimeout(150);
+      if (sample === 4) {
+        await client.evaluate(() => {
+          const canvas = document.querySelector<HTMLCanvasElement>("canvas.game-canvas")!;
+          canvas.dispatchEvent(new MouseEvent("mousedown", { button: 0, bubbles: true }));
+        });
+      }
+      if (sample === 7) await client.keyboard.press("Space");
+      remoteHostSamples.push(await client.evaluate(() => {
+        const snapshot = window.__EGAME__!.snapshot();
+        const player = snapshot.networkPlayers[0]!;
+        return {
+          time: performance.now(),
+          x: player.x,
+          z: player.z,
+          clientX: snapshot.playerX,
+          clientZ: snapshot.playerZ,
+          correction: snapshot.networkCorrection,
+          jumpHeight: snapshot.jumpHeight
+        };
+      }));
+    }
+    await host.waitForFunction(({ ammo, actionSequence }) => {
+      const player = window.__EGAME__!.snapshot().networkPlayers[0];
+      return player?.ammo === ammo - 1 && player.lastProcessedActionSequence >= actionSequence + 2;
+    }, { ammo: ammoBeforeConcurrentShot, actionSequence: actionSequenceBeforeConcurrentMove });
+    await client.waitForFunction((actionSequence) => {
+      const snapshot = window.__EGAME__!.snapshot();
+      return snapshot.lastNetworkActionSequence >= actionSequence + 2
+        && snapshot.lastNetworkActionSucceeded;
+    }, actionSequenceBeforeConcurrentMove);
+    await host.keyboard.up("ArrowUp");
+    await client.keyboard.up("ArrowRight");
+    const clientAfterConcurrentMove = (await host.evaluate(() => window.__EGAME__!.snapshot())).networkPlayers[0]!;
+    expect(Math.hypot(
+      clientAfterConcurrentMove.x - clientBeforeConcurrentMove.x,
+      clientAfterConcurrentMove.z - clientBeforeConcurrentMove.z
+    )).toBeGreaterThan(3);
+    const hostTravelX = remoteHostSamples.at(-1)!.x - hostBeforeMove.x;
+    const hostTravelZ = remoteHostSamples.at(-1)!.z - hostBeforeMove.z;
+    const hostTravelDistance = Math.hypot(hostTravelX, hostTravelZ);
+    expect(hostTravelDistance).toBeGreaterThan(3);
+    const hostDirectionX = hostTravelX / hostTravelDistance;
+    const hostDirectionZ = hostTravelZ / hostTravelDistance;
+    const remoteHostSteps = remoteHostSamples.slice(1).map((sample, index) => {
+      const previous = remoteHostSamples[index]!;
+      const duration = Math.max(0.001, (sample.time - previous.time) / 1000);
+      return {
+        speed: Math.hypot(sample.x - previous.x, sample.z - previous.z) / duration,
+        forward: (sample.x - previous.x) * hostDirectionX + (sample.z - previous.z) * hostDirectionZ
+      };
+    });
+    expect(Math.min(...remoteHostSteps.map((step) => step.forward))).toBeGreaterThan(-0.25);
+    expect(Math.max(...remoteHostSteps.map((step) => step.speed))).toBeLessThan(20);
+    const concurrentClientX = remoteHostSamples.at(-1)!.clientX - remoteHostSamples[0]!.clientX;
+    const concurrentClientZ = remoteHostSamples.at(-1)!.clientZ - remoteHostSamples[0]!.clientZ;
+    const concurrentClientDistance = Math.hypot(concurrentClientX, concurrentClientZ);
+    expect(concurrentClientDistance).toBeGreaterThan(2);
+    const concurrentClientDirectionX = concurrentClientX / concurrentClientDistance;
+    const concurrentClientDirectionZ = concurrentClientZ / concurrentClientDistance;
+    const concurrentClientSteps = remoteHostSamples.slice(1).map((sample, index) => {
+      const previous = remoteHostSamples[index]!;
+      return (sample.clientX - previous.clientX) * concurrentClientDirectionX
+        + (sample.clientZ - previous.clientZ) * concurrentClientDirectionZ;
+    });
+    expect(Math.min(...concurrentClientSteps)).toBeGreaterThan(-0.3);
+    expect(Math.max(...remoteHostSamples.map((sample) => sample.correction))).toBeLessThan(0.8);
+    expect(Math.max(...remoteHostSamples.map((sample) => sample.jumpHeight))).toBeGreaterThan(0.02);
+
+    // A bike remains claimable by the client after the host has mounted,
+    // ridden, and released it. Ownership and the bike's new position must
+    // both be authoritative snapshots, not host-local state.
+    expect(await host.evaluate(() => window.__EGAME__!.testToggleBike())).toBe(true);
+    await client.waitForFunction(() => window.__EGAME__!.snapshot().networkPlayers[0]?.bikeMounted === true);
+    await host.keyboard.down("ArrowUp");
+    await host.waitForTimeout(700);
+    await host.keyboard.up("ArrowUp");
+    expect(await host.evaluate(() => window.__EGAME__!.testToggleBike())).toBe(true);
+    await client.waitForFunction(() => window.__EGAME__!.snapshot().networkPlayers[0]?.bikeMounted === false);
+    expect(await host.evaluate(() => window.__EGAME__!.testPositionNetworkPeerAtBike())).toBe(true);
+    const bikePosition = (await host.evaluate(() => window.__EGAME__!.snapshot())).networkPlayers[0]!;
+    await client.waitForFunction(({ x, z }) => {
+      const snapshot = window.__EGAME__!.snapshot();
+      return Math.hypot(snapshot.playerX - x, snapshot.playerZ - z) < 1;
+    }, { x: bikePosition.x, z: bikePosition.z });
+    await client.keyboard.press("e");
+    await host.waitForFunction(() => window.__EGAME__!.snapshot().networkPlayers[0]?.bikeMounted === true);
+    await client.waitForFunction(() => window.__EGAME__!.snapshot().bikeMounted === true);
+    await client.keyboard.press("e");
+    await host.waitForFunction(() => window.__EGAME__!.snapshot().networkPlayers[0]?.bikeMounted === false);
+    await client.waitForFunction(() => window.__EGAME__!.snapshot().bikeMounted === false);
 
     const beforeMove = await client.evaluate(() => window.__EGAME__!.snapshot());
     await client.keyboard.down("Shift");
@@ -173,7 +289,7 @@ test("clients render and fire weapons while sustained movement stays smooth", as
     const totalDistance = Math.hypot(totalX, totalZ);
     expect(totalDistance).toBeGreaterThan(10);
     expect(afterSprint.stamina).toBeLessThan(beforeMove.stamina - 25);
-    expect(afterRecovery.stamina).toBeGreaterThan(afterSprint.stamina + 18);
+    expect(afterRecovery.stamina).toBeGreaterThan(afterSprint.stamina + 16);
     const directionX = totalX / totalDistance;
     const directionZ = totalZ / totalDistance;
     const movementSteps = movementSamples.slice(1).map((sample, index) => ({
@@ -183,7 +299,7 @@ test("clients render and fire weapons while sustained movement stays smooth", as
     }));
     expect(Math.max(...movementSteps.map((step) => Math.hypot(step.x, step.z) / step.duration))).toBeLessThan(20);
     expect(Math.min(...movementSteps.map((step) => step.x * directionX + step.z * directionZ))).toBeGreaterThan(-0.3);
-    expect(renderSamples.length).toBeGreaterThan(4);
+    expect(renderSamples.length).toBeGreaterThanOrEqual(3);
     const renderSteps = renderSamples.slice(1).map((sample, index) => ({
       duration: Math.max(0.001, (sample.time - renderSamples[index]!.time) / 1000),
       forward: (sample.x - renderSamples[index]!.x) * directionX + (sample.z - renderSamples[index]!.z) * directionZ

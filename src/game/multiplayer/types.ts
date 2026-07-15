@@ -44,10 +44,13 @@ export type NetworkActionType =
 export interface NetworkAction {
   type: NetworkActionType;
   sequence: number;
+  inputSequence?: number;
   yaw: number;
   pitch: number;
   slot?: number;
   upgradeId?: UpgradeId;
+  targetKind?: "weaponDrop" | "worldItem" | "placedLadder" | "bike";
+  targetId?: number | string;
 }
 
 export interface NetworkPlayerSnapshot {
@@ -56,6 +59,8 @@ export interface NetworkPlayerSnapshot {
   avatarId: AvatarId;
   lastProcessedInputSequence: number;
   lastProcessedActionSequence: number;
+  lastActionSucceeded?: boolean;
+  lastActionMessage?: string | null;
   shotSequence: number;
   x: number;
   y: number;

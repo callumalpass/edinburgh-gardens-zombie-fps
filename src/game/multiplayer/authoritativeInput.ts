@@ -1,6 +1,9 @@
-import type { NetworkInputState } from "./types";
+import type { NetworkAction, NetworkInputState } from "./types";
 
 const MAX_PENDING_INPUTS = 180;
+const MAX_PENDING_ACTIONS = 64;
+const TARGET_PENDING_SECONDS = 1 / 60;
+const MAX_CATCHUP_SECONDS_PER_FRAME = 0.05;
 
 export interface AuthoritativeInputSlice {
   input: NetworkInputState;
@@ -22,9 +25,11 @@ export function queueAuthoritativeInput(
 }
 
 /**
- * Advances queued client commands by at most the host frame's simulation
- * budget. Each command duration is consumed exactly once, and its sequence is
- * acknowledged only after that duration has actually been simulated.
+ * Advances queued client commands atomically. A snapshot must never contain a
+ * partially applied command while reporting that command as unacknowledged:
+ * the owning client would replay the whole command on top of the partial move
+ * and visibly overshoot. The first pending command may exceed the remaining
+ * frame budget so low host frame rates cannot starve ordinary 60 Hz commands.
  */
 export function consumeAuthoritativeInputBudget(
   pending: NetworkInputState[],
@@ -40,15 +45,68 @@ export function consumeAuthoritativeInputBudget(
       slices.push({ input: { ...command, duration: 0 }, completedSequence: command.sequence });
       continue;
     }
-    const duration = Math.min(commandDuration, remaining);
-    command.duration = Math.max(0, commandDuration - duration);
-    remaining = Math.max(0, remaining - duration);
-    const completed = command.duration <= 0.000001;
+    if (slices.length > 0 && commandDuration > remaining + 0.000001) break;
+    pending.shift();
     slices.push({
-      input: { ...command, duration },
-      completedSequence: completed ? command.sequence : null
+      input: { ...command, duration: commandDuration },
+      completedSequence: command.sequence
     });
-    if (completed) pending.shift();
+    remaining = Math.max(0, remaining - commandDuration);
   }
   return slices;
+}
+
+/**
+ * Keeps the usual one-tick command buffer for network jitter, but gives the
+ * host a bounded amount of extra simulation time when renderer stalls have
+ * allowed client commands to accumulate. Without catch-up, new input arrives
+ * as quickly as the ordinary frame budget can consume it, so the host stays
+ * permanently behind and every snapshot pulls the owning client backwards.
+ */
+export function authoritativeInputSimulationBudget(
+  pending: readonly NetworkInputState[],
+  frameBudget: number
+): number {
+  const available = pending.reduce((total, input) => total + Math.max(0, input.duration), 0);
+  if (available <= 0) return 0;
+  const ordinaryBudget = Math.max(0, frameBudget);
+  const backlogAfterFrame = Math.max(0, available - ordinaryBudget);
+  const catchup = Math.min(
+    MAX_CATCHUP_SECONDS_PER_FRAME,
+    Math.max(0, backlogAfterFrame - TARGET_PENDING_SECONDS)
+  );
+  return Math.min(available, ordinaryBudget + catchup);
+}
+
+export function queueAuthoritativeAction(
+  pending: NetworkAction[],
+  lastProcessedSequence: number,
+  action: NetworkAction
+): boolean {
+  if (action.sequence <= lastProcessedSequence || pending.some((candidate) => candidate.sequence === action.sequence)) {
+    return false;
+  }
+  pending.push({ ...action });
+  pending.sort((a, b) => a.sequence - b.sequence);
+  if (pending.length > MAX_PENDING_ACTIONS) pending.splice(0, pending.length - MAX_PENDING_ACTIONS);
+  return true;
+}
+
+/**
+ * WebSocket ordering guarantees the referenced inputs arrived before the
+ * action. Execute only after those inputs are authoritative so interaction
+ * range, jump state and weapon origin match what the client saw.
+ */
+export function takeReadyAuthoritativeActions(
+  pending: NetworkAction[],
+  lastProcessedInputSequence: number
+): NetworkAction[] {
+  const ready: NetworkAction[] = [];
+  while (pending.length > 0) {
+    const action = pending[0]!;
+    if ((action.inputSequence ?? 0) > lastProcessedInputSequence) break;
+    ready.push(action);
+    pending.shift();
+  }
+  return ready;
 }

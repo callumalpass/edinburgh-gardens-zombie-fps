@@ -155,7 +155,14 @@ export class NetworkSession {
 
   sendAction(
     type: NetworkAction["type"],
-    frame: { yaw: number; pitch: number; slot?: number; upgradeId?: NetworkAction["upgradeId"] }
+    frame: {
+      yaw: number;
+      pitch: number;
+      slot?: number;
+      upgradeId?: NetworkAction["upgradeId"];
+      targetKind?: NetworkAction["targetKind"];
+      targetId?: NetworkAction["targetId"];
+    }
   ): boolean {
     if (!this.isClient || !this.client?.connected) {
       return false;
@@ -164,7 +171,10 @@ export class NetworkSession {
       type,
       slot: frame.slot,
       upgradeId: frame.upgradeId,
+      targetKind: frame.targetKind,
+      targetId: frame.targetId,
       sequence: ++this.actionSequence,
+      inputSequence: this.inputSequence,
       yaw: frame.yaw,
       pitch: frame.pitch
     });

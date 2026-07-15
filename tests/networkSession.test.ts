@@ -147,15 +147,21 @@ describe("NetworkSession", () => {
     expect(session.sendAction("jump", { yaw: 1, pitch: -0.2 })).toBe(true);
     expect(session.sendAction("equipSlot", { yaw: 1, pitch: -0.2, slot: 2 })).toBe(true);
     expect(session.sendAction("take", { yaw: 1, pitch: -0.2 })).toBe(true);
+    expect(session.sendAction("take", { yaw: 1, pitch: -0.2, targetKind: "weaponDrop", targetId: 42 })).toBe(true);
     expect(session.sendAction("chooseIntermissionUpgrade", { yaw: 1, pitch: -0.2, upgradeId: "damage" })).toBe(true);
     expect(transport.actions.map((action) => [action.type, action.sequence, action.slot, action.upgradeId])).toEqual([
       ["jump", 1, undefined, undefined],
       ["equipSlot", 2, 2, undefined],
       ["take", 3, undefined, undefined],
-      ["chooseIntermissionUpgrade", 4, undefined, "damage"]
+      ["take", 4, undefined, undefined],
+      ["chooseIntermissionUpgrade", 5, undefined, "damage"]
     ]);
+    expect(transport.actions[3]).toMatchObject({ targetKind: "weaponDrop", targetId: 42 });
+    expect(transport.actions.every((action) => action.inputSequence === 0)).toBe(true);
 
     expect(session.sendInputFrame(1, "playing", inputFrame)?.sequence).toBe(1);
+    expect(session.sendAction("jump", { yaw: 1, pitch: -0.2 })).toBe(true);
+    expect(transport.actions.at(-1)).toMatchObject({ type: "jump", inputSequence: 1 });
     expect(session.sendInputFrame(0.1, "playing", inputFrame)).toBeNull();
     expect(session.pendingPredictionFrame(inputFrame)).toMatchObject({ sequence: 2, duration: 0.1 });
     expect(session.sendInputFrame(0.4, "playing", inputFrame)?.sequence).toBe(2);

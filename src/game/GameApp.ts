@@ -124,7 +124,10 @@ import { ClientCameraSmoother } from "./multiplayer/ClientCameraSmoother";
 import { ClientZombieInterpolator } from "./multiplayer/ClientZombieInterpolator";
 import { hydrateNetworkTtl, serializeNetworkTtl } from "./multiplayer/snapshotValues";
 import {
+  authoritativeInputSimulationBudget,
   consumeAuthoritativeInputBudget,
+  queueAuthoritativeAction,
+  takeReadyAuthoritativeActions,
   queueAuthoritativeInput
 } from "./multiplayer/authoritativeInput";
 import type {
@@ -211,6 +214,9 @@ const STRUCTURE_LIGHT_EXPOSURE_RADIUS = 28;
 const SCREAMER_RALLY_RADIUS = 94;
 const SCREAMER_RALLY_SEARCH_RADIUS = 28;
 const PLACED_LADDER_PICKUP_RADIUS = 4.8;
+const WEAPON_PICKUP_REACH = 8.2;
+const NETWORK_WEAPON_PICKUP_GRACE = 2.4;
+const NETWORK_BIKE_INTERACTION_GRACE = 2.0;
 const HIT_FLASH_SECONDS = 0.12;
 const HIT_SPARK_SECONDS = 0.075;
 const HIT_SPARK_BASE_SIZE = 0.42;
@@ -284,7 +290,11 @@ export class GameApp {
   private readonly clientPositionReconciler = new ClientPositionReconciler();
   private readonly clientCameraSmoother = new ClientCameraSmoother();
   private readonly clientZombieInterpolator = new ClientZombieInterpolator();
+  private readonly networkActionResults = new Map<string, { sequence: number; succeeded: boolean; message: string | null }>();
   private hasInitialNetworkSnapshot = false;
+  private lastObservedNetworkActionSequence = 0;
+  private lastNetworkActionSucceeded = true;
+  private lastNetworkActionMessage: string | null = null;
   private readonly smokeMode = new URLSearchParams(window.location.search).has("smoke");
   private readonly networkTestMode = new URLSearchParams(window.location.search).has("network-test");
   private readonly contextAuditMode = new URLSearchParams(window.location.search).has("context-audit");
@@ -316,7 +326,8 @@ export class GameApp {
   private readonly frameLoop = new FrameLoop((tick) => this.tick(
     tick.dt,
     tick.elapsedSeconds,
-    Math.min(0.25, tick.rawDt)
+    Math.min(0.25, tick.rawDt),
+    tick.rawDt
   ));
   private disposed = false;
   private frame = 0;
@@ -681,7 +692,9 @@ export class GameApp {
         weaponAttachedToSocket: player.mesh.getObjectByName("remote-weapon")?.parent?.name === "WeaponSocket"
       })),
       testToggleBike: () => this.testToggleBike(),
-      testPositionNetworkPeerAtWeapon: (weaponId) => this.testPositionNetworkPeerAtWeapon(weaponId),
+      testPositionNetworkPeerAtBike: (authoritativeDistance) => this.testPositionNetworkPeerAtBike(authoritativeDistance),
+      testPositionNetworkPeerAtWeapon: (weaponId, authoritativeDistance) => this.testPositionNetworkPeerAtWeapon(weaponId, authoritativeDistance),
+      testRequestNetworkWeaponTake: (weaponId) => this.testRequestNetworkWeaponTake(weaponId),
       testEquipNetworkPeer: (weaponId) => this.testEquipNetworkPeer(weaponId),
       testStartRescueScenario: () => {
         this.startRescueScenarioIfNeeded(true);
@@ -848,16 +861,25 @@ export class GameApp {
         peerJoined: (playerId, name, avatarId) => this.remotePlayers.add(playerId, name, avatarId),
         peerLeft: (playerId) => {
           this.releaseNetworkPlayerBike(playerId);
+          this.networkActionResults.delete(playerId);
           this.remotePlayers.remove(playerId);
         },
         input: (playerId, input) => {
           const player = this.remotePlayers.get(playerId) ?? this.remotePlayers.add(playerId, `Player ${playerId}`);
           if (!queueAuthoritativeInput(player.pendingInputs, player.lastProcessedInputSequence, input)) return;
-          player.yaw = input.yaw;
-          player.pitch = input.pitch;
           player.lastInputAt = performance.now() / 1000;
+          // Client commands already carry their bounded simulation duration.
+          // Apply them on receipt so host renderer frame phase cannot stall or
+          // intermittently zero another player's authoritative movement.
+          this.processNetworkPlayerInputs(player, Number.POSITIVE_INFINITY);
+          this.processReadyNetworkPlayerActions(player);
+          this.remotePlayers.updateMesh(player);
         },
-        action: (playerId, action) => this.handleNetworkPlayerAction(playerId, action),
+        action: (playerId, action) => {
+          const player = this.remotePlayers.get(playerId) ?? this.remotePlayers.add(playerId, `Player ${playerId}`);
+          if (!queueAuthoritativeAction(player.pendingActions, player.lastProcessedActionSequence, action)) return;
+          this.processReadyNetworkPlayerActions(player);
+        },
         snapshot: (snapshot) => this.applyNetworkSnapshot(snapshot)
       },
       { disabled: this.smokeMode && !this.networkTestMode }
@@ -918,7 +940,9 @@ export class GameApp {
 
   private handleInteractInput(): boolean {
     if (this.paused || this.player.health <= 0) return false;
-    if (this.sendNetworkAction("interact")) {
+    const bike = this.mountedBike() ?? (!this.nearestScenarioTarget ? this.nearestBike : null);
+    const target = bike ? { targetKind: "bike" as const, targetId: bike.id } : undefined;
+    if (this.sendNetworkAction("interact", undefined, undefined, target)) {
       return true;
     }
     return this.handleInteract();
@@ -942,7 +966,10 @@ export class GameApp {
 
   private handleTakeInput(): boolean {
     if (this.paused || this.player.health <= 0) return false;
-    if (this.sendNetworkAction("take")) {
+    const target = !this.nearestWorldItem && this.nearestWeaponDrop
+      ? { targetKind: "weaponDrop" as const, targetId: this.nearestWeaponDrop.id }
+      : undefined;
+    if (this.sendNetworkAction("take", undefined, undefined, target)) {
       return true;
     }
     return this.handleTakeOrRemove();
@@ -957,6 +984,9 @@ export class GameApp {
   private handleJumpInput(): boolean {
     if (this.paused || this.player.health <= 0) return false;
     if (this.sendNetworkAction("jump")) {
+      // Predict this discrete movement locally just like continuous movement;
+      // the authoritative action result will correct it if the host rejects it.
+      this.jump();
       return true;
     }
     return this.jump();
@@ -981,10 +1011,17 @@ export class GameApp {
     this.equipSlot(index);
   }
 
-  private sendNetworkAction(type: NetworkAction["type"], slot?: number, upgradeId?: UpgradeId): boolean {
+  private sendNetworkAction(
+    type: NetworkAction["type"],
+    slot?: number,
+    upgradeId?: UpgradeId,
+    target?: Pick<NetworkAction, "targetKind" | "targetId">
+  ): boolean {
     return this.network.sendAction(type, {
       slot,
       upgradeId,
+      targetKind: target?.targetKind,
+      targetId: target?.targetId,
       yaw: this.player.yaw,
       pitch: this.player.pitch
     });
@@ -1077,7 +1114,11 @@ export class GameApp {
     this.spawnWorldItems();
     if (this.isNetworkHost) {
       this.remotePlayers.reset();
+      this.networkActionResults.clear();
     }
+    this.lastObservedNetworkActionSequence = 0;
+    this.lastNetworkActionSucceeded = true;
+    this.lastNetworkActionMessage = null;
     this.hud.clearOutcome();
     this.state = "playing";
     this.paused = false;
@@ -1092,7 +1133,7 @@ export class GameApp {
     this.sendNetworkSnapshotNow();
   }
 
-  private tick(dt: number, now: number, playerDt = dt): void {
+  private tick(dt: number, now: number, playerDt = dt, networkTimelineDt = playerDt): void {
     if (this.disposed) {
       return;
     }
@@ -1110,7 +1151,8 @@ export class GameApp {
     }
 
     const simulationDt = this.paused && !this.network.enabled ? 0 : dt;
-    this.remotePlayers?.updateAnimations(simulationDt);
+    const remoteTimelineDt = this.paused && !this.network.enabled ? 0 : networkTimelineDt;
+    this.remotePlayers?.updateAnimations(simulationDt, remoteTimelineDt);
     this.syncNetworkPlayerBikeMeshes();
     if (this.isNetworkClient) {
       for (const zombie of this.zombies) {
@@ -1265,7 +1307,9 @@ export class GameApp {
       return;
     }
     this.nearestBike = this.bikes
-      .filter((bike) => bike.position.distanceTo(this.player.position) < BIKE_INTERACTION_RADIUS)
+      .filter((bike) => (
+        bike.mountedByPlayerId === null || bike.mountedByPlayerId === this.network.localId
+      ) && bike.position.distanceTo(this.player.position) < BIKE_INTERACTION_RADIUS)
       .sort((a, b) => a.position.distanceTo(this.player.position) - b.position.distanceTo(this.player.position))[0] ?? null;
   }
 
@@ -1443,6 +1487,8 @@ export class GameApp {
       avatarId: this.network.config.avatarId,
       lastProcessedInputSequence: 0,
       lastProcessedActionSequence: 0,
+      lastActionSucceeded: true,
+      lastActionMessage: null,
       shotSequence: this.shotSequence,
       x: this.player.position.x,
       y: this.player.position.y,
@@ -1481,12 +1527,15 @@ export class GameApp {
   }
 
   private remotePlayerNetworkSnapshot(player: NetworkRemotePlayer): NetworkPlayerSnapshot {
+    const actionResult = this.networkActionResults.get(player.id);
     return {
       id: player.id,
       name: player.name,
       avatarId: player.avatarId,
       lastProcessedInputSequence: player.lastProcessedInputSequence,
       lastProcessedActionSequence: player.lastProcessedActionSequence,
+      lastActionSucceeded: actionResult?.succeeded ?? true,
+      lastActionMessage: actionResult?.message ?? null,
       shotSequence: player.shotSequence,
       x: player.position.x,
       y: player.position.y,
@@ -1546,32 +1595,36 @@ export class GameApp {
     }
     for (const player of this.remotePlayers.values()) {
       player.loadout = finishReloadIfReady(player.loadout, now);
-      const inputSlices = consumeAuthoritativeInputBudget(player.pendingInputs, dt);
+      const inputBudget = authoritativeInputSimulationBudget(player.pendingInputs, dt);
+      this.processNetworkPlayerInputs(player, inputBudget);
+      this.processReadyNetworkPlayerActions(player);
       if (player.health <= 0) {
-        for (const slice of inputSlices) {
-          player.input = slice.input;
-          if (slice.completedSequence !== null) player.lastProcessedInputSequence = slice.completedSequence;
-        }
         this.releaseNetworkPlayerBike(player.id);
         player.mountedBikeId = null;
         player.velocity.multiplyScalar(0.72);
         this.remotePlayers.updateMesh(player);
         continue;
       }
-      for (const slice of inputSlices) {
-        player.input = slice.input;
-        player.yaw = slice.input.yaw;
-        player.pitch = slice.input.pitch;
-        this.updateNetworkPlayerMovement(player, slice.input, slice.input.duration);
-        this.updateNetworkPlayerCondition(player, slice.input.duration);
-        if (slice.completedSequence !== null) player.lastProcessedInputSequence = slice.completedSequence;
-      }
-      if (inputSlices.length === 0) {
+      if (now - player.lastInputAt > 0.3) {
         player.velocity.x = 0;
         player.velocity.z = 0;
         player.isSprinting = false;
       }
       this.remotePlayers.updateMesh(player);
+    }
+  }
+
+  private processNetworkPlayerInputs(player: NetworkRemotePlayer, budget: number): void {
+    const inputSlices = consumeAuthoritativeInputBudget(player.pendingInputs, budget);
+    for (const slice of inputSlices) {
+      player.input = slice.input;
+      player.yaw = slice.input.yaw;
+      player.pitch = slice.input.pitch;
+      if (player.health > 0) {
+        this.updateNetworkPlayerMovement(player, slice.input, slice.input.duration);
+        this.updateNetworkPlayerCondition(player, slice.input.duration);
+      }
+      if (slice.completedSequence !== null) player.lastProcessedInputSequence = slice.completedSequence;
     }
   }
 
@@ -1641,13 +1694,25 @@ export class GameApp {
     player.movementNoiseTimer = player.crouching ? 0.82 : sprinting ? 0.28 : 0.46;
   }
 
+  private processReadyNetworkPlayerActions(player: NetworkRemotePlayer): void {
+    for (const action of takeReadyAuthoritativeActions(player.pendingActions, player.lastProcessedInputSequence)) {
+      this.handleNetworkPlayerAction(player.id, action);
+    }
+  }
+
   private handleNetworkPlayerAction(playerId: string, action: NetworkAction): void {
     const player = this.remotePlayers.get(playerId);
-    if (!player || player.health <= 0 || this.state !== "playing") {
-      return;
-    }
+    if (!player) return;
     if (action.sequence <= player.lastProcessedActionSequence) return;
     player.lastProcessedActionSequence = action.sequence;
+    if (player.health <= 0 || this.state !== "playing") {
+      this.networkActionResults.set(playerId, {
+        sequence: action.sequence,
+        succeeded: false,
+        message: player.health <= 0 ? "Unable to act while downed" : "Unable to act right now"
+      });
+      return;
+    }
     player.yaw = action.yaw;
     player.pitch = action.pitch;
     player.input = {
@@ -1657,19 +1722,57 @@ export class GameApp {
       aim: player.input.aim
     };
     const now = performance.now() / 1000;
+    let actionSucceeded = true;
+    let actionMessage: string | null = null;
     if (action.type === "shoot") this.shootNetworkPlayer(player, now, action.sequence);
     if (action.type === "reload") this.reloadNetworkPlayer(player, now);
-    if (action.type === "interact") this.interactNetworkPlayer(player);
-    if (action.type === "take") this.takeNetworkPlayer(player);
+    if (action.type === "interact") {
+      const requestedBike = action.targetKind === "bike" && typeof action.targetId === "string"
+        ? this.bikes.find((bike) => bike.id === action.targetId) ?? null
+        : null;
+      const wasMounted = requestedBike?.mountedByPlayerId === player.id;
+      const requestedBikeState = requestedBike?.state;
+      actionSucceeded = this.interactNetworkPlayer(player, action);
+      if (requestedBike) {
+        actionMessage = actionSucceeded
+          ? wasMounted
+            ? "Bike dismounted"
+            : requestedBikeState !== "available"
+              ? "Bike ready"
+              : "Bike mounted"
+          : requestedBike.mountedByPlayerId
+            ? "Bike is in use"
+            : requestedBike.position.distanceTo(player.position) >= BIKE_INTERACTION_RADIUS + NETWORK_BIKE_INTERACTION_GRACE
+              ? "Move closer to use that bike"
+              : "Bike is not ready";
+      }
+    }
+    if (action.type === "take") {
+      const requestedWeapon = action.targetKind === "weaponDrop" && typeof action.targetId === "number"
+        ? this.weaponDrops.find((drop) => drop.id === action.targetId) ?? null
+        : null;
+      actionSucceeded = this.takeNetworkPlayer(player, action);
+      actionMessage = actionSucceeded
+        ? requestedWeapon ? `${WEAPON_DEFINITIONS[requestedWeapon.weaponId].name} equipped` : "Item taken"
+        : requestedWeapon ? "Move closer to take that weapon" : "That item is no longer available";
+    }
     if (action.type === "dropItem") this.dropNetworkPlayerItem(player);
     if (action.type === "toggleFlashlight") this.toggleNetworkPlayerFlashlight(player);
     if (action.type === "throwDistraction") this.throwNetworkPlayerDistraction(player);
-    if (action.type === "jump") this.jumpNetworkPlayer(player);
+    if (action.type === "jump") {
+      actionSucceeded = this.jumpNetworkPlayer(player);
+      if (!actionSucceeded) actionMessage = "Unable to jump";
+    }
     if (action.type === "toggleSkateboard") this.toggleNetworkPlayerSkateboard(player);
     if (action.type === "equipSlot" && typeof action.slot === "number") this.equipNetworkPlayerSlot(player, action.slot);
     if (action.type === "chooseIntermissionUpgrade" && action.upgradeId) {
       this.chooseIntermissionUpgradeForNetworkPlayer(player, action.upgradeId);
     }
+    this.networkActionResults.set(playerId, {
+      sequence: action.sequence,
+      succeeded: actionSucceeded,
+      message: actionMessage
+    });
   }
 
   private shootNetworkPlayer(player: NetworkRemotePlayer, now: number, shotSequence: number): void {
@@ -1838,12 +1941,29 @@ export class GameApp {
     return true;
   }
 
-  private interactNetworkPlayer(player: NetworkRemotePlayer): boolean {
+  private interactNetworkPlayer(player: NetworkRemotePlayer, action?: NetworkAction): boolean {
     const mountedBike = player.mountedBikeId
       ? this.bikes.find((bike) => bike.id === player.mountedBikeId) ?? null
       : null;
     if (mountedBike) {
+      if (action?.targetKind === "bike" && action.targetId !== mountedBike.id) return false;
       return this.toggleNetworkPlayerBike(player, mountedBike);
+    }
+    if (action?.targetKind === "bike") {
+      const requestedBike = typeof action.targetId === "string"
+        ? this.bikes.find((bike) => bike.id === action.targetId) ?? null
+        : null;
+      if (
+        !requestedBike
+        || requestedBike.mountedByPlayerId !== null
+        || requestedBike.position.distanceTo(player.position) >= BIKE_INTERACTION_RADIUS + NETWORK_BIKE_INTERACTION_GRACE
+      ) {
+        return false;
+      }
+      if (requestedBike.state !== "available") {
+        return this.repairOrUnlockBikeForNetworkPlayer(player, requestedBike);
+      }
+      return this.toggleNetworkPlayerBike(player, requestedBike);
     }
     const scenarioTarget = this.rescueWorld.nearestInteraction(player.position);
     if (scenarioTarget) {
@@ -2044,7 +2164,17 @@ export class GameApp {
     }
   }
 
-  private takeNetworkPlayer(player: NetworkRemotePlayer): boolean {
+  private takeNetworkPlayer(player: NetworkRemotePlayer, action?: NetworkAction): boolean {
+    if (action?.targetKind === "weaponDrop" && typeof action.targetId === "number") {
+      const requestedDrop = this.weaponDrops.find((drop) => drop.id === action.targetId) ?? null;
+      if (!requestedDrop || requestedDrop.position.distanceTo(player.position) >= WEAPON_PICKUP_REACH + NETWORK_WEAPON_PICKUP_GRACE) {
+        return false;
+      }
+      player.loadout = addWeapon(player.loadout, requestedDrop.weaponId);
+      this.scene.remove(requestedDrop.mesh);
+      this.weaponDrops = this.weaponDrops.filter((candidate) => candidate !== requestedDrop);
+      return true;
+    }
     const worldItem = [...this.droppedItems]
       .filter((item) => item.position.distanceTo(player.position) < (item.itemId === "ladder" ? 5.2 : 4.4))
       .sort((a, b) => a.position.distanceTo(player.position) - b.position.distanceTo(player.position))[0] ?? null;
@@ -2067,7 +2197,7 @@ export class GameApp {
       }
       return true;
     }
-    const drop = this.nearestWeaponDropForPoint(player.position, 8.2);
+    const drop = this.nearestWeaponDropForPoint(player.position, WEAPON_PICKUP_REACH + NETWORK_WEAPON_PICKUP_GRACE);
     if (drop) {
       player.loadout = addWeapon(player.loadout, drop.weaponId);
       this.scene.remove(drop.mesh);
@@ -2263,6 +2393,12 @@ export class GameApp {
     this.player.yaw = localYaw;
     this.player.pitch = localPitch;
     this.compensateNetworkCamera(cameraBefore);
+    if ((snapshot.lastProcessedActionSequence ?? 0) > this.lastObservedNetworkActionSequence) {
+      this.lastObservedNetworkActionSequence = snapshot.lastProcessedActionSequence ?? 0;
+      this.lastNetworkActionSucceeded = snapshot.lastActionSucceeded ?? true;
+      this.lastNetworkActionMessage = snapshot.lastActionMessage ?? null;
+      if (snapshot.lastActionMessage) this.flashStatus(snapshot.lastActionMessage);
+    }
     if (previousHealth <= 0 && snapshot.health > 0) {
       this.clearHitFlash();
       this.flashStatus(`Revived — regroup for wave ${this.wave + 1}`);
@@ -2313,6 +2449,7 @@ export class GameApp {
       player.inventory = [...(snapshot.inventory ?? [])];
       player.carriedItem = snapshot.carriedItem ?? null;
       player.lastProcessedInputSequence = snapshot.lastProcessedInputSequence ?? 0;
+      player.lastProcessedActionSequence = snapshot.lastProcessedActionSequence ?? 0;
       player.shotSequence = snapshot.shotSequence ?? 0;
       if (player.shotSequence > previousShotSequence) {
         this.remotePlayers.triggerShot(player, getWeaponStats(snapshot.loadout).kind === "melee");
@@ -2482,7 +2619,7 @@ export class GameApp {
         this.weaponDrops = this.weaponDrops.filter((candidate) => candidate !== drop);
       }
     }
-    this.nearestWeaponDrop = this.nearestWeaponDropForPoint(this.player.position, 8.2);
+    this.nearestWeaponDrop = this.nearestWeaponDropForPoint(this.player.position, WEAPON_PICKUP_REACH);
   }
 
   private applyWorldItemSnapshots(snapshots: NetworkWorldItemSnapshot[]): void {
@@ -4462,7 +4599,7 @@ export class GameApp {
       }
     }
 
-    this.nearestWeaponDrop = this.nearestWeaponDropForPoint(this.player.position, 8.2);
+    this.nearestWeaponDrop = this.nearestWeaponDropForPoint(this.player.position, WEAPON_PICKUP_REACH);
   }
 
   private nearestWeaponDropForPoint(position: THREE.Vector3, reach: number): WeaponDrop | null {
@@ -4595,6 +4732,10 @@ export class GameApp {
     let nearest: RideableBike | null = null;
     let nearestDistance = Number.POSITIVE_INFINITY;
     for (const bike of this.bikes) {
+      if (bike.mountedByPlayerId !== null && bike.mountedByPlayerId !== this.network.localId) {
+        this.syncBikeMesh(bike);
+        continue;
+      }
       const distanceToBike = bike.position.distanceTo(this.player.position);
       if (distanceToBike < nearestDistance && distanceToBike < BIKE_INTERACTION_RADIUS) {
         nearest = bike;
@@ -5977,18 +6118,43 @@ export class GameApp {
     return this.toggleBike(bike);
   }
 
-  private testPositionNetworkPeerAtWeapon(weaponId?: WeaponId): boolean {
+  private testPositionNetworkPeerAtWeapon(weaponId?: WeaponId, authoritativeDistance = 0): boolean {
     const player = this.remotePlayers.values().next().value as NetworkRemotePlayer | undefined;
     const drop = weaponId
       ? this.weaponDrops.find((candidate) => candidate.weaponId === weaponId) ?? null
       : this.weaponDrops[0] ?? null;
     if (!this.isNetworkHost || !player || !drop) return false;
-    player.position.set(drop.position.x, this.groundY(drop.position), drop.position.z);
+    player.position.set(drop.position.x + authoritativeDistance, this.groundY(drop.position), drop.position.z);
     player.velocity.set(0, 0, 0);
     player.input = { ...player.input, moveX: 0, moveZ: 0, sprint: false };
     this.remotePlayers.updateMesh(player);
     this.sendNetworkSnapshotNow();
     return true;
+  }
+
+  private testPositionNetworkPeerAtBike(authoritativeDistance = 0): boolean {
+    const player = this.remotePlayers.values().next().value as NetworkRemotePlayer | undefined;
+    const bike = this.bike ?? this.bikes.find((candidate) => candidate.state === "available") ?? null;
+    if (!this.isNetworkHost || !player || !bike) return false;
+    player.position.set(
+      bike.position.x + authoritativeDistance,
+      this.groundY({ x: bike.position.x + authoritativeDistance, z: bike.position.z }),
+      bike.position.z
+    );
+    player.velocity.set(0, 0, 0);
+    player.input = { ...player.input, moveX: 0, moveZ: 0, sprint: false };
+    this.remotePlayers.updateMesh(player);
+    this.sendNetworkSnapshotNow();
+    return true;
+  }
+
+  private testRequestNetworkWeaponTake(weaponId?: WeaponId): boolean {
+    const drop = weaponId
+      ? this.weaponDrops.find((candidate) => candidate.weaponId === weaponId) ?? null
+      : this.nearestWeaponDrop;
+    return drop
+      ? this.sendNetworkAction("take", undefined, undefined, { targetKind: "weaponDrop", targetId: drop.id })
+      : false;
   }
 
   private testEquipNetworkPeer(weaponId: WeaponId = "carbine"): boolean {
@@ -6370,6 +6536,9 @@ export class GameApp {
       unlockedScenarioGates: this.rescueScenario.unlockedGateIds.size,
       intactBarricades: this.rescueWorld.intactBarricadeCount,
       networkReady: !this.isNetworkClient || this.hasInitialNetworkSnapshot,
+      lastNetworkActionSequence: this.lastObservedNetworkActionSequence,
+      lastNetworkActionSucceeded: this.lastNetworkActionSucceeded,
+      lastNetworkActionMessage: this.lastNetworkActionMessage,
       networkPlayers: [...this.remotePlayers.values()].map((player) => {
         const weapon = player.mesh.getObjectByName("remote-weapon");
         let weaponMeshes = 0;
@@ -6386,6 +6555,7 @@ export class GameApp {
           ammo: player.loadout.ammoInMagazine,
           stamina: Number(player.condition.stamina.toFixed(2)),
           sprinting: player.isSprinting,
+          bikeMounted: player.mountedBikeId !== null,
           moveSpeed: Number(player.velocity.length().toFixed(3)),
           weaponVisible: weapon?.visible === true,
           weaponMeshes

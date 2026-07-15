@@ -163,6 +163,9 @@ export interface Snapshot {
   unlockedScenarioGates: number;
   intactBarricades: number;
   networkReady: boolean;
+  lastNetworkActionSequence: number;
+  lastNetworkActionSucceeded: boolean;
+  lastNetworkActionMessage: string | null;
   networkPlayers: Array<{
     id: string;
     x: number;
@@ -173,6 +176,7 @@ export interface Snapshot {
     ammo: number;
     stamina: number;
     sprinting: boolean;
+    bikeMounted: boolean;
     moveSpeed: number;
     weaponVisible: boolean;
     weaponMeshes: number;
@@ -223,7 +227,9 @@ export interface GameTestApi {
   testAddTeammate: (name?: string, avatarId?: AvatarId) => boolean;
   testAvatarStates: () => Array<{ id: string; avatarId: AvatarId; assetLoaded: boolean; animation: string; weaponAttachedToSocket: boolean }>;
   testToggleBike: () => boolean;
-  testPositionNetworkPeerAtWeapon: (weaponId?: WeaponId) => boolean;
+  testPositionNetworkPeerAtBike: (authoritativeDistance?: number) => boolean;
+  testPositionNetworkPeerAtWeapon: (weaponId?: WeaponId, authoritativeDistance?: number) => boolean;
+  testRequestNetworkWeaponTake: (weaponId?: WeaponId) => boolean;
   testEquipNetworkPeer: (weaponId?: WeaponId) => boolean;
   testStartRescueScenario: () => Snapshot;
   testDefeatCaretaker: () => Snapshot;

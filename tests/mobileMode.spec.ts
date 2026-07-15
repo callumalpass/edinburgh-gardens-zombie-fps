@@ -31,6 +31,22 @@ test("the main menu toggles and persists mobile mode", async ({ page }) => {
   await expect(page.locator(".touch-controls")).toBeHidden();
 });
 
+test("start menus remain scrollable on short screens", async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 320 });
+  await page.goto("/");
+
+  const launch = page.locator(".launch-screen");
+  await expect(launch).toBeVisible();
+  await expectScrollableMenu(launch);
+
+  await page.getByRole("button", { name: /play solo/i }).click();
+  await page.waitForFunction(() => window.__EGAME__?.ready === true);
+
+  const startOverlay = page.locator(".start-overlay");
+  await expect(startOverlay).toBeVisible();
+  await expectScrollableMenu(startOverlay);
+});
+
 test("touch layouts support movement, free look, combat controls and the field bag", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 915, height: 412 });
   await page.goto("/?smoke=1&touch=1");
@@ -120,3 +136,19 @@ test("skateboard can be carried while riding a bicycle", async ({ page }) => {
   expect(dismounted.bikeMounted).toBe(false);
   expect(dismounted.carriedItem).toBe("skateboard");
 });
+
+async function expectScrollableMenu(locator: import("@playwright/test").Locator): Promise<void> {
+  const metrics = await locator.evaluate((element) => ({
+    clientHeight: element.clientHeight,
+    overflowY: getComputedStyle(element).overflowY,
+    scrollHeight: element.scrollHeight
+  }));
+  expect(metrics.overflowY).toBe("auto");
+  expect(metrics.scrollHeight).toBeGreaterThan(metrics.clientHeight + 20);
+
+  const scrollTop = await locator.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+    return element.scrollTop;
+  });
+  expect(scrollTop).toBeGreaterThan(0);
+}
