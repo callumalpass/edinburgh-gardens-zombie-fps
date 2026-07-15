@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import type { Locator } from "@playwright/test";
 import { createLevelData } from "../src/game/levelData";
 
 test.afterEach(async ({ page }) => {
@@ -45,6 +46,35 @@ test("start menus remain scrollable on short screens", async ({ page }) => {
   const startOverlay = page.locator(".start-overlay");
   await expect(startOverlay).toBeVisible();
   await expectScrollableMenu(startOverlay);
+});
+
+test("touch HUD and controls stay separated on compact mobile screens", async ({ page }) => {
+  for (const viewport of [{ width: 360, height: 640 }, { width: 740, height: 360 }]) {
+    await page.setViewportSize(viewport);
+    await page.goto("/?smoke=1&touch=1");
+    await page.waitForFunction(() => window.__EGAME__?.ready === true);
+
+    const weapon = await requiredBox(page.locator(".weapon-hud"));
+    const wave = await requiredBox(page.locator(".wave-hud"));
+    const miniMap = await requiredBox(page.locator(".mini-map-shell"));
+    const movement = await requiredBox(page.locator(".touch-movement"));
+    const primary = await requiredBox(page.locator(".touch-actions-primary"));
+    const utility = await requiredBox(page.locator(".touch-actions-utility"));
+
+    expect(intersects(weapon, movement, 6)).toBe(false);
+    expect(intersects(weapon, primary, 6)).toBe(false);
+    expect(intersects(miniMap, primary, 6)).toBe(false);
+    expect(intersects(miniMap, utility, 6)).toBe(false);
+    expect(intersects(miniMap, wave, 6)).toBe(false);
+
+    const targetSizes = await page.locator("[data-touch-action]").evaluateAll((buttons) =>
+      buttons.map((button) => {
+        const rect = button.getBoundingClientRect();
+        return { width: rect.width, height: rect.height };
+      })
+    );
+    expect(targetSizes.every((size) => size.width >= 44 && size.height >= 44)).toBe(true);
+  }
 });
 
 test("touch layouts support movement, free look, combat controls and the field bag", async ({ page }, testInfo) => {
@@ -137,7 +167,7 @@ test("skateboard can be carried while riding a bicycle", async ({ page }) => {
   expect(dismounted.carriedItem).toBe("skateboard");
 });
 
-async function expectScrollableMenu(locator: import("@playwright/test").Locator): Promise<void> {
+async function expectScrollableMenu(locator: Locator): Promise<void> {
   const metrics = await locator.evaluate((element) => ({
     clientHeight: element.clientHeight,
     overflowY: getComputedStyle(element).overflowY,
@@ -151,4 +181,21 @@ async function expectScrollableMenu(locator: import("@playwright/test").Locator)
     return element.scrollTop;
   });
   expect(scrollTop).toBeGreaterThan(0);
+}
+
+async function requiredBox(locator: Locator): Promise<{ x: number; y: number; width: number; height: number }> {
+  const box = await locator.boundingBox();
+  expect(box).not.toBeNull();
+  return box!;
+}
+
+function intersects(
+  first: { x: number; y: number; width: number; height: number },
+  second: { x: number; y: number; width: number; height: number },
+  gap = 0
+): boolean {
+  return first.x < second.x + second.width + gap
+    && first.x + first.width + gap > second.x
+    && first.y < second.y + second.height + gap
+    && first.y + first.height + gap > second.y;
 }
