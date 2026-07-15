@@ -2333,7 +2333,7 @@ h1 {
   }
 
   .touch-mode .interaction-prompt {
-    bottom: 118px;
+    bottom: max(184px, calc(env(safe-area-inset-bottom) + 184px));
   }
 
   .touch-mode .inventory-menu {
@@ -2386,6 +2386,11 @@ h1 {
     display: grid;
     grid-template-columns: repeat(5, 44px);
     width: auto;
+  }
+
+  .touch-mode .interaction-prompt {
+    bottom: max(338px, calc(env(safe-area-inset-bottom) + 338px));
+    max-width: min(320px, calc(100% - 24px));
   }
 
   .touch-mode .weapon-hud {

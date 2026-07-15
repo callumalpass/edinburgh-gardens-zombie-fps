@@ -131,6 +131,24 @@ test("touch layouts support movement, free look, combat controls and the field b
     (previous) => (window.__EGAME__?.snapshot().shotSequence ?? previous) > previous,
     afterLookSnapshot.shotSequence
   );
+  const prompt = page.locator('[data-hud="prompt"]');
+  let pickupPrompt = "";
+  for (const spawn of createLevelData().weaponSpawns) {
+    const frame = await page.evaluate((position) => {
+      const snapshot = window.__EGAME__!.testTeleport({ x: position.x, z: position.z, yaw: 0, pitch: 0 });
+      return snapshot.frame;
+    }, spawn.position);
+    await page.waitForFunction((previousFrame) => window.__EGAME__!.snapshot().frame > previousFrame, frame);
+    pickupPrompt = (await prompt.textContent()) ?? "";
+    if (/^Take\s+/.test(pickupPrompt)) break;
+  }
+  expect(pickupPrompt).toMatch(/^Take\s+/);
+  expect(pickupPrompt).not.toMatch(/\bX\b|\bE\b/);
+  const promptBox = await requiredBox(prompt);
+  const promptPrimary = await requiredBox(page.locator(".touch-actions-primary"));
+  const promptUtility = await requiredBox(page.locator(".touch-actions-utility"));
+  expect(intersects(promptBox, promptPrimary, 6)).toBe(false);
+  expect(intersects(promptBox, promptUtility, 6)).toBe(false);
   await page.screenshot({ path: testInfo.outputPath("touch-controls.png"), fullPage: false });
 
   await page.evaluate(() => {
@@ -140,6 +158,7 @@ test("touch layouts support movement, free look, combat controls and the field b
   });
   const inventory = page.locator('[data-hud="inventory"]');
   await expect(inventory).toBeVisible();
+  await expect(page.locator(".inventory-close kbd")).toHaveText("Bag");
   await expect(page.locator("[data-touch-look]")).toHaveCSS("pointer-events", "none");
   await page.locator('[data-weapon-slot="0"]').click();
   await expect(page.locator('[data-weapon-slot="0"]')).toHaveAttribute("aria-pressed", "true");

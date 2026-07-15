@@ -358,11 +358,12 @@ export class HudController {
         skateboard: view.skateboardMounted,
         lures: view.throwables,
         light: view.flashlightOn,
-        bindings: view.bindings
+        bindings: view.bindings,
+        touchPrompts: this.touchPromptsEnabled()
       });
       if (inventorySignature !== this.inventorySignature) {
         this.inventorySignature = inventorySignature;
-        this.refs.inventory.innerHTML = renderInventoryMenu(view);
+        this.refs.inventory.innerHTML = renderInventoryMenu(view, this.touchPromptsEnabled());
       }
       patchInventorySelection(this.refs.inventory, view.loadout);
     } else {
@@ -389,7 +390,8 @@ export class HudController {
   }
 
   private updateContextStatus(view: HudUpdate, weaponName: string): void {
-    const key = (action: InputAction) => bindingLabel(view.bindings, action);
+    const prompt = (action: InputAction, label: string) => this.formatActionPrompt(action, label, view.bindings);
+    const legacyPrompt = (action: InputAction, label: string) => this.formatLegacyPrompt(action, label, view.bindings);
     if (view.loadout.reloadingUntil > performance.now() / 1000) {
       const percent = Math.round(view.reloadProgress * 100);
       this.refs.status.textContent = view.loadout.weaponId === "shotgun"
@@ -398,28 +400,28 @@ export class HudController {
           ? `Loading flare ${percent}%`
           : `Reloading ${percent}%`;
     } else if (view.bikeMounted) {
-      this.refs.prompt.textContent = `${key("interact")}  ${view.mountedVehicleKind === "maintenance-cart" ? "Park cart" : "Dismount bike"}`;
+      this.refs.prompt.textContent = prompt("interact", view.mountedVehicleKind === "maintenance-cart" ? "Park cart" : "Dismount bike");
       this.refs.status.textContent = view.mountedVehicleKind === "maintenance-cart" ? "Maintenance cart" : view.bikePumpBoostRemaining > 0 ? "Tuned bike" : "Bike";
     } else if (view.scenarioAction) {
-      this.refs.prompt.textContent = `${key("interact")}  ${view.scenarioAction.action}`;
+      this.refs.prompt.textContent = prompt("interact", view.scenarioAction.action);
       this.refs.status.textContent = view.scenarioAction.label;
     } else if (view.nearestWorldItem) {
-      this.refs.prompt.textContent = `${key("take")}  Take ${ITEM_DEFINITIONS[view.nearestWorldItem.itemId].label}`;
+      this.refs.prompt.textContent = prompt("take", `Take ${ITEM_DEFINITIONS[view.nearestWorldItem.itemId].label}`);
       this.refs.status.textContent = view.nearestWorldItem.label;
     } else if (view.nearestWeaponDrop) {
-      this.refs.prompt.textContent = `${key("take")}  Take ${WEAPON_DEFINITIONS[view.nearestWeaponDrop.weaponId].name}`;
+      this.refs.prompt.textContent = prompt("take", `Take ${WEAPON_DEFINITIONS[view.nearestWeaponDrop.weaponId].name}`);
       this.refs.status.textContent = view.nearestWeaponDrop.label;
     } else if (view.nearestBike) {
       this.refs.prompt.textContent = view.nearestBike.vehicleKind === "maintenance-cart"
-        ? `${key("interact")}  ${view.nearestBike.state === "available" ? "Drive maintenance cart" : "Inspect maintenance cart"}`
+        ? prompt("interact", view.nearestBike.state === "available" ? "Drive maintenance cart" : "Inspect maintenance cart")
         : view.nearestBike.state === "flat-tyres"
-          ? `${key("interact")}  Repair flat tyre`
+          ? prompt("interact", "Repair flat tyre")
         : view.nearestBike.state === "locked"
-          ? `${key("interact")}  Cut bike chain`
-          : `${key("interact")}  Ride bike`;
+          ? prompt("interact", "Cut bike chain")
+          : prompt("interact", "Ride bike");
       this.refs.status.textContent = view.nearestBike.label;
     } else if (view.nearestBrokenBike) {
-      this.refs.prompt.textContent = `${key("interact")}  Inspect bike`;
+      this.refs.prompt.textContent = prompt("interact", "Inspect bike");
       this.refs.status.textContent = view.nearestBrokenBike.label;
     } else if (view.nearestFixture) {
       const active = view.activeFixtureId === view.nearestFixture.id;
@@ -427,31 +429,31 @@ export class HudController {
       const needsLadder = ladderFixture && view.carriedItem === "ladder" && !active;
       const placedLadder = ladderFixture && view.nearestPlacedLadder;
       this.refs.prompt.textContent = active
-        ? `${key("interact")}  Climb down from ${view.nearestFixture.label}`
+        ? prompt("interact", `Climb down from ${view.nearestFixture.label}`)
         : needsLadder
-          ? `${key("interact")}  Place ladder at ${view.nearestFixture.label}`
+          ? prompt("interact", `Place ladder at ${view.nearestFixture.label}`)
           : placedLadder
-            ? `${key("interact")}  Climb ${view.nearestFixture.label} · ${key("take")}  Remove ladder`
-            : view.nearestFixture.prompt.replace(":", " ");
+            ? `${prompt("interact", `Climb ${view.nearestFixture.label}`)} · ${prompt("take", "Remove ladder")}`
+            : legacyPrompt("interact", view.nearestFixture.prompt);
       this.refs.status.textContent = view.nearestFixture.label;
     } else if (view.nearestPlacedLadder) {
-      this.refs.prompt.textContent = `${key("take")}  Remove ladder`;
+      this.refs.prompt.textContent = prompt("take", "Remove ladder");
       this.refs.status.textContent = view.nearestPlacedLadder.label;
     } else if (view.nearestAmenity) {
-      this.refs.prompt.textContent = view.amenityPrompt(view.nearestAmenity).replace(":", " ");
+      this.refs.prompt.textContent = legacyPrompt("interact", view.amenityPrompt(view.nearestAmenity));
       this.refs.status.textContent = view.nearestAmenity.label;
     } else if (view.nearestStation) {
       const upgrade = UPGRADE_DEFINITIONS[view.nearestStation.upgradeId];
       const current = view.loadout.upgrades[view.nearestStation.upgradeId];
       this.refs.prompt.textContent = current >= upgrade.maxLevel
         ? `${upgrade.label} maxed`
-        : `${key("interact")}  ${upgrade.label} · ${upgradeCost(view.nearestStation.upgradeId, current)} scrap`;
+        : prompt("interact", `${upgrade.label} · ${upgradeCost(view.nearestStation.upgradeId, current)} scrap`);
       this.refs.status.textContent = view.nearestStation.label;
     } else if (view.skateboardMounted) {
-      this.refs.prompt.textContent = `${key("skateboard")}  Step off skateboard`;
+      this.refs.prompt.textContent = prompt("skateboard", "Step off skateboard");
       this.refs.status.textContent = "Skateboard · loud";
     } else if (view.carriedItem === "skateboard") {
-      this.refs.prompt.textContent = `${key("skateboard")}  Ride skateboard`;
+      this.refs.prompt.textContent = prompt("skateboard", "Ride skateboard");
       this.refs.status.textContent = "Carrying skateboard";
     } else {
       this.refs.prompt.textContent = "";
@@ -463,6 +465,22 @@ export class HudController {
       ].filter(Boolean);
       this.refs.status.textContent = `${weaponName}${conditions.length ? ` · ${conditions.join(" · ")}` : ""}`;
     }
+  }
+
+  private touchPromptsEnabled(): boolean {
+    return this.root.querySelector(".shell.touch-mode") !== null;
+  }
+
+  private formatActionPrompt(action: InputAction, label: string, bindings: InputBindings): string {
+    const control = this.touchPromptsEnabled() ? touchActionLabel(action, bindings) : bindingLabel(bindings, action);
+    const actionText = this.touchPromptsEnabled() ? mobileActionText(action, label) : label;
+    return `${control}  ${actionText}`;
+  }
+
+  private formatLegacyPrompt(action: InputAction, label: string, bindings: InputBindings): string {
+    const stripped = stripControlPrefix(label);
+    if (stripped === label.trim()) return label.replace(":", " ");
+    return this.formatActionPrompt(action, sentenceCase(stripped), bindings);
   }
 
   private renderBindingCaptureState(): void {
@@ -538,7 +556,7 @@ export class HudController {
   }
 }
 
-function renderInventoryMenu(view: HudUpdate): string {
+function renderInventoryMenu(view: HudUpdate, touchPrompts: boolean): string {
   const slots = view.inventory.length > 0
     ? view.inventory.map((itemId, index) => `<li class="inventory-slot"><b>T${index + 1}</b><span>${ITEM_DEFINITIONS[itemId].label}</span></li>`).join("")
     : `<li class="inventory-slot empty"><b>T</b><span>No tools carried</span></li>`;
@@ -556,7 +574,7 @@ function renderInventoryMenu(view: HudUpdate): string {
     return `<li><span><b>${escapeHtml(upgrade.label)}</b><small>${escapeHtml(upgrade.description)}</small></span><strong>${level}/${upgrade.maxLevel}</strong></li>`;
   }).join("");
   return `
-    <header class="inventory-header"><div><span>Field bag</span><strong>${WEAPON_DEFINITIONS[view.loadout.weaponId].name}</strong></div><button class="inventory-close" type="button" data-action="close-inventory">Close <kbd>${bindingLabel(view.bindings, "inventory")}</kbd></button></header>
+    <header class="inventory-header"><div><span>Field bag</span><strong>${WEAPON_DEFINITIONS[view.loadout.weaponId].name}</strong></div><button class="inventory-close" type="button" data-action="close-inventory">Close <kbd>${touchPrompts ? touchActionLabel("inventory", view.bindings) : bindingLabel(view.bindings, "inventory")}</kbd></button></header>
     <div class="inventory-workbench">
       <div class="inventory-rail">
         ${renderWeaponInventory(view.loadout)}
@@ -792,6 +810,35 @@ function noiseLabel(value: number): string {
 
 function initials(name: string): string {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase() ?? "").join("") || "?";
+}
+
+function touchActionLabel(action: InputAction, bindings: InputBindings): string {
+  const labels: Partial<Record<InputAction, string>> = {
+    interact: "Use",
+    take: "Take",
+    inventory: "Bag",
+    skateboard: "Board",
+    reload: "Reload",
+    jump: "Jump",
+    scopeToggle: "Aim",
+    throwDistraction: "Lure",
+    flashlight: "Light"
+  };
+  return labels[action] ?? bindingLabel(bindings, action);
+}
+
+function mobileActionText(action: InputAction, label: string): string {
+  const trimmed = sentenceCase(label.trim());
+  return action === "take" ? trimmed.replace(/^Take\s+/i, "") : trimmed;
+}
+
+function stripControlPrefix(label: string): string {
+  return label.trim().replace(/^[A-Z0-9]+:\s*/i, "");
+}
+
+function sentenceCase(label: string): string {
+  const trimmed = label.trim();
+  return trimmed ? `${trimmed[0]!.toUpperCase()}${trimmed.slice(1)}` : trimmed;
 }
 
 function escapeHtml(value: string): string {
