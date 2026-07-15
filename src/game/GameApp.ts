@@ -6461,6 +6461,7 @@ export class GameApp {
       paused: this.paused,
       zombies: this.zombies.length,
       ammo: this.loadout.ammoInMagazine,
+      shotSequence: this.shotSequence,
       health: Math.max(0, Math.round(this.player.health)),
       scrap: this.player.scrap,
       weapon: this.loadout.weaponId,

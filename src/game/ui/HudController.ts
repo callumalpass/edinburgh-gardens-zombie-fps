@@ -671,7 +671,7 @@ function createMarkup(): string {
       <section class="hud quest-ribbon" data-hud="objective" aria-label="Current rescue objective" aria-live="polite" hidden>
         <span>Park rescue</span><strong data-hud="objective-copy"></strong>
       </section>
-      <section class="hud weapon-hud" aria-label="Weapon status">
+      <section class="hud weapon-hud" aria-label="Weapon status" data-touch-info-surface aria-expanded="false">
         <div class="ammo"><strong data-hud="ammo">MELEE</strong><span data-hud="reserve">Emergency knife</span></div>
         <div class="status-line" data-hud="status">Emergency knife · light on</div>
       </section>
@@ -686,14 +686,13 @@ function createMarkup(): string {
       <section class="intermission-panel" data-hud="intermission" aria-live="polite" hidden></section>
 
       <section class="touch-controls" aria-label="Touch game controls">
-        <div class="touch-look-zone" data-touch-look aria-label="Drag to look"></div>
+        <div class="touch-look-zone" data-touch-look aria-label="Drag to look. Tap to attack."></div>
         <div class="touch-movement">
           <div class="touch-stick" data-touch-stick aria-label="Movement joystick"><span></span></div>
           <button type="button" data-touch-action="sprint">Run</button>
           <button type="button" data-touch-action="crouch">Crouch</button>
         </div>
         <div class="touch-actions touch-actions-primary">
-          <button class="touch-fire" type="button" data-touch-action="fire">Attack</button>
           <button type="button" data-touch-action="aim">Aim</button>
           <button class="touch-context" type="button" data-touch-action="interact">Use</button>
           <button type="button" data-touch-action="take">Take</button>

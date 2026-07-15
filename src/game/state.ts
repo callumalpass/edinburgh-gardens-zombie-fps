@@ -88,6 +88,7 @@ export interface Snapshot {
   paused: boolean;
   zombies: number;
   ammo: number;
+  shotSequence: number;
   health: number;
   scrap: number;
   weapon: WeaponId;

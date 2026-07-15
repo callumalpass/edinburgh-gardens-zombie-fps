@@ -192,9 +192,14 @@ export class InputController {
     const stick = shell?.querySelector<HTMLElement>("[data-touch-stick]");
     const knob = stick?.querySelector<HTMLElement>("span");
     const lookZone = shell?.querySelector<HTMLElement>("[data-touch-look]");
+    const infoSurface = shell?.querySelector<HTMLElement>("[data-touch-info-surface]");
     if (!shell || !stick || !knob || !lookZone) return;
 
     shell.classList.add("touch-mode");
+    const setTouchInfoOpen = (open: boolean) => {
+      shell.classList.toggle("touch-info-open", open);
+      infoSurface?.setAttribute("aria-expanded", open ? "true" : "false");
+    };
     let stickPointer: number | null = null;
     const updateStick = (event: PointerEvent) => {
       const rect = stick.getBoundingClientRect();
@@ -234,12 +239,20 @@ export class InputController {
     let lookPointer: number | null = null;
     let lookX = 0;
     let lookY = 0;
+    let lookStartX = 0;
+    let lookStartY = 0;
+    let lookStartedAt = 0;
+    let lookTravel = 0;
     lookZone.addEventListener("pointerdown", (event) => {
       if (!this.enabled) return;
       event.preventDefault();
       lookPointer = event.pointerId;
       lookX = event.clientX;
       lookY = event.clientY;
+      lookStartX = event.clientX;
+      lookStartY = event.clientY;
+      lookStartedAt = performance.now();
+      lookTravel = 0;
       lookZone.setPointerCapture(event.pointerId);
       this.actions.unlockAudio();
     }, { signal: this.signal });
@@ -249,13 +262,49 @@ export class InputController {
       const dy = event.clientY - lookY;
       lookX = event.clientX;
       lookY = event.clientY;
+      lookTravel += Math.hypot(dx, dy);
       this.actions.look(dx * 1.35, dy * 1.35);
     }, { signal: this.signal });
     const releaseLook = (event: PointerEvent) => {
-      if (lookPointer === event.pointerId) lookPointer = null;
+      if (lookPointer !== event.pointerId) return;
+      event.preventDefault();
+      const directDistance = Math.hypot(event.clientX - lookStartX, event.clientY - lookStartY);
+      const isTap = this.enabled && performance.now() - lookStartedAt < 280 && Math.max(lookTravel, directDistance) < 10;
+      lookPointer = null;
+      if (isTap) this.actions.shoot();
     };
     lookZone.addEventListener("pointerup", releaseLook, { signal: this.signal });
-    lookZone.addEventListener("pointercancel", releaseLook, { signal: this.signal });
+    lookZone.addEventListener("pointercancel", (event) => {
+      if (lookPointer === event.pointerId) lookPointer = null;
+    }, { signal: this.signal });
+
+    if (infoSurface) {
+      let infoPointer: number | null = null;
+      let infoStartY = 0;
+      infoSurface.addEventListener("pointerdown", (event) => {
+        if (!this.enabled) return;
+        event.preventDefault();
+        event.stopPropagation();
+        infoPointer = event.pointerId;
+        infoStartY = event.clientY;
+        infoSurface.setPointerCapture(event.pointerId);
+        this.actions.unlockAudio();
+      }, { signal: this.signal });
+      const releaseInfo = (event: PointerEvent) => {
+        if (infoPointer !== event.pointerId) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const deltaY = event.clientY - infoStartY;
+        if (deltaY < -24) setTouchInfoOpen(true);
+        else if (deltaY > 24) setTouchInfoOpen(false);
+        else setTouchInfoOpen(!shell.classList.contains("touch-info-open"));
+        infoPointer = null;
+      };
+      infoSurface.addEventListener("pointerup", releaseInfo, { signal: this.signal });
+      infoSurface.addEventListener("pointercancel", (event) => {
+        if (infoPointer === event.pointerId) infoPointer = null;
+      }, { signal: this.signal });
+    }
 
     for (const button of shell.querySelectorAll<HTMLButtonElement>("[data-touch-action]")) {
       const action = button.dataset.touchAction;

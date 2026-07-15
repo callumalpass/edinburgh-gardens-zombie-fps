@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import type { Locator } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import { createLevelData } from "../src/game/levelData";
 
 test.afterEach(async ({ page }) => {
@@ -66,9 +66,27 @@ test("touch HUD and controls stay separated on compact mobile screens", async ({
     expect(intersects(miniMap, primary, 6)).toBe(false);
     expect(intersects(miniMap, utility, 6)).toBe(false);
     expect(intersects(miniMap, wave, 6)).toBe(false);
+    await expect(page.locator(".wave-hud small")).toBeHidden();
+
+    await drag(page, weapon.x + weapon.width / 2, weapon.y + weapon.height / 2, weapon.x + weapon.width / 2, weapon.y + 4);
+    await expect(page.locator(".shell")).toHaveClass(/touch-info-open/);
+    await expect(page.locator(".wave-hud small")).toBeVisible();
+
+    const expandedWeapon = await requiredBox(page.locator(".weapon-hud"));
+    await drag(
+      page,
+      expandedWeapon.x + expandedWeapon.width / 2,
+      expandedWeapon.y + 4,
+      expandedWeapon.x + expandedWeapon.width / 2,
+      expandedWeapon.y + expandedWeapon.height / 2
+    );
+    await expect(page.locator(".shell")).not.toHaveClass(/touch-info-open/);
 
     const targetSizes = await page.locator("[data-touch-action]").evaluateAll((buttons) =>
-      buttons.map((button) => {
+      buttons.filter((button) => {
+        const rect = button.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0 && getComputedStyle(button).visibility !== "hidden";
+      }).map((button) => {
         const rect = button.getBoundingClientRect();
         return { width: rect.width, height: rect.height };
       })
@@ -83,7 +101,7 @@ test("touch layouts support movement, free look, combat controls and the field b
   await page.waitForFunction(() => window.__EGAME__?.ready === true);
 
   await expect(page.locator(".touch-controls")).toBeVisible();
-  await expect(page.locator('[data-touch-action="fire"]')).toBeVisible();
+  await expect(page.locator('[data-touch-action="fire"]')).toHaveCount(0);
   expect((await page.evaluate(() => window.__EGAME__!.snapshot())).renderQuality).toBe("low");
 
   const beforeMove = await page.evaluate(() => window.__EGAME__!.snapshot());
@@ -98,13 +116,21 @@ test("touch layouts support movement, free look, combat controls and the field b
   expect(Math.hypot(afterMove.playerX - beforeMove.playerX, afterMove.playerZ - beforeMove.playerZ)).toBeGreaterThan(0.5);
 
   const beforeLook = afterMove.playerYaw;
+  const beforeLookShotSequence = afterMove.shotSequence;
   const look = await page.locator("[data-touch-look]").boundingBox();
   expect(look).not.toBeNull();
   await page.mouse.move(look!.x + look!.width * 0.45, look!.y + look!.height * 0.45);
   await page.mouse.down();
   await page.mouse.move(look!.x + look!.width * 0.68, look!.y + look!.height * 0.45, { steps: 3 });
   await page.mouse.up();
-  expect((await page.evaluate(() => window.__EGAME__!.snapshot())).playerYaw).not.toBeCloseTo(beforeLook, 2);
+  const afterLookSnapshot = await page.evaluate(() => window.__EGAME__!.snapshot());
+  expect(afterLookSnapshot.playerYaw).not.toBeCloseTo(beforeLook, 2);
+  expect(afterLookSnapshot.shotSequence).toBe(beforeLookShotSequence);
+  await page.mouse.click(look!.x + look!.width * 0.52, look!.y + look!.height * 0.52);
+  await page.waitForFunction(
+    (previous) => (window.__EGAME__?.snapshot().shotSequence ?? previous) > previous,
+    afterLookSnapshot.shotSequence
+  );
   await page.screenshot({ path: testInfo.outputPath("touch-controls.png"), fullPage: false });
 
   await page.evaluate(() => {
@@ -114,13 +140,13 @@ test("touch layouts support movement, free look, combat controls and the field b
   });
   const inventory = page.locator('[data-hud="inventory"]');
   await expect(inventory).toBeVisible();
-  await expect(page.locator('[data-touch-action="fire"]')).toHaveCSS("pointer-events", "none");
+  await expect(page.locator("[data-touch-look]")).toHaveCSS("pointer-events", "none");
   await page.locator('[data-weapon-slot="0"]').click();
   await expect(page.locator('[data-weapon-slot="0"]')).toHaveAttribute("aria-pressed", "true");
   await page.screenshot({ path: testInfo.outputPath("touch-field-bag.png"), fullPage: false });
   await page.getByRole("button", { name: /close/i }).click();
   await expect(inventory).toBeHidden();
-  await expect(page.locator('[data-touch-action="fire"]')).toHaveCSS("pointer-events", "auto");
+  await expect(page.locator("[data-touch-look]")).toHaveCSS("pointer-events", "auto");
 });
 
 test("keybinding settings add a trackpad-friendly scope toggle", async ({ page }) => {
@@ -187,6 +213,13 @@ async function requiredBox(locator: Locator): Promise<{ x: number; y: number; wi
   const box = await locator.boundingBox();
   expect(box).not.toBeNull();
   return box!;
+}
+
+async function drag(page: Page, fromX: number, fromY: number, toX: number, toY: number): Promise<void> {
+  await page.mouse.move(fromX, fromY);
+  await page.mouse.down();
+  await page.mouse.move(toX, toY, { steps: 4 });
+  await page.mouse.up();
 }
 
 function intersects(
